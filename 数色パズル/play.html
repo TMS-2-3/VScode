@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>数色パズル</title>
+    <link rel="icon" href="icon.ico">
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <button id="rules-button" class="rules-tab" type="button" aria-controls="rules-panel" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H7a3 3 0 0 0-3 3V5.5Z"></path>
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+        <path d="M8 7h8"></path>
+        <path d="M8 11h6"></path>
+      </svg>
+      <span>ルール</span>
+    </button>
+
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow"><span id="stage-size-label">10 x 10</span> Puzzle</p>
+          <div class="brand-title">
+            <img class="brand-icon" src="icon.ico" alt="" aria-hidden="true">
+            <h1>数色パズル</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="difficulty-wrap" hidden aria-hidden="true">
+            <button id="difficulty-button" class="difficulty-button" type="button" aria-expanded="false" aria-controls="difficulty-popover">
+              <span>Difficulty</span>
+              <strong id="difficulty-label">Easy</strong>
+            </button>
+            <div id="difficulty-popover" class="difficulty-popover" hidden>
+              <button class="difficulty-option" type="button" data-difficulty="baby">
+                <strong>Baby</strong>
+                <span>2色 / 10 x 10</span>
+              </button>
+              <button class="difficulty-option active" type="button" data-difficulty="easy">
+                <strong>Easy</strong>
+                <span>3色 / 12 x 12</span>
+              </button>
+              <button class="difficulty-option" type="button" data-difficulty="normal">
+                <strong>Normal</strong>
+                <span>4色 / 13 x 13</span>
+              </button>
+              <button class="difficulty-option" type="button" data-difficulty="hard">
+                <strong>Hard</strong>
+                <span>5色 / 15 x 15</span>
+              </button>
+            </div>
+          </div>
+          <div class="scoreboard" aria-live="polite">
+            <div>
+              <span>Time</span>
+              <strong id="timer">5:00</strong>
+            </div>
+            <div>
+              <span>Score</span>
+              <strong id="score">0</strong>
+            </div>
+            <div>
+              <span>Best</span>
+              <strong id="best-score">0</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="game-layout" aria-label="数色パズル">
+        <div class="board-wrap">
+          <div id="board" class="board" aria-label="game board"></div>
+        </div>
+
+        <aside class="side-panel" aria-label="piece rack">
+          <div class="rack-header">
+            <span>Parts</span>
+            <button id="restart-button" class="reset-button" type="button">
+              リセット
+            </button>
+          </div>
+          <div id="piece-rack" class="piece-rack"></div>
+          <div id="status" class="status" aria-live="polite">スロットAを選択中</div>
+          <details class="controls-help">
+            <summary>操作方法</summary>
+            <dl>
+              <div>
+                <dt>マウス</dt>
+                <dd>左クリック: 設置</dd>
+                <dd>右クリック: パーツ切替</dd>
+                <dd>ホイール上: ↻付きだけ右回転</dd>
+                <dd>ホイール下: ↻付きだけ左回転</dd>
+              </div>
+              <div>
+                <dt>キーボード</dt>
+                <dd>WASD / 矢印: 移動</dd>
+                <dd>Space: ↻付きだけ回転</dd>
+                <dd>K: 設置</dd>
+                <dd>H: パーツ切替</dd>
+              </div>
+            </dl>
+          </details>
+        </aside>
+      </section>
+    </main>
+
+    <div id="rules-overlay" class="rules-overlay" hidden></div>
+    <aside id="rules-panel" class="rules-panel" aria-labelledby="rules-title" hidden>
+      <div class="rules-panel-head">
+        <div>
+          <span>Guide</span>
+          <h2 id="rules-title">ルール</h2>
+        </div>
+        <div class="rules-panel-actions">
+          <button id="score-list-button" class="score-list-button" type="button" aria-expanded="false" aria-controls="score-list-panel">スコア確認</button>
+          <button id="rules-close-button" class="rules-close" type="button" aria-label="ルールを閉じる">閉じる</button>
+        </div>
+      </div>
+      <div id="score-list-panel" class="score-list-panel" hidden>
+        <div class="score-list-head">
+          <div>
+            <h3>最高スコア一覧（5分）</h3>
+            <p>エンドレスは記録対象外です。</p>
+          </div>
+          <button id="score-clear-all-button" class="score-clear-button" type="button" aria-label="最高スコアをすべて削除">
+            <span class="trash-icon" aria-hidden="true"></span>
+            <span>全部削除</span>
+          </button>
+        </div>
+        <table class="score-list-table">
+          <thead>
+            <tr>
+              <th scope="col">モード</th>
+              <th scope="col">アイテムOFF</th>
+              <th scope="col">アイテムON</th>
+            </tr>
+          </thead>
+          <tbody id="score-list-body"></tbody>
+        </table>
+      </div>
+      <div class="rules-body">
+        <div class="rules-column">
+          <h3>ルール</h3>
+          <section>
+            <h4>目的</h4>
+            <p><span id="rules-board-size">10 x 10</span>の盤面にパーツを置き、同じ色の連続した数字をつなげてスコアを伸ばします。</p>
+          </section>
+          <section>
+            <h4>消去条件</h4>
+            <p>同じ色で同じ数字、または数字差が1のパーツ同士が縦横どこか1マスでも隣接すると接続します。ネットワーク内に3段階以上の連番があれば、枝分かれも含めてパーツ単位で消えます。</p>
+          </section>
+          <section>
+            <h4>スコア</h4>
+            <p>1パーツ100ptです。4パーツ以上を同時に消すと、消した数に応じて倍率ボーナスが付きます。5分の最高スコアはモードとアイテムON/OFF別に保存されます。</p>
+          </section>
+          <section>
+            <h4>設定</h4>
+            <p>開始前やリセット時に難易度、アイテム、プレイ時間を選べます。パーツは提示時にランダムな向きで出ます。5分モードでは時間が0になると終了します。</p>
+          </section>
+          <section>
+            <h4>終了条件</h4>
+            <p>提示中の2パーツがどちらも、許可された向き・どの位置にも置けなくなったらゲームオーバーです。</p>
+          </section>
+        </div>
+
+        <div class="rules-column">
+          <h3>操作方法</h3>
+          <dl class="rules-controls">
+            <div>
+              <dt>マウス</dt>
+              <dd>左クリック: 設置</dd>
+              <dd>右クリック: パーツ切替</dd>
+              <dd>ホイール上: ↻付きだけ右回転</dd>
+              <dd>ホイール下: ↻付きだけ左回転</dd>
+            </div>
+            <div>
+              <dt>キーボード</dt>
+              <dd>WASD / 矢印: 移動</dd>
+              <dd>Space: ↻付きだけ回転</dd>
+              <dd>K: 設置</dd>
+              <dd>H: パーツ切替</dd>
+              <dd>Enter: 設定画面では5分で開始</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="rules-column">
+          <h3>アイテム効果</h3>
+          <div class="rule-effect-card">
+            <div class="rule-piece" data-rule-effect="wild" aria-label="ワイルド数字の例"></div>
+            <div>
+              <h4>ワイルド数字</h4>
+              <p>?を巻き込んだ連鎖が起きた場合、?からはどの数字へも連鎖がつながります。有効な3連番に?が入ると、その先の離れた数字のまとまりも橋渡ししてまとめて消せます。</p>
+            </div>
+          </div>
+          <div class="rule-effect-card">
+            <div class="rule-piece" data-rule-effect="rainbow" aria-label="レインボー色の例"></div>
+            <div>
+              <h4>レインボー色</h4>
+              <p>どの色のパーツとも接続できます。別々の色の数字列を橋渡しできるため、赤2-虹3-青4のようにつなげて消せます。</p>
+            </div>
+          </div>
+          <div class="rule-effect-card">
+            <div class="rule-piece" data-rule-effect="bomb" aria-label="爆弾の例"></div>
+            <div>
+              <h4>爆弾</h4>
+              <p>消える時に斜めを含む半径1マス内のパーツを巻き込みます。巻き込んだパーツからは、3連番がなくても通常接続でさらに連鎖します。</p>
+            </div>
+          </div>
+          <div class="rule-effect-card">
+            <div class="rule-piece" data-rule-effect="multiplier" aria-label="倍率の例"></div>
+            <div>
+              <h4>倍率</h4>
+              <p>×2から×5が付きます。消去全体には一番大きい倍率がかかり、同じ連鎖にそれより小さい倍率パーツがある場合は、そのパーツだけさらに倍率がかかります。</p>
+            </div>
+          </div>
+          <div class="rule-effect-card">
+            <div class="rule-piece" data-rule-effect="rotate" aria-label="回転の例"></div>
+            <div>
+              <h4>回転</h4>
+              <p>↻が付いたパーツだけ、ホイールやSpaceで自由に回転できます。通常パーツは出てきた向きのまま使います。向きを変えても形が変わらないパーツには付きません。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="start-modal" class="start-modal">
+      <div class="start-dialog" role="dialog" aria-modal="true" aria-labelledby="start-title">
+        <p>Game Setup</p>
+        <h2 id="start-title">設定して開始</h2>
+        <button id="start-rules-button" class="start-rules-button" type="button">ルールを確認</button>
+        <div class="start-section">
+          <span>難易度</span>
+          <div class="start-difficulty-options">
+            <button type="button" data-start-difficulty="baby">
+              <strong>Baby</strong>
+              <span>2色 / 10 x 10</span>
+            </button>
+            <button class="active" type="button" data-start-difficulty="easy">
+              <strong>Easy</strong>
+              <span>3色 / 12 x 12</span>
+            </button>
+            <button type="button" data-start-difficulty="normal">
+              <strong>Normal</strong>
+              <span>4色 / 13 x 13</span>
+            </button>
+            <button type="button" data-start-difficulty="hard">
+              <strong>Hard</strong>
+              <span>5色 / 15 x 15</span>
+            </button>
+          </div>
+        </div>
+        <div class="start-section start-item-section">
+          <div class="start-section-head">
+            <span>アイテム</span>
+            <div class="item-mode-options" role="group" aria-label="アイテムON/OFF">
+              <button type="button" data-item-mode="on" aria-pressed="false">ON</button>
+              <button class="active" type="button" data-item-mode="off" aria-pressed="true">OFF</button>
+            </div>
+          </div>
+          <div id="start-item-picker" class="item-picker">
+            <button class="active" type="button" data-item-effect="wild" aria-pressed="true" disabled>
+              <strong>ワイルド数字</strong>
+            </button>
+            <button class="active" type="button" data-item-effect="rainbow" aria-pressed="true" disabled>
+              <strong>虹色パーツ</strong>
+            </button>
+            <button type="button" data-item-effect="multiplier" aria-pressed="false" disabled>
+              <strong>倍率パーツ</strong>
+            </button>
+            <button type="button" data-item-effect="bomb" aria-pressed="false" disabled>
+              <strong>爆弾パーツ</strong>
+            </button>
+            <button type="button" data-item-effect="rotate" aria-pressed="false" disabled>
+              <strong>回転パーツ</strong>
+            </button>
+          </div>
+          <p id="item-setting-note" class="item-setting-note">OFF: アイテムなし</p>
+        </div>
+        <div class="start-section">
+          <span>プレイ時間</span>
+          <div class="play-mode-options">
+            <button type="button" data-play-mode="timed">
+              <strong>5分</strong>
+              <span>制限時間あり</span>
+            </button>
+            <button type="button" data-play-mode="endless">
+              <strong>エンドレス</strong>
+              <span>制限時間なし</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-over" class="game-over" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+        <p id="game-over-title">Game Over</p>
+        <strong id="final-score">0</strong>
+        <button id="play-again-button" type="button">もう一度</button>
+      </div>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+</html>
