@@ -1,0 +1,16 @@
+AI用メモ
+- このファイルはCodexが作業中の判断、仕様差分、確認事項を自由に残すためのメモ。
+
+2026-05-25 mood tune: natural fall -0.5/s above 50, recover +0.3/s below 50, event mood deltas x1.2 (heal, shield, dealt/received damage).
+2026-05-25 mood curve changed: outgoing damage peaks at mood70 (+30%), falls to -20% at 100 and -50% at 0; incoming +0 until 70 then +20% at 100; guard point curve 0:-50pt 50:0 70:+15pt 92:-15pt 93+:0%; ult blocked <=40, random auto >=85, forced auto >=95; CD penalty below 50 (40:+5%, 0:+80%); cast curve 0:+30%, 50:0, 70:-20%, 100:0.
+2026-05-25 town prototype added: initial state town; walkable 1600x1100 town map, facilities inn/item/weapon/armor/guild, E interaction panels, guild starts tutorial battle, battle result R returns to town.
+2026-05-25 player controls changed: Space guard; RMB hold attack aim preview, LMB confirms shot, RMB release cancels; F/G enter heal/shield aim previews, LMB confirms, RMB cancels. Added range/aim preview drawing.
+2026-05-25 attack aim changed from RMB-hold to RMB toggle. F/G aim overwrites current aim, so pressing a different skill while aiming switches to that skill; RMB cancels any current aim.
+2026-05-25 interrupted player casts now set the interrupted skill cooldown to 80% of its max CD (attack 3.2s, heal 4.8s, shield 6.4s). Constants added for player CDs.
+2026-05-25 mood gain tuning: damage mood gain gets distance multiplier x1 at <200, linear to x1.5 at >=420; natural mood fall above 50 scales down with noDamage time to 0.1/s at 18s+; multi-hit mood bonus on 2+ enemy hits from one skill = 3 + enemyHits (enemies only).
+2026-05-25 UI color distinction: mood changed to pink/magenta (#ff7ac8, high #ff4f87); ultimate remains gold (#ffd86b) in skill gauge.
+2026-05-25 UI: mood stays yellow/orange bar; ultimate = circular icon ring in lower-left party HUD, violet color; skill panel ultimate uses same violet.
+2026-05-25 UI: added ultimate key badges beside circular ult rings. Mapping is by id, not party row order: ulpes=1, rihas=2, sushia=3, finald=4.
+2026-05-25 dialogue: added SKILL_LINES from spec and speech bubble effect for normal attacks, skills, and ultimates. Lines trigger on successful action/cast start.
+2026-05-25 dialogue: casted skills now speak on cast completion/resolution, not on cast start. Applies to Finald attack/heal/shield and Sushia bolts/bomb/ice ult; Full Heal remains on channel start.
+2026-05-25 player cast interrupt: INTERRUPTED_CAST_COOLDOWN_REDUCTION=0.8 means remaining cooldown is 20% of max, e.g. 10s -> 2s.

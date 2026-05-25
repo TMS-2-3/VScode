@@ -17,9 +17,9 @@
   };
 
   const game = {
-    state: "playing",
+    state: "town",
     time: 0,
-    message: "依頼: 魔物を全滅させる",
+    message: "はじまりの町",
     messageTimer: 5,
     hover: null,
     stageClearTimer: 0,
@@ -32,16 +32,30 @@
   let areas = [];
   let effects = [];
   let lastTime = performance.now();
+  const TOWN_WIDTH = 1600;
+  const TOWN_HEIGHT = 1100;
+  const town = {
+    player: { x: TOWN_WIDTH * 0.5, y: TOWN_HEIGHT - 160, radius: 15, speed: 235, color: "#57c7c9" },
+    camera: { x: 0, y: 0 },
+    buildings: [],
+    props: [],
+    interaction: null,
+    panel: null,
+  };
 
   const PLAYER_ATTACK_CAST = 1;
   const PLAYER_ATTACK_COST = 6;
+  const PLAYER_ATTACK_CD = 4;
   const PLAYER_ATTACK_RANGE = 420;
   const HEAL_CAST = 2;
   const HEAL_COST = 18;
+  const HEAL_CD = 6;
   const HEAL_RANGE = 520;
   const SHIELD_CAST = 2;
   const SHIELD_COST = 24;
+  const SHIELD_CD = 8;
   const SHIELD_RANGE = 340;
+  const INTERRUPTED_CAST_COOLDOWN_REDUCTION = 0.8;
   const SHIELD_RADIUS = 92;
   const SELF_HEAL_DELAY = 5;
   const SELF_HEAL_LIMIT = 0.8;
@@ -49,6 +63,26 @@
   const SELF_HEAL_HP_PER_SEC = 14;
   const AI_IDLE_RECHECK = 0.2;
   const ACTION_GAP = 0.2;
+  const MOOD_BASELINE = 50;
+  const MOOD_NATURAL_FALL = 0.5;
+  const MOOD_NATURAL_FALL_MIN = 0.1;
+  const MOOD_NATURAL_FALL_MIN_TIME = 18;
+  const MOOD_NATURAL_RECOVER = 0.3;
+  const MOOD_EVENT_MULT = 1.2;
+  const MOOD_NO_DAMAGE_GAIN_BONUS_START = 3;
+  const MOOD_NO_DAMAGE_GAIN_BONUS_MAX_TIME = 18;
+  const MOOD_NO_DAMAGE_GAIN_BONUS_MAX = 1.3;
+  const MOOD_DISTANCE_BONUS_START = 200;
+  const MOOD_DISTANCE_BONUS_END = 420;
+  const MOOD_DISTANCE_BONUS_MAX = 1.5;
+  const MOOD_MULTI_HIT_MIN = 2;
+  const MOOD_MULTI_HIT_BASE = 3;
+  const ENEMY_NORMAL_ATTACK_CD = 4;
+  const CASTER_ACTION_CD = 5.2;
+  const CASTER_SKILL_CD_BASE = 6.6;
+  const CASTER_SKILL_CD_RANDOM = 1.5;
+  const HEAVY_SLAM_CD = 8.4;
+  const SUSHIA_ICE_WORLD_RADIUS = 330;
 
   const COLORS = {
     floor: "#263129",
@@ -63,10 +97,42 @@
     mp: "#73a7ff",
     shield: "#8fe9ff",
     mood: "#ffd86b",
+    moodHigh: "#ff9f43",
+    ult: "#b88cff",
     black: "#111111",
     white: "#ffffff",
   };
 
+  const ULTIMATE_KEYS = {
+    ulpes: "1",
+    rihas: "2",
+    sushia: "3",
+    finald: "4",
+  };
+
+  const SKILL_LINES = {
+    finald: {
+      attack: ["援護します"],
+      heal: ["ヒール!", "回復!"],
+      shield: ["バリア展開!", "守るよ!"],
+      ult: ["フルヒール!!"],
+    },
+    ulpes: {
+      attack: ["てやっ!", "くらえ!"],
+      heroSlash: ["ヒーロースラッシュ!!"],
+      ult: ["正義の一撃!!"],
+    },
+    rihas: {
+      attack: ["どりゃぁ!", "しねぇ!"],
+      quake: ["台地よ!揺れよ!"],
+      ult: ["相手してやる"],
+    },
+    sushia: {
+      attack: ["とうっ!", "拡散弾!"],
+      bomb: ["インパクトボム!!"],
+      ult: ["全部凍っちゃえ!!"],
+    },
+  };
   const player = makeUnit({
     id: "finald",
     name: "フィナルド",
@@ -94,36 +160,50 @@
     canvas.style.width = `${view.w}px`;
     canvas.style.height = `${view.h}px`;
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    clampAllUnits();
+    if (game.state === "town") {
+      clampTownPlayer();
+      updateTownCamera();
+    } else {
+      clampAllUnits();
+    }
   }
 
   window.addEventListener("resize", resize);
   resize();
-  resetGame();
+  startTown();
   requestAnimationFrame(loop);
 
   window.addEventListener("keydown", (event) => {
-    const key = event.key.toLowerCase();
+    const key = event.key === " " ? "space" : event.key.toLowerCase();
     input.keys[key] = true;
 
-    if (["f", "g", "r", "1", "2", "3", "4"].includes(key)) {
+    if (["f", "g", "r", "e", "escape", "space", "1", "2", "3", "4"].includes(key)) {
       event.preventDefault();
     }
     if (event.repeat) {
       return;
     }
 
+    if (game.state === "town") {
+      if (key === "e") {
+        interactTown();
+      } else if (key === "escape") {
+        closeTownPanel();
+      }
+      return;
+    }
+
     if (game.state !== "playing") {
       if (key === "r") {
-        resetGame();
+        startTown();
       }
       return;
     }
 
     if (key === "f") {
-      castHeal();
+      startPlayerAim("heal");
     } else if (key === "g") {
-      castShield();
+      startPlayerAim("shield");
     } else if (key === "1") {
       triggerUltimate("ulpes");
     } else if (key === "2") {
@@ -136,7 +216,7 @@
   });
 
   window.addEventListener("keyup", (event) => {
-    input.keys[event.key.toLowerCase()] = false;
+    input.keys[event.key === " " ? "space" : event.key.toLowerCase()] = false;
   });
 
   canvas.addEventListener("mousemove", (event) => {
@@ -151,10 +231,15 @@
       return;
     }
     if (event.button === 0) {
-      firePlayerShot();
+      confirmPlayerAim();
     }
     if (event.button === 2) {
       input.mouse.right = true;
+      if (player.aim) {
+        cancelPlayerAim();
+      } else {
+        startPlayerAim("attack");
+      }
     }
   });
 
@@ -210,6 +295,7 @@
       guardFlash: 0,
       noDamage: 999,
       cast: null,
+      aim: null,
       selfHealFloat: 0,
       delayedDamageQueue: [],
     });
@@ -313,7 +399,7 @@
       magicDefense: options.magicDefense || 0,
       guardChance: options.guardChance || 0,
       preferredRange: options.preferredRange || 90,
-      mood: options.team === "party" && options.id !== "finald" ? 40 : null,
+      mood: options.team === "party" && options.id !== "finald" ? MOOD_BASELINE : null,
       ult: 0,
       shield: 0,
       shieldTimer: 0,
@@ -327,6 +413,7 @@
       noDamage: 999,
       channel: null,
       cast: null,
+      aim: null,
       selfHealFloat: 0,
       delayedDamageQueue: [],
       castStacks: 0,
@@ -364,11 +451,182 @@
     });
     enemy.x = x;
     enemy.y = y;
-    enemy.cds.attack = 0.4 + Math.random() * 1.2;
-    enemy.cds.skill = 1.2 + Math.random() * 2.4;
+    enemy.cds.attack = Math.random() * getActionCooldown(enemy);
+    if (kind === "caster") {
+      enemy.cds.skill = CASTER_SKILL_CD_BASE + Math.random() * CASTER_SKILL_CD_RANDOM;
+    } else if (kind === "elite") {
+      enemy.cds.skill = HEAVY_SLAM_CD;
+    } else {
+      enemy.cds.skill = 0;
+    }
     return enemy;
   }
 
+
+  function startTown() {
+    projectiles = [];
+    telegraphs = [];
+    areas = [];
+    effects = [];
+    enemies = [];
+    game.state = "town";
+    game.time = 0;
+    game.hover = null;
+    game.stageClearTimer = 0;
+    game.message = "はじまりの町";
+    game.messageTimer = 4;
+    town.panel = null;
+    town.interaction = null;
+    player.aim = null;
+    if (town.buildings.length === 0) {
+      setupTown();
+    }
+    town.player.x = TOWN_WIDTH * 0.5;
+    town.player.y = TOWN_HEIGHT - 155;
+    clampTownPlayer();
+    updateTownCamera();
+  }
+
+  function setupTown() {
+    town.buildings = [
+      makeTownBuilding("inn", "宿屋", "宿", 170, 150, 250, 170, "#f0c978", "#b95143"),
+      makeTownBuilding("item", "アイテム屋", "薬", 510, 160, 250, 160, "#d6e7a6", "#3f8d72"),
+      makeTownBuilding("weapon", "武器屋", "剣", 890, 150, 260, 175, "#d7dce2", "#55616f"),
+      makeTownBuilding("armor", "防具屋", "盾", 1210, 175, 240, 155, "#d9d3ee", "#655aa0"),
+      makeTownBuilding("guild", "依頼所", "依", 610, 585, 380, 215, "#e1b07c", "#7f3f4d"),
+    ];
+
+    town.props = [
+      { type: "well", x: 790, y: 465, r: 28 },
+      { type: "tree", x: 120, y: 430, r: 28 },
+      { type: "tree", x: 310, y: 690, r: 30 },
+      { type: "tree", x: 1290, y: 455, r: 32 },
+      { type: "tree", x: 1470, y: 690, r: 27 },
+      { type: "crate", x: 455, y: 395, w: 42, h: 34 },
+      { type: "crate", x: 1125, y: 395, w: 50, h: 32 },
+    ];
+  }
+
+  function makeTownBuilding(id, name, sign, x, y, w, h, wall, roof) {
+    return {
+      id,
+      name,
+      sign,
+      x,
+      y,
+      w,
+      h,
+      wall,
+      roof,
+      door: { x: x + w / 2, y: y + h + 14 },
+    };
+  }
+
+  function updateTown(dt) {
+    if (!town.panel) {
+      const move = getMoveVector();
+      const speed = town.player.speed;
+      const nextX = town.player.x + move.x * speed * dt;
+      if (!isTownBlockedAt(nextX, town.player.y)) {
+        town.player.x = nextX;
+      }
+      const nextY = town.player.y + move.y * speed * dt;
+      if (!isTownBlockedAt(town.player.x, nextY)) {
+        town.player.y = nextY;
+      }
+      clampTownPlayer();
+    }
+    town.interaction = getTownInteraction();
+    updateTownCamera();
+  }
+
+  function updateTownCamera() {
+    const maxX = Math.max(0, TOWN_WIDTH - view.w);
+    const maxY = Math.max(0, TOWN_HEIGHT - view.h);
+    town.camera.x = clamp(town.player.x - view.w / 2, 0, maxX);
+    town.camera.y = clamp(town.player.y - view.h / 2, 0, maxY);
+  }
+
+  function isTownBlockedAt(x, y) {
+    const r = town.player.radius;
+    if (x < r || y < r || x > TOWN_WIDTH - r || y > TOWN_HEIGHT - r) {
+      return true;
+    }
+    for (const building of town.buildings) {
+      if (circleRectOverlap(x, y, r + 4, building.x, building.y, building.w, building.h)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function getTownInteraction() {
+    let best = null;
+    let bestDist = Infinity;
+    for (const building of town.buildings) {
+      const d = distPoint(town.player.x, town.player.y, building.door.x, building.door.y);
+      if (d <= 72 && d < bestDist) {
+        best = building;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  function interactTown() {
+    if (town.panel) {
+      if (town.panel.action === "quest") {
+        resetGame();
+      } else {
+        closeTownPanel();
+      }
+      return;
+    }
+
+    const target = getTownInteraction();
+    if (!target) {
+      return;
+    }
+
+    if (target.id === "inn") {
+      for (const member of party) {
+        member.hp = member.maxHp;
+        member.mp = member.maxMp;
+        member.dead = false;
+        member.shield = 0;
+        member.shieldTimer = 0;
+      }
+      town.panel = {
+        title: "宿屋",
+        lines: ["全員のHPとMPを回復した。", "次の依頼に向けて一息つける場所。"],
+      };
+    } else if (target.id === "item") {
+      town.panel = {
+        title: "アイテム屋",
+        lines: ["回復薬、魔力薬、状態回復アイテムを扱う予定。", "今は品揃え準備中。"],
+      };
+    } else if (target.id === "weapon") {
+      town.panel = {
+        title: "武器屋",
+        lines: ["杖、剣、拳具を扱う予定。", "数値強化だけでなく、調子の動きが変わる装備にしたい。"],
+      };
+    } else if (target.id === "armor") {
+      town.panel = {
+        title: "防具屋",
+        lines: ["ローブ、軽鎧、腕甲を扱う予定。", "防御力や魔防、ガード率に関わる装備を置く予定。"],
+      };
+    } else if (target.id === "guild") {
+      town.panel = {
+        title: "依頼所",
+        lines: ["依頼: 町外れの魔物討伐", "報酬や難易度選択はあとで追加する。"],
+        action: "quest",
+      };
+    }
+  }
+
+  function closeTownPanel() {
+    town.panel = null;
+  }
   function update(dt) {
     game.time += dt;
     if (game.messageTimer > 0) {
@@ -376,6 +634,10 @@
     }
 
     updateEffects(dt);
+    if (game.state === "town") {
+      updateTown(dt);
+      return;
+    }
     if (game.state !== "playing") {
       return;
     }
@@ -436,10 +698,10 @@
       }
 
       if (unit.team === "party" && unit.id !== "finald") {
-        if (unit.mood > 40) {
-          unit.mood = Math.max(40, unit.mood - dt * 1.2);
-        } else if (unit.mood < 40) {
-          unit.mood = Math.min(40, unit.mood + dt * 0.5);
+        if (unit.mood > MOOD_BASELINE) {
+          unit.mood = Math.max(MOOD_BASELINE, unit.mood - dt * getMoodNaturalFall(unit));
+        } else if (unit.mood < MOOD_BASELINE) {
+          unit.mood = Math.min(MOOD_BASELINE, unit.mood + dt * MOOD_NATURAL_RECOVER);
         }
       }
     }
@@ -460,8 +722,12 @@
       }
     }
 
+    const guardHeld = isPlayerGuarding();
+    if (guardHeld && player.aim) {
+      cancelPlayerAim();
+    }
     const busy = Boolean(player.channel || player.cast);
-    const guarding = input.mouse.right && !busy && player.actionLock <= 0 && player.frozen <= 0;
+    const guarding = guardHeld && !busy && player.actionLock <= 0 && player.frozen <= 0;
     player.guarding = guarding;
     const moveSpeed = player.speed * (guarding ? 0.42 : 1);
     if (player.frozen <= 0 && !busy) {
@@ -521,9 +787,10 @@
   }
 
   function startPlayerCast(type, data, castTime) {
-    if (player.dead || player.channel || player.cast || input.mouse.right || player.frozen > 0 || player.actionLock > 0) {
+    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
       return false;
     }
+    player.aim = null;
     player.cast = { type, time: castTime, total: castTime, ...data };
     player.actionLock = castTime;
     return true;
@@ -532,12 +799,16 @@
   function finishPlayerCast() {
     const cast = player.cast;
     player.cast = null;
-    if (!cast || player.dead || player.frozen > 0) {
+    if (!cast) {
+      return;
+    }
+    if (player.dead || player.frozen > 0) {
+      applyInterruptedPlayerCastCooldown(cast);
       return;
     }
 
     if (cast.type === "attack") {
-      completePlayerShot();
+      completePlayerShot(cast.dir);
     } else if (cast.type === "heal") {
       completeHeal(cast.target);
     } else if (cast.type === "shield") {
@@ -556,13 +827,21 @@
         updatePartyMovement(member, dt);
       }
       member.aiTick -= dt;
+      if (member.actionLock <= 0 && member.ult >= 100 && member.mood >= 95) {
+        if (triggerUltimate(member.id, true)) {
+          setActionCooldown(member);
+        }
+        continue;
+      }
+
       if (member.aiTick > 0 || member.actionLock > 0 || (member.cds.attack || 0) > 0) {
         continue;
       }
 
-      if (member.mood >= 86 && member.ult >= 100 && Math.random() < 0.16) {
-        triggerUltimate(member.id, true);
-        setActionCooldown(member);
+      if (member.mood >= 85 && member.ult >= 100 && Math.random() < 0.16) {
+        if (triggerUltimate(member.id, true)) {
+          setActionCooldown(member);
+        }
         continue;
       }
 
@@ -590,7 +869,7 @@
       dir = normalize(unit.x - target.x, unit.y - target.y);
     }
 
-    const moodSpeed = 1 + Math.max(0, unit.mood - 40) * 0.003;
+    const moodSpeed = 1 + Math.max(0, unit.mood - MOOD_BASELINE) * 0.003;
     unit.x += dir.x * unit.speed * moodSpeed * dt;
     unit.y += dir.y * unit.speed * moodSpeed * dt;
     clampUnit(unit);
@@ -659,11 +938,15 @@
         }
         if (distPoint(unit.x, unit.y, shot.x, shot.y) <= unit.radius + shot.radius) {
           shot.hit.add(unit);
-          dealDamage(shot.owner, unit, shot.damage, { magic: shot.magic });
+          if (shot.healAllies && unit.team === shot.owner.team) {
+            healUnit(shot.owner, unit, shot.heal ?? shot.damage, { noMood: unit === player });
+          } else {
+            dealDamage(shot.owner, unit, shot.damage, { magic: shot.magic });
+          }
           if (!shot.pierce) {
             projectiles.splice(i, 1);
+            break;
           }
-          break;
         }
       }
     }
@@ -807,11 +1090,11 @@
   }
 
   function getActionCooldown(unit) {
-    if (unit.id === "ulpes") return 3;
-    if (unit.id === "rihas") return 4;
-    if (unit.id === "sushia") return 5;
-    if (unit.role === "skirmisher") return 1.15;
-    if (unit.role === "caster") return 2.2;
+    if (unit.id === "ulpes") return getMoodCooldown(unit, 3);
+    if (unit.id === "rihas") return getMoodCooldown(unit, 4);
+    if (unit.id === "sushia") return getMoodCooldown(unit, 5);
+    if (unit.role === "caster") return CASTER_ACTION_CD;
+    if (unit.team === "enemy") return ENEMY_NORMAL_ATTACK_CD;
     return 1.5;
   }
 
@@ -819,11 +1102,110 @@
     unit.cds.attack = Math.max(unit.cds.attack || 0, getActionCooldown(unit));
   }
 
-  function getSushiaCastTime(baseTime, unit) {
-    return Math.max(baseTime * 0.25, baseTime * (1 - unit.castStacks * 0.05));
+  function moodLerp(mood, leftMood, leftValue, rightMood, rightValue) {
+    const ratio = clamp((mood - leftMood) / (rightMood - leftMood), 0, 1);
+    return leftValue + (rightValue - leftValue) * ratio;
   }
 
+  function getMoodNaturalFall(unit) {
+    const ratio = clamp(unit.noDamage / MOOD_NATURAL_FALL_MIN_TIME, 0, 1);
+    return moodLerp(ratio, 0, MOOD_NATURAL_FALL, 1, MOOD_NATURAL_FALL_MIN);
+  }
+
+  function getMoodGainMultiplier(unit) {
+    if (!unit || unit.mood === null) return 1;
+    if (unit.noDamage <= MOOD_NO_DAMAGE_GAIN_BONUS_START) return 1;
+    return moodLerp(unit.noDamage, MOOD_NO_DAMAGE_GAIN_BONUS_START, 1, MOOD_NO_DAMAGE_GAIN_BONUS_MAX_TIME, MOOD_NO_DAMAGE_GAIN_BONUS_MAX);
+  }
+
+  function addMoodGain(unit, amount) {
+    if (!unit || unit.mood === null || amount <= 0) {
+      return 0;
+    }
+    const adjusted = amount * getMoodGainMultiplier(unit);
+    const before = unit.mood;
+    unit.mood = clamp(unit.mood + adjusted, 0, 100);
+    return unit.mood - before;
+  }
+  function getMoodDistanceMultiplier(source, target) {
+    if (!source || !target) return 1;
+    const hitDistance = dist(source, target);
+    if (hitDistance <= MOOD_DISTANCE_BONUS_START) return 1;
+    return moodLerp(hitDistance, MOOD_DISTANCE_BONUS_START, 1, MOOD_DISTANCE_BONUS_END, MOOD_DISTANCE_BONUS_MAX);
+  }
+
+  function applyMultiHitMoodBonus(unit, enemyHits) {
+    if (!unit || unit.mood === null || enemyHits < MOOD_MULTI_HIT_MIN) {
+      return;
+    }
+    const bonus = MOOD_MULTI_HIT_BASE + enemyHits;
+    const gained = addMoodGain(unit, bonus);
+    if (gained > 0) {
+      addFloat(`調子+${Math.round(gained)}`, unit.x, unit.y - 42, COLORS.mood);
+    }
+  }
+
+  function getMoodOutgoingDamageMultiplier(unit) {
+    if (!unit || unit.mood === null) return 1;
+    if (unit.mood <= 50) return moodLerp(unit.mood, 0, 0.5, 50, 1);
+    if (unit.mood <= 70) return moodLerp(unit.mood, 50, 1, 70, 1.3);
+    return moodLerp(unit.mood, 70, 1.3, 100, 0.8);
+  }
+
+  function getMoodIncomingDamageMultiplier(unit) {
+    if (!unit || unit.mood === null || unit.mood <= 70) return 1;
+    return moodLerp(unit.mood, 70, 1, 100, 1.2);
+  }
+
+  function getMoodGuardChance(unit) {
+    if (!unit || unit.mood === null) return unit ? unit.guardChance : 0;
+    if (unit.mood >= 93) return 0;
+
+    let delta = 0;
+    if (unit.mood <= 50) {
+      delta = moodLerp(unit.mood, 0, -0.5, 50, 0);
+    } else if (unit.mood <= 70) {
+      delta = moodLerp(unit.mood, 50, 0, 70, 0.15);
+    } else if (unit.mood <= 92) {
+      delta = moodLerp(unit.mood, 70, 0.15, 92, -0.15);
+    } else {
+      delta = -0.15;
+    }
+    return clamp(unit.guardChance + delta, 0, 1);
+  }
+
+  function getMoodCooldownMultiplier(unit) {
+    if (!unit || unit.mood === null || unit.mood >= 50) return 1;
+    if (unit.mood >= 40) return moodLerp(unit.mood, 50, 1, 40, 1.05);
+    return moodLerp(unit.mood, 40, 1.05, 0, 1.8);
+  }
+
+  function getMoodCooldown(unit, baseTime) {
+    return baseTime * getMoodCooldownMultiplier(unit);
+  }
+
+  function getMoodCastTimeMultiplier(unit) {
+    if (!unit || unit.mood === null) return 1;
+    if (unit.mood <= 50) return moodLerp(unit.mood, 0, 1.3, 50, 1);
+    if (unit.mood <= 70) return moodLerp(unit.mood, 50, 1, 70, 0.8);
+    return moodLerp(unit.mood, 70, 0.8, 100, 1);
+  }
+
+  function getSushiaCastTime(baseTime, unit) {
+    const stackMultiplier = 1 - unit.castStacks * 0.05;
+    return Math.max(baseTime * 0.25, baseTime * stackMultiplier * getMoodCastTimeMultiplier(unit));
+  }
+
+  function speakSkill(unit, skillKey) {
+    const lines = SKILL_LINES[unit.id] && SKILL_LINES[unit.id][skillKey];
+    if (!lines || lines.length === 0) {
+      return;
+    }
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    addSpeech(line, unit);
+  }
   function useUlpesNormal(unit, target) {
+    speakSkill(unit, "attack");
     setActionCooldown(unit);
     unit.actionLock = ACTION_GAP;
     unit.aimAngle = angleTo(unit, target);
@@ -838,8 +1220,9 @@
   }
 
   function useUlpesHeroSlash(unit, target) {
+    speakSkill(unit, "heroSlash");
     setActionCooldown(unit);
-    unit.cds.heroSlash = 10;
+    unit.cds.heroSlash = getMoodCooldown(unit, 10);
     unit.actionLock = 0.62 + ACTION_GAP;
     unit.aimAngle = angleTo(unit, target);
     addTelegraph({
@@ -866,13 +1249,14 @@
             hits += unitHit.team === "enemy" ? 1 : 0;
           }
         }
+        applyMultiHitMoodBonus(unit, hits);
         unit.cds.heroSlash = Math.max(1.5, unit.cds.heroSlash - hits * 0.5);
         addBurst(unit.x, unit.y, 116, "rgba(244,197,79,0.22)");
       },
     });
   }
-
   function useRihasNormal(unit) {
+    speakSkill(unit, "attack");
     setActionCooldown(unit);
     unit.actionLock = 0.38 + ACTION_GAP;
     addTelegraph({
@@ -884,22 +1268,25 @@
       time: 0.38,
       getPosition: () => ({ x: unit.x, y: unit.y }),
       resolve: () => {
+        let hits = 0;
         for (const unitHit of [...enemies, ...party]) {
           if (unitHit.dead || unitHit === unit) {
             continue;
           }
           if (distPoint(unitHit.x, unitHit.y, unit.x, unit.y) <= 66 + unitHit.radius) {
             dealDamage(unit, unitHit, 16 + unit.attack * 0.55);
+            hits += unitHit.team === "enemy" ? 1 : 0;
           }
         }
+        applyMultiHitMoodBonus(unit, hits);
         addBurst(unit.x, unit.y, 72, "rgba(227,122,63,0.25)");
       },
     });
   }
-
   function useRihasJump(unit, target) {
+    speakSkill(unit, "quake");
     setActionCooldown(unit);
-    unit.cds.quake = 13;
+    unit.cds.quake = getMoodCooldown(unit, 13);
     unit.actionLock = 0.82 + ACTION_GAP;
     const dir = normalize(target.x - unit.x, target.y - unit.y);
     const landing = {
@@ -926,6 +1313,7 @@
           return;
         }
         const currentLanding = { x: telegraph.x, y: telegraph.y };
+        let hits = 0;
         unit.x = currentLanding.x;
         unit.y = currentLanding.y;
         for (const unitHit of [...enemies, ...party]) {
@@ -935,16 +1323,18 @@
           const d = distPoint(unitHit.x, unitHit.y, currentLanding.x, currentLanding.y);
           if (d <= 92 + unitHit.radius) {
             dealDamage(unit, unitHit, 22 + unit.attack * 0.8);
+            hits += unitHit.team === "enemy" ? 1 : 0;
           } else if (d <= 160 + unitHit.radius) {
             dealDamage(unit, unitHit, 10 + unit.attack * 0.25, { magic: true });
+            hits += unitHit.team === "enemy" ? 1 : 0;
           }
         }
+        applyMultiHitMoodBonus(unit, hits);
         addBurst(currentLanding.x, currentLanding.y, 158, "rgba(227,122,63,0.18)");
       },
     };
     addTelegraph(telegraph);
   }
-
   function useSushiaBolts(unit, target) {
     setActionCooldown(unit);
     const cast = getSushiaCastTime(1, unit);
@@ -960,6 +1350,7 @@
       time: cast,
       getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
       resolve: () => {
+        speakSkill(unit, "attack");
         for (let i = 0; i < 3; i += 1) {
           const spread = (i - 1) * 0.08;
           const angle = angleTo(unit, target) + spread;
@@ -985,7 +1376,7 @@
 
   function useSushiaBomb(unit, target) {
     setActionCooldown(unit);
-    unit.cds.bomb = 15;
+    unit.cds.bomb = getMoodCooldown(unit, 15);
     const cast = getSushiaCastTime(3, unit);
     unit.actionLock = cast + ACTION_GAP;
     const telegraph = {
@@ -997,7 +1388,9 @@
       time: cast,
       getPosition: () => ({ x: target.x, y: target.y }),
       resolve: () => {
+        speakSkill(unit, "bomb");
         const impact = { x: telegraph.x, y: telegraph.y };
+        let hits = 0;
         for (const unitHit of [...enemies, ...party]) {
           if (unitHit.dead || unitHit === unit) {
             continue;
@@ -1006,74 +1399,126 @@
           if (d <= 108 + unitHit.radius) {
             const nearCenter = d <= 32 + unitHit.radius;
             dealDamage(unit, unitHit, nearCenter ? 32 + unit.magic * 0.95 : 16 + unit.magic * 0.48, { magic: true });
+            hits += unitHit.team === "enemy" ? 1 : 0;
           }
         }
+        applyMultiHitMoodBonus(unit, hits);
         addBurst(impact.x, impact.y, 118, "rgba(185,133,238,0.28)");
       },
     };
     addTelegraph(telegraph);
   }
 
+  function startPlayerAim(type) {
+    if (player.dead || player.channel || player.cast || player.frozen > 0) {
+      return false;
+    }
+    player.aim = { type };
+    game.hover = getHoveredPartyMember();
+    return true;
+  }
+
+  function cancelPlayerAim() {
+    player.aim = null;
+  }
+
+  function confirmPlayerAim() {
+    if (!player.aim || player.dead || player.channel || player.cast || player.frozen > 0) {
+      return false;
+    }
+    game.hover = getHoveredPartyMember();
+    if (player.aim.type === "attack") {
+      return firePlayerShot();
+    }
+    if (player.aim.type === "heal") {
+      return castHeal();
+    }
+    if (player.aim.type === "shield") {
+      return castShield();
+    }
+    return false;
+  }
+
+  function isPlayerGuarding() {
+    return Boolean(input.keys.space);
+  }
   function firePlayerShot() {
-    if (player.dead || player.channel || player.cast || input.mouse.right || player.frozen > 0 || player.actionLock > 0) {
-      return;
+    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
+      return false;
     }
     if ((player.cds.attack || 0) > 0) {
-      return;
+      addFloat("再詠唱中", player.x, player.y - 28, "#ffffff");
+      return false;
     }
     if (player.mp < PLAYER_ATTACK_COST) {
       addFloat("魔力不足", player.x, player.y - 28, "#ffffff");
-      return;
+      return false;
     }
     const dir = normalize(input.mouse.x - player.x, input.mouse.y - player.y);
     if (dir.len === 0) {
-      return;
+      return false;
+    }
+    if (!startPlayerCast("attack", { dir }, PLAYER_ATTACK_CAST)) {
+      return false;
     }
     player.mp -= PLAYER_ATTACK_COST;
-    player.cds.attack = 4;
-    startPlayerCast("attack", {}, PLAYER_ATTACK_CAST);
+    player.cds.attack = PLAYER_ATTACK_CD;
+    return true;
   }
 
-  function completePlayerShot() {
-    const dir = normalize(input.mouse.x - player.x, input.mouse.y - player.y);
+  function completePlayerShot(lockedDir) {
+    const dir = lockedDir && lockedDir.len !== 0 ? lockedDir : normalize(input.mouse.x - player.x, input.mouse.y - player.y);
     if (dir.len === 0) {
       return;
     }
+    speakSkill(player, "attack");
     projectiles.push({
       x: player.x,
       y: player.y,
       vx: dir.x * 260,
       vy: dir.y * 260,
-      radius: 6,
+      radius: 12,
       team: "party",
       owner: player,
       damage: 16 + player.magic * 0.28,
       magic: true,
       life: PLAYER_ATTACK_RANGE / 260,
       hit: new Set(),
-      pierce: false,
+      pierce: true,
       affectsAllies: true,
+      healAllies: true,
+      heal: 16 + player.magic * 0.28,
       color: "#9ef7ff",
     });
   }
 
   function castHeal() {
-    if (player.dead || player.channel || player.cast || input.mouse.right || player.frozen > 0 || player.actionLock > 0) {
-      return;
+    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
+      return false;
     }
     const target = game.hover;
     if (!target || target.dead || target.team !== "party") {
       addFloat("対象なし", input.mouse.x, input.mouse.y - 12, "#ffffff");
-      return;
+      return false;
     }
-    if ((player.cds.heal || 0) > 0 || player.mp < HEAL_COST || dist(player, target) > HEAL_RANGE) {
+    if ((player.cds.heal || 0) > 0) {
+      addFloat("再詠唱中", target.x, target.y - 28, "#ffffff");
+      return false;
+    }
+    if (player.mp < HEAL_COST) {
+      addFloat("魔力不足", player.x, player.y - 28, "#ffffff");
+      return false;
+    }
+    if (dist(player, target) > HEAL_RANGE) {
       addFloat("届かない", target.x, target.y - 28, "#ffffff");
-      return;
+      return false;
     }
-
+    if (!startPlayerCast("heal", { target }, HEAL_CAST)) {
+      return false;
+    }
     player.mp -= HEAL_COST;
-    player.cds.heal = 6;
-    startPlayerCast("heal", { target }, HEAL_CAST);
+    player.cds.heal = HEAL_CD;
+    return true;
   }
 
   function completeHeal(target) {
@@ -1081,6 +1526,7 @@
       addFloat("対象なし", player.x, player.y - 28, "#ffffff");
       return;
     }
+    speakSkill(player, "heal");
     healUnit(player, target, 38 + player.magic * 0.55, { noMood: target === player });
     effects.push({
       type: "beam",
@@ -1095,32 +1541,40 @@
   }
 
   function castShield() {
-    if (player.dead || player.channel || player.cast || input.mouse.right || player.frozen > 0 || player.actionLock > 0) {
-      return;
+    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
+      return false;
     }
-    if ((player.cds.shield || 0) > 0 || player.mp < SHIELD_COST) {
+    if ((player.cds.shield || 0) > 0) {
+      addFloat("再詠唱中", player.x, player.y - 28, "#ffffff");
+      return false;
+    }
+    if (player.mp < SHIELD_COST) {
       addFloat("魔力不足", player.x, player.y - 28, "#ffffff");
-      return;
+      return false;
     }
     const x = clamp(input.mouse.x, 35, view.w - 35);
     const y = clamp(input.mouse.y, 35, view.h - 35);
     if (distPoint(player.x, player.y, x, y) > SHIELD_RANGE) {
       addFloat("届かない", x, y - 18, "#ffffff");
-      return;
+      return false;
+    }
+    if (!startPlayerCast("shield", { x, y }, SHIELD_CAST)) {
+      return false;
     }
     player.mp -= SHIELD_COST;
-    player.cds.shield = 8;
-    startPlayerCast("shield", { x, y }, SHIELD_CAST);
+    player.cds.shield = SHIELD_CD;
+    return true;
   }
 
   function completeShield(x, y) {
+    speakSkill(player, "shield");
     let applied = 0;
     for (const member of party) {
       if (!member.dead && distPoint(member.x, member.y, x, y) <= SHIELD_RADIUS + member.radius) {
         member.shield = Math.max(member.shield, 40 + player.magic * 0.45);
         member.shieldTimer = 6;
         if (member !== player) {
-          member.mood = clamp(member.mood + 4, 0, 100);
+          addMoodGain(member, 4 * MOOD_EVENT_MULT);
         }
         applied += 1;
       }
@@ -1141,7 +1595,11 @@
   function triggerUltimate(id, automatic = false) {
     const unit = party.find((member) => member.id === id);
     if (!unit || unit.dead || unit.frozen > 0 || unit.ult < 100 || unit.actionLock > 0 || unit.cast) {
-      return;
+      return false;
+    }
+    if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 40) {
+      addFloat("不調", unit.x, unit.y - 34, "#cfd5e6");
+      return false;
     }
     unit.ult = 0;
     if (id === "ulpes") {
@@ -1153,6 +1611,7 @@
     } else if (id === "finald") {
       ultFinald();
     }
+    return true;
   }
 
   function ultUlpes(unit, automatic) {
@@ -1160,6 +1619,7 @@
     if (!target) {
       return;
     }
+    speakSkill(unit, "ult");
     unit.actionLock = (automatic ? 0.45 : 0.7) + ACTION_GAP;
     const telegraph = {
       type: "circle",
@@ -1174,6 +1634,7 @@
           return;
         }
         const impact = { x: telegraph.x, y: telegraph.y };
+        let hits = 0;
         unit.x = clamp(impact.x + 22, 35, view.w - 35);
         unit.y = impact.y;
         for (const unitHit of [...enemies, ...party]) {
@@ -1184,15 +1645,17 @@
           if (d <= 70 + unitHit.radius) {
             const base = unitHit.team === "enemy" ? 74 + unit.attack * 1.4 : (74 + unit.attack * 1.4) / 4;
             dealDamage(unit, unitHit, automatic ? base * 0.65 : base);
+            hits += unitHit.team === "enemy" ? 1 : 0;
           }
         }
+        applyMultiHitMoodBonus(unit, hits);
         addBurst(impact.x, impact.y, 84, "rgba(244,197,79,0.32)");
       },
     };
     addTelegraph(telegraph);
   }
-
   function ultRihas(unit) {
+    speakSkill(unit, "ult");
     unit.actionLock = ACTION_GAP;
     let taunted = 0;
     for (const enemy of enemies) {
@@ -1205,7 +1668,6 @@
     unit.shield = Math.max(unit.shield, 25 + taunted * 8);
     unit.shieldTimer = 5.5;
     addBurst(unit.x, unit.y, 270, "rgba(227,122,63,0.18)");
-    addFloat("相手してやる", unit.x, unit.y - 36, "#ffd6bd");
   }
 
   function ultSushia(unit, automatic) {
@@ -1215,48 +1677,55 @@
       type: "circle",
       x: unit.x,
       y: unit.y,
-      radius: 220,
+      radius: SUSHIA_ICE_WORLD_RADIUS,
       team: "party",
       time: cast,
       getPosition: () => ({ x: unit.x, y: unit.y }),
       resolve: () => {
+        speakSkill(unit, "ult");
         const frozen = new Set();
+        let multiHitAwarded = false;
         areas.push({
           type: "ice",
           x: unit.x,
           y: unit.y,
-          radius: 220,
+          radius: SUSHIA_ICE_WORLD_RADIUS,
           time: automatic ? 2.6 : 4.2,
           tick: 0,
           tickRate: 0.4,
           apply: () => {
+            let hits = 0;
             for (const unitHit of [...enemies, ...party]) {
               if (unitHit.dead || unitHit === unit) {
                 continue;
               }
               const d = distPoint(unitHit.x, unitHit.y, unit.x, unit.y);
-              if (d <= 220 + unitHit.radius) {
+              if (d <= SUSHIA_ICE_WORLD_RADIUS + unitHit.radius) {
                 if (!frozen.has(unitHit)) {
                   unitHit.frozen = Math.max(unitHit.frozen, automatic ? 1.1 : 2);
                   frozen.add(unitHit);
                 }
-                const scale = 1 - clamp(d / 220, 0, 0.8);
+                const scale = 1 - clamp(d / SUSHIA_ICE_WORLD_RADIUS, 0, 0.8);
                 dealDamage(unit, unitHit, (8 + unit.magic * 0.22) * scale, { magic: true });
+                hits += unitHit.team === "enemy" ? 1 : 0;
               }
+            }
+            if (!multiHitAwarded && hits >= MOOD_MULTI_HIT_MIN) {
+              applyMultiHitMoodBonus(unit, hits);
+              multiHitAwarded = true;
             }
           },
         });
       },
     });
   }
-
   function ultFinald() {
     if (player.channel || player.cast || player.actionLock > 0) {
       return;
     }
     player.channel = { time: 5.5, pulse: 0 };
     player.actionLock = ACTION_GAP;
-    addFloat("フルヒール", player.x, player.y - 36, "#bdfcff");
+    speakSkill(player, "ult");
   }
 
   function enemyBite(enemy, target) {
@@ -1284,7 +1753,7 @@
 
   function enemyLineAttack(enemy, target) {
     setActionCooldown(enemy);
-    enemy.cds.skill = 3.6 + Math.random() * 1.5;
+    enemy.cds.skill = CASTER_SKILL_CD_BASE + Math.random() * CASTER_SKILL_CD_RANDOM;
     enemy.actionLock = 0.86 + ACTION_GAP;
     const getLine = () => {
       const end = projectPoint(enemy, target, 620);
@@ -1314,7 +1783,7 @@
 
   function enemyHeavySlam(enemy, target) {
     setActionCooldown(enemy);
-    enemy.cds.skill = 5.4;
+    enemy.cds.skill = HEAVY_SLAM_CD;
     enemy.actionLock = 0.95 + ACTION_GAP;
     const telegraph = {
       type: "circle",
@@ -1344,7 +1813,7 @@
 
     let finalAmount = amount;
     if (source && source.team === "party" && source.id !== "finald" && source.mood !== null) {
-      finalAmount *= 1 + Math.max(0, source.mood - 40) * 0.006 - Math.max(0, 40 - source.mood) * 0.007;
+      finalAmount *= getMoodOutgoingDamageMultiplier(source);
       if (source.id === "rihas" && hasDelayedDamage(source)) {
         finalAmount *= 1.12;
       }
@@ -1355,7 +1824,7 @@
     }
 
     if (target.team === "party" && target.id !== "finald" && target.mood !== null) {
-      finalAmount *= 1 + Math.max(0, target.mood - 40) * 0.005;
+      finalAmount *= getMoodIncomingDamageMultiplier(target);
     }
 
     if (source && source.team === "enemy" && target.id === "rihas" && source.forcedTarget === target && source.tauntTimer > 0) {
@@ -1417,13 +1886,14 @@
         source.stackCooldown = 1;
       }
       if (source.mood !== null && target.team === "enemy") {
-        source.mood = clamp(source.mood + rewardDamage * 0.035, 0, 100);
+        const distanceMult = getMoodDistanceMultiplier(source, target);
+        addMoodGain(source, rewardDamage * 0.035 * MOOD_EVENT_MULT * distanceMult);
       }
     }
 
     if (target.team === "party" && target.id !== "finald") {
       target.ult = clamp(target.ult + rewardDamage * 0.16, 0, 100);
-      target.mood = clamp(target.mood - rewardDamage * 0.045, 0, 100);
+      target.mood = clamp(target.mood - rewardDamage * 0.045 * MOOD_EVENT_MULT, 0, 100);
     }
 
     if (target.hp <= 0) {
@@ -1452,8 +1922,8 @@
       source.ult = clamp(source.ult + healed * 0.22, 0, 100);
     }
     if (!options.noMood && target.team === "party" && target.id !== "finald") {
-      const quickBonus = target.noDamage < 3 ? 5 : 0;
-      target.mood = clamp(target.mood + healed * 0.12 + quickBonus, 0, 100);
+      const quickBonus = target.noDamage < 3 ? 5 * MOOD_EVENT_MULT : 0;
+      addMoodGain(target, healed * 0.12 * MOOD_EVENT_MULT + quickBonus);
     }
     return healed;
   }
@@ -1520,7 +1990,7 @@
 
   function tryGuard(unit) {
     if (unit === player) {
-      if (input.mouse.right && !player.channel && !player.cast && player.actionLock <= 0 && player.frozen <= 0) {
+      if (isPlayerGuarding() && !player.channel && !player.cast && player.actionLock <= 0 && player.frozen <= 0) {
         player.guardFlash = 0.18;
         return true;
       }
@@ -1529,8 +1999,10 @@
     if (unit.frozen > 0 || unit.actionLock > 0) {
       return false;
     }
-    const moodPenalty = Math.max(0, unit.mood - 60) * 0.004;
-    const chance = Math.max(0.04, unit.guardChance - moodPenalty);
+    const chance = getMoodGuardChance(unit);
+    if (chance <= 0) {
+      return false;
+    }
     if (Math.random() < chance) {
       unit.guardFlash = 0.28;
       unit.actionLock = ACTION_GAP;
@@ -1579,6 +2051,12 @@
     effects.push({ type: "burst", x, y, radius, color, time: 0.35, age: 0 });
   }
 
+  function addSpeech(text, unit) {
+    if (!text || !unit) {
+      return;
+    }
+    effects.push({ type: "speech", text, source: unit, time: 1.25, total: 1.25, age: 0 });
+  }
   function addFloat(text, x, y, color, outline = "#0b0d0b") {
     effects.push({ type: "float", text, x, y, color, outline, time: 0.85, age: 0, vy: -28 });
   }
@@ -1602,21 +2080,325 @@
   }
 
   function cancelPlayerCast() {
+    const cast = player.cast;
     player.cast = null;
+    applyInterruptedPlayerCastCooldown(cast);
     player.actionLock = Math.max(player.actionLock, ACTION_GAP);
     addFloat("詠唱中断", player.x, player.y - 32, "#ffffff");
   }
 
+  function applyInterruptedPlayerCastCooldown(cast) {
+    const cooldown = getPlayerCastCooldown(cast && cast.type);
+    if (!cooldown) {
+      return;
+    }
+    player.cds[cooldown.key] = cooldown.max * (1 - INTERRUPTED_CAST_COOLDOWN_REDUCTION);
+  }
+
+  function getPlayerCastCooldown(type) {
+    if (type === "attack") return { key: "attack", max: PLAYER_ATTACK_CD };
+    if (type === "heal") return { key: "heal", max: HEAL_CD };
+    if (type === "shield") return { key: "shield", max: SHIELD_CD };
+    return null;
+  }
+
   function draw() {
     ctx.clearRect(0, 0, view.w, view.h);
+    if (game.state === "town") {
+      drawTown();
+      drawEffects();
+      return;
+    }
     drawFloor();
     drawAreas();
     drawTelegraphs();
+    drawPlayerAimPreview();
     drawProjectiles();
     drawUnits();
     drawEffects();
     drawHud();
     drawResultOverlay();
+  }
+
+  function drawTown() {
+    updateTownCamera();
+    ctx.fillStyle = "#3f6a48";
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    ctx.save();
+    ctx.translate(-town.camera.x, -town.camera.y);
+    drawTownTerrain();
+    drawTownRoads();
+    drawTownProps();
+    drawTownBuildings();
+    drawTownCompanions();
+    drawTownPlayer();
+    ctx.restore();
+
+    drawTownHud();
+    drawTownPanel();
+  }
+
+  function drawTownTerrain() {
+    ctx.fillStyle = "#47784f";
+    ctx.fillRect(0, 0, TOWN_WIDTH, TOWN_HEIGHT);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.035)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= TOWN_WIDTH; x += 80) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, TOWN_HEIGHT);
+    }
+    for (let y = 0; y <= TOWN_HEIGHT; y += 80) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(TOWN_WIDTH, y);
+    }
+    ctx.stroke();
+  }
+
+  function drawTownRoads() {
+    ctx.fillStyle = "#b9a67f";
+    roundRect(0, 430, TOWN_WIDTH, 150, 26);
+    ctx.fill();
+    roundRect(705, 0, 190, TOWN_HEIGHT, 26);
+    ctx.fill();
+
+    ctx.fillStyle = "#c9b98f";
+    ctx.beginPath();
+    ctx.arc(800, 505, 150, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(92,70,44,0.22)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([18, 18]);
+    ctx.beginPath();
+    ctx.moveTo(0, 505);
+    ctx.lineTo(TOWN_WIDTH, 505);
+    ctx.moveTo(800, 0);
+    ctx.lineTo(800, TOWN_HEIGHT);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawTownProps() {
+    for (const prop of town.props) {
+      ctx.save();
+      if (prop.type === "tree") {
+        ctx.fillStyle = "#5f3c24";
+        roundRect(prop.x - 6, prop.y + 10, 12, 26, 4);
+        ctx.fill();
+        ctx.fillStyle = "#2f6d3c";
+        ctx.beginPath();
+        ctx.arc(prop.x, prop.y, prop.r, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#3f8a4d";
+        ctx.beginPath();
+        ctx.arc(prop.x - 10, prop.y - 8, prop.r * 0.55, 0, TAU);
+        ctx.fill();
+      } else if (prop.type === "well") {
+        ctx.fillStyle = "#6c7c85";
+        ctx.beginPath();
+        ctx.arc(prop.x, prop.y, prop.r, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#26343c";
+        ctx.beginPath();
+        ctx.arc(prop.x, prop.y, prop.r - 9, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = "#d8e1e2";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      } else if (prop.type === "crate") {
+        ctx.fillStyle = "#9a6841";
+        roundRect(prop.x, prop.y, prop.w, prop.h, 4);
+        ctx.fill();
+        ctx.strokeStyle = "#593821";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawTownBuildings() {
+    const buildings = [...town.buildings].sort((a, b) => (a.y + a.h) - (b.y + b.h));
+    for (const building of buildings) {
+      drawTownBuilding(building);
+    }
+  }
+
+  function drawTownBuilding(building) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    roundRect(building.x + 10, building.y + 14, building.w, building.h, 10);
+    ctx.fill();
+
+    ctx.fillStyle = building.wall;
+    roundRect(building.x, building.y, building.w, building.h, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(52,38,29,0.45)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = building.roof;
+    ctx.beginPath();
+    ctx.moveTo(building.x - 18, building.y + 28);
+    ctx.lineTo(building.x + building.w / 2, building.y - 36);
+    ctx.lineTo(building.x + building.w + 18, building.y + 28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const doorW = 54;
+    ctx.fillStyle = "#5f3a2a";
+    roundRect(building.door.x - doorW / 2, building.y + building.h - 58, doorW, 58, 5);
+    ctx.fill();
+
+    ctx.fillStyle = "#f4e7bc";
+    roundRect(building.x + building.w / 2 - 33, building.y + 45, 66, 34, 6);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(66,43,28,0.55)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#2d241b";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "800 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(building.sign, building.x + building.w / 2, building.y + 62);
+
+    ctx.fillStyle = "#fff7df";
+    ctx.strokeStyle = "#34251d";
+    ctx.lineWidth = 4;
+    ctx.font = "800 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.strokeText(building.name, building.x + building.w / 2, building.y + building.h + 30);
+    ctx.fillText(building.name, building.x + building.w / 2, building.y + building.h + 30);
+
+    if (town.interaction === building && !town.panel) {
+      const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
+      ctx.strokeStyle = `rgba(255,255,255,${0.62 + pulse * 0.3})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(building.door.x, building.door.y, 34 + pulse * 5, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = "#111714";
+      ctx.strokeStyle = "#f7fff6";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(building.door.x, building.door.y - 48, 17, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#f7fff6";
+      ctx.font = "800 16px 'Segoe UI', sans-serif";
+      ctx.fillText("E", building.door.x, building.door.y - 48);
+    }
+    ctx.restore();
+  }
+
+  function drawTownCompanions() {
+    drawTownNpc(710, 705, COLORS.ulpes, "ウ");
+    drawTownNpc(770, 735, COLORS.rihas, "リ");
+    drawTownNpc(845, 710, COLORS.sushia, "ス");
+  }
+
+  function drawTownNpc(x, y, color, label) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + 17, 17, 8, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = "#102018";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#101814";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x, y + 1);
+    ctx.restore();
+  }
+
+  function drawTownPlayer() {
+    const unit = town.player;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.24)";
+    ctx.beginPath();
+    ctx.ellipse(unit.x, unit.y + unit.radius + 4, unit.radius + 4, 7, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = unit.color;
+    ctx.strokeStyle = "#101814";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(unit.x, unit.y, unit.radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#101814";
+    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("フ", unit.x, unit.y + 1);
+
+    ctx.strokeStyle = "#6a4a2e";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(unit.x + 14, unit.y + 20);
+    ctx.lineTo(unit.x + 30, unit.y - 14);
+    ctx.stroke();
+    ctx.fillStyle = "#a8fbff";
+    ctx.strokeStyle = "#f7fff6";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(unit.x + 31, unit.y - 16, 6, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTownHud() {
+    drawPanel(18, 18, 300, 80);
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 19px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("はじまりの町", 34, 47);
+    ctx.font = "13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#d4e4d5";
+    const target = town.interaction ? town.interaction.name : "広場";
+    ctx.fillText(`現在地: ${target}`, 34, 73);
+  }
+
+  function drawTownPanel() {
+    if (!town.panel) {
+      return;
+    }
+    const w = Math.min(560, view.w - 32);
+    const h = 188;
+    const x = (view.w - w) / 2;
+    const y = view.h - h - 28;
+    drawPanel(x, y, w, h);
+
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(town.panel.title, x + 24, y + 42);
+
+    ctx.font = "14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#dce9dc";
+    for (let i = 0; i < town.panel.lines.length; i += 1) {
+      ctx.fillText(town.panel.lines[i], x + 24, y + 76 + i * 25);
+    }
+
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(town.panel.action === "quest" ? "E  出発" : "E  閉じる", x + w - 24, y + h - 24);
   }
 
   function drawFloor() {
@@ -1719,6 +2501,77 @@
     }
   }
 
+
+  function drawPlayerAimPreview() {
+    if (!player.aim || player.dead) {
+      return;
+    }
+
+    ctx.save();
+    if (player.aim.type === "attack") {
+      const dir = normalize(input.mouse.x - player.x, input.mouse.y - player.y);
+      if (dir.len > 0) {
+        const endX = player.x + dir.x * PLAYER_ATTACK_RANGE;
+        const endY = player.y + dir.y * PLAYER_ATTACK_RANGE;
+        drawAimRangeCircle(player.x, player.y, PLAYER_ATTACK_RANGE, "rgba(158,247,255,0.22)");
+        ctx.strokeStyle = "rgba(158,247,255,0.24)";
+        ctx.lineWidth = 26;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        ctx.strokeStyle = "#9ef7ff";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 10]);
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    } else if (player.aim.type === "heal") {
+      drawAimRangeCircle(player.x, player.y, HEAL_RANGE, "rgba(121,255,141,0.24)");
+      const target = game.hover;
+      if (target && target.team === "party" && !target.dead) {
+        const inRange = dist(player, target) <= HEAL_RANGE;
+        ctx.strokeStyle = inRange ? "#79ff8d" : "#ff6a5c";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, target.radius + 15, 0, TAU);
+        ctx.stroke();
+        ctx.globalAlpha = inRange ? 0.72 : 0.35;
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+      }
+    } else if (player.aim.type === "shield") {
+      drawAimRangeCircle(player.x, player.y, SHIELD_RANGE, "rgba(143,233,255,0.22)");
+      const x = clamp(input.mouse.x, 35, view.w - 35);
+      const y = clamp(input.mouse.y, 35, view.h - 35);
+      const inRange = distPoint(player.x, player.y, x, y) <= SHIELD_RANGE;
+      ctx.fillStyle = inRange ? "rgba(143,233,255,0.18)" : "rgba(255,92,78,0.14)";
+      ctx.strokeStyle = inRange ? "#8fe9ff" : "#ff6a5c";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, SHIELD_RADIUS, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawAimRangeCircle(x, y, radius, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 12]);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
   function drawProjectiles() {
     for (const shot of projectiles) {
       ctx.save();
@@ -1742,7 +2595,7 @@
 
   function drawUnit(unit) {
     const isHovered = game.hover === unit;
-    const mood = unit.mood === null ? 40 : unit.mood;
+    const mood = unit.mood === null ? MOOD_BASELINE : unit.mood;
 
     ctx.save();
     if (unit.hurt > 0) {
@@ -1752,7 +2605,7 @@
     if (unit.team === "party" && unit.id !== "finald") {
       const start = -Math.PI / 2;
       const end = start + TAU * (mood / 100);
-      ctx.strokeStyle = mood > 80 ? "#ff9f55" : COLORS.mood;
+      ctx.strokeStyle = mood > 80 ? COLORS.moodHigh : COLORS.mood;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(unit.x, unit.y, unit.radius + 7, start, end);
@@ -1971,11 +2824,53 @@
     ctx.restore();
   }
 
+  function drawSpeechBubble(effect) {
+    const source = effect.source;
+    if (!source) {
+      return;
+    }
+    const alpha = clamp(Math.min(effect.age / 0.12, effect.time / 0.22), 0, 1);
+    const anchorX = source.x;
+    const anchorY = source.y - (source.radius || 14) - 20;
+
+    ctx.globalAlpha = alpha;
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const textWidth = ctx.measureText(effect.text).width;
+    const bubbleW = Math.min(Math.max(textWidth + 20, 46), 190);
+    const bubbleH = 27;
+    const bubbleX = clamp(anchorX - bubbleW / 2, 8, view.w - bubbleW - 8);
+    const bubbleY = clamp(anchorY - bubbleH - 12 - Math.sin(effect.age * 7) * 1.5, 8, view.h - bubbleH - 20);
+    const tailX = clamp(anchorX, bubbleX + 12, bubbleX + bubbleW - 12);
+    const tailY = bubbleY + bubbleH - 1;
+
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.strokeStyle = "rgba(10,12,10,0.82)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tailX - 6, tailY);
+    ctx.lineTo(tailX + 6, tailY);
+    ctx.lineTo(clamp(anchorX, bubbleX + 10, bubbleX + bubbleW - 10), tailY + 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    roundRect(bubbleX, bubbleY, bubbleW, bubbleH, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#101510";
+    ctx.fillText(effect.text, bubbleX + bubbleW / 2, bubbleY + bubbleH / 2 + 0.5);
+  }
+
   function drawEffects() {
     for (const effect of effects) {
       const life = clamp(effect.time / 0.85, 0, 1);
       ctx.save();
-      if (effect.type === "float") {
+      if (effect.type === "speech") {
+        drawSpeechBubble(effect);
+      } else if (effect.type === "float") {
         ctx.globalAlpha = life;
         ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
         ctx.textAlign = "center";
@@ -2036,10 +2931,42 @@
   }
 
   function drawPartyRow(unit, x, y, width) {
+    const iconX = x + 10;
+    const iconY = y + 13;
+    const barX = x + 112;
+    const barW = width - 118;
+
+    drawCircleGauge(iconX, iconY, 13, unit.ult / 100, "rgba(0,0,0,0.45)", COLORS.ult);
     ctx.fillStyle = unit.color;
     ctx.beginPath();
-    ctx.arc(x + 10, y + 13, 8, 0, TAU);
+    ctx.arc(iconX, iconY, 8, 0, TAU);
     ctx.fill();
+
+    if (unit.ult >= 100) {
+      ctx.strokeStyle = "rgba(255,255,255,0.82)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, 16, 0, TAU);
+      ctx.stroke();
+    }
+
+    const ultKey = ULTIMATE_KEYS[unit.id];
+    if (ultKey) {
+      const keyX = iconX - 11;
+      const keyY = iconY - 18;
+      ctx.fillStyle = unit.ult >= 100 ? COLORS.ult : "rgba(7,10,9,0.88)";
+      ctx.strokeStyle = unit.ult >= 100 ? "#ffffff" : "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 1;
+      roundRect(keyX - 7, keyY - 7, 14, 14, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = unit.ult >= 100 ? "#111111" : "#f7fff6";
+      ctx.font = "800 10px 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(ultKey, keyX, keyY + 0.5);
+      ctx.textBaseline = "alphabetic";
+    }
 
     ctx.fillStyle = "#f7fff6";
     ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -2049,29 +2976,27 @@
     ctx.fillStyle = "#cfe0d2";
     ctx.fillText(`${Math.ceil(unit.hp)}/${unit.maxHp}`, x + 25, y + 25);
 
-    drawBar(x + 112, y + 2, width - 118, 8, unit.hp / unit.maxHp, "#132115", COLORS.hp);
+    drawBar(barX, y + 2, barW, 8, unit.hp / unit.maxHp, "#132115", COLORS.hp);
     if (unit.maxMp > 0) {
-      drawBar(x + 112, y + 14, width - 118, 6, unit.mp / unit.maxMp, "#131b2a", COLORS.mp);
+      drawBar(barX, y + 14, barW, 6, unit.mp / unit.maxMp, "#131b2a", COLORS.mp);
     }
-    drawBar(x + 112, y + 24, width - 118, 5, unit.ult / 100, "#2d2413", "#ffd86b");
     if (unit.mood !== null) {
-      const marker = x + 112 + (width - 118) * 0.4;
-      drawBar(x + 112, y + 32, width - 118, 5, unit.mood / 100, "#2b2615", unit.mood > 80 ? "#ff9f55" : COLORS.mood);
+      const marker = barX + barW * 0.5;
+      drawBar(barX, y + 25, barW, 6, unit.mood / 100, "#2b2615", unit.mood > 80 ? COLORS.moodHigh : COLORS.mood);
       ctx.strokeStyle = "#f6f6f6";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(marker, y + 31);
-      ctx.lineTo(marker, y + 39);
+      ctx.moveTo(marker, y + 24);
+      ctx.lineTo(marker, y + 33);
       ctx.stroke();
     }
   }
-
   function drawSkillPanel(x, y, w, h) {
     drawPanel(x, y, w, h);
     const skills = [
-      { name: "援護射撃", cd: player.cds.attack || 0, max: 4 },
-      { name: "ヒール", cd: player.cds.heal || 0, max: 6 },
-      { name: "シールド", cd: player.cds.shield || 0, max: 8 },
+      { name: "援護射撃", cd: player.cds.attack || 0, max: PLAYER_ATTACK_CD },
+      { name: "ヒール", cd: player.cds.heal || 0, max: HEAL_CD },
+      { name: "シールド", cd: player.cds.shield || 0, max: SHIELD_CD },
       { name: "フルヒール", cd: player.ult < 100 ? 100 - player.ult : 0, max: 100, gauge: true },
     ];
     const gap = 10;
@@ -2087,7 +3012,7 @@
       ctx.textAlign = "center";
       ctx.fillText(skill.name, sx + itemW / 2, y + 42);
       const ratio = skill.gauge ? player.ult / 100 : 1 - clamp(skill.cd / skill.max, 0, 1);
-      drawBar(sx + 12, y + 60, itemW - 24, 7, ratio, "rgba(0,0,0,0.35)", skill.gauge ? COLORS.mood : COLORS.mp);
+      drawBar(sx + 12, y + 60, itemW - 24, 7, ratio, "rgba(0,0,0,0.35)", skill.gauge ? COLORS.ult : COLORS.mp);
       if (skill.cd > 0 && !skill.gauge) {
         ctx.fillStyle = "#ffffff";
         ctx.font = "700 13px 'Segoe UI', sans-serif";
@@ -2097,7 +3022,7 @@
   }
 
   function drawResultOverlay() {
-    if (game.state === "playing") {
+    if (game.state === "playing" || game.state === "town") {
       return;
     }
     ctx.save();
@@ -2109,7 +3034,7 @@
     ctx.font = "800 40px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(game.state === "won" ? "依頼達成" : "依頼失敗", view.w / 2, view.h / 2 - 24);
     ctx.font = "18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText("R で再戦", view.w / 2, view.h / 2 + 28);
+    ctx.fillText("R で町へ戻る", view.w / 2, view.h / 2 + 28);
     ctx.restore();
   }
 
@@ -2134,6 +3059,23 @@
     ctx.fill();
   }
 
+  function drawCircleGauge(x, y, radius, ratio, back, fill) {
+    const value = clamp(ratio, 0, 1);
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = back;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + TAU);
+    ctx.stroke();
+    if (value > 0) {
+      ctx.strokeStyle = fill;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + TAU * value);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   function roundRect(x, y, w, h, r) {
     const radius = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
@@ -2149,6 +3091,17 @@
     ctx.closePath();
   }
 
+
+  function clampTownPlayer() {
+    town.player.x = clamp(town.player.x, town.player.radius, TOWN_WIDTH - town.player.radius);
+    town.player.y = clamp(town.player.y, town.player.radius, TOWN_HEIGHT - town.player.radius);
+  }
+
+  function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
+    const nearestX = clamp(cx, rx, rx + rw);
+    const nearestY = clamp(cy, ry, ry + rh);
+    return distPoint(cx, cy, nearestX, nearestY) <= r;
+  }
   function separateUnits(dt) {
     const all = [...party, ...enemies].filter((unit) => !unit.dead);
     for (let i = 0; i < all.length; i += 1) {
