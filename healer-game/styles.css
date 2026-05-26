@@ -18,3 +18,26 @@ body {
   cursor: crosshair;
   user-select: none;
 }
+
+.profile-name-input {
+  position: fixed;
+  z-index: 20;
+  box-sizing: border-box;
+  height: 46px;
+  border: 2px solid rgba(247, 255, 246, 0.84);
+  border-radius: 8px;
+  background: rgba(247, 255, 246, 0.96);
+  color: #111714;
+  font: 800 22px "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+  text-align: center;
+  outline: none;
+}
+
+.profile-name-input:focus {
+  border-color: #b88cff;
+  box-shadow: 0 0 0 4px rgba(184, 140, 255, 0.24);
+}
+
+.profile-name-input[hidden] {
+  display: none;
+}

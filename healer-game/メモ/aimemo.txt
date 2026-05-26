@@ -14,3 +14,34 @@ AI用メモ
 2026-05-25 dialogue: added SKILL_LINES from spec and speech bubble effect for normal attacks, skills, and ultimates. Lines trigger on successful action/cast start.
 2026-05-25 dialogue: casted skills now speak on cast completion/resolution, not on cast start. Applies to Finald attack/heal/shield and Sushia bolts/bomb/ice ult; Full Heal remains on channel start.
 2026-05-25 player cast interrupt: INTERRUPTED_CAST_COOLDOWN_REDUCTION=0.8 means remaining cooldown is 20% of max, e.g. 10s -> 2s.
+2026-05-26 shields/taunt: Rihas taunt radius 350px; shield durability stacks additively with max timer; taunted units draw a pulsing anger mark.
+
+2026-05-26 architecture: added skills.js. All current skill data and per-skill behavior now lives in createHealerSkillSystem; main.js keeps game loop, shared helpers, damage/heal, rendering, and delegates via wrappers.
+
+2026-05-26 mood scaling: damage dealt/taken and heal mood changes now use amount / target.maxHp, then convert through moodBaseHp so current balance matches the old raw rates. Rates remain dealt=0.035, taken=0.045, heal=0.12 before MOOD_EVENT_MULT.
+
+2026-05-26 mood color: mood gauge color interpolates 0=white, 50=yellow, 70=orange, 100=red; same helper used by field ring and HUD bar.
+
+2026-05-26 telegraph avoidance: party AI with mood <=80 avoids enemy circle/line/fan telegraphs when not action-locked/casting/channeling. Avoidance movement overrides preferred-range movement; while avoiding, units may still use in-range non-approach skills. Approach skills (e.g. Rihas quake) and automatic ultimates are skipped while avoiding.
+2026-05-26 Sushia ice world split: automatic keeps base radius/damage/duration but freezes allies 3s and enemies 1s. Manual uses radius +50px, freezes allies 1s and enemies 3s, and halves ally damage.
+2026-05-26 story intro: added town RPG-style bottom dialogue. Opening plays once from inn start, guild approach triggers party meeting, then guild quest starts tutorial. Advance with E/Space/Enter/click.
+2026-05-26 story correction: only quoted story memo lines are shown as dialogue. Added profile setup for gender/name/pronoun before opening; name feeds protagonist speaker/full name. Ulpes/Rihas/Sushia wait outside guild arguing before meeting, then become town followers after the meeting.
+2026-05-26 profile/town party tune: removed free gender choice, profile setup now only shows the current field. Name input shows suffix "・フィナルド" beside the input. After meeting, town party follows Finald in a Pikmin-like chain order: Ulpes, Rihas, Sushia.
+2026-05-26 town NPC placement: before joining, Ulpes/Rihas/Sushia are drawn from the start after profile setup near the outside of the guild entrance, lower than the previous arguing position.
+2026-05-26 ice world bugfix: freeze/damage checks now use the fixed ice area center captured on cast resolve, matching the drawn area. Previously checks followed Sushia's current position after the area appeared.
+2026-05-26 battle stage background: battle field now has top/bottom tree bands and a central grass lane. Unit movement/teleports/jump landings/shield placement are clamped to the playable grass bounds, reserving top/bottom space for future UI.
+2026-05-26 mood natural drift: time-based mood drift now depends on current HP ratio, not mood returning to 50. HP >=75%: +0.35/s, 60-75%: +0.15/s, 40-60%: -0.1/s, 25-40%: -0.45/s, <25%: -0.9/s. No high-mood auto stop/decay yet; tune later after playtest.
+2026-05-26 mood high damping: all positive mood gains are reduced by 30% once mood is >=90. If a gain crosses 90, only the portion above 90 is damped. Applies to event gains through addMoodGain and natural HP-based gains.
+2026-05-26 heal mood tune: quick heal bonus after recent damage is now a flat final +2 mood, not 5*eventMult. Heal mood still uses healed HP ratio * fixed current-character moodBaseHp, preserving current feel when maxHP later changes from levels/equipment.
+2026-05-26 heal mood rate lowered 8%: MOOD_HEAL_RATE 0.12 -> 0.1104. Fixed quick heal bonus remains +2.
+2026-05-26 mood natural HP table changed: >=85 +1/s, >=70 +0.5/s, >=60 +0.2/s, >=50 -0.3/s, >=40 -0.5/s, >=30 -0.8/s, >=20 -1/s, >=10 -1.5/s, <10 -3/s. Existing >=90 mood gain damping still reduces positive natural gains.
+2026-05-26 damage/kill mood: dealt-damage mood gain now has MOOD_DAMAGE_DEALT_MULT=0.85. Killing an enemy gives the party attacker MOOD_KILL_BONUS=3 through addMoodGain, so noDamage gain multiplier and >=90 damping still apply; displays a small kill mood float.
+2026-05-26 damage taken mood loss increased 10%: MOOD_DAMAGE_TAKEN_RATE 0.045 -> 0.0495. Applies to party non-Finald damage taken mood loss.
+2026-05-26 player attack aim control: LMB starts attack aim when idle, second LMB confirms/fires. RMB is now cancel-only for current aim; F/G still switch to heal/shield aim.
+2026-05-26 battle guide: accepting the guild quest now opens a pre-battle guide panel before resetGame. It summarizes Finald's skills, all ultimates, controls, and starts combat with E/Space/Enter/click.
+2026-05-26 battle pacing: first full enemy wipe now spawns a rear small-vanguard wave of 3 enemies from the enemy-side back line. Quest completes only after this reinforcement wave is also defeated.
+2026-05-26 reinforcement position tweak: the 3 small-vanguard reinforcements now spawn from the screen-left/back side instead of the right enemy-side back line.
+2026-05-26 mood initial: party non-Finald mood now starts at 35 instead of 50. MOOD_BASELINE remains 50 for curves/speed/reference behavior.
+2026-05-26 battle guide copy: added a pre-battle mood meter explanation to explain HP/activity gains, high-mood overconfidence risks, and low-HP mood loss.
+2026-05-26 protagonist display name: visible player name now uses firstName/default Arjuna instead of Finald, while the profile input suffix "・フィナルド" remains. Temporary protagonist marker changed from フ to 主.
+2026-05-26 management rework step 1: split fixed data into data/characters.js, data/enemies.js, and data/town.js, loaded before skills/main. Battle player is now a UI/support unit (field=false/targetable=false/collidable=false), so enemies/collisions/field drawing ignore the protagonist. Player support skills no longer depend on field position: attack fires from a backline support origin toward the cursor, heal targets hovered field allies, shield targets a point, and Finald ult pulses across field allies.

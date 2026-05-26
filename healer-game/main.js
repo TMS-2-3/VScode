@@ -4,6 +4,14 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   const TAU = Math.PI * 2;
+  const createSkillSystem = window.createHealerSkillSystem;
+  const CHARACTER_DEFS = window.HEALER_CHARACTER_DEFS;
+  const ENEMY_DEFS = window.HEALER_ENEMY_DEFS;
+  const TOWN_DATA = window.HEALER_TOWN_DATA;
+
+  if (!createSkillSystem || !CHARACTER_DEFS || !ENEMY_DEFS || !TOWN_DATA) {
+    throw new Error("data files and skills.js must be loaded before main.js");
+  }
 
   const view = {
     w: window.innerWidth,
@@ -23,6 +31,7 @@
     messageTimer: 5,
     hover: null,
     stageClearTimer: 0,
+    reinforcementsSpawned: false,
   };
 
   let party = [];
@@ -32,31 +41,33 @@
   let areas = [];
   let effects = [];
   let lastTime = performance.now();
-  const TOWN_WIDTH = 1600;
-  const TOWN_HEIGHT = 1100;
+  const TOWN_WIDTH = TOWN_DATA.width;
+  const TOWN_HEIGHT = TOWN_DATA.height;
+  const BATTLE_SIDE_MARGIN = 24;
+  const BATTLE_MIN_PLAY_HEIGHT = 320;
   const town = {
-    player: { x: TOWN_WIDTH * 0.5, y: TOWN_HEIGHT - 160, radius: 15, speed: 235, color: "#57c7c9" },
+    player: { ...TOWN_DATA.player },
     camera: { x: 0, y: 0 },
     buildings: [],
     props: [],
     interaction: null,
     panel: null,
+    story: null,
+    followers: [],
+    introDone: false,
+    meetingDone: false,
   };
+  const playerProfile = {
+    gender: "",
+    firstName: "アルジュナ",
+    pronoun: "",
+    done: false,
+    step: "gender",
+  };
+  let profileNameInput = null;
+  let profileClickTargets = [];
 
-  const PLAYER_ATTACK_CAST = 1;
-  const PLAYER_ATTACK_COST = 6;
-  const PLAYER_ATTACK_CD = 4;
-  const PLAYER_ATTACK_RANGE = 420;
-  const HEAL_CAST = 2;
-  const HEAL_COST = 18;
-  const HEAL_CD = 6;
-  const HEAL_RANGE = 520;
-  const SHIELD_CAST = 2;
-  const SHIELD_COST = 24;
-  const SHIELD_CD = 8;
-  const SHIELD_RANGE = 340;
   const INTERRUPTED_CAST_COOLDOWN_REDUCTION = 0.8;
-  const SHIELD_RADIUS = 92;
   const SELF_HEAL_DELAY = 5;
   const SELF_HEAL_LIMIT = 0.8;
   const SELF_HEAL_MP_PER_SEC = 22;
@@ -64,25 +75,43 @@
   const AI_IDLE_RECHECK = 0.2;
   const ACTION_GAP = 0.2;
   const MOOD_BASELINE = 50;
-  const MOOD_NATURAL_FALL = 0.5;
-  const MOOD_NATURAL_FALL_MIN = 0.1;
-  const MOOD_NATURAL_FALL_MIN_TIME = 18;
-  const MOOD_NATURAL_RECOVER = 0.3;
+  const MOOD_INITIAL = 35;
+  const MOOD_NATURAL_HP_STEPS = [
+    { hp: 0.85, delta: 1 },
+    { hp: 0.7, delta: 0.5 },
+    { hp: 0.6, delta: 0.2 },
+    { hp: 0.5, delta: -0.3 },
+    { hp: 0.4, delta: -0.5 },
+    { hp: 0.3, delta: -0.8 },
+    { hp: 0.2, delta: -1 },
+    { hp: 0.1, delta: -1.5 },
+  ];
+  const MOOD_NATURAL_HP_BOTTOM_DELTA = -3;
   const MOOD_EVENT_MULT = 1.2;
   const MOOD_NO_DAMAGE_GAIN_BONUS_START = 3;
   const MOOD_NO_DAMAGE_GAIN_BONUS_MAX_TIME = 18;
   const MOOD_NO_DAMAGE_GAIN_BONUS_MAX = 1.3;
+  const MOOD_HIGH_GAIN_DAMPING_START = 90;
+  const MOOD_HIGH_GAIN_DAMPING_MULT = 0.7;
   const MOOD_DISTANCE_BONUS_START = 200;
   const MOOD_DISTANCE_BONUS_END = 420;
   const MOOD_DISTANCE_BONUS_MAX = 1.5;
   const MOOD_MULTI_HIT_MIN = 2;
   const MOOD_MULTI_HIT_BASE = 3;
-  const ENEMY_NORMAL_ATTACK_CD = 4;
-  const CASTER_ACTION_CD = 5.2;
-  const CASTER_SKILL_CD_BASE = 6.6;
-  const CASTER_SKILL_CD_RANDOM = 1.5;
-  const HEAVY_SLAM_CD = 8.4;
-  const SUSHIA_ICE_WORLD_RADIUS = 330;
+  const MOOD_DAMAGE_DEALT_RATE = 0.035;
+  const MOOD_DAMAGE_DEALT_MULT = 0.85;
+  const MOOD_KILL_BONUS = 3;
+  const MOOD_DAMAGE_TAKEN_RATE = 0.0495;
+  const MOOD_HEAL_RATE = 0.1104;
+  const MOOD_QUICK_HEAL_BONUS = 2;
+  const MOOD_REFERENCE_HP_BY_ID = {
+    ulpes: 190,
+    rihas: 230,
+    sushia: 135,
+  };
+  const TELEGRAPH_AVOID_MOOD_LIMIT = 80;
+  const TELEGRAPH_AVOID_PADDING = 18;
+  const TELEGRAPH_AVOID_SPEED_MULT = 1.15;
 
   const COLORS = {
     floor: "#263129",
@@ -110,46 +139,236 @@
     finald: "4",
   };
 
-  const SKILL_LINES = {
-    finald: {
-      attack: ["援護します"],
-      heal: ["ヒール!", "回復!"],
-      shield: ["バリア展開!", "守るよ!"],
-      ult: ["フルヒール!!"],
-    },
-    ulpes: {
-      attack: ["てやっ!", "くらえ!"],
-      heroSlash: ["ヒーロースラッシュ!!"],
-      ult: ["正義の一撃!!"],
-    },
-    rihas: {
-      attack: ["どりゃぁ!", "しねぇ!"],
-      quake: ["台地よ!揺れよ!"],
-      ult: ["相手してやる"],
-    },
-    sushia: {
-      attack: ["とうっ!", "拡散弾!"],
-      bomb: ["インパクトボム!!"],
-      ult: ["全部凍っちゃえ!!"],
-    },
-  };
-  const player = makeUnit({
-    id: "finald",
-    name: "フィナルド",
-    label: "フ",
-    team: "party",
-    role: "support",
-    color: COLORS.player,
-    radius: 15,
-    maxHp: 150,
-    maxMp: 140,
-    speed: 230,
-    attack: 7,
-    magic: 16,
-    defense: 6,
-    magicDefense: 12,
-    guardChance: 0,
-  });
+  function getOpeningStory() {
+    const name = getPlayerFirstName();
+    return [
+      { speaker: name, text: "今日はついに応募したパーティーの顔合わせか" },
+      { speaker: name, text: "あの強力な魔王の討伐を目標に募集されていたんだ" },
+      { speaker: name, text: "どんな人達か楽しみだな" },
+      { speaker: name, text: "集合場所は依頼所だ、さっそく会いに行こう" },
+    ];
+  }
+
+  function getMeetingStory() {
+    const name = getPlayerFirstName();
+    return [
+      { speaker: "ウルペス", text: "僕の方が強いに決まってるだろ" },
+      { speaker: "リハス", text: "お前みたいなチビの方が強いだぁ？" },
+      { speaker: "リハス", text: "見ろよ。この身体を、筋肉を。お前なんか一捻りだ" },
+      { speaker: "ウルペス", text: "ふっ、筋肉がすべてなわけないだろ。この筋肉バカめ" },
+      { speaker: "スシア", text: "アホとバカ、落ち着きなさいよ。私の方が強いんだから" },
+      { speaker: "ウルペス＆リハス", text: "誰がアホ/バカだ！" },
+      { speaker: "スシア", text: "４人目、来たわよ。ほんと、呆れる" },
+      { speaker: name, text: "(もしかしてずっと喧嘩してた…？)" },
+      { speaker: name, text: `えーと、サポートの${getPlayerFirstName()}です。よろしくお願いします…` },
+      { speaker: "ウルペス", text: "イケメン剣士のウルペス・トゥルスだ。よろしく頼む" },
+      { speaker: "リハス", text: "一番強い、モンクのリハス・タインだ。せいぜい足引っ張んなよ" },
+      { speaker: "ウルペス", text: "なっ、僕の方が強いと言っているだろう！" },
+      { speaker: "スシア", text: "このバカ２人は気にしなくていいから" },
+      { speaker: "スシア", text: "魔法使いのスシアよ。よろしくね" },
+      { speaker: "ウルペス", text: "誰がバカだ！このガキ！" },
+      { speaker: "リハス", text: "そうだ！俺様が一番強いのは一目瞭然だろう" },
+      { speaker: "スシア", text: "じゃあ、４人揃ったことだし、依頼で勝負する？" },
+      { speaker: "リハス", text: "いいだろう、俺様の勝ちは見えているがな！ガハハハハ" },
+      { speaker: "ウルペス", text: "僕が一番ということを証明してやろう" },
+      { speaker: name, text: "(このパーティー…大丈夫かな…)" },
+      { text: "依頼を受けましょう！依頼所で受けることができます！" },
+    ];
+  }
+
+  const player = makeUnit({ ...CHARACTER_DEFS.player, name: getPlayerFirstName() });
+  const skillSystem = createSkillSystem(createSkillContext());
+  profileNameInput = createProfileNameInput();
+
+  function createSkillContext() {
+    return {
+      get player() { return player; },
+      get party() { return party; },
+      get enemies() { return enemies; },
+      get projectiles() { return projectiles; },
+      get areas() { return areas; },
+      get effects() { return effects; },
+      canvasCtx: ctx,
+      TAU,
+      view,
+      input,
+      game,
+      COLORS,
+      ACTION_GAP,
+      AI_IDLE_RECHECK,
+      MOOD_EVENT_MULT,
+      MOOD_MULTI_HIT_MIN,
+      clamp,
+      normalize,
+      dist,
+      distPoint,
+      angleTo,
+      deg,
+      inFan,
+      nearestAlive,
+      projectPoint,
+      distanceToSegment,
+      getMoodCooldown,
+      getSushiaCastTime,
+      applyMultiHitMoodBonus,
+      addMoodGain,
+      dealDamage,
+      healUnit,
+      addTelegraph,
+      addBurst,
+      addFloat,
+      addSpeech,
+      slashEffect,
+      addShield,
+      startPlayerCast,
+      getHoveredPartyMember,
+      cancelPlayerChannel,
+      drawAimRangeCircle,
+      getBattleBounds,
+      clampBattlePoint,
+      getSupportOrigin,
+      isFieldUnit,
+      getFieldPartyMembers,
+      getTargetablePartyMembers,
+    };
+  }
+
+  function createProfileNameInput() {
+    const inputEl = document.createElement("input");
+    inputEl.type = "text";
+    inputEl.maxLength = 6;
+    inputEl.value = playerProfile.firstName;
+    inputEl.className = "profile-name-input";
+    inputEl.setAttribute("aria-label", "主人公の名前");
+    document.body.appendChild(inputEl);
+    inputEl.addEventListener("input", () => {
+      playerProfile.firstName = clampProfileName(inputEl.value);
+      if (inputEl.value !== playerProfile.firstName) {
+        inputEl.value = playerProfile.firstName;
+      }
+    });
+    inputEl.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Enter") {
+        event.preventDefault();
+        confirmProfileName();
+      }
+    });
+    return inputEl;
+  }
+
+  function setMouseFromEvent(event) {
+    const rect = canvas.getBoundingClientRect();
+    input.mouse.x = event.clientX - rect.left;
+    input.mouse.y = event.clientY - rect.top;
+  }
+
+  function getPlayerFirstName() {
+    return playerProfile.firstName || "アルジュナ";
+  }
+
+  function clampProfileName(value) {
+    return Array.from((value || "").trim()).slice(0, 6).join("");
+  }
+
+  function handleProfileSetupKey(key) {
+    if (playerProfile.step === "gender") {
+      if (key === "1") selectProfileGender("男の子");
+      else if (key === "2") selectProfileGender("女の子");
+    } else if (playerProfile.step === "name") {
+      if (["e", "space", "enter"].includes(key)) {
+        confirmProfileName();
+      }
+    } else if (playerProfile.step === "pronoun") {
+      const index = Number(key) - 1;
+      const choices = getPronounChoices();
+      if (choices[index]) {
+        selectProfilePronoun(choices[index]);
+      }
+    }
+  }
+
+  function handleProfileSetupClick(x, y) {
+    for (const target of profileClickTargets) {
+      if (x >= target.x && x <= target.x + target.w && y >= target.y && y <= target.y + target.h) {
+        target.action();
+        return;
+      }
+    }
+  }
+
+  function selectProfileGender(gender) {
+    playerProfile.gender = gender;
+    town.player.color = gender === "女の子" ? "#ff93c8" : COLORS.player;
+    player.color = town.player.color;
+    playerProfile.step = "name";
+    updateProfileNameInput();
+  }
+
+  function confirmProfileName() {
+    playerProfile.firstName = clampProfileName(profileNameInput ? profileNameInput.value : playerProfile.firstName) || "アルジュナ";
+    if (profileNameInput) {
+      profileNameInput.value = playerProfile.firstName;
+    }
+    playerProfile.step = "pronoun";
+    updateProfileNameInput();
+  }
+
+  function selectProfilePronoun(pronoun) {
+    playerProfile.pronoun = pronoun;
+    completeProfileSetup();
+  }
+
+  function completeProfileSetup() {
+    playerProfile.done = true;
+    player.name = getPlayerFirstName();
+    updateProfileNameInput();
+    beginOpeningStory();
+  }
+
+  function beginOpeningStory() {
+    if (town.introDone || town.story || !playerProfile.done) {
+      return;
+    }
+    startTownStory("opening", getOpeningStory(), () => {
+      town.introDone = true;
+      game.message = "集合場所: 依頼所";
+      game.messageTimer = 5;
+    });
+  }
+
+  function getPronounChoices() {
+    return ["俺", "僕", "我", "私", "うち", "あたし"];
+  }
+
+  function updateProfileNameInput() {
+    if (!profileNameInput) {
+      return;
+    }
+    const visible = game.state === "town" && !playerProfile.done && playerProfile.step === "name";
+    profileNameInput.hidden = !visible;
+    if (!visible) {
+      return;
+    }
+    const rect = getProfileNameInputRect();
+    profileNameInput.style.width = `${rect.w}px`;
+    profileNameInput.style.left = `${rect.x}px`;
+    profileNameInput.style.top = `${rect.y}px`;
+    if (document.activeElement !== profileNameInput) {
+      profileNameInput.focus();
+      profileNameInput.select();
+    }
+  }
+
+  function getProfileNameInputRect() {
+    const w = Math.max(120, Math.min(220, view.w - 190));
+    return {
+      x: view.w / 2 - w / 2 - 58,
+      y: Math.max(138, view.h * 0.5 - 14),
+      w,
+      h: 46,
+    };
+  }
 
   function resize() {
     view.w = window.innerWidth;
@@ -166,6 +385,7 @@
     } else {
       clampAllUnits();
     }
+    updateProfileNameInput();
   }
 
   window.addEventListener("resize", resize);
@@ -177,7 +397,7 @@
     const key = event.key === " " ? "space" : event.key.toLowerCase();
     input.keys[key] = true;
 
-    if (["f", "g", "r", "e", "escape", "space", "1", "2", "3", "4"].includes(key)) {
+    if (["f", "g", "r", "e", "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
       event.preventDefault();
     }
     if (event.repeat) {
@@ -185,6 +405,20 @@
     }
 
     if (game.state === "town") {
+      if (!playerProfile.done) {
+        handleProfileSetupKey(key);
+        return;
+      }
+      if (town.story) {
+        if (["e", "space", "enter"].includes(key)) {
+          advanceTownStory();
+        }
+        return;
+      }
+      if (town.panel && town.panel.action === "battleGuide" && ["e", "space", "enter"].includes(key)) {
+        interactTown();
+        return;
+      }
       if (key === "e") {
         interactTown();
       } else if (key === "escape") {
@@ -202,8 +436,10 @@
 
     if (key === "f") {
       startPlayerAim("heal");
-    } else if (key === "g") {
+    } else if (key === "g" || key === "space") {
       startPlayerAim("shield");
+    } else if (key === "escape") {
+      cancelPlayerAim();
     } else if (key === "1") {
       triggerUltimate("ulpes");
     } else if (key === "2") {
@@ -220,25 +456,40 @@
   });
 
   canvas.addEventListener("mousemove", (event) => {
-    const rect = canvas.getBoundingClientRect();
-    input.mouse.x = event.clientX - rect.left;
-    input.mouse.y = event.clientY - rect.top;
+    setMouseFromEvent(event);
   });
 
   canvas.addEventListener("mousedown", (event) => {
     event.preventDefault();
+    setMouseFromEvent(event);
+    if (game.state === "town") {
+      if (!playerProfile.done) {
+        handleProfileSetupClick(input.mouse.x, input.mouse.y);
+        return;
+      }
+      if (town.story && event.button === 0) {
+        advanceTownStory();
+        return;
+      }
+      if (town.panel && town.panel.action === "battleGuide" && event.button === 0) {
+        interactTown();
+      }
+      return;
+    }
     if (game.state !== "playing") {
       return;
     }
     if (event.button === 0) {
-      confirmPlayerAim();
+      if (player.aim) {
+        confirmPlayerAim();
+      } else {
+        startPlayerAim("attack");
+      }
     }
     if (event.button === 2) {
       input.mouse.right = true;
       if (player.aim) {
         cancelPlayerAim();
-      } else {
-        startPlayerAim("attack");
       }
     }
   });
@@ -273,15 +524,18 @@
     game.state = "playing";
     game.time = 0;
     game.stageClearTimer = 0;
+    game.reinforcementsSpawned = false;
     game.message = "依頼: 魔物を全滅させる";
     game.messageTimer = 4;
 
+    const bounds = getBattleBounds();
+    const supportOrigin = getSupportOrigin();
     const cx = view.w * 0.33;
-    const cy = view.h * 0.54;
+    const cy = bounds.centerY;
 
     Object.assign(player, {
-      x: cx - 90,
-      y: cy + 28,
+      x: supportOrigin.x,
+      y: supportOrigin.y,
       hp: player.maxHp,
       mp: player.maxMp,
       shield: 0,
@@ -298,64 +552,14 @@
       aim: null,
       selfHealFloat: 0,
       delayedDamageQueue: [],
+      field: false,
+      targetable: false,
+      collidable: false,
     });
 
-    const ulpes = makeUnit({
-      id: "ulpes",
-      name: "ウルペス",
-      label: "ウ",
-      team: "party",
-      role: "hero",
-      color: COLORS.ulpes,
-      radius: 16,
-      maxHp: 190,
-      maxMp: 50,
-      speed: 150,
-      attack: 12,
-      magic: 4,
-      defense: 11,
-      magicDefense: 8,
-      guardChance: 0.24,
-      preferredRange: 42,
-    });
-
-    const rihas = makeUnit({
-      id: "rihas",
-      name: "リハス",
-      label: "リ",
-      team: "party",
-      role: "monk",
-      color: COLORS.rihas,
-      radius: 17,
-      maxHp: 230,
-      maxMp: 45,
-      speed: 135,
-      attack: 14,
-      magic: 2,
-      defense: 15,
-      magicDefense: 7,
-      guardChance: 0.22,
-      preferredRange: 56,
-    });
-
-    const sushia = makeUnit({
-      id: "sushia",
-      name: "スシア",
-      label: "ス",
-      team: "party",
-      role: "mage",
-      color: COLORS.sushia,
-      radius: 15,
-      maxHp: 135,
-      maxMp: 120,
-      speed: 120,
-      attack: 2,
-      magic: 15,
-      defense: 5,
-      magicDefense: 14,
-      guardChance: 0.16,
-      preferredRange: 260,
-    });
+    const ulpes = makePartyMember("ulpes");
+    const rihas = makePartyMember("rihas");
+    const sushia = makePartyMember("sushia");
 
     Object.assign(ulpes, { x: cx + 28, y: cy - 72 });
     Object.assign(rihas, { x: cx + 62, y: cy + 55 });
@@ -363,14 +567,15 @@
     party = [player, ulpes, rihas, sushia];
 
     const startX = Math.min(view.w - 120, view.w * 0.72);
-    const startY = view.h * 0.5;
+    const startY = bounds.centerY;
+    const enemySpread = Math.min(150, bounds.height * 0.32);
     enemies = [
-      makeEnemy("魔物A", startX, startY - 150, "brute"),
-      makeEnemy("魔物B", startX + 72, startY - 80, "skirmisher"),
+      makeEnemy("魔物A", startX, startY - enemySpread, "brute"),
+      makeEnemy("魔物B", startX + 72, startY - enemySpread * 0.53, "skirmisher"),
       makeEnemy("魔物C", startX + 18, startY + 5, "brute"),
-      makeEnemy("魔物D", startX + 92, startY + 88, "skirmisher"),
-      makeEnemy("射手A", startX + 205, startY - 96, "caster"),
-      makeEnemy("射手B", startX + 220, startY + 80, "caster"),
+      makeEnemy("魔物D", startX + 92, startY + enemySpread * 0.59, "skirmisher"),
+      makeEnemy("射手A", startX + 205, startY - enemySpread * 0.64, "caster"),
+      makeEnemy("射手B", startX + 220, startY + enemySpread * 0.53, "caster"),
       makeEnemy("大魔物", startX + 150, startY + 4, "elite"),
     ];
 
@@ -390,6 +595,7 @@
       color: options.color || "#ffffff",
       maxHp: options.maxHp || 100,
       hp: options.maxHp || 100,
+      moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || options.maxHp || 100,
       maxMp: options.maxMp || 0,
       mp: options.maxMp || 0,
       speed: options.speed || 100,
@@ -399,7 +605,7 @@
       magicDefense: options.magicDefense || 0,
       guardChance: options.guardChance || 0,
       preferredRange: options.preferredRange || 90,
-      mood: options.team === "party" && options.id !== "finald" ? MOOD_BASELINE : null,
+      mood: options.team === "party" && options.id !== "finald" ? MOOD_INITIAL : null,
       ult: 0,
       shield: 0,
       shieldTimer: 0,
@@ -422,21 +628,30 @@
       forcedTarget: null,
       tauntTimer: 0,
       aimAngle: 0,
+      field: options.field !== false,
+      targetable: options.targetable !== false,
+      collidable: options.collidable !== false,
     };
   }
 
+  function makePartyMember(id) {
+    const def = CHARACTER_DEFS.allies.find((member) => member.id === id);
+    if (!def) {
+      throw new Error(`Unknown party member: ${id}`);
+    }
+    return makeUnit({ ...def });
+  }
+
   function makeEnemy(name, x, y, kind) {
-    const stats = {
-      brute: { hp: 110, speed: 74, radius: 15, attack: 8, defense: 7, magicDefense: 4, color: COLORS.enemy },
-      skirmisher: { hp: 80, speed: 118, radius: 13, attack: 6, defense: 4, magicDefense: 3, color: "#d88468" },
-      caster: { hp: 70, speed: 62, radius: 13, attack: 8, defense: 3, magicDefense: 8, color: "#a0506e" },
-      elite: { hp: 250, speed: 68, radius: 22, attack: 12, defense: 11, magicDefense: 8, color: COLORS.enemyDark },
-    }[kind];
+    const stats = ENEMY_DEFS[kind];
+    if (!stats) {
+      throw new Error(`Unknown enemy kind: ${kind}`);
+    }
 
     const enemy = makeUnit({
       id: `${kind}-${Math.random().toString(16).slice(2)}`,
       name,
-      label: kind === "caster" ? "射" : "魔",
+      label: stats.label,
       team: "enemy",
       role: kind,
       color: stats.color,
@@ -453,13 +668,40 @@
     enemy.y = y;
     enemy.cds.attack = Math.random() * getActionCooldown(enemy);
     if (kind === "caster") {
-      enemy.cds.skill = CASTER_SKILL_CD_BASE + Math.random() * CASTER_SKILL_CD_RANDOM;
+      const casterLine = skillSystem.requireSkill("enemy", "casterLine");
+      enemy.cds.skill = casterLine.cdBase + Math.random() * casterLine.cdRandom;
     } else if (kind === "elite") {
-      enemy.cds.skill = HEAVY_SLAM_CD;
+      enemy.cds.skill = skillSystem.requireSkill("enemy", "heavySlam").cd;
     } else {
       enemy.cds.skill = 0;
     }
     return enemy;
+  }
+
+  function spawnRearVanguardWave() {
+    const bounds = getBattleBounds();
+    const spawnX = bounds.left + 34;
+    const centerY = bounds.centerY;
+    const spread = Math.min(92, bounds.height * 0.24);
+    const wave = [
+      makeEnemy("小魔物A", spawnX, centerY - spread, "smallVanguard"),
+      makeEnemy("小魔物B", spawnX - 8, centerY, "smallVanguard"),
+      makeEnemy("小魔物C", spawnX, centerY + spread, "smallVanguard"),
+    ];
+
+    for (const enemy of wave) {
+      const point = clampBattlePoint(enemy.x, enemy.y, enemy.radius);
+      enemy.x = point.x;
+      enemy.y = point.y;
+      enemy.cds.attack = 0.35 + Math.random() * 0.7;
+      enemies.push(enemy);
+      addBurst(enemy.x, enemy.y, enemy.radius * 3.2, "rgba(230,151,99,0.28)");
+    }
+
+    addFloat("増援!", spawnX + 46, centerY - spread - 28, COLORS.enemy);
+    game.reinforcementsSpawned = true;
+    game.message = "後方から増援!";
+    game.messageTimer = 4;
   }
 
 
@@ -473,6 +715,7 @@
     game.time = 0;
     game.hover = null;
     game.stageClearTimer = 0;
+    game.reinforcementsSpawned = false;
     game.message = "はじまりの町";
     game.messageTimer = 4;
     town.panel = null;
@@ -481,30 +724,40 @@
     if (town.buildings.length === 0) {
       setupTown();
     }
-    town.player.x = TOWN_WIDTH * 0.5;
-    town.player.y = TOWN_HEIGHT - 155;
+    if (!town.introDone) {
+      const inn = getTownBuilding("inn");
+      town.player.x = inn ? inn.door.x : TOWN_WIDTH * 0.5;
+      town.player.y = inn ? inn.door.y + 52 : TOWN_HEIGHT - 155;
+    } else {
+      town.player.x = TOWN_WIDTH * 0.5;
+      town.player.y = TOWN_HEIGHT - 155;
+    }
     clampTownPlayer();
+    town.interaction = getTownInteraction();
+    resetTownFollowers();
     updateTownCamera();
+    updateProfileNameInput();
+    if (!playerProfile.done) {
+      town.story = null;
+      return;
+    }
+    beginOpeningStory();
   }
 
   function setupTown() {
-    town.buildings = [
-      makeTownBuilding("inn", "宿屋", "宿", 170, 150, 250, 170, "#f0c978", "#b95143"),
-      makeTownBuilding("item", "アイテム屋", "薬", 510, 160, 250, 160, "#d6e7a6", "#3f8d72"),
-      makeTownBuilding("weapon", "武器屋", "剣", 890, 150, 260, 175, "#d7dce2", "#55616f"),
-      makeTownBuilding("armor", "防具屋", "盾", 1210, 175, 240, 155, "#d9d3ee", "#655aa0"),
-      makeTownBuilding("guild", "依頼所", "依", 610, 585, 380, 215, "#e1b07c", "#7f3f4d"),
-    ];
+    town.buildings = TOWN_DATA.buildings.map((building) => makeTownBuilding(
+      building.id,
+      building.name,
+      building.sign,
+      building.x,
+      building.y,
+      building.w,
+      building.h,
+      building.wall,
+      building.roof,
+    ));
 
-    town.props = [
-      { type: "well", x: 790, y: 465, r: 28 },
-      { type: "tree", x: 120, y: 430, r: 28 },
-      { type: "tree", x: 310, y: 690, r: 30 },
-      { type: "tree", x: 1290, y: 455, r: 32 },
-      { type: "tree", x: 1470, y: 690, r: 27 },
-      { type: "crate", x: 455, y: 395, w: 42, h: 34 },
-      { type: "crate", x: 1125, y: 395, w: 50, h: 32 },
-    ];
+    town.props = TOWN_DATA.props.map((prop) => ({ ...prop }));
   }
 
   function makeTownBuilding(id, name, sign, x, y, w, h, wall, roof) {
@@ -522,7 +775,21 @@
     };
   }
 
+  function getTownBuilding(id) {
+    return town.buildings.find((building) => building.id === id) || null;
+  }
+
   function updateTown(dt) {
+    if (!playerProfile.done) {
+      updateProfileNameInput();
+      updateTownCamera();
+      return;
+    }
+    if (town.story) {
+      updateTownCamera();
+      return;
+    }
+    const before = { x: town.player.x, y: town.player.y };
     if (!town.panel) {
       const move = getMoveVector();
       const speed = town.player.speed;
@@ -536,7 +803,11 @@
       }
       clampTownPlayer();
     }
+    updateTownFollowers(dt, before);
     town.interaction = getTownInteraction();
+    if (!town.meetingDone && town.introDone && !town.panel && isNearTownBuilding("guild", 170)) {
+      startGuildMeetingStory();
+    }
     updateTownCamera();
   }
 
@@ -545,6 +816,37 @@
     const maxY = Math.max(0, TOWN_HEIGHT - view.h);
     town.camera.x = clamp(town.player.x - view.w / 2, 0, maxX);
     town.camera.y = clamp(town.player.y - view.h / 2, 0, maxY);
+  }
+
+  function resetTownFollowers() {
+    const spacing = 42;
+    town.followers = [
+      { id: "ulpes", label: "ウ", color: COLORS.ulpes, x: town.player.x, y: town.player.y + spacing },
+      { id: "rihas", label: "リ", color: COLORS.rihas, x: town.player.x, y: town.player.y + spacing * 2 },
+      { id: "sushia", label: "ス", color: COLORS.sushia, x: town.player.x, y: town.player.y + spacing * 3 },
+    ];
+  }
+
+  function updateTownFollowers(dt, previousPlayerPosition) {
+    if (!town.meetingDone || town.followers.length === 0) {
+      return;
+    }
+    let target = { x: previousPlayerPosition.x, y: previousPlayerPosition.y };
+    const spacing = 38;
+    for (const follower of town.followers) {
+      const dx = target.x - follower.x;
+      const dy = target.y - follower.y;
+      const d = Math.hypot(dx, dy);
+      if (d > spacing) {
+        const speed = town.player.speed * 1.12;
+        const step = Math.min(d - spacing, speed * dt);
+        follower.x += (dx / d) * step;
+        follower.y += (dy / d) * step;
+      }
+      follower.x = clamp(follower.x, 12, TOWN_WIDTH - 12);
+      follower.y = clamp(follower.y, 12, TOWN_HEIGHT - 12);
+      target = follower;
+    }
   }
 
   function isTownBlockedAt(x, y) {
@@ -573,9 +875,19 @@
     return best;
   }
 
+  function isNearTownBuilding(id, range) {
+    const building = getTownBuilding(id);
+    return !!building && distPoint(town.player.x, town.player.y, building.door.x, building.door.y) <= range;
+  }
+
   function interactTown() {
+    if (town.story) {
+      return;
+    }
     if (town.panel) {
       if (town.panel.action === "quest") {
+        showBattleGuidePanel();
+      } else if (town.panel.action === "battleGuide") {
         resetGame();
       } else {
         closeTownPanel();
@@ -616,6 +928,10 @@
         lines: ["ローブ、軽鎧、腕甲を扱う予定。", "防御力や魔防、ガード率に関わる装備を置く予定。"],
       };
     } else if (target.id === "guild") {
+      if (!town.meetingDone) {
+        startGuildMeetingStory();
+        return;
+      }
       town.panel = {
         title: "依頼所",
         lines: ["依頼: 町外れの魔物討伐", "報酬や難易度選択はあとで追加する。"],
@@ -624,9 +940,89 @@
     }
   }
 
+  function showBattleGuidePanel() {
+    town.panel = {
+      title: "出発前の確認",
+      action: "battleGuide",
+      sections: [
+        {
+          title: `${getPlayerFirstName()}の技`,
+          lines: [
+            "援護射撃: 左クリックで構え、もう一度左クリックで後方から発射。敵にはダメージ、味方には回復。",
+            "ヒール: Fで構え、カーソル上の味方を回復。対象がいないと発動しない。",
+            "バリア: GまたはSpaceで構え、指定範囲の味方にシールドを付与。重なったシールドは耐久値が加算される。",
+          ],
+        },
+        {
+          title: "必殺技",
+          lines: [
+            "1 ウルペス: 正義の一撃。敵へ飛び込み、大きな一撃を入れる。",
+            "2 リハス: 俺ァ無敵!! 周囲の敵を挑発し、自分にシールドを張る。",
+            "3 スシア: アイスワールド。広範囲を凍らせ、継続ダメージを与える。",
+            `4 ${getPlayerFirstName()}: フルヒール。詠唱中、戦場の味方を回復し続ける。`,
+          ],
+        },
+        {
+          title: "調子メーター",
+          lines: [
+            "仲間はHPが高く保たれたり、活躍したりすると調子が上がる。",
+            "調子が上がると攻撃力や詠唱が強くなるが、上がりすぎると慢心してガードや攻撃が雑になったり、必殺技を勝手に使ったりする。",
+            "逆にHPが削られすぎると調子が下がり、萎縮して弱くなる。",
+          ],
+        },
+        {
+          title: "操作",
+          lines: [
+            "主人公は戦場に出ず、後方から味方を支援する。",
+            "左クリック: 援護射撃の構え、または構え中スキルの発動 / 右クリック: 構えキャンセル",
+            "F: ヒール / G・Space: バリア / 1-4: 必殺技 / 勝利条件: 敵全滅",
+          ],
+        },
+      ],
+    };
+  }
+
   function closeTownPanel() {
     town.panel = null;
   }
+
+  function startGuildMeetingStory() {
+    if (town.story || town.meetingDone) {
+      return;
+    }
+    closeTownPanel();
+    startTownStory("meeting", getMeetingStory(), () => {
+      town.meetingDone = true;
+      resetTownFollowers();
+      game.message = "依頼所で依頼を受けよう";
+      game.messageTimer = 5;
+    });
+  }
+
+  function startTownStory(id, lines, onComplete) {
+    town.story = {
+      id,
+      lines,
+      index: 0,
+      onComplete,
+    };
+  }
+
+  function advanceTownStory() {
+    if (!town.story) {
+      return;
+    }
+    town.story.index += 1;
+    if (town.story.index < town.story.lines.length) {
+      return;
+    }
+    const complete = town.story.onComplete;
+    town.story = null;
+    if (complete) {
+      complete();
+    }
+  }
+
   function update(dt) {
     game.time += dt;
     if (game.messageTimer > 0) {
@@ -698,11 +1094,9 @@
       }
 
       if (unit.team === "party" && unit.id !== "finald") {
-        if (unit.mood > MOOD_BASELINE) {
-          unit.mood = Math.max(MOOD_BASELINE, unit.mood - dt * getMoodNaturalFall(unit));
-        } else if (unit.mood < MOOD_BASELINE) {
-          unit.mood = Math.min(MOOD_BASELINE, unit.mood + dt * MOOD_NATURAL_RECOVER);
-        }
+        const naturalDelta = getMoodNaturalDelta(unit) * dt;
+        const adjustedDelta = naturalDelta > 0 ? applyMoodHighGainDamping(unit, naturalDelta) : naturalDelta;
+        unit.mood = clamp(unit.mood + adjustedDelta, 0, 100);
       }
     }
   }
@@ -712,9 +1106,10 @@
       return;
     }
 
-    if (player.channel && hasMoveInput()) {
-      cancelPlayerChannel();
-    }
+    const supportOrigin = getSupportOrigin();
+    player.x = supportOrigin.x;
+    player.y = supportOrigin.y;
+
     if (player.cast) {
       player.cast.time -= dt;
       if (player.cast.time <= 0) {
@@ -722,45 +1117,14 @@
       }
     }
 
-    const guardHeld = isPlayerGuarding();
-    if (guardHeld && player.aim) {
-      cancelPlayerAim();
-    }
-    const busy = Boolean(player.channel || player.cast);
-    const guarding = guardHeld && !busy && player.actionLock <= 0 && player.frozen <= 0;
-    player.guarding = guarding;
-    const moveSpeed = player.speed * (guarding ? 0.42 : 1);
-    if (player.frozen <= 0 && !busy) {
-      const move = getMoveVector();
-      player.x += move.x * moveSpeed * dt;
-      player.y += move.y * moveSpeed * dt;
-    }
-    clampUnit(player);
+    player.guarding = false;
 
-    const regen = guarding ? 5 : 13;
+    const regen = 13;
     player.mp = clamp(player.mp + regen * dt, 0, player.maxMp);
     updateSelfHeal(dt);
 
-    if (player.channel) {
-      player.channel.time -= dt;
-      player.channel.pulse -= dt;
-      if (player.channel.pulse <= 0) {
-        player.channel.pulse = 0.22;
-        const alliesInRange = party.filter((member) => member !== player && !member.dead && dist(player, member) <= 285);
-        if (alliesInRange.length === 0) {
-          cancelPlayerChannel();
-          return;
-        }
-        for (const member of party) {
-          if (!member.dead && dist(player, member) <= 285) {
-            healUnit(player, member, 6, { noMood: member === player });
-          }
-        }
-      }
-      if (player.channel.time <= 0) {
-        player.channel = null;
-      }
-    }
+    skillSystem.updatePlayerChannel(dt);
+
   }
 
   function updateSelfHeal(dt) {
@@ -807,13 +1171,8 @@
       return;
     }
 
-    if (cast.type === "attack") {
-      completePlayerShot(cast.dir);
-    } else if (cast.type === "heal") {
-      completeHeal(cast.target);
-    } else if (cast.type === "shield") {
-      completeShield(cast.x, cast.y);
-    }
+    skillSystem.completePlayerCast(cast);
+
     player.actionLock = Math.max(player.actionLock, ACTION_GAP);
   }
 
@@ -823,11 +1182,9 @@
         continue;
       }
 
-      if (member.actionLock <= 0) {
-        updatePartyMovement(member, dt);
-      }
       member.aiTick -= dt;
-      if (member.actionLock <= 0 && member.ult >= 100 && member.mood >= 95) {
+      const avoidingTelegraph = member.actionLock <= 0 && updatePartyMovement(member, dt);
+      if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= 100 && member.mood >= 95) {
         if (triggerUltimate(member.id, true)) {
           setActionCooldown(member);
         }
@@ -838,7 +1195,7 @@
         continue;
       }
 
-      if (member.mood >= 85 && member.ult >= 100 && Math.random() < 0.16) {
+      if (!avoidingTelegraph && member.mood >= 85 && member.ult >= 100 && Math.random() < 0.16) {
         if (triggerUltimate(member.id, true)) {
           setActionCooldown(member);
         }
@@ -846,11 +1203,11 @@
       }
 
       if (member.id === "ulpes") {
-        thinkUlpes(member);
+        thinkUlpes(member, avoidingTelegraph);
       } else if (member.id === "rihas") {
-        thinkRihas(member);
+        thinkRihas(member, avoidingTelegraph);
       } else if (member.id === "sushia") {
-        thinkSushia(member);
+        thinkSushia(member, avoidingTelegraph);
       }
     }
   }
@@ -858,9 +1215,18 @@
   function updatePartyMovement(unit, dt) {
     const target = nearestAlive(unit, enemies);
     if (!target) {
-      return;
+      return false;
     }
     const d = dist(unit, target);
+    const avoidDir = getTelegraphAvoidance(unit);
+    const moodSpeed = 1 + Math.max(0, unit.mood - MOOD_BASELINE) * 0.003;
+    if (avoidDir) {
+      unit.x += avoidDir.x * unit.speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt;
+      unit.y += avoidDir.y * unit.speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt;
+      clampUnit(unit);
+      return true;
+    }
+
     const desired = unit.preferredRange * (unit.mood > 80 ? 0.62 : 1);
     let dir = { x: 0, y: 0 };
     if (d > desired + 18) {
@@ -869,10 +1235,104 @@
       dir = normalize(unit.x - target.x, unit.y - target.y);
     }
 
-    const moodSpeed = 1 + Math.max(0, unit.mood - MOOD_BASELINE) * 0.003;
     unit.x += dir.x * unit.speed * moodSpeed * dt;
     unit.y += dir.y * unit.speed * moodSpeed * dt;
     clampUnit(unit);
+    return false;
+  }
+
+  function getTelegraphAvoidance(unit) {
+    if (!unit || unit.mood === null || unit.mood > TELEGRAPH_AVOID_MOOD_LIMIT || unit.actionLock > 0 || unit.cast || unit.channel) {
+      return null;
+    }
+
+    let x = 0;
+    let y = 0;
+    for (const telegraph of telegraphs) {
+      if (telegraph.team !== "enemy") {
+        continue;
+      }
+      updateTelegraphDynamic(telegraph);
+      const escape = getTelegraphEscapeVector(unit, telegraph);
+      if (!escape) {
+        continue;
+      }
+      x += escape.x * escape.weight;
+      y += escape.y * escape.weight;
+    }
+
+    const dir = normalize(x, y);
+    return dir.len > 0 ? dir : null;
+  }
+
+  function getTelegraphEscapeVector(unit, telegraph) {
+    if (telegraph.type === "circle") {
+      return getCircleTelegraphEscape(unit, telegraph);
+    }
+    if (telegraph.type === "line") {
+      return getLineTelegraphEscape(unit, telegraph);
+    }
+    if (telegraph.type === "fan") {
+      return getFanTelegraphEscape(unit, telegraph);
+    }
+    return null;
+  }
+
+  function getCircleTelegraphEscape(unit, telegraph) {
+    const dangerRadius = telegraph.radius + unit.radius + TELEGRAPH_AVOID_PADDING;
+    const d = distPoint(unit.x, unit.y, telegraph.x, telegraph.y);
+    if (d > dangerRadius) {
+      return null;
+    }
+    const dir = d === 0 ? { x: 1, y: 0 } : normalize(unit.x - telegraph.x, unit.y - telegraph.y);
+    return { x: dir.x, y: dir.y, weight: getTelegraphAvoidWeight(telegraph, dangerRadius, d) };
+  }
+
+  function getLineTelegraphEscape(unit, telegraph) {
+    const closest = closestPointOnSegment(unit.x, unit.y, telegraph.x, telegraph.y, telegraph.x2, telegraph.y2);
+    const dangerWidth = (telegraph.width || 24) * 0.5 + unit.radius + TELEGRAPH_AVOID_PADDING;
+    const d = distPoint(unit.x, unit.y, closest.x, closest.y);
+    if (d > dangerWidth) {
+      return null;
+    }
+    const dir = d === 0 ? getLinePerpendicular(telegraph) : normalize(unit.x - closest.x, unit.y - closest.y);
+    return { x: dir.x, y: dir.y, weight: getTelegraphAvoidWeight(telegraph, dangerWidth, d) };
+  }
+
+  function getFanTelegraphEscape(unit, telegraph) {
+    const dangerRadius = telegraph.radius + unit.radius + TELEGRAPH_AVOID_PADDING;
+    const d = distPoint(unit.x, unit.y, telegraph.x, telegraph.y);
+    if (d > dangerRadius) {
+      return null;
+    }
+    const angle = Math.atan2(unit.y - telegraph.y, unit.x - telegraph.x);
+    if (Math.abs(angleDiff(angle, telegraph.angle)) > telegraph.arc / 2) {
+      return null;
+    }
+    const dir = d === 0 ? { x: Math.cos(telegraph.angle), y: Math.sin(telegraph.angle) } : normalize(unit.x - telegraph.x, unit.y - telegraph.y);
+    return { x: dir.x, y: dir.y, weight: getTelegraphAvoidWeight(telegraph, dangerRadius, d) };
+  }
+
+  function getTelegraphAvoidWeight(telegraph, dangerSize, distance) {
+    const urgency = telegraph.total ? 1 - clamp(telegraph.time / telegraph.total, 0, 1) : 0;
+    return 1 + clamp((dangerSize - distance) / dangerSize, 0, 1) + urgency * 0.5;
+  }
+
+  function closestPointOnSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) {
+      return { x: x1, y: y1 };
+    }
+    const t = clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1);
+    return { x: x1 + t * dx, y: y1 + t * dy };
+  }
+
+  function getLinePerpendicular(telegraph) {
+    const dx = telegraph.x2 - telegraph.x;
+    const dy = telegraph.y2 - telegraph.y;
+    const dir = normalize(-dy, dx);
+    return dir.len > 0 ? dir : { x: 1, y: 0 };
   }
 
   function updateEnemyAi(dt) {
@@ -883,7 +1343,7 @@
 
       const target = enemy.forcedTarget && !enemy.forcedTarget.dead
         ? enemy.forcedTarget
-        : nearestAlive(enemy, party);
+        : nearestAlive(enemy, getTargetablePartyMembers());
       if (!target) {
         continue;
       }
@@ -927,8 +1387,8 @@
       }
 
       const candidates = shot.team === "party"
-        ? (shot.affectsAllies ? [...enemies, ...party] : enemies)
-        : party;
+        ? (shot.affectsAllies ? [...enemies, ...getFieldPartyMembers()] : enemies)
+        : getFieldPartyMembers();
       for (const unit of candidates) {
         if (unit.dead || unit === shot.owner) {
           continue;
@@ -1012,104 +1472,46 @@
     }
   }
 
-  function thinkUlpes(unit) {
-    const target = nearestAlive(unit, enemies);
-    if (!target) {
-      return;
-    }
-    const d = dist(unit, target);
-    const candidates = [];
-    if ((unit.cds.heroSlash || 0) <= 0 && d <= 128) {
-      candidates.push(() => useUlpesHeroSlash(unit, target));
-    }
-    if (d <= 52) {
-      candidates.push(() => useUlpesNormal(unit, target));
-    }
-    useRandomCandidate(unit, candidates);
+  function thinkUlpes(unit, avoidingTelegraph = false) {
+    return skillSystem.thinkUlpes(unit, avoidingTelegraph);
   }
 
-  function thinkRihas(unit) {
-    const target = nearestAlive(unit, enemies);
-    if (!target) {
-      return;
-    }
-    const d = dist(unit, target);
-    const candidates = [];
-    if ((unit.cds.quake || 0) <= 0 && d <= 260) {
-      candidates.push(() => useRihasJump(unit, target));
-    }
-    if (d <= 75) {
-      candidates.push(() => useRihasNormal(unit));
-    }
-    useRandomCandidate(unit, candidates);
+  function thinkRihas(unit, avoidingTelegraph = false) {
+    return skillSystem.thinkRihas(unit, avoidingTelegraph);
   }
 
-  function thinkSushia(unit) {
-    const target = nearestAlive(unit, enemies);
-    if (!target) {
-      return;
-    }
-    const d = dist(unit, target);
-    const candidates = [];
-    if ((unit.cds.bomb || 0) <= 0 && d <= 430) {
-      candidates.push(() => useSushiaBomb(unit, target));
-    }
-    if (d <= 340) {
-      candidates.push(() => useSushiaBolts(unit, target));
-    }
-    useRandomCandidate(unit, candidates);
+  function thinkSushia(unit, avoidingTelegraph = false) {
+    return skillSystem.thinkSushia(unit, avoidingTelegraph);
   }
 
   function thinkEnemy(enemy, target, distance) {
-    const candidates = [];
-    if (enemy.role === "caster") {
-      if ((enemy.cds.skill || 0) <= 0) {
-        candidates.push(() => enemyLineAttack(enemy, target));
-      }
-    } else if (enemy.role === "elite") {
-      if ((enemy.cds.skill || 0) <= 0) {
-        candidates.push(() => enemyHeavySlam(enemy, target));
-      }
-      if (distance <= 58) {
-        candidates.push(() => enemyBite(enemy, target));
-      }
-    } else if (distance <= 48) {
-      candidates.push(() => enemyBite(enemy, target));
-    }
-
-    useRandomCandidate(enemy, candidates);
-  }
-
-  function useRandomCandidate(unit, candidates) {
-    if (candidates.length === 0) {
-      unit.aiTick = AI_IDLE_RECHECK;
-      return false;
-    }
-    candidates[Math.floor(Math.random() * candidates.length)]();
-    return true;
+    return skillSystem.thinkEnemy(enemy, target, distance);
   }
 
   function getActionCooldown(unit) {
-    if (unit.id === "ulpes") return getMoodCooldown(unit, 3);
-    if (unit.id === "rihas") return getMoodCooldown(unit, 4);
-    if (unit.id === "sushia") return getMoodCooldown(unit, 5);
-    if (unit.role === "caster") return CASTER_ACTION_CD;
-    if (unit.team === "enemy") return ENEMY_NORMAL_ATTACK_CD;
-    return 1.5;
+    return skillSystem.getActionCooldown(unit);
   }
 
   function setActionCooldown(unit) {
-    unit.cds.attack = Math.max(unit.cds.attack || 0, getActionCooldown(unit));
+    return skillSystem.setActionCooldown(unit);
   }
-
   function moodLerp(mood, leftMood, leftValue, rightMood, rightValue) {
     const ratio = clamp((mood - leftMood) / (rightMood - leftMood), 0, 1);
     return leftValue + (rightValue - leftValue) * ratio;
   }
 
-  function getMoodNaturalFall(unit) {
-    const ratio = clamp(unit.noDamage / MOOD_NATURAL_FALL_MIN_TIME, 0, 1);
-    return moodLerp(ratio, 0, MOOD_NATURAL_FALL, 1, MOOD_NATURAL_FALL_MIN);
+  function getMoodNaturalDelta(unit) {
+    if (!unit || unit.mood === null || unit.maxHp <= 0) {
+      return 0;
+    }
+
+    const hpRatio = clamp(unit.hp / unit.maxHp, 0, 1);
+    for (const step of MOOD_NATURAL_HP_STEPS) {
+      if (hpRatio >= step.hp) {
+        return step.delta;
+      }
+    }
+    return MOOD_NATURAL_HP_BOTTOM_DELTA;
   }
 
   function getMoodGainMultiplier(unit) {
@@ -1118,11 +1520,37 @@
     return moodLerp(unit.noDamage, MOOD_NO_DAMAGE_GAIN_BONUS_START, 1, MOOD_NO_DAMAGE_GAIN_BONUS_MAX_TIME, MOOD_NO_DAMAGE_GAIN_BONUS_MAX);
   }
 
+  function applyMoodHighGainDamping(unit, amount) {
+    if (!unit || unit.mood === null || amount <= 0) {
+      return amount;
+    }
+    if (unit.mood >= MOOD_HIGH_GAIN_DAMPING_START) {
+      return amount * MOOD_HIGH_GAIN_DAMPING_MULT;
+    }
+
+    const normalRoom = MOOD_HIGH_GAIN_DAMPING_START - unit.mood;
+    if (amount <= normalRoom) {
+      return amount;
+    }
+    return normalRoom + (amount - normalRoom) * MOOD_HIGH_GAIN_DAMPING_MULT;
+  }
+
+  function getHpRatio(amount, unit) {
+    if (!unit || unit.maxHp <= 0 || amount <= 0) {
+      return 0;
+    }
+    return Math.max(0, amount / unit.maxHp);
+  }
+
+  function getMoodReferenceHp(unit) {
+    return Math.max(1, unit && (unit.moodBaseHp || unit.maxHp) || 1);
+  }
+
   function addMoodGain(unit, amount) {
     if (!unit || unit.mood === null || amount <= 0) {
       return 0;
     }
-    const adjusted = amount * getMoodGainMultiplier(unit);
+    const adjusted = applyMoodHighGainDamping(unit, amount * getMoodGainMultiplier(unit));
     const before = unit.mood;
     unit.mood = clamp(unit.mood + adjusted, 0, 100);
     return unit.mood - before;
@@ -1197,620 +1625,118 @@
   }
 
   function speakSkill(unit, skillKey) {
-    const lines = SKILL_LINES[unit.id] && SKILL_LINES[unit.id][skillKey];
-    if (!lines || lines.length === 0) {
-      return;
-    }
-    const line = lines[Math.floor(Math.random() * lines.length)];
-    addSpeech(line, unit);
+    return skillSystem.speakSkill(unit, skillKey);
   }
+
   function useUlpesNormal(unit, target) {
-    speakSkill(unit, "attack");
-    setActionCooldown(unit);
-    unit.actionLock = ACTION_GAP;
-    unit.aimAngle = angleTo(unit, target);
-    for (let i = 0; i < 3; i += 1) {
-      setTimeout(() => {
-        if (!unit.dead && !target.dead && dist(unit, target) <= 62) {
-          dealDamage(unit, target, 8 + unit.attack * 0.38, { crit: true });
-          slashEffect(unit, target);
-        }
-      }, i * 120);
-    }
+    return skillSystem.useUlpesNormal(unit, target);
   }
 
   function useUlpesHeroSlash(unit, target) {
-    speakSkill(unit, "heroSlash");
-    setActionCooldown(unit);
-    unit.cds.heroSlash = getMoodCooldown(unit, 10);
-    unit.actionLock = 0.62 + ACTION_GAP;
-    unit.aimAngle = angleTo(unit, target);
-    addTelegraph({
-      type: "fan",
-      source: unit,
-      x: unit.x,
-      y: unit.y,
-      radius: 122,
-      angle: unit.aimAngle,
-      arc: deg(200),
-      team: "party",
-      time: 0.62,
-      getPosition: () => ({ x: unit.x, y: unit.y }),
-      getAngle: () => target.dead ? unit.aimAngle : angleTo(unit, target),
-      resolve: () => {
-        let hits = 0;
-        unit.aimAngle = target.dead ? unit.aimAngle : angleTo(unit, target);
-        for (const unitHit of [...enemies, ...party]) {
-          if (unitHit.dead || unitHit === unit) {
-            continue;
-          }
-          if (inFan(unitHit, unit.x, unit.y, 122, unit.aimAngle, deg(200))) {
-            dealDamage(unit, unitHit, 18 + unit.attack * 0.7, { crit: true });
-            hits += unitHit.team === "enemy" ? 1 : 0;
-          }
-        }
-        applyMultiHitMoodBonus(unit, hits);
-        unit.cds.heroSlash = Math.max(1.5, unit.cds.heroSlash - hits * 0.5);
-        addBurst(unit.x, unit.y, 116, "rgba(244,197,79,0.22)");
-      },
-    });
+    return skillSystem.useUlpesHeroSlash(unit, target);
   }
+
   function useRihasNormal(unit) {
-    speakSkill(unit, "attack");
-    setActionCooldown(unit);
-    unit.actionLock = 0.38 + ACTION_GAP;
-    addTelegraph({
-      type: "circle",
-      x: unit.x,
-      y: unit.y,
-      radius: 66,
-      team: "party",
-      time: 0.38,
-      getPosition: () => ({ x: unit.x, y: unit.y }),
-      resolve: () => {
-        let hits = 0;
-        for (const unitHit of [...enemies, ...party]) {
-          if (unitHit.dead || unitHit === unit) {
-            continue;
-          }
-          if (distPoint(unitHit.x, unitHit.y, unit.x, unit.y) <= 66 + unitHit.radius) {
-            dealDamage(unit, unitHit, 16 + unit.attack * 0.55);
-            hits += unitHit.team === "enemy" ? 1 : 0;
-          }
-        }
-        applyMultiHitMoodBonus(unit, hits);
-        addBurst(unit.x, unit.y, 72, "rgba(227,122,63,0.25)");
-      },
-    });
+    return skillSystem.useRihasNormal(unit);
   }
+
   function useRihasJump(unit, target) {
-    speakSkill(unit, "quake");
-    setActionCooldown(unit);
-    unit.cds.quake = getMoodCooldown(unit, 13);
-    unit.actionLock = 0.82 + ACTION_GAP;
-    const dir = normalize(target.x - unit.x, target.y - unit.y);
-    const landing = {
-      x: clamp(target.x - dir.x * 18, 45, view.w - 45),
-      y: clamp(target.y - dir.y * 18, 45, view.h - 45),
-    };
-    const getLanding = () => {
-      const currentDir = normalize(target.x - unit.x, target.y - unit.y);
-      return {
-        x: clamp(target.x - currentDir.x * 18, 45, view.w - 45),
-        y: clamp(target.y - currentDir.y * 18, 45, view.h - 45),
-      };
-    };
-    const telegraph = {
-      type: "circle",
-      x: landing.x,
-      y: landing.y,
-      radius: 92,
-      team: "party",
-      time: 0.82,
-      getPosition: getLanding,
-      resolve: () => {
-        if (unit.dead) {
-          return;
-        }
-        const currentLanding = { x: telegraph.x, y: telegraph.y };
-        let hits = 0;
-        unit.x = currentLanding.x;
-        unit.y = currentLanding.y;
-        for (const unitHit of [...enemies, ...party]) {
-          if (unitHit.dead || unitHit === unit) {
-            continue;
-          }
-          const d = distPoint(unitHit.x, unitHit.y, currentLanding.x, currentLanding.y);
-          if (d <= 92 + unitHit.radius) {
-            dealDamage(unit, unitHit, 22 + unit.attack * 0.8);
-            hits += unitHit.team === "enemy" ? 1 : 0;
-          } else if (d <= 160 + unitHit.radius) {
-            dealDamage(unit, unitHit, 10 + unit.attack * 0.25, { magic: true });
-            hits += unitHit.team === "enemy" ? 1 : 0;
-          }
-        }
-        applyMultiHitMoodBonus(unit, hits);
-        addBurst(currentLanding.x, currentLanding.y, 158, "rgba(227,122,63,0.18)");
-      },
-    };
-    addTelegraph(telegraph);
+    return skillSystem.useRihasJump(unit, target);
   }
+
   function useSushiaBolts(unit, target) {
-    setActionCooldown(unit);
-    const cast = getSushiaCastTime(1, unit);
-    unit.actionLock = cast + ACTION_GAP;
-    addTelegraph({
-      type: "line",
-      x: unit.x,
-      y: unit.y,
-      x2: target.x,
-      y2: target.y,
-      width: 16,
-      team: "party",
-      time: cast,
-      getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
-      resolve: () => {
-        speakSkill(unit, "attack");
-        for (let i = 0; i < 3; i += 1) {
-          const spread = (i - 1) * 0.08;
-          const angle = angleTo(unit, target) + spread;
-          projectiles.push({
-            x: unit.x,
-            y: unit.y,
-            vx: Math.cos(angle) * 360,
-            vy: Math.sin(angle) * 360,
-            radius: 5,
-            team: "party",
-            owner: unit,
-            damage: 10 + unit.magic * 0.35,
-            magic: true,
-            life: 1.4,
-            hit: new Set(),
-            pierce: false,
-            color: "#d9afff",
-          });
-        }
-      },
-    });
+    return skillSystem.useSushiaBolts(unit, target);
   }
 
   function useSushiaBomb(unit, target) {
-    setActionCooldown(unit);
-    unit.cds.bomb = getMoodCooldown(unit, 15);
-    const cast = getSushiaCastTime(3, unit);
-    unit.actionLock = cast + ACTION_GAP;
-    const telegraph = {
-      type: "circle",
-      x: target.x,
-      y: target.y,
-      radius: 108,
-      team: "party",
-      time: cast,
-      getPosition: () => ({ x: target.x, y: target.y }),
-      resolve: () => {
-        speakSkill(unit, "bomb");
-        const impact = { x: telegraph.x, y: telegraph.y };
-        let hits = 0;
-        for (const unitHit of [...enemies, ...party]) {
-          if (unitHit.dead || unitHit === unit) {
-            continue;
-          }
-          const d = distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
-          if (d <= 108 + unitHit.radius) {
-            const nearCenter = d <= 32 + unitHit.radius;
-            dealDamage(unit, unitHit, nearCenter ? 32 + unit.magic * 0.95 : 16 + unit.magic * 0.48, { magic: true });
-            hits += unitHit.team === "enemy" ? 1 : 0;
-          }
-        }
-        applyMultiHitMoodBonus(unit, hits);
-        addBurst(impact.x, impact.y, 118, "rgba(185,133,238,0.28)");
-      },
-    };
-    addTelegraph(telegraph);
+    return skillSystem.useSushiaBomb(unit, target);
   }
 
+
   function startPlayerAim(type) {
-    if (player.dead || player.channel || player.cast || player.frozen > 0) {
-      return false;
-    }
-    player.aim = { type };
-    game.hover = getHoveredPartyMember();
-    return true;
+    return skillSystem.startPlayerAim(type);
   }
 
   function cancelPlayerAim() {
-    player.aim = null;
+    return skillSystem.cancelPlayerAim();
   }
 
   function confirmPlayerAim() {
-    if (!player.aim || player.dead || player.channel || player.cast || player.frozen > 0) {
-      return false;
-    }
-    game.hover = getHoveredPartyMember();
-    if (player.aim.type === "attack") {
-      return firePlayerShot();
-    }
-    if (player.aim.type === "heal") {
-      return castHeal();
-    }
-    if (player.aim.type === "shield") {
-      return castShield();
-    }
+    return skillSystem.confirmPlayerAim();
+  }
+  function isPlayerGuarding() {
     return false;
   }
 
-  function isPlayerGuarding() {
-    return Boolean(input.keys.space);
-  }
   function firePlayerShot() {
-    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
-      return false;
-    }
-    if ((player.cds.attack || 0) > 0) {
-      addFloat("再詠唱中", player.x, player.y - 28, "#ffffff");
-      return false;
-    }
-    if (player.mp < PLAYER_ATTACK_COST) {
-      addFloat("魔力不足", player.x, player.y - 28, "#ffffff");
-      return false;
-    }
-    const dir = normalize(input.mouse.x - player.x, input.mouse.y - player.y);
-    if (dir.len === 0) {
-      return false;
-    }
-    if (!startPlayerCast("attack", { dir }, PLAYER_ATTACK_CAST)) {
-      return false;
-    }
-    player.mp -= PLAYER_ATTACK_COST;
-    player.cds.attack = PLAYER_ATTACK_CD;
-    return true;
+    return skillSystem.firePlayerShot();
   }
 
   function completePlayerShot(lockedDir) {
-    const dir = lockedDir && lockedDir.len !== 0 ? lockedDir : normalize(input.mouse.x - player.x, input.mouse.y - player.y);
-    if (dir.len === 0) {
-      return;
-    }
-    speakSkill(player, "attack");
-    projectiles.push({
-      x: player.x,
-      y: player.y,
-      vx: dir.x * 260,
-      vy: dir.y * 260,
-      radius: 12,
-      team: "party",
-      owner: player,
-      damage: 16 + player.magic * 0.28,
-      magic: true,
-      life: PLAYER_ATTACK_RANGE / 260,
-      hit: new Set(),
-      pierce: true,
-      affectsAllies: true,
-      healAllies: true,
-      heal: 16 + player.magic * 0.28,
-      color: "#9ef7ff",
-    });
+    return skillSystem.completePlayerShot(lockedDir);
   }
 
   function castHeal() {
-    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
-      return false;
-    }
-    const target = game.hover;
-    if (!target || target.dead || target.team !== "party") {
-      addFloat("対象なし", input.mouse.x, input.mouse.y - 12, "#ffffff");
-      return false;
-    }
-    if ((player.cds.heal || 0) > 0) {
-      addFloat("再詠唱中", target.x, target.y - 28, "#ffffff");
-      return false;
-    }
-    if (player.mp < HEAL_COST) {
-      addFloat("魔力不足", player.x, player.y - 28, "#ffffff");
-      return false;
-    }
-    if (dist(player, target) > HEAL_RANGE) {
-      addFloat("届かない", target.x, target.y - 28, "#ffffff");
-      return false;
-    }
-    if (!startPlayerCast("heal", { target }, HEAL_CAST)) {
-      return false;
-    }
-    player.mp -= HEAL_COST;
-    player.cds.heal = HEAL_CD;
-    return true;
+    return skillSystem.castHeal();
   }
 
   function completeHeal(target) {
-    if (!target || target.dead || target.team !== "party" || dist(player, target) > HEAL_RANGE) {
-      addFloat("対象なし", player.x, player.y - 28, "#ffffff");
-      return;
-    }
-    speakSkill(player, "heal");
-    healUnit(player, target, 38 + player.magic * 0.55, { noMood: target === player });
-    effects.push({
-      type: "beam",
-      x: player.x,
-      y: player.y,
-      x2: target.x,
-      y2: target.y,
-      color: "rgba(151,247,255,0.72)",
-      time: 0.24,
-      age: 0,
-    });
+    return skillSystem.completeHeal(target);
   }
 
   function castShield() {
-    if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
-      return false;
-    }
-    if ((player.cds.shield || 0) > 0) {
-      addFloat("再詠唱中", player.x, player.y - 28, "#ffffff");
-      return false;
-    }
-    if (player.mp < SHIELD_COST) {
-      addFloat("魔力不足", player.x, player.y - 28, "#ffffff");
-      return false;
-    }
-    const x = clamp(input.mouse.x, 35, view.w - 35);
-    const y = clamp(input.mouse.y, 35, view.h - 35);
-    if (distPoint(player.x, player.y, x, y) > SHIELD_RANGE) {
-      addFloat("届かない", x, y - 18, "#ffffff");
-      return false;
-    }
-    if (!startPlayerCast("shield", { x, y }, SHIELD_CAST)) {
-      return false;
-    }
-    player.mp -= SHIELD_COST;
-    player.cds.shield = SHIELD_CD;
-    return true;
+    return skillSystem.castShield();
   }
 
   function completeShield(x, y) {
-    speakSkill(player, "shield");
-    let applied = 0;
-    for (const member of party) {
-      if (!member.dead && distPoint(member.x, member.y, x, y) <= SHIELD_RADIUS + member.radius) {
-        member.shield = Math.max(member.shield, 40 + player.magic * 0.45);
-        member.shieldTimer = 6;
-        if (member !== player) {
-          addMoodGain(member, 4 * MOOD_EVENT_MULT);
-        }
-        applied += 1;
-      }
+    return skillSystem.completeShield(x, y);
+  }
+
+  function addShield(unit, amount, duration) {
+    if (!unit || amount <= 0 || duration <= 0) {
+      return;
     }
-    player.ult = clamp(player.ult + applied * 4, 0, 100);
-    addTelegraph({
-      type: "circle",
-      x,
-      y,
-      radius: SHIELD_RADIUS,
-      team: "support",
-      time: 0.18,
-      resolve: () => {},
-    });
-    addBurst(x, y, SHIELD_RADIUS + 4, "rgba(143,233,255,0.25)");
+    unit.shield += amount;
+    unit.shieldTimer = Math.max(unit.shieldTimer, duration);
   }
 
   function triggerUltimate(id, automatic = false) {
-    const unit = party.find((member) => member.id === id);
-    if (!unit || unit.dead || unit.frozen > 0 || unit.ult < 100 || unit.actionLock > 0 || unit.cast) {
-      return false;
-    }
-    if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 40) {
-      addFloat("不調", unit.x, unit.y - 34, "#cfd5e6");
-      return false;
-    }
-    unit.ult = 0;
-    if (id === "ulpes") {
-      ultUlpes(unit, automatic);
-    } else if (id === "rihas") {
-      ultRihas(unit);
-    } else if (id === "sushia") {
-      ultSushia(unit, automatic);
-    } else if (id === "finald") {
-      ultFinald();
-    }
-    return true;
+    return skillSystem.triggerUltimate(id, automatic);
   }
 
   function ultUlpes(unit, automatic) {
-    const target = nearestAlive(unit, enemies);
-    if (!target) {
-      return;
-    }
-    speakSkill(unit, "ult");
-    unit.actionLock = (automatic ? 0.45 : 0.7) + ACTION_GAP;
-    const telegraph = {
-      type: "circle",
-      x: target.x,
-      y: target.y,
-      radius: 72,
-      team: "party",
-      time: automatic ? 0.45 : 0.7,
-      getPosition: () => ({ x: target.x, y: target.y }),
-      resolve: () => {
-        if (unit.dead || target.dead) {
-          return;
-        }
-        const impact = { x: telegraph.x, y: telegraph.y };
-        let hits = 0;
-        unit.x = clamp(impact.x + 22, 35, view.w - 35);
-        unit.y = impact.y;
-        for (const unitHit of [...enemies, ...party]) {
-          if (unitHit.dead || unitHit === unit) {
-            continue;
-          }
-          const d = distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
-          if (d <= 70 + unitHit.radius) {
-            const base = unitHit.team === "enemy" ? 74 + unit.attack * 1.4 : (74 + unit.attack * 1.4) / 4;
-            dealDamage(unit, unitHit, automatic ? base * 0.65 : base);
-            hits += unitHit.team === "enemy" ? 1 : 0;
-          }
-        }
-        applyMultiHitMoodBonus(unit, hits);
-        addBurst(impact.x, impact.y, 84, "rgba(244,197,79,0.32)");
-      },
-    };
-    addTelegraph(telegraph);
+    return skillSystem.ultUlpes(unit, automatic);
   }
+
   function ultRihas(unit) {
-    speakSkill(unit, "ult");
-    unit.actionLock = ACTION_GAP;
-    let taunted = 0;
-    for (const enemy of enemies) {
-      if (!enemy.dead && dist(unit, enemy) <= 260) {
-        enemy.forcedTarget = unit;
-        enemy.tauntTimer = 5.5;
-        taunted += 1;
-      }
-    }
-    unit.shield = Math.max(unit.shield, 25 + taunted * 8);
-    unit.shieldTimer = 5.5;
-    addBurst(unit.x, unit.y, 270, "rgba(227,122,63,0.18)");
+    return skillSystem.ultRihas(unit);
   }
 
   function ultSushia(unit, automatic) {
-    const cast = automatic ? getSushiaCastTime(3.5, unit) : getSushiaCastTime(7, unit);
-    unit.actionLock = cast + ACTION_GAP;
-    addTelegraph({
-      type: "circle",
-      x: unit.x,
-      y: unit.y,
-      radius: SUSHIA_ICE_WORLD_RADIUS,
-      team: "party",
-      time: cast,
-      getPosition: () => ({ x: unit.x, y: unit.y }),
-      resolve: () => {
-        speakSkill(unit, "ult");
-        const frozen = new Set();
-        let multiHitAwarded = false;
-        areas.push({
-          type: "ice",
-          x: unit.x,
-          y: unit.y,
-          radius: SUSHIA_ICE_WORLD_RADIUS,
-          time: automatic ? 2.6 : 4.2,
-          tick: 0,
-          tickRate: 0.4,
-          apply: () => {
-            let hits = 0;
-            for (const unitHit of [...enemies, ...party]) {
-              if (unitHit.dead || unitHit === unit) {
-                continue;
-              }
-              const d = distPoint(unitHit.x, unitHit.y, unit.x, unit.y);
-              if (d <= SUSHIA_ICE_WORLD_RADIUS + unitHit.radius) {
-                if (!frozen.has(unitHit)) {
-                  unitHit.frozen = Math.max(unitHit.frozen, automatic ? 1.1 : 2);
-                  frozen.add(unitHit);
-                }
-                const scale = 1 - clamp(d / SUSHIA_ICE_WORLD_RADIUS, 0, 0.8);
-                dealDamage(unit, unitHit, (8 + unit.magic * 0.22) * scale, { magic: true });
-                hits += unitHit.team === "enemy" ? 1 : 0;
-              }
-            }
-            if (!multiHitAwarded && hits >= MOOD_MULTI_HIT_MIN) {
-              applyMultiHitMoodBonus(unit, hits);
-              multiHitAwarded = true;
-            }
-          },
-        });
-      },
-    });
+    return skillSystem.ultSushia(unit, automatic);
   }
+
   function ultFinald() {
-    if (player.channel || player.cast || player.actionLock > 0) {
-      return;
-    }
-    player.channel = { time: 5.5, pulse: 0 };
-    player.actionLock = ACTION_GAP;
-    speakSkill(player, "ult");
+    return skillSystem.ultFinald();
   }
 
   function enemyBite(enemy, target) {
-    setActionCooldown(enemy);
-    enemy.actionLock = 0.32 + ACTION_GAP;
-    const telegraph = {
-      type: "circle",
-      x: target.x,
-      y: target.y,
-      radius: 42,
-      team: "enemy",
-      time: 0.32,
-      getPosition: () => ({ x: target.x, y: target.y }),
-      resolve: () => {
-        const impact = { x: telegraph.x, y: telegraph.y };
-        for (const member of party) {
-          if (!member.dead && distPoint(member.x, member.y, impact.x, impact.y) <= 42 + member.radius) {
-            dealDamage(enemy, member, enemy.attack + 8);
-          }
-        }
-      },
-    };
-    addTelegraph(telegraph);
+    return skillSystem.enemyBite(enemy, target);
   }
 
   function enemyLineAttack(enemy, target) {
-    setActionCooldown(enemy);
-    enemy.cds.skill = CASTER_SKILL_CD_BASE + Math.random() * CASTER_SKILL_CD_RANDOM;
-    enemy.actionLock = 0.86 + ACTION_GAP;
-    const getLine = () => {
-      const end = projectPoint(enemy, target, 620);
-      return { x: enemy.x, y: enemy.y, x2: end.x, y2: end.y };
-    };
-    const initial = getLine();
-    const telegraph = {
-      type: "line",
-      x: initial.x,
-      y: initial.y,
-      x2: initial.x2,
-      y2: initial.y2,
-      width: 26,
-      team: "enemy",
-      time: 0.86,
-      getLine,
-      resolve: () => {
-        for (const member of party) {
-          if (!member.dead && distanceToSegment(member.x, member.y, telegraph.x, telegraph.y, telegraph.x2, telegraph.y2) <= 18 + member.radius) {
-            dealDamage(enemy, member, enemy.attack + 17, { magic: true });
-          }
-        }
-      },
-    };
-    addTelegraph(telegraph);
+    return skillSystem.enemyLineAttack(enemy, target);
   }
 
   function enemyHeavySlam(enemy, target) {
-    setActionCooldown(enemy);
-    enemy.cds.skill = HEAVY_SLAM_CD;
-    enemy.actionLock = 0.95 + ACTION_GAP;
-    const telegraph = {
-      type: "circle",
-      x: target.x,
-      y: target.y,
-      radius: 98,
-      team: "enemy",
-      time: 0.95,
-      getPosition: () => ({ x: target.x, y: target.y }),
-      resolve: () => {
-        const impact = { x: telegraph.x, y: telegraph.y };
-        for (const member of party) {
-          if (!member.dead && distPoint(member.x, member.y, impact.x, impact.y) <= 98 + member.radius) {
-            dealDamage(enemy, member, enemy.attack + 20);
-          }
-        }
-        addBurst(impact.x, impact.y, 110, "rgba(201,93,78,0.22)");
-      },
-    };
-    addTelegraph(telegraph);
+    return skillSystem.enemyHeavySlam(enemy, target);
   }
-
   function dealDamage(source, target, amount, options = {}) {
     if (!target || target.dead) {
       return 0;
     }
 
+    const wasTargetAlive = target.hp > 0;
     let finalAmount = amount;
     if (source && source.team === "party" && source.id !== "finald" && source.mood !== null) {
       finalAmount *= getMoodOutgoingDamageMultiplier(source);
@@ -1887,16 +1813,26 @@
       }
       if (source.mood !== null && target.team === "enemy") {
         const distanceMult = getMoodDistanceMultiplier(source, target);
-        addMoodGain(source, rewardDamage * 0.035 * MOOD_EVENT_MULT * distanceMult);
+        const damageRatio = getHpRatio(rewardDamage, target);
+        const referenceDamage = damageRatio * getMoodReferenceHp(target);
+        addMoodGain(source, referenceDamage * MOOD_DAMAGE_DEALT_RATE * MOOD_DAMAGE_DEALT_MULT * MOOD_EVENT_MULT * distanceMult);
       }
     }
 
     if (target.team === "party" && target.id !== "finald") {
       target.ult = clamp(target.ult + rewardDamage * 0.16, 0, 100);
-      target.mood = clamp(target.mood - rewardDamage * 0.045 * MOOD_EVENT_MULT, 0, 100);
+      const damageRatio = getHpRatio(rewardDamage, target);
+      const referenceDamage = damageRatio * getMoodReferenceHp(target);
+      target.mood = clamp(target.mood - referenceDamage * MOOD_DAMAGE_TAKEN_RATE * MOOD_EVENT_MULT, 0, 100);
     }
 
     if (target.hp <= 0) {
+      if (wasTargetAlive && target.team === "enemy" && source && source.team === "party" && source.mood !== null) {
+        const gained = addMoodGain(source, MOOD_KILL_BONUS);
+        if (gained > 0) {
+          addFloat(`撃破+${Math.round(gained)}`, source.x, source.y - 46, COLORS.mood);
+        }
+      }
       target.dead = true;
       target.hp = 0;
       addBurst(target.x, target.y, target.radius * 2.2, "rgba(255,255,255,0.2)");
@@ -1922,8 +1858,10 @@
       source.ult = clamp(source.ult + healed * 0.22, 0, 100);
     }
     if (!options.noMood && target.team === "party" && target.id !== "finald") {
-      const quickBonus = target.noDamage < 3 ? 5 * MOOD_EVENT_MULT : 0;
-      addMoodGain(target, healed * 0.12 * MOOD_EVENT_MULT + quickBonus);
+      const quickBonus = target.noDamage < 3 ? MOOD_QUICK_HEAL_BONUS : 0;
+      const healRatio = getHpRatio(healed, target);
+      const referenceHeal = healRatio * getMoodReferenceHp(target);
+      addMoodGain(target, referenceHeal * MOOD_HEAL_RATE * MOOD_EVENT_MULT + quickBonus);
     }
     return healed;
   }
@@ -2012,13 +1950,17 @@
   }
 
   function checkBattleState() {
-    if (party.some((member) => member.dead)) {
+    if (getFieldPartyMembers().some((member) => member.dead)) {
       game.state = "lost";
       game.message = "戦闘不能者が出た";
       game.messageTimer = 999;
       return;
     }
     if (enemies.every((enemy) => enemy.dead)) {
+      if (!game.reinforcementsSpawned) {
+        spawnRearVanguardWave();
+        return;
+      }
       game.stageClearTimer += 1 / 60;
       game.state = "won";
       game.message = "依頼達成";
@@ -2029,7 +1971,7 @@
   function getHoveredPartyMember() {
     let best = null;
     let bestDist = Infinity;
-    for (const member of party) {
+    for (const member of getFieldPartyMembers()) {
       if (member.dead) {
         continue;
       }
@@ -2040,6 +1982,31 @@
       }
     }
     return best;
+  }
+
+  function isFieldUnit(unit) {
+    return Boolean(unit && unit.field !== false);
+  }
+
+  function isTargetableUnit(unit) {
+    return isFieldUnit(unit) && unit.targetable !== false && !unit.dead;
+  }
+
+  function getFieldPartyMembers() {
+    return party.filter(isFieldUnit);
+  }
+
+  function getTargetablePartyMembers() {
+    return party.filter(isTargetableUnit);
+  }
+
+  function getSupportOrigin(target = null) {
+    const bounds = getBattleBounds();
+    const fallbackY = bounds.bottom - 42;
+    const y = target && Number.isFinite(target.y)
+      ? clamp(target.y, bounds.top + 28, bounds.bottom - 28)
+      : fallbackY;
+    return { x: bounds.left - 36, y };
   }
 
   function addTelegraph(data) {
@@ -2076,7 +2043,8 @@
 
   function cancelPlayerChannel() {
     player.channel = null;
-    addFloat("中断", player.x, player.y - 32, "#ffffff");
+    const origin = getSupportOrigin();
+    addFloat("中断", origin.x + 28, origin.y - 32, "#ffffff");
   }
 
   function cancelPlayerCast() {
@@ -2084,7 +2052,8 @@
     player.cast = null;
     applyInterruptedPlayerCastCooldown(cast);
     player.actionLock = Math.max(player.actionLock, ACTION_GAP);
-    addFloat("詠唱中断", player.x, player.y - 32, "#ffffff");
+    const origin = getSupportOrigin();
+    addFloat("詠唱中断", origin.x + 28, origin.y - 32, "#ffffff");
   }
 
   function applyInterruptedPlayerCastCooldown(cast) {
@@ -2096,10 +2065,7 @@
   }
 
   function getPlayerCastCooldown(type) {
-    if (type === "attack") return { key: "attack", max: PLAYER_ATTACK_CD };
-    if (type === "heal") return { key: "heal", max: HEAL_CD };
-    if (type === "shield") return { key: "shield", max: SHIELD_CD };
-    return null;
+    return skillSystem.getPlayerCastCooldown(type);
   }
 
   function draw() {
@@ -2107,12 +2073,18 @@
     if (game.state === "town") {
       drawTown();
       drawEffects();
+      if (!playerProfile.done) {
+        drawProfileSetup();
+      } else {
+        drawTownStoryDialogue();
+      }
       return;
     }
     drawFloor();
     drawAreas();
     drawTelegraphs();
     drawPlayerAimPreview();
+    drawSupportCastPreview();
     drawProjectiles();
     drawUnits();
     drawEffects();
@@ -2295,9 +2267,24 @@
   }
 
   function drawTownCompanions() {
-    drawTownNpc(710, 705, COLORS.ulpes, "ウ");
-    drawTownNpc(770, 735, COLORS.rihas, "リ");
-    drawTownNpc(845, 710, COLORS.sushia, "ス");
+    if (!playerProfile.done) {
+      return;
+    }
+    if (!town.meetingDone) {
+      const guild = getTownBuilding("guild");
+      const baseX = guild ? guild.door.x : 800;
+      const baseY = guild ? guild.door.y - 18 : 790;
+      drawTownNpc(baseX - 74, baseY + 8, COLORS.ulpes, "ウ");
+      drawTownNpc(baseX - 8, baseY + 34, COLORS.rihas, "リ");
+      drawTownNpc(baseX + 66, baseY + 10, COLORS.sushia, "ス");
+      drawArgumentMark(baseX - 48, baseY - 22);
+      drawArgumentMark(baseX + 6, baseY + 4);
+      drawArgumentMark(baseX + 66, baseY - 18);
+      return;
+    }
+    for (const follower of town.followers) {
+      drawTownNpc(follower.x, follower.y, follower.color, follower.label);
+    }
   }
 
   function drawTownNpc(x, y, color, label) {
@@ -2321,6 +2308,28 @@
     ctx.restore();
   }
 
+  function drawArgumentMark(x, y) {
+    const pulse = 0.5 + Math.sin(game.time * 8 + x * 0.01) * 0.18;
+    ctx.save();
+    ctx.fillStyle = `rgba(255,84,64,${0.72 + pulse * 0.25})`;
+    ctx.strokeStyle = "#2d1110";
+    ctx.lineWidth = 4;
+    ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeText("!", x, y);
+    ctx.fillText("!", x, y);
+    ctx.strokeStyle = "rgba(255,84,64,0.78)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x - 22, y + 4);
+    ctx.lineTo(x - 8, y - 10);
+    ctx.lineTo(x + 4, y - 2);
+    ctx.lineTo(x + 20, y - 16);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawTownPlayer() {
     const unit = town.player;
     ctx.save();
@@ -2341,7 +2350,7 @@
     ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("フ", unit.x, unit.y + 1);
+    ctx.fillText("主", unit.x, unit.y + 1);
 
     ctx.strokeStyle = "#6a4a2e";
     ctx.lineWidth = 4;
@@ -2377,6 +2386,10 @@
     if (!town.panel) {
       return;
     }
+    if (town.panel.action === "battleGuide") {
+      drawBattleGuidePanel();
+      return;
+    }
     const w = Math.min(560, view.w - 32);
     const h = 188;
     const x = (view.w - w) / 2;
@@ -2401,23 +2414,312 @@
     ctx.fillText(town.panel.action === "quest" ? "E  出発" : "E  閉じる", x + w - 24, y + h - 24);
   }
 
-  function drawFloor() {
-    ctx.fillStyle = COLORS.floor;
+  function drawBattleGuidePanel() {
+    const w = Math.min(940, view.w - 32);
+    const h = Math.min(660, view.h - 32);
+    const x = (view.w - w) / 2;
+    const y = (view.h - h) / 2;
+    const compact = w < 640 || h < 600;
+    const titleSize = compact ? 22 : 26;
+    const sectionSize = compact ? 15 : 17;
+    const textSize = compact ? 12 : 14;
+    const lineHeight = compact ? 17 : 21;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.44)";
+    ctx.fillRect(0, 0, view.w, view.h);
+    drawPanel(x, y, w, h);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = `800 ${titleSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.fillText(town.panel.title, x + 26, y + 44);
+
+    let cursorY = y + (compact ? 76 : 86);
+    const contentW = w - 52;
+    for (const section of town.panel.sections) {
+      ctx.fillStyle = "#ffd86b";
+      ctx.font = `800 ${sectionSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      ctx.fillText(section.title, x + 26, cursorY);
+      cursorY += compact ? 22 : 27;
+
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = `700 ${textSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      for (const line of section.lines) {
+        const wrapped = wrapCanvasText(line, contentW);
+        for (const textLine of wrapped) {
+          if (cursorY > y + h - 40) {
+            break;
+          }
+          ctx.fillText(textLine, x + 36, cursorY);
+          cursorY += lineHeight;
+        }
+      }
+      cursorY += compact ? 8 : 12;
+    }
+
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("E / Space / Enter / クリック で戦闘開始", x + w - 24, y + h - 20);
+    ctx.restore();
+  }
+
+  function drawProfileSetup() {
+    updateProfileNameInput();
+    profileClickTargets = [];
+    const w = Math.min(620, view.w - 32);
+    const h = Math.min(430, view.h - 32);
+    const x = (view.w - w) / 2;
+    const y = (view.h - h) / 2;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(0, 0, view.w, view.h);
+    drawPanel(x, y, w, h);
+
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("主人公設定", x + w / 2, y + 48);
+
+    if (playerProfile.step === "gender") {
+      drawProfilePrompt(x, y, w, "性別を選択してください");
+      drawProfileChoices(x, y + 150, w, [
+        { label: "1  男の子", selected: playerProfile.gender === "男の子", action: () => selectProfileGender("男の子") },
+        { label: "2  女の子", selected: playerProfile.gender === "女の子", action: () => selectProfileGender("女の子") },
+      ], 2);
+    } else if (playerProfile.step === "name") {
+      drawProfilePrompt(x, y, w, "名前を入力してください");
+      ctx.fillStyle = "#cfe1d0";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("フィナルドの前につく名前。6文字まで。未入力ならアルジュナになります。", x + w / 2, y + 132);
+      const inputRect = getProfileNameInputRect();
+      ctx.fillStyle = "#f7fff6";
+      ctx.font = "800 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("・フィナルド", inputRect.x + inputRect.w + 14, inputRect.y + inputRect.h / 2 + 1);
+      drawProfileButton(x + w / 2 - 100, y + 255, 200, 46, "決定", false, confirmProfileName);
+    } else if (playerProfile.step === "pronoun") {
+      drawProfilePrompt(x, y, w, "一人称を選択してください");
+      drawProfileChoices(x, y + 136, w, getPronounChoices().map((choice, index) => ({
+        label: `${index + 1}  ${choice}`,
+        selected: playerProfile.pronoun === choice,
+        action: () => selectProfilePronoun(choice),
+      })), 3);
+    }
+
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(247,255,246,0.72)";
+    ctx.fillText(playerProfile.step === "name" ? "Enter / 決定" : "数字キー / クリック", x + w - 24, y + h - 24);
+    ctx.restore();
+  }
+
+  function drawProfilePrompt(x, y, w, text) {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(text, x + w / 2, y + 116);
+  }
+
+  function drawProfileChoices(panelX, startY, panelW, choices, columns) {
+    const gap = 12;
+    const buttonW = Math.min(150, (panelW - 72 - gap * (columns - 1)) / columns);
+    const buttonH = 48;
+    const totalW = buttonW * columns + gap * (columns - 1);
+    const x0 = panelX + (panelW - totalW) / 2;
+    for (let i = 0; i < choices.length; i += 1) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const x = x0 + col * (buttonW + gap);
+      const y = startY + row * (buttonH + 14);
+      drawProfileButton(x, y, buttonW, buttonH, choices[i].label, choices[i].selected, choices[i].action);
+    }
+  }
+
+  function drawProfileButton(x, y, w, h, label, selected, action) {
+    profileClickTargets.push({ x, y, w, h, action });
+    ctx.fillStyle = selected ? "rgba(184,140,255,0.55)" : "rgba(255,255,255,0.1)";
+    ctx.strokeStyle = selected ? "#f7fff6" : "rgba(255,255,255,0.18)";
+    ctx.lineWidth = selected ? 3 : 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+  }
+
+  function drawTownStoryDialogue() {
+    if (!town.story) {
+      return;
+    }
+    const entry = town.story.lines[town.story.index];
+    if (!entry) {
+      return;
+    }
+
+    const w = Math.min(920, view.w - 28);
+    const x = (view.w - w) / 2;
+    const fontSize = view.w < 560 ? 15 : 17;
+    const lineHeight = fontSize + 10;
+    const textFont = `700 ${fontSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.font = textFont;
+    const textLines = wrapCanvasText(entry.text, w - 58);
+    const h = Math.min(view.h - 28, Math.max(154, 100 + textLines.length * lineHeight));
+    const y = Math.max(14, view.h - h - 22);
+    const speaker = entry.speaker || "システム";
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
     ctx.fillRect(0, 0, view.w, view.h);
 
-    const grid = 56;
-    ctx.strokeStyle = COLORS.floorLine;
+    drawPanel(x, y, w, h);
+    ctx.fillStyle = "rgba(247,255,246,0.96)";
+    roundRect(x + 22, y + 18, Math.min(210, Math.max(118, ctx.measureText(speaker).width + 42)), 36, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(18,24,20,0.78)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#111714";
+    ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(speaker, x + 42, y + 42);
+
+    ctx.font = textFont;
+    ctx.fillStyle = "#f7fff6";
+    for (let i = 0; i < textLines.length; i += 1) {
+      ctx.fillText(textLines[i], x + 30, y + 82 + i * lineHeight);
+    }
+
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(247,255,246,0.78)";
+    ctx.fillText(`${town.story.index + 1}/${town.story.lines.length}`, x + w - 30, y + 34);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("E / Space / クリック", x + w - 30, y + h - 22);
+    ctx.restore();
+  }
+
+  function wrapCanvasText(text, maxWidth) {
+    const lines = [];
+    let line = "";
+    for (const char of Array.from(text)) {
+      if (char === "\n") {
+        lines.push(line);
+        line = "";
+        continue;
+      }
+      const next = line + char;
+      if (line && ctx.measureText(next).width > maxWidth) {
+        lines.push(line);
+        line = char;
+      } else {
+        line = next;
+      }
+    }
+    if (line) {
+      lines.push(line);
+    }
+    return lines.length ? lines : [""];
+  }
+
+  function drawFloor() {
+    const bounds = getBattleBounds();
+    ctx.fillStyle = "#1d3f2b";
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    ctx.fillStyle = "#4d7f4c";
+    ctx.fillRect(0, bounds.top, view.w, bounds.height);
+
+    drawGrassField(bounds);
+    drawBattleTreeBand(0, bounds.top, true);
+    drawBattleTreeBand(bounds.bottom, view.h, false);
+
+    ctx.strokeStyle = "rgba(20,45,24,0.45)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = (game.time * -8) % grid; x < view.w; x += grid) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, view.h);
+    for (let x = 0; x <= view.w; x += 64) {
+      ctx.moveTo(x, bounds.top);
+      ctx.lineTo(x, bounds.bottom);
     }
-    for (let y = (game.time * -4) % grid; y < view.h; y += grid) {
+    for (let y = bounds.top; y <= bounds.bottom; y += 64) {
       ctx.moveTo(0, y);
       ctx.lineTo(view.w, y);
     }
     ctx.stroke();
+
+    ctx.strokeStyle = "rgba(9,28,16,0.75)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, bounds.top);
+    ctx.lineTo(view.w, bounds.top);
+    ctx.moveTo(0, bounds.bottom);
+    ctx.lineTo(view.w, bounds.bottom);
+    ctx.stroke();
+  }
+
+  function drawGrassField(bounds) {
+    ctx.save();
+    ctx.lineCap = "round";
+    for (let y = bounds.top + 24; y < bounds.bottom - 18; y += 38) {
+      for (let x = 18 + ((Math.floor(y) * 7) % 31); x < view.w; x += 46) {
+        const sway = Math.sin(x * 0.09 + y * 0.04) * 3;
+        ctx.strokeStyle = (Math.floor((x + y) / 46) % 2) ? "rgba(126,178,94,0.38)" : "rgba(57,117,57,0.38)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y + 7);
+        ctx.lineTo(x + sway, y - 4);
+        ctx.moveTo(x + 7, y + 6);
+        ctx.lineTo(x + 10 + sway * 0.4, y - 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawBattleTreeBand(y0, y1, topBand) {
+    if (y1 <= y0) {
+      return;
+    }
+    ctx.save();
+    ctx.fillStyle = topBand ? "#173620" : "#15341f";
+    ctx.fillRect(0, y0, view.w, y1 - y0);
+
+    const rowGap = 42;
+    const colGap = 54;
+    let row = 0;
+    const treeEndY = topBand ? y1 - 18 : y1 + 24;
+    for (let y = y0 + 18; y < treeEndY; y += rowGap) {
+      const offset = row % 2 ? 24 : -4;
+      for (let x = offset; x < view.w + colGap; x += colGap) {
+        const wobble = Math.sin(x * 0.13 + y * 0.17) * 5;
+        const trunkX = x + wobble;
+        const trunkY = y + 10;
+        ctx.fillStyle = "#6a4428";
+        roundRect(trunkX - 5, trunkY, 10, 22, 3);
+        ctx.fill();
+        ctx.fillStyle = row % 2 ? "#27653a" : "#225a34";
+        ctx.beginPath();
+        ctx.arc(trunkX, y, 24, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = row % 2 ? "#2f7845" : "#2b7040";
+        ctx.beginPath();
+        ctx.arc(trunkX - 10, y - 7, 15, 0, TAU);
+        ctx.arc(trunkX + 11, y - 8, 16, 0, TAU);
+        ctx.fill();
+      }
+      row += 1;
+    }
+    ctx.restore();
   }
 
   function drawAreas() {
@@ -2503,63 +2805,55 @@
 
 
   function drawPlayerAimPreview() {
-    if (!player.aim || player.dead) {
+    return skillSystem.drawPlayerAimPreview();
+  }
+
+  function drawSupportCastPreview() {
+    if (!player.cast && !player.channel) {
       return;
     }
 
     ctx.save();
-    if (player.aim.type === "attack") {
-      const dir = normalize(input.mouse.x - player.x, input.mouse.y - player.y);
-      if (dir.len > 0) {
-        const endX = player.x + dir.x * PLAYER_ATTACK_RANGE;
-        const endY = player.y + dir.y * PLAYER_ATTACK_RANGE;
-        drawAimRangeCircle(player.x, player.y, PLAYER_ATTACK_RANGE, "rgba(158,247,255,0.22)");
-        ctx.strokeStyle = "rgba(158,247,255,0.24)";
-        ctx.lineWidth = 26;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(player.x, player.y);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-        ctx.strokeStyle = "#9ef7ff";
-        ctx.lineWidth = 3;
-        ctx.setLineDash([12, 10]);
-        ctx.beginPath();
-        ctx.moveTo(player.x, player.y);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-        ctx.setLineDash([]);
+    if (player.cast) {
+      const progress = 1 - clamp(player.cast.time / Math.max(player.cast.total || 1, 0.001), 0, 1);
+      if (player.cast.type === "heal" && player.cast.target && !player.cast.target.dead) {
+        drawSupportCastingAt(player.cast.target.x, player.cast.target.y, player.cast.target.radius + 22, "#79ff8d", progress);
+      } else if (player.cast.type === "shield") {
+        drawSupportCastingAt(player.cast.x, player.cast.y, 30, "#8fe9ff", progress);
+      } else if (player.cast.type === "attack" && player.cast.target) {
+        drawSupportCastingAt(player.cast.target.x, player.cast.target.y, 22, "#9ef7ff", progress);
       }
-    } else if (player.aim.type === "heal") {
-      drawAimRangeCircle(player.x, player.y, HEAL_RANGE, "rgba(121,255,141,0.24)");
-      const target = game.hover;
-      if (target && target.team === "party" && !target.dead) {
-        const inRange = dist(player, target) <= HEAL_RANGE;
-        ctx.strokeStyle = inRange ? "#79ff8d" : "#ff6a5c";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(target.x, target.y, target.radius + 15, 0, TAU);
-        ctx.stroke();
-        ctx.globalAlpha = inRange ? 0.72 : 0.35;
-        ctx.beginPath();
-        ctx.moveTo(player.x, player.y);
-        ctx.lineTo(target.x, target.y);
-        ctx.stroke();
+    }
+
+    if (player.channel) {
+      const pulse = 0.5 + Math.sin(game.time * 8) * 0.5;
+      for (const member of getFieldPartyMembers()) {
+        if (member.dead) {
+          continue;
+        }
+        drawSupportCastingAt(member.x, member.y, member.radius + 18 + pulse * 5, "#79ff8d", pulse);
       }
-    } else if (player.aim.type === "shield") {
-      drawAimRangeCircle(player.x, player.y, SHIELD_RANGE, "rgba(143,233,255,0.22)");
-      const x = clamp(input.mouse.x, 35, view.w - 35);
-      const y = clamp(input.mouse.y, 35, view.h - 35);
-      const inRange = distPoint(player.x, player.y, x, y) <= SHIELD_RANGE;
-      ctx.fillStyle = inRange ? "rgba(143,233,255,0.18)" : "rgba(255,92,78,0.14)";
-      ctx.strokeStyle = inRange ? "#8fe9ff" : "#ff6a5c";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(x, y, SHIELD_RADIUS, 0, TAU);
-      ctx.fill();
-      ctx.stroke();
     }
     ctx.restore();
+  }
+
+  function drawSupportCastingAt(x, y, radius, color, progress) {
+    const angle = game.time * 4.4;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.32 + progress * 0.28;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, angle, angle + TAU * 0.72);
+    ctx.stroke();
+
+    for (let i = 0; i < 3; i += 1) {
+      const a = angle + i * (TAU / 3);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.55 + progress * 0.35;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * radius, y + Math.sin(a) * radius, 4, 0, TAU);
+      ctx.fill();
+    }
   }
 
   function drawAimRangeCircle(x, y, radius, color) {
@@ -2586,13 +2880,36 @@
   }
 
   function drawUnits() {
-    const units = [...enemies, ...party].filter((unit) => !unit.dead);
+    const units = [...enemies, ...party].filter((unit) => !unit.dead && isFieldUnit(unit));
     units.sort((a, b) => a.y - b.y);
     for (const unit of units) {
       drawUnit(unit);
     }
   }
 
+
+  function lerpColor(from, to, ratio) {
+    const t = clamp(ratio, 0, 1);
+    const r = Math.round(from[0] + (to[0] - from[0]) * t);
+    const g = Math.round(from[1] + (to[1] - from[1]) * t);
+    const b = Math.round(from[2] + (to[2] - from[2]) * t);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function getMoodColor(mood) {
+    const value = clamp(mood, 0, 100);
+    const white = [255, 255, 255];
+    const yellow = [255, 216, 107];
+    const orange = [255, 159, 67];
+    const red = [255, 79, 79];
+    if (value <= 50) {
+      return lerpColor(white, yellow, value / 50);
+    }
+    if (value <= 70) {
+      return lerpColor(yellow, orange, (value - 50) / 20);
+    }
+    return lerpColor(orange, red, (value - 70) / 30);
+  }
   function drawUnit(unit) {
     const isHovered = game.hover === unit;
     const mood = unit.mood === null ? MOOD_BASELINE : unit.mood;
@@ -2605,7 +2922,7 @@
     if (unit.team === "party" && unit.id !== "finald") {
       const start = -Math.PI / 2;
       const end = start + TAU * (mood / 100);
-      ctx.strokeStyle = mood > 80 ? COLORS.moodHigh : COLORS.mood;
+      ctx.strokeStyle = getMoodColor(mood);
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(unit.x, unit.y, unit.radius + 7, start, end);
@@ -2676,11 +2993,45 @@
       ctx.moveTo(unit.x, unit.y);
       ctx.lineTo(unit.forcedTarget.x, unit.forcedTarget.y);
       ctx.stroke();
+      drawTauntMark(unit);
     }
 
     ctx.restore();
   }
 
+  function drawTauntMark(unit) {
+    const pulse = 0.75 + Math.sin(game.time * 11) * 0.25;
+    const x = unit.x + unit.radius + 12;
+    const y = unit.y - unit.radius - 14;
+    const size = 12 + pulse * 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.78 + pulse * 0.18;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#2b1210";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x - size * 0.7, y);
+    ctx.lineTo(x - size * 0.15, y - size * 0.62);
+    ctx.lineTo(x + size * 0.35, y - size * 0.15);
+    ctx.moveTo(x - size * 0.65, y + size * 0.62);
+    ctx.lineTo(x - size * 0.05, y + size * 0.12);
+    ctx.lineTo(x + size * 0.7, y + size * 0.58);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#ff5d3f";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x - size * 0.7, y);
+    ctx.lineTo(x - size * 0.15, y - size * 0.62);
+    ctx.lineTo(x + size * 0.35, y - size * 0.15);
+    ctx.moveTo(x - size * 0.65, y + size * 0.62);
+    ctx.lineTo(x - size * 0.05, y + size * 0.12);
+    ctx.lineTo(x + size * 0.7, y + size * 0.58);
+    ctx.stroke();
+    ctx.restore();
+  }
   function drawCastOrbit(unit) {
     const castProgress = player.cast
       ? 1 - clamp(player.cast.time / player.cast.total, 0, 1)
@@ -2982,7 +3333,7 @@
     }
     if (unit.mood !== null) {
       const marker = barX + barW * 0.5;
-      drawBar(barX, y + 25, barW, 6, unit.mood / 100, "#2b2615", unit.mood > 80 ? COLORS.moodHigh : COLORS.mood);
+      drawBar(barX, y + 25, barW, 6, unit.mood / 100, "#2b2615", getMoodColor(unit.mood));
       ctx.strokeStyle = "#f6f6f6";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -2993,12 +3344,7 @@
   }
   function drawSkillPanel(x, y, w, h) {
     drawPanel(x, y, w, h);
-    const skills = [
-      { name: "援護射撃", cd: player.cds.attack || 0, max: PLAYER_ATTACK_CD },
-      { name: "ヒール", cd: player.cds.heal || 0, max: HEAL_CD },
-      { name: "シールド", cd: player.cds.shield || 0, max: SHIELD_CD },
-      { name: "フルヒール", cd: player.ult < 100 ? 100 - player.ult : 0, max: 100, gauge: true },
-    ];
+    const skills = skillSystem.getPanelSkills(player);
     const gap = 10;
     const itemW = (w - 32 - gap * 3) / 4;
     for (let i = 0; i < skills.length; i += 1) {
@@ -3103,7 +3449,7 @@
     return distPoint(cx, cy, nearestX, nearestY) <= r;
   }
   function separateUnits(dt) {
-    const all = [...party, ...enemies].filter((unit) => !unit.dead);
+    const all = [...party, ...enemies].filter((unit) => !unit.dead && isFieldUnit(unit) && unit.collidable !== false);
     for (let i = 0; i < all.length; i += 1) {
       for (let j = i + 1; j < all.length; j += 1) {
         const a = all[i];
@@ -3145,7 +3491,7 @@
     let best = null;
     let bestDist = Infinity;
     for (const unit of list) {
-      if (unit.dead) {
+      if (unit.dead || (unit.team === "party" && !isTargetableUnit(unit))) {
         continue;
       }
       const d = dist(from, unit);
@@ -3159,14 +3505,45 @@
 
   function clampAllUnits() {
     for (const unit of [...party, ...enemies]) {
-      clampUnit(unit);
+      if (isFieldUnit(unit)) {
+        clampUnit(unit);
+      }
     }
   }
 
+  function getBattleBounds() {
+    let top = clamp(view.h * 0.16, 88, 132);
+    let bottomBand = clamp(view.h * 0.18, 108, 160);
+    const shortage = BATTLE_MIN_PLAY_HEIGHT - (view.h - top - bottomBand);
+    if (shortage > 0) {
+      top = Math.max(64, top - shortage * 0.45);
+      bottomBand = Math.max(76, bottomBand - shortage * 0.55);
+    }
+    const bottom = view.h - bottomBand;
+    return {
+      left: BATTLE_SIDE_MARGIN,
+      right: view.w - BATTLE_SIDE_MARGIN,
+      top,
+      bottom,
+      width: Math.max(0, view.w - BATTLE_SIDE_MARGIN * 2),
+      height: Math.max(0, bottom - top),
+      centerY: (top + bottom) / 2,
+    };
+  }
+
+  function clampBattlePoint(x, y, margin = 0) {
+    const bounds = getBattleBounds();
+    return {
+      x: clamp(x, bounds.left + margin, bounds.right - margin),
+      y: clamp(y, bounds.top + margin, bounds.bottom - margin),
+    };
+  }
+
   function clampUnit(unit) {
-    if (!unit) return;
-    unit.x = clamp(unit.x, 24 + unit.radius, view.w - 24 - unit.radius);
-    unit.y = clamp(unit.y, 24 + unit.radius, view.h - 24 - unit.radius);
+    if (!isFieldUnit(unit)) return;
+    const point = clampBattlePoint(unit.x, unit.y, unit.radius);
+    unit.x = point.x;
+    unit.y = point.y;
   }
 
   function normalize(x, y) {
