@@ -1,12 +1,17 @@
 (() => {
   "use strict";
 
+  const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
+    ? window.HEALER_CONFIG.battleSpatialScale
+    : 1;
+  const px = (value) => Math.max(1, Math.round(value * spatialScale));
+
   window.HEALER_ENEMY_DEFS = {
     brute: {
       label: "魔",
       hp: 110,
-      speed: 74,
-      radius: 15,
+      speed: px(74),
+      radius: px(15),
       attack: 8,
       defense: 7,
       magicDefense: 4,
@@ -15,8 +20,8 @@
     skirmisher: {
       label: "魔",
       hp: 80,
-      speed: 118,
-      radius: 13,
+      speed: px(118),
+      radius: px(13),
       attack: 6,
       defense: 4,
       magicDefense: 3,
@@ -25,8 +30,8 @@
     smallVanguard: {
       label: "小",
       hp: 62,
-      speed: 128,
-      radius: 11,
+      speed: px(128),
+      radius: px(11),
       attack: 6,
       defense: 3,
       magicDefense: 2,
@@ -35,8 +40,8 @@
     caster: {
       label: "射",
       hp: 70,
-      speed: 62,
-      radius: 13,
+      speed: px(62),
+      radius: px(13),
       attack: 8,
       defense: 3,
       magicDefense: 8,
@@ -45,8 +50,8 @@
     elite: {
       label: "魔",
       hp: 250,
-      speed: 68,
-      radius: 22,
+      speed: px(68),
+      radius: px(22),
       attack: 12,
       defense: 11,
       magicDefense: 8,

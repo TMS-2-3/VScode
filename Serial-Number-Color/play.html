@@ -34,6 +34,10 @@
               <strong id="difficulty-label">Easy</strong>
             </button>
             <div id="difficulty-popover" class="difficulty-popover" hidden>
+              <button class="difficulty-option" type="button" data-difficulty="tutorial">
+                <strong>Tutorial</strong>
+                <span>練習 / 10 x 10</span>
+              </button>
               <button class="difficulty-option" type="button" data-difficulty="baby">
                 <strong>Baby</strong>
                 <span>2色 / 10 x 10</span>
@@ -71,6 +75,7 @@
 
       <section class="game-layout" aria-label="数色パズル">
         <div class="board-wrap">
+          <div id="tutorial-board-tip" class="tutorial-bubble tutorial-bubble-board" hidden>自由にパーツを設置しよう！</div>
           <div id="board" class="board" aria-label="game board"></div>
         </div>
 
@@ -78,9 +83,10 @@
           <div class="rack-header">
             <span>Parts</span>
             <button id="restart-button" class="reset-button" type="button">
-              リセット
+              メニューに戻る
             </button>
           </div>
+          <div id="tutorial-rack-tip" class="tutorial-bubble tutorial-bubble-rack" hidden>好きなブロックを選ぼう！</div>
           <div id="piece-rack" class="piece-rack"></div>
           <div id="status" class="status" aria-live="polite">スロットAを選択中</div>
           <details class="controls-help">
@@ -106,6 +112,7 @@
       </section>
     </main>
 
+    <div id="tutorial-fail-overlay" class="tutorial-fail-overlay" hidden></div>
     <div id="rules-overlay" class="rules-overlay" hidden></div>
     <aside id="rules-panel" class="rules-panel" aria-labelledby="rules-title" hidden>
       <div class="rules-panel-head">
@@ -149,7 +156,7 @@
           </section>
           <section>
             <h4>消去条件</h4>
-            <p>同じ色で同じ数字、または数字差が1のパーツ同士が縦横どこか1マスでも隣接すると接続します。ネットワーク内に3段階以上の連番があれば、枝分かれも含めてパーツ単位で消えます。</p>
+            <p>同じ色で同じ数字かつ、数字差が1のパーツ同士が縦横どこか1マスでも隣接すると接続します。ネットワーク内に3段階以上の連番があれば、枝分かれも含めてパーツ単位で消えます。</p>
           </section>
           <section>
             <h4>スコア</h4>
@@ -181,7 +188,6 @@
               <dd>Space: ↻付きだけ回転</dd>
               <dd>K: 設置</dd>
               <dd>H: パーツ切替</dd>
-              <dd>Enter: 設定画面では5分で開始</dd>
             </div>
           </dl>
         </div>
@@ -235,6 +241,10 @@
         <div class="start-section">
           <span>難易度</span>
           <div class="start-difficulty-options">
+            <button type="button" data-start-difficulty="tutorial">
+              <strong>Tutorial</strong>
+              <span>練習 / 10 x 10</span>
+            </button>
             <button type="button" data-start-difficulty="baby">
               <strong>Baby</strong>
               <span>2色 / 10 x 10</span>
@@ -293,6 +303,7 @@
             </button>
           </div>
         </div>
+        <button id="start-button" class="start-button" type="button">開始</button>
       </div>
     </div>
 
@@ -304,6 +315,20 @@
       </div>
     </div>
 
+
+    <div id="tutorial-complete-modal" class="tutorial-complete-modal" hidden>
+      <div class="tutorial-complete-dialog" role="dialog" aria-modal="true" aria-labelledby="tutorial-complete-title">
+        <p>Tutorial Complete</p>
+        <h2 id="tutorial-complete-title">チュートリアル完了です！</h2>
+        <button id="tutorial-menu-button" type="button">メニューに戻る</button>
+      </div>
+    </div>
     <script src="game.js"></script>
   </body>
 </html>
+
+
+
+
+
+

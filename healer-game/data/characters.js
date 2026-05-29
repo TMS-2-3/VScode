@@ -1,6 +1,11 @@
 (() => {
   "use strict";
 
+  const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
+    ? window.HEALER_CONFIG.battleSpatialScale
+    : 1;
+  const px = (value) => Math.max(1, Math.round(value * spatialScale));
+
   window.HEALER_CHARACTER_DEFS = {
     player: {
       id: "finald",
@@ -9,10 +14,10 @@
       team: "party",
       role: "support",
       color: "#57c7c9",
-      radius: 15,
+      radius: px(15),
       maxHp: 150,
       maxMp: 140,
-      speed: 230,
+      speed: px(230),
       attack: 7,
       magic: 16,
       defense: 6,
@@ -30,16 +35,16 @@
         team: "party",
         role: "hero",
         color: "#f4c54f",
-        radius: 16,
+        radius: px(16),
         maxHp: 190,
         maxMp: 50,
-        speed: 150,
+        speed: px(150),
         attack: 12,
         magic: 4,
         defense: 11,
         magicDefense: 8,
         guardChance: 0.24,
-        preferredRange: 42,
+        preferredRange: px(42),
       },
       {
         id: "rihas",
@@ -48,16 +53,16 @@
         team: "party",
         role: "monk",
         color: "#e37a3f",
-        radius: 17,
+        radius: px(17),
         maxHp: 230,
         maxMp: 45,
-        speed: 135,
+        speed: px(135),
         attack: 14,
         magic: 2,
         defense: 15,
         magicDefense: 7,
         guardChance: 0.22,
-        preferredRange: 56,
+        preferredRange: px(56),
       },
       {
         id: "sushia",
@@ -66,16 +71,16 @@
         team: "party",
         role: "mage",
         color: "#b985ee",
-        radius: 15,
+        radius: px(15),
         maxHp: 135,
         maxMp: 120,
-        speed: 120,
+        speed: px(120),
         attack: 2,
         magic: 15,
         defense: 5,
         magicDefense: 14,
         guardChance: 0.16,
-        preferredRange: 260,
+        preferredRange: px(260),
       },
     ],
   };

@@ -1,29 +1,34 @@
 (() => {
   "use strict";
 
+  const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
+    ? window.HEALER_CONFIG.battleSpatialScale
+    : 1;
+  const px = (value) => Math.max(1, Math.round(value * spatialScale));
+
   const DATA = {
     finald: {
-      attack: { id: "finald_attack", key: "attack", owner: "finald", name: "援護射撃", cd: 4, cast: 1, cost: 6, range: 420, projectileSpeed: 260, projectileRadius: 12, damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["援護します"] },
-      heal: { id: "finald_heal", key: "heal", owner: "finald", name: "ヒール", cd: 6, cast: 2, cost: 18, range: 520, healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール!", "回復!"] },
-      shield: { id: "finald_shield", key: "shield", owner: "finald", name: "バリア", cd: 8, cast: 2, cost: 24, range: 340, radius: 92, shieldBase: 40, magicScale: 0.45, duration: 6, moodGain: 4, lines: ["バリア展開!", "守るよ!"] },
-      ult: { id: "finald_ult", key: "ult", owner: "finald", name: "フルヒール", channelTime: 5.5, pulseRate: 0.22, range: 285, healPerPulse: 6, lines: ["フルヒール!!"] },
+      attack: { id: "finald_attack", key: "attack", owner: "finald", name: "援護射撃", cd: 5, cast: 1, cost: 6, radius: px(54), burstRadius: px(62), damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["援護します"] },
+      heal: { id: "finald_heal", key: "heal", owner: "finald", name: "ヒール", cd: 6, cast: 2, cost: 18, range: px(520), healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール!", "回復!"] },
+      shield: { id: "finald_shield", key: "shield", owner: "finald", name: "バリア", cd: 8, cast: 2, cost: 24, range: px(340), radius: px(92), shieldBase: 40, magicScale: 0.45, duration: 6, moodGain: 4, lines: ["バリア展開!", "守るよ!"] },
+      ult: { id: "finald_ult", key: "ult", owner: "finald", name: "フルヒール", cast: 3, baseHealRatio: 0.25, missingHealRatio: 0.5, lines: ["フルヒール!!"] },
     },
     ulpes: {
-      attack: { id: "ulpes_attack", key: "attack", owner: "ulpes", name: "通常攻撃", cd: 3, range: 52, hitRange: 62, repeat: 3, repeatDelayMs: 120, damageBase: 8, attackScale: 0.38, lines: ["てやっ!", "くらえ!"] },
-      heroSlash: { id: "ulpes_hero_slash", key: "heroSlash", owner: "ulpes", name: "ヒーロースラッシュ", cd: 10, range: 128, radius: 122, arcDeg: 200, cast: 0.62, damageBase: 18, attackScale: 0.7, minCdAfterHit: 1.5, cdRefundPerHit: 0.5, burstRadius: 116, lines: ["ヒーロースラッシュ!!"] },
-      ult: { id: "ulpes_ult", key: "ult", owner: "ulpes", name: "正義の一撃", cast: 0.7, autoCast: 0.45, radius: 72, hitRadius: 70, damageBase: 74, attackScale: 1.4, autoDamageScale: 0.65, teleportOffset: 22, burstRadius: 84, lines: ["正義の一撃!!"] },
+      attack: { id: "ulpes_attack", key: "attack", owner: "ulpes", name: "通常攻撃", cd: 3, range: px(52), hitRange: px(62), repeat: 3, repeatDelayMs: 120, damageBase: 8, attackScale: 0.38, lines: ["てやっ!", "くらえ!"] },
+      heroSlash: { id: "ulpes_hero_slash", key: "heroSlash", owner: "ulpes", name: "ヒーロースラッシュ", cd: 10, range: px(128), radius: px(122), arcDeg: 200, cast: 0.62, damageBase: 18, attackScale: 0.7, minCdAfterHit: 1.5, cdRefundPerHit: 0.5, burstRadius: px(116), lines: ["ヒーロースラッシュ!!"] },
+      ult: { id: "ulpes_ult", key: "ult", owner: "ulpes", name: "正義の一撃", cast: 0.7, autoCast: 0.45, radius: px(72), hitRadius: px(70), damageBase: 74, attackScale: 1.4, autoDamageScale: 0.65, teleportOffset: px(22), burstRadius: px(84), lines: ["正義の一撃!!"] },
     },
     rihas: {
-      attack: { id: "rihas_attack", key: "attack", owner: "rihas", name: "台地揺るがす拳", cd: 4, range: 75, radius: 66, cast: 0.38, damageBase: 16, attackScale: 0.55, burstRadius: 72, lines: ["どりゃぁ!", "しねぇ!"] },
-      quake: { id: "rihas_quake", key: "quake", owner: "rihas", name: "台地よ!揺れよ!", cd: 13, range: 260, radius: 92, shockRadius: 160, cast: 0.82, landingOffset: 18, damageBase: 22, attackScale: 0.8, shockDamageBase: 10, shockAttackScale: 0.25, burstRadius: 158, approach: true, lines: ["台地よ!揺れよ!"] },
-      ult: { id: "rihas_ult", key: "ult", owner: "rihas", name: "俺ァ無敵!!", radius: 350, duration: 5.5, shieldBase: 25, shieldPerTarget: 8, burstExtraRadius: 10, lines: ["相手してやる"] },
+      attack: { id: "rihas_attack", key: "attack", owner: "rihas", name: "台地揺るがす拳", cd: 4, range: px(75), radius: px(66), cast: 0.38, damageBase: 16, attackScale: 0.55, burstRadius: px(72), lines: ["どりゃぁ!", "しねぇ!"] },
+      quake: { id: "rihas_quake", key: "quake", owner: "rihas", name: "台地よ!揺れよ!", cd: 13, range: px(260), radius: px(92), shockRadius: px(160), cast: 0.82, landingOffset: px(18), damageBase: 22, attackScale: 0.8, shockDamageBase: 10, shockAttackScale: 0.25, burstRadius: px(158), approach: true, lines: ["台地よ!揺れよ!"] },
+      ult: { id: "rihas_ult", key: "ult", owner: "rihas", name: "俺ァ無敵!!", radius: px(350), duration: 5.5, shieldBase: 25, shieldPerTarget: 8, burstExtraRadius: px(10), lines: ["相手してやる"] },
     },
     sushia: {
-      attack: { id: "sushia_attack", key: "attack", owner: "sushia", name: "拡散弾", cd: 5, range: 340, cast: 1, projectileCount: 3, spread: 0.08, projectileSpeed: 360, projectileRadius: 5, damageBase: 10, magicScale: 0.35, life: 1.4, color: "#d9afff", lines: ["とうっ!", "拡散弾!"] },
-      bomb: { id: "sushia_bomb", key: "bomb", owner: "sushia", name: "インパクトボム", cd: 15, range: 430, cast: 3, radius: 108, innerRadius: 32, nearDamageBase: 32, nearMagicScale: 0.95, farDamageBase: 16, farMagicScale: 0.48, burstRadius: 118, lines: ["インパクトボム!!"] },
+      attack: { id: "sushia_attack", key: "attack", owner: "sushia", name: "拡散弾", cd: 5, range: px(340), cast: 1, projectileCount: 3, spread: 0.08, lineWidth: px(16), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.35, life: 1.4, color: "#d9afff", lines: ["とうっ!", "拡散弾!"] },
+      bomb: { id: "sushia_bomb", key: "bomb", owner: "sushia", name: "インパクトボム", cd: 15, range: px(430), cast: 3, radius: px(108), innerRadius: px(32), nearDamageBase: 32, nearMagicScale: 0.95, farDamageBase: 16, farMagicScale: 0.48, burstRadius: px(118), lines: ["インパクトボム!!"] },
       ult: {
         id: "sushia_ult", key: "ult", owner: "sushia", name: "アイスワールド",
-        cast: 5, autoCast: 3.5, radius: 330, manualRadiusBonus: 50,
+        cast: 5, autoCast: 3.5, radius: px(330), manualRadiusBonus: px(50),
         duration: 4.2, autoDuration: 2.6, tickRate: 0.4,
         freezeEnemy: 3, freezeAlly: 1, autoFreezeEnemy: 1, autoFreezeAlly: 3,
         manualAllyDamageMultiplier: 0.5,
@@ -31,9 +36,9 @@
       },
     },
     enemy: {
-      attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", cd: 4, bruteRange: 48, eliteRange: 58, cast: 0.32, radius: 42, damageBonus: 8 },
-      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", actionCd: 5.2, cdBase: 6.6, cdRandom: 1.5, cast: 0.86, length: 620, width: 26, hitWidth: 18, damageBonus: 17 },
-      heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", cd: 8.4, cast: 0.95, radius: 98, damageBonus: 20, burstRadius: 110 },
+      attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", cd: 4, bruteRange: px(48), eliteRange: px(58), cast: 0.32, radius: px(42), damageBonus: 8 },
+      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", actionCd: 5.2, cdBase: 6.6, cdRandom: 1.5, cast: 0.86, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
+      heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", cd: 8.4, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
     },
   };
 
@@ -49,6 +54,9 @@
 
   function createHealerSkillSystem(ctx) {
     function speakSkill(unit, key) {
+      if (unit.id === "finald") {
+        return;
+      }
       const skill = get(unit.id, key);
       const lines = skill && Array.isArray(skill.lines) ? skill.lines : [];
       if (lines.length) ctx.addSpeech(lines[Math.floor(Math.random() * lines.length)], unit);
@@ -201,8 +209,8 @@
       const getLanding = () => {
         const dir = ctx.normalize(target.x - unit.x, target.y - unit.y);
         return ctx.clampBattlePoint
-          ? ctx.clampBattlePoint(target.x - dir.x * skill.landingOffset, target.y - dir.y * skill.landingOffset, 45)
-          : { x: ctx.clamp(target.x - dir.x * skill.landingOffset, 45, ctx.view.w - 45), y: ctx.clamp(target.y - dir.y * skill.landingOffset, 45, ctx.view.h - 45) };
+          ? ctx.clampBattlePoint(target.x - dir.x * skill.landingOffset, target.y - dir.y * skill.landingOffset, ctx.battlePx(45))
+          : { x: ctx.clamp(target.x - dir.x * skill.landingOffset, ctx.battlePx(45), ctx.view.w - ctx.battlePx(45)), y: ctx.clamp(target.y - dir.y * skill.landingOffset, ctx.battlePx(45), ctx.view.h - ctx.battlePx(45)) };
       };
       const landing = getLanding();
       const telegraph = {
@@ -238,14 +246,14 @@
       const cast = ctx.getSushiaCastTime(skill.cast, unit);
       unit.actionLock = cast + ctx.ACTION_GAP;
       ctx.addTelegraph({
-        type: "line", x: unit.x, y: unit.y, x2: target.x, y2: target.y, width: 16, team: "party", time: cast,
+        type: "line", x: unit.x, y: unit.y, x2: target.x, y2: target.y, width: skill.lineWidth, team: "party", time: cast,
         getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
         resolve: () => {
           speakSkill(unit, "attack");
           for (let i = 0; i < skill.projectileCount; i += 1) {
             const spread = (i - Math.floor(skill.projectileCount / 2)) * skill.spread;
             const angle = ctx.angleTo(unit, target) + spread;
-            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: skill.damageBase + unit.magic * skill.magicScale, magic: true, life: skill.life, hit: new Set(), pierce: false, color: skill.color });
+            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: skill.damageBase + unit.magic * skill.magicScale, magic: true, life: skill.life, hit: new Set(), pierce: false, affectsAllies: true, color: skill.color });
           }
         },
       });
@@ -307,7 +315,7 @@
       const player = ctx.player;
       const skill = need("finald", "attack");
       if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
-      const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, 12);
+      const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
       if ((player.cds.attack || 0) > 0) { ctx.addFloat("再詠唱中", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (player.mp < skill.cost) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
@@ -320,13 +328,23 @@
     function completePlayerShot(lockedTarget) {
       const player = ctx.player;
       const skill = need("finald", "attack");
-      const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, 12);
+      const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
-      const dir = ctx.normalize(target.x - origin.x, target.y - origin.y);
-      if (dir.len === 0) return;
       speakSkill(player, "attack");
-      const travel = ctx.distPoint(origin.x, origin.y, target.x, target.y) + 120;
-      ctx.projectiles.push({ x: origin.x, y: origin.y, vx: dir.x * skill.projectileSpeed, vy: dir.y * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: player, damage: skill.damageBase + player.magic * skill.magicScale, magic: true, life: travel / skill.projectileSpeed, hit: new Set(), pierce: true, affectsAllies: true, healAllies: true, heal: skill.damageBase + player.magic * skill.magicScale, color: skill.color });
+      let hits = 0;
+      const damage = skill.damageBase + player.magic * skill.magicScale;
+      for (const unit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
+        if (unit.dead || unit === player) {
+          continue;
+        }
+        if (ctx.distPoint(unit.x, unit.y, target.x, target.y) <= skill.radius + unit.radius) {
+          ctx.dealDamage(player, unit, damage, { magic: true });
+          hits += 1;
+        }
+      }
+      ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: target.x, y2: target.y, color: "rgba(158,247,255,0.78)", time: 0.18, age: 0 });
+      ctx.addTelegraph({ type: "circle", x: target.x, y: target.y, radius: skill.radius, team: "support", time: 0.16, resolve: () => {} });
+      ctx.addBurst(target.x, target.y, skill.burstRadius, hits > 0 ? "rgba(158,247,255,0.28)" : "rgba(158,247,255,0.14)");
     }
     function castHeal() {
       const player = ctx.player;
@@ -364,8 +382,8 @@
       if ((player.cds.shield || 0) > 0) { ctx.addFloat("再詠唱中", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (player.mp < skill.cost) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       const point = ctx.clampBattlePoint
-        ? ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, 35)
-        : { x: ctx.clamp(ctx.input.mouse.x, 35, ctx.view.w - 35), y: ctx.clamp(ctx.input.mouse.y, 35, ctx.view.h - 35) };
+        ? ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(35))
+        : { x: ctx.clamp(ctx.input.mouse.x, ctx.battlePx(35), ctx.view.w - ctx.battlePx(35)), y: ctx.clamp(ctx.input.mouse.y, ctx.battlePx(35), ctx.view.h - ctx.battlePx(35)) };
       const { x, y } = point;
       if (!ctx.startPlayerCast("shield", { x, y }, skill.cast)) return false;
       player.mp -= skill.cost;
@@ -394,6 +412,7 @@
       if (cast.type === "attack") completePlayerShot(cast.target);
       else if (cast.type === "heal") completeHeal(cast.target);
       else if (cast.type === "shield") completeShield(cast.x, cast.y);
+      else if (cast.type === "ult") completeFinaldUlt();
     }
 
     function getPlayerCastCooldown(type) {
@@ -404,7 +423,7 @@
 
     function triggerUltimate(id, automatic = false) {
       const unit = ctx.party.find((member) => member.id === id);
-      if (!unit || unit.dead || unit.frozen > 0 || unit.ult < 100 || unit.actionLock > 0 || unit.cast) return false;
+      if (!unit || unit.dead || unit.frozen > 0 || unit.ult < 100 || unit.actionLock > 0 || unit.cast || unit.channel) return false;
       if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 40) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
       unit.ult = 0;
       if (id === "ulpes") ultUlpes(unit, automatic);
@@ -429,8 +448,8 @@
           const impact = { x: telegraph.x, y: telegraph.y };
           let hits = 0;
           const point = ctx.clampBattlePoint
-            ? ctx.clampBattlePoint(impact.x + skill.teleportOffset, impact.y, 35)
-            : { x: ctx.clamp(impact.x + skill.teleportOffset, 35, ctx.view.w - 35), y: impact.y };
+            ? ctx.clampBattlePoint(impact.x + skill.teleportOffset, impact.y, ctx.battlePx(35))
+            : { x: ctx.clamp(impact.x + skill.teleportOffset, ctx.battlePx(35), ctx.view.w - ctx.battlePx(35)), y: impact.y };
           unit.x = point.x;
           unit.y = point.y;
           for (const unitHit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
@@ -487,7 +506,10 @@
                 if (d <= radius + unitHit.radius) {
                   if (!frozen.has(unitHit)) {
                     const freezeTime = getSushiaIceFreezeTime(skill, unitHit, automatic);
-                    unitHit.frozen = Math.max(unitHit.frozen, freezeTime);
+                    if (freezeTime > unitHit.frozen) {
+                      unitHit.frozen = freezeTime;
+                      unitHit.frozenMax = freezeTime;
+                    }
                     frozen.add(unitHit);
                   }
                   const scale = 1 - ctx.clamp(d / radius, 0, 0.8);
@@ -517,9 +539,27 @@
       const player = ctx.player;
       const skill = need("finald", "ult");
       if (player.channel || player.cast || player.actionLock > 0) return;
-      player.channel = { skillId: skill.id, time: skill.channelTime, pulse: 0 };
-      player.actionLock = ctx.ACTION_GAP;
+      if (!ctx.startPlayerCast("ult", {}, skill.cast)) return;
       speakSkill(player, "ult");
+    }
+
+    function completeFinaldUlt() {
+      const player = ctx.player;
+      const skill = need("finald", "ult");
+      let healed = 0;
+      for (const member of ctx.getFieldPartyMembers()) {
+        if (member.dead) {
+          continue;
+        }
+        const hpRatio = member.maxHp > 0 ? ctx.clamp(member.hp / member.maxHp, 0, 1) : 0;
+        const healRatio = skill.baseHealRatio + (1 - hpRatio) * skill.missingHealRatio;
+        if (ctx.healUnit(player, member, member.maxHp * healRatio) > 0) {
+          healed += 1;
+        }
+      }
+      if (healed > 0) {
+        ctx.addBurst(ctx.view.w * 0.5, ctx.getBattleBounds().centerY, ctx.battlePx(170), "rgba(121,255,141,0.2)");
+      }
     }
 
     function updatePlayerChannel(dt) {
@@ -606,34 +646,23 @@
       draw.save();
       if (player.aim.type === "attack") {
         const skill = need("finald", "attack");
-        const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, 12);
-        const origin = ctx.getSupportOrigin(target);
-        draw.strokeStyle = "rgba(158,247,255,0.24)";
-        draw.lineWidth = skill.projectileRadius * 2;
-        draw.lineCap = "round";
-        draw.beginPath(); draw.moveTo(origin.x, origin.y); draw.lineTo(target.x, target.y); draw.stroke();
+        const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
+        draw.fillStyle = "rgba(158,247,255,0.18)";
         draw.strokeStyle = "#9ef7ff";
         draw.lineWidth = 3;
-        draw.setLineDash([12, 10]);
-        draw.beginPath(); draw.moveTo(origin.x, origin.y); draw.lineTo(target.x, target.y); draw.stroke();
-        draw.setLineDash([]);
-        draw.fillStyle = "rgba(158,247,255,0.2)";
-        draw.beginPath(); draw.arc(target.x, target.y, 18, 0, ctx.TAU); draw.fill();
+        draw.beginPath(); draw.arc(target.x, target.y, skill.radius, 0, ctx.TAU); draw.fill(); draw.stroke();
       } else if (player.aim.type === "heal") {
         const target = ctx.game.hover;
         if (target && target.team === "party" && !target.dead) {
-          const origin = ctx.getSupportOrigin(target);
           draw.strokeStyle = "#79ff8d";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 15, 0, ctx.TAU); draw.stroke();
-          draw.globalAlpha = 0.52;
-          draw.beginPath(); draw.moveTo(origin.x, origin.y); draw.lineTo(target.x, target.y); draw.stroke();
         }
       } else if (player.aim.type === "shield") {
         const skill = need("finald", "shield");
         const point = ctx.clampBattlePoint
-          ? ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, 35)
-          : { x: ctx.clamp(ctx.input.mouse.x, 35, ctx.view.w - 35), y: ctx.clamp(ctx.input.mouse.y, 35, ctx.view.h - 35) };
+          ? ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(35))
+          : { x: ctx.clamp(ctx.input.mouse.x, ctx.battlePx(35), ctx.view.w - ctx.battlePx(35)), y: ctx.clamp(ctx.input.mouse.y, ctx.battlePx(35), ctx.view.h - ctx.battlePx(35)) };
         const { x, y } = point;
         draw.fillStyle = "rgba(143,233,255,0.18)";
         draw.strokeStyle = "#8fe9ff";

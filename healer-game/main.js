@@ -8,10 +8,13 @@
   const CHARACTER_DEFS = window.HEALER_CHARACTER_DEFS;
   const ENEMY_DEFS = window.HEALER_ENEMY_DEFS;
   const TOWN_DATA = window.HEALER_TOWN_DATA;
+  const CONFIG = window.HEALER_CONFIG || {};
 
-  if (!createSkillSystem || !CHARACTER_DEFS || !ENEMY_DEFS || !TOWN_DATA) {
-    throw new Error("data files and skills.js must be loaded before main.js");
+  if (!createSkillSystem || !CHARACTER_DEFS || !ENEMY_DEFS || !TOWN_DATA || !CONFIG) {
+    throw new Error("config, data files, and skills.js must be loaded before main.js");
   }
+
+  const BATTLE_SPATIAL_SCALE = Number.isFinite(CONFIG.battleSpatialScale) ? CONFIG.battleSpatialScale : 1;
 
   const view = {
     w: window.innerWidth,
@@ -20,7 +23,6 @@
   };
 
   const input = {
-    keys: Object.create(null),
     mouse: { x: view.w / 2, y: view.h / 2, right: false },
   };
 
@@ -41,10 +43,13 @@
   let areas = [];
   let effects = [];
   let lastTime = performance.now();
+  let expandedStatusUnitIds = new Set();
+  let statusUiButtons = [];
+  let statusCardMetas = [];
   const TOWN_WIDTH = TOWN_DATA.width;
   const TOWN_HEIGHT = TOWN_DATA.height;
-  const BATTLE_SIDE_MARGIN = 24;
-  const BATTLE_MIN_PLAY_HEIGHT = 320;
+  const BATTLE_SIDE_MARGIN = battlePx(24);
+  const BATTLE_MIN_PLAY_HEIGHT = battlePx(320);
   const town = {
     player: { ...TOWN_DATA.player },
     camera: { x: 0, y: 0 },
@@ -93,8 +98,8 @@
   const MOOD_NO_DAMAGE_GAIN_BONUS_MAX = 1.3;
   const MOOD_HIGH_GAIN_DAMPING_START = 90;
   const MOOD_HIGH_GAIN_DAMPING_MULT = 0.7;
-  const MOOD_DISTANCE_BONUS_START = 200;
-  const MOOD_DISTANCE_BONUS_END = 420;
+  const MOOD_DISTANCE_BONUS_START = battlePx(200);
+  const MOOD_DISTANCE_BONUS_END = battlePx(420);
   const MOOD_DISTANCE_BONUS_MAX = 1.5;
   const MOOD_MULTI_HIT_MIN = 2;
   const MOOD_MULTI_HIT_BASE = 3;
@@ -110,8 +115,18 @@
     sushia: 135,
   };
   const TELEGRAPH_AVOID_MOOD_LIMIT = 80;
-  const TELEGRAPH_AVOID_PADDING = 18;
+  const TELEGRAPH_AVOID_PADDING = battlePx(18);
   const TELEGRAPH_AVOID_SPEED_MULT = 1.15;
+  const RIHAS_PASSIVE_MAX_STACKS = 30;
+  const RIHAS_PASSIVE_STACK_DURATION = 2;
+  const RIHAS_PASSIVE_STACK_COOLDOWN = 0.8;
+  const RIHAS_PASSIVE_MAX_DAMAGE_BONUS = 0.15;
+  const RIHAS_PASSIVE_MAX_DAMAGE_REDUCTION = 0.15;
+  const SUSHIA_PASSIVE_MAX_STACKS = 15;
+  const SUSHIA_PASSIVE_STACK_DURATION = 8;
+  const SUSHIA_PASSIVE_STACK_COOLDOWN = 1;
+  const BASE_CRIT_CHANCE = 0.1;
+  const BASE_CRIT_DAMAGE = 1.65;
 
   const COLORS = {
     floor: "#263129",
@@ -125,6 +140,8 @@
     hp: "#72df82",
     mp: "#73a7ff",
     shield: "#8fe9ff",
+    heal: "#5cff7a",
+    enemyHeal: "#d86bff",
     mood: "#ffd86b",
     moodHigh: "#ff9f43",
     ult: "#b88cff",
@@ -137,6 +154,11 @@
     rihas: "2",
     sushia: "3",
     finald: "4",
+  };
+  const STATUS_FULL_NAMES = {
+    ulpes: "ウルペス・トゥルス",
+    rihas: "リハス・タイン",
+    sushia: "スシア・ストゥード",
   };
 
   function getOpeningStory() {
@@ -198,6 +220,8 @@
       AI_IDLE_RECHECK,
       MOOD_EVENT_MULT,
       MOOD_MULTI_HIT_MIN,
+      BATTLE_SPATIAL_SCALE,
+      battlePx,
       clamp,
       normalize,
       dist,
@@ -395,7 +419,6 @@
 
   window.addEventListener("keydown", (event) => {
     const key = event.key === " " ? "space" : event.key.toLowerCase();
-    input.keys[key] = true;
 
     if (["f", "g", "r", "e", "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
       event.preventDefault();
@@ -451,10 +474,6 @@
     }
   });
 
-  window.addEventListener("keyup", (event) => {
-    input.keys[event.key === " " ? "space" : event.key.toLowerCase()] = false;
-  });
-
   canvas.addEventListener("mousemove", (event) => {
     setMouseFromEvent(event);
   });
@@ -473,6 +492,10 @@
       }
       if (town.panel && town.panel.action === "battleGuide" && event.button === 0) {
         interactTown();
+        return;
+      }
+      if (event.button === 0) {
+        interactTown();
       }
       return;
     }
@@ -480,6 +503,9 @@
       return;
     }
     if (event.button === 0) {
+      if (handleStatusUiClick(input.mouse.x, input.mouse.y)) {
+        return;
+      }
       if (player.aim) {
         confirmPlayerAim();
       } else {
@@ -521,6 +547,7 @@
     telegraphs = [];
     areas = [];
     effects = [];
+    expandedStatusUnitIds.clear();
     game.state = "playing";
     game.time = 0;
     game.stageClearTimer = 0;
@@ -530,7 +557,7 @@
 
     const bounds = getBattleBounds();
     const supportOrigin = getSupportOrigin();
-    const cx = view.w * 0.33;
+    const cx = bounds.left + bounds.width * 0.33;
     const cy = bounds.centerY;
 
     Object.assign(player, {
@@ -545,6 +572,7 @@
       cds: {},
       channel: null,
       actionLock: 0,
+      actionTotal: 0,
       hurt: 0,
       guardFlash: 0,
       noDamage: 999,
@@ -561,22 +589,22 @@
     const rihas = makePartyMember("rihas");
     const sushia = makePartyMember("sushia");
 
-    Object.assign(ulpes, { x: cx + 28, y: cy - 72 });
-    Object.assign(rihas, { x: cx + 62, y: cy + 55 });
-    Object.assign(sushia, { x: cx - 28, y: cy - 6 });
+    Object.assign(ulpes, { x: cx + battlePx(28), y: cy - battlePx(72) });
+    Object.assign(rihas, { x: cx + battlePx(62), y: cy + battlePx(55) });
+    Object.assign(sushia, { x: cx - battlePx(28), y: cy - battlePx(6) });
     party = [player, ulpes, rihas, sushia];
 
-    const startX = Math.min(view.w - 120, view.w * 0.72);
+    const startX = Math.min(bounds.right - battlePx(120), bounds.left + bounds.width * 0.72);
     const startY = bounds.centerY;
-    const enemySpread = Math.min(150, bounds.height * 0.32);
+    const enemySpread = Math.min(battlePx(150), bounds.height * 0.32);
     enemies = [
       makeEnemy("魔物A", startX, startY - enemySpread, "brute"),
-      makeEnemy("魔物B", startX + 72, startY - enemySpread * 0.53, "skirmisher"),
-      makeEnemy("魔物C", startX + 18, startY + 5, "brute"),
-      makeEnemy("魔物D", startX + 92, startY + enemySpread * 0.59, "skirmisher"),
-      makeEnemy("射手A", startX + 205, startY - enemySpread * 0.64, "caster"),
-      makeEnemy("射手B", startX + 220, startY + enemySpread * 0.53, "caster"),
-      makeEnemy("大魔物", startX + 150, startY + 4, "elite"),
+      makeEnemy("魔物B", startX + battlePx(72), startY - enemySpread * 0.53, "skirmisher"),
+      makeEnemy("魔物C", startX + battlePx(18), startY + battlePx(5), "brute"),
+      makeEnemy("魔物D", startX + battlePx(92), startY + enemySpread * 0.59, "skirmisher"),
+      makeEnemy("射手A", startX + battlePx(205), startY - enemySpread * 0.64, "caster"),
+      makeEnemy("射手B", startX + battlePx(220), startY + enemySpread * 0.53, "caster"),
+      makeEnemy("大魔物", startX + battlePx(150), startY + battlePx(4), "elite"),
     ];
 
     clampAllUnits();
@@ -591,14 +619,14 @@
       role: options.role,
       x: options.x || 0,
       y: options.y || 0,
-      radius: options.radius || 14,
+      radius: options.radius || battlePx(14),
       color: options.color || "#ffffff",
       maxHp: options.maxHp || 100,
       hp: options.maxHp || 100,
       moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || options.maxHp || 100,
       maxMp: options.maxMp || 0,
       mp: options.maxMp || 0,
-      speed: options.speed || 100,
+      speed: options.speed || battlePx(100),
       attack: options.attack || 10,
       magic: options.magic || 10,
       defense: options.defense || 0,
@@ -611,10 +639,12 @@
       shieldTimer: 0,
       cds: {},
       actionLock: 0,
+      actionTotal: 0,
       aiTick: 0,
       hurt: 0,
       guardFlash: 0,
       frozen: 0,
+      frozenMax: 0,
       dead: false,
       noDamage: 999,
       channel: null,
@@ -622,6 +652,9 @@
       aim: null,
       selfHealFloat: 0,
       delayedDamageQueue: [],
+      rihasPassiveStacks: 0,
+      rihasPassiveTimer: 0,
+      rihasPassiveStackCooldown: 0,
       castStacks: 0,
       stackTimer: 0,
       stackCooldown: 0,
@@ -680,12 +713,12 @@
 
   function spawnRearVanguardWave() {
     const bounds = getBattleBounds();
-    const spawnX = bounds.left + 34;
+    const spawnX = bounds.left + battlePx(34);
     const centerY = bounds.centerY;
-    const spread = Math.min(92, bounds.height * 0.24);
+    const spread = Math.min(battlePx(92), bounds.height * 0.24);
     const wave = [
       makeEnemy("小魔物A", spawnX, centerY - spread, "smallVanguard"),
-      makeEnemy("小魔物B", spawnX - 8, centerY, "smallVanguard"),
+      makeEnemy("小魔物B", spawnX - battlePx(8), centerY, "smallVanguard"),
       makeEnemy("小魔物C", spawnX, centerY + spread, "smallVanguard"),
     ];
 
@@ -698,7 +731,7 @@
       addBurst(enemy.x, enemy.y, enemy.radius * 3.2, "rgba(230,151,99,0.28)");
     }
 
-    addFloat("増援!", spawnX + 46, centerY - spread - 28, COLORS.enemy);
+    addFloat("増援!", spawnX + battlePx(46), centerY - spread - battlePx(28), COLORS.enemy);
     game.reinforcementsSpawned = true;
     game.message = "後方から増援!";
     game.messageTimer = 4;
@@ -782,40 +815,19 @@
   function updateTown(dt) {
     if (!playerProfile.done) {
       updateProfileNameInput();
-      updateTownCamera();
+      town.interaction = getTownInteraction();
       return;
     }
     if (town.story) {
-      updateTownCamera();
+      town.interaction = null;
       return;
     }
-    const before = { x: town.player.x, y: town.player.y };
-    if (!town.panel) {
-      const move = getMoveVector();
-      const speed = town.player.speed;
-      const nextX = town.player.x + move.x * speed * dt;
-      if (!isTownBlockedAt(nextX, town.player.y)) {
-        town.player.x = nextX;
-      }
-      const nextY = town.player.y + move.y * speed * dt;
-      if (!isTownBlockedAt(town.player.x, nextY)) {
-        town.player.y = nextY;
-      }
-      clampTownPlayer();
-    }
-    updateTownFollowers(dt, before);
     town.interaction = getTownInteraction();
-    if (!town.meetingDone && town.introDone && !town.panel && isNearTownBuilding("guild", 170)) {
-      startGuildMeetingStory();
-    }
-    updateTownCamera();
   }
 
   function updateTownCamera() {
-    const maxX = Math.max(0, TOWN_WIDTH - view.w);
-    const maxY = Math.max(0, TOWN_HEIGHT - view.h);
-    town.camera.x = clamp(town.player.x - view.w / 2, 0, maxX);
-    town.camera.y = clamp(town.player.y - view.h / 2, 0, maxY);
+    town.camera.x = 0;
+    town.camera.y = 0;
   }
 
   function resetTownFollowers() {
@@ -827,57 +839,24 @@
     ];
   }
 
-  function updateTownFollowers(dt, previousPlayerPosition) {
-    if (!town.meetingDone || town.followers.length === 0) {
-      return;
-    }
-    let target = { x: previousPlayerPosition.x, y: previousPlayerPosition.y };
-    const spacing = 38;
-    for (const follower of town.followers) {
-      const dx = target.x - follower.x;
-      const dy = target.y - follower.y;
-      const d = Math.hypot(dx, dy);
-      if (d > spacing) {
-        const speed = town.player.speed * 1.12;
-        const step = Math.min(d - spacing, speed * dt);
-        follower.x += (dx / d) * step;
-        follower.y += (dy / d) * step;
-      }
-      follower.x = clamp(follower.x, 12, TOWN_WIDTH - 12);
-      follower.y = clamp(follower.y, 12, TOWN_HEIGHT - 12);
-      target = follower;
-    }
-  }
-
-  function isTownBlockedAt(x, y) {
-    const r = town.player.radius;
-    if (x < r || y < r || x > TOWN_WIDTH - r || y > TOWN_HEIGHT - r) {
-      return true;
-    }
-    for (const building of town.buildings) {
-      if (circleRectOverlap(x, y, r + 4, building.x, building.y, building.w, building.h)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   function getTownInteraction() {
-    let best = null;
-    let bestDist = Infinity;
+    if (town.panel || town.story) {
+      return null;
+    }
+    const point = screenToTownPoint(input.mouse.x, input.mouse.y);
+    if (!point) {
+      return null;
+    }
     for (const building of town.buildings) {
-      const d = distPoint(town.player.x, town.player.y, building.door.x, building.door.y);
-      if (d <= 72 && d < bestDist) {
-        best = building;
-        bestDist = d;
+      if (point.x >= building.x && point.x <= building.x + building.w && point.y >= building.y - 44 && point.y <= building.y + building.h + 46) {
+        return building;
       }
     }
-    return best;
+    return null;
   }
 
   function isNearTownBuilding(id, range) {
-    const building = getTownBuilding(id);
-    return !!building && distPoint(town.player.x, town.player.y, building.door.x, building.door.y) <= range;
+    return town.interaction && town.interaction.id === id;
   }
 
   function interactTown() {
@@ -940,6 +919,25 @@
     }
   }
 
+  function handleStatusUiClick(x, y) {
+    for (let i = statusUiButtons.length - 1; i >= 0; i -= 1) {
+      const button = statusUiButtons[i];
+      if (x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) {
+        if (button.action === "close") {
+          expandedStatusUnitIds.delete(button.unitId);
+        } else if (button.action === "toggle") {
+          if (expandedStatusUnitIds.has(button.unitId)) {
+            expandedStatusUnitIds.delete(button.unitId);
+          } else {
+            expandedStatusUnitIds.add(button.unitId);
+          }
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
   function showBattleGuidePanel() {
     town.panel = {
       title: "出発前の確認",
@@ -948,7 +946,8 @@
         {
           title: `${getPlayerFirstName()}の技`,
           lines: [
-            "援護射撃: 左クリックで構え、もう一度左クリックで後方から発射。敵にはダメージ、味方には回復。",
+            "共通: 構え中は左クリックで発動、右クリックでキャンセル。",
+            "援護射撃: 左クリックで構え、指定地点の狭い範囲へ魔法攻撃。",
             "ヒール: Fで構え、カーソル上の味方を回復。対象がいないと発動しない。",
             "バリア: GまたはSpaceで構え、指定範囲の味方にシールドを付与。重なったシールドは耐久値が加算される。",
           ],
@@ -959,13 +958,14 @@
             "1 ウルペス: 正義の一撃。敵へ飛び込み、大きな一撃を入れる。",
             "2 リハス: 俺ァ無敵!! 周囲の敵を挑発し、自分にシールドを張る。",
             "3 スシア: アイスワールド。広範囲を凍らせ、継続ダメージを与える。",
-            `4 ${getPlayerFirstName()}: フルヒール。詠唱中、戦場の味方を回復し続ける。`,
+            `4 ${getPlayerFirstName()}: フルヒール。4で詠唱開始、3秒後に全味方を最大HP割合で回復する。`,
           ],
         },
         {
           title: "調子メーター",
           lines: [
             "仲間はHPが高く保たれたり、活躍したりすると調子が上がる。",
+            "少し調子に乗っている時が、一番パフォーマンスを出しやすい。",
             "調子が上がると攻撃力や詠唱が強くなるが、上がりすぎると慢心してガードや攻撃が雑になったり、必殺技を勝手に使ったりする。",
             "逆にHPが削られすぎると調子が下がり、萎縮して弱くなる。",
           ],
@@ -1057,12 +1057,22 @@
       }
 
       unit.noDamage += dt;
+      if (unit.actionLock > 0 && (!unit.actionTotal || unit.actionTotal < unit.actionLock)) {
+        unit.actionTotal = unit.actionLock;
+      }
       unit.actionLock = Math.max(0, unit.actionLock - dt);
+      if (unit.actionLock <= 0) {
+        unit.actionTotal = 0;
+      }
       unit.hurt = Math.max(0, unit.hurt - dt);
       unit.guardFlash = Math.max(0, unit.guardFlash - dt);
       unit.frozen = Math.max(0, unit.frozen - dt);
+      if (unit.frozen <= 0) {
+        unit.frozenMax = 0;
+      }
       unit.stackCooldown = Math.max(0, unit.stackCooldown - dt);
       updateDelayedDamage(unit, dt);
+      updateRihasPassiveStacks(unit, dt);
 
       if (unit.stackTimer > 0) {
         unit.stackTimer -= dt;
@@ -1116,8 +1126,6 @@
         finishPlayerCast();
       }
     }
-
-    player.guarding = false;
 
     const regen = 13;
     player.mp = clamp(player.mp + regen * dt, 0, player.maxMp);
@@ -1229,9 +1237,9 @@
 
     const desired = unit.preferredRange * (unit.mood > 80 ? 0.62 : 1);
     let dir = { x: 0, y: 0 };
-    if (d > desired + 18) {
+    if (d > desired + battlePx(18)) {
       dir = normalize(target.x - unit.x, target.y - unit.y);
-    } else if (d < desired - 12) {
+    } else if (d < desired - battlePx(12)) {
       dir = normalize(unit.x - target.x, unit.y - target.y);
     }
 
@@ -1290,7 +1298,7 @@
 
   function getLineTelegraphEscape(unit, telegraph) {
     const closest = closestPointOnSegment(unit.x, unit.y, telegraph.x, telegraph.y, telegraph.x2, telegraph.y2);
-    const dangerWidth = (telegraph.width || 24) * 0.5 + unit.radius + TELEGRAPH_AVOID_PADDING;
+    const dangerWidth = (telegraph.width || battlePx(24)) * 0.5 + unit.radius + TELEGRAPH_AVOID_PADDING;
     const d = distPoint(unit.x, unit.y, closest.x, closest.y);
     if (d > dangerWidth) {
       return null;
@@ -1349,12 +1357,12 @@
       }
 
       const d = dist(enemy, target);
-      const preferred = enemy.role === "caster" ? 330 : 36;
+      const preferred = enemy.role === "caster" ? battlePx(330) : battlePx(36);
       const dir = normalize(target.x - enemy.x, target.y - enemy.y);
-      if (enemy.actionLock <= 0 && d > preferred + 10) {
+      if (enemy.actionLock <= 0 && d > preferred + battlePx(10)) {
         enemy.x += dir.x * enemy.speed * dt;
         enemy.y += dir.y * enemy.speed * dt;
-      } else if (enemy.actionLock <= 0 && d < preferred - 20 && enemy.role === "caster") {
+      } else if (enemy.actionLock <= 0 && d < preferred - battlePx(20) && enemy.role === "caster") {
         enemy.x -= dir.x * enemy.speed * 0.65 * dt;
         enemy.y -= dir.y * enemy.speed * 0.65 * dt;
       }
@@ -1377,10 +1385,10 @@
 
       if (
         shot.life <= 0 ||
-        shot.x < -60 ||
-        shot.y < -60 ||
-        shot.x > view.w + 60 ||
-        shot.y > view.h + 60
+        shot.x < -battlePx(60) ||
+        shot.y < -battlePx(60) ||
+        shot.x > view.w + battlePx(60) ||
+        shot.y > view.h + battlePx(60)
       ) {
         projectiles.splice(i, 1);
         continue;
@@ -1567,10 +1575,7 @@
       return;
     }
     const bonus = MOOD_MULTI_HIT_BASE + enemyHits;
-    const gained = addMoodGain(unit, bonus);
-    if (gained > 0) {
-      addFloat(`調子+${Math.round(gained)}`, unit.x, unit.y - 42, COLORS.mood);
-    }
+    addMoodGain(unit, bonus);
   }
 
   function getMoodOutgoingDamageMultiplier(unit) {
@@ -1664,9 +1669,6 @@
   function confirmPlayerAim() {
     return skillSystem.confirmPlayerAim();
   }
-  function isPlayerGuarding() {
-    return false;
-  }
 
   function firePlayerShot() {
     return skillSystem.firePlayerShot();
@@ -1696,7 +1698,7 @@
     if (!unit || amount <= 0 || duration <= 0) {
       return;
     }
-    unit.shield += amount;
+    unit.shield = clamp(unit.shield + amount, 0, unit.maxHp);
     unit.shieldTimer = Math.max(unit.shieldTimer, duration);
   }
 
@@ -1740,11 +1742,11 @@
     let finalAmount = amount;
     if (source && source.team === "party" && source.id !== "finald" && source.mood !== null) {
       finalAmount *= getMoodOutgoingDamageMultiplier(source);
-      if (source.id === "rihas" && hasDelayedDamage(source)) {
-        finalAmount *= 1.12;
+      if (source.id === "rihas") {
+        finalAmount *= getRihasPassiveDamageMultiplier(source);
       }
-      if (options.crit && Math.random() < 0.1) {
-        finalAmount *= 1.65;
+      if (options.crit && Math.random() < BASE_CRIT_CHANCE) {
+        finalAmount *= BASE_CRIT_DAMAGE;
         addFloat("CRIT", target.x, target.y - 36, "#fff1a0");
       }
     }
@@ -1757,34 +1759,45 @@
       finalAmount *= 0.6;
     }
 
+    if (target.id === "rihas") {
+      finalAmount *= getRihasPassiveIncomingMultiplier(target);
+    }
+
     finalAmount = reduceByDefense(target, finalAmount, options.magic);
 
-    if (target.team === "party") {
+    if (target.team === "party" && target.id !== "finald") {
       const guarded = tryGuard(target);
       if (guarded) {
-        finalAmount *= target === player ? 0.35 : 0.48;
+        finalAmount *= 0.48;
       }
     }
 
+    const damageFloatColor = getDamageFloatColor(source, target);
     let shielded = 0;
     if (target.shield > 0) {
       shielded = Math.min(target.shield, finalAmount);
       target.shield -= shielded;
       finalAmount -= shielded;
+      if (target.shield <= 0) {
+        target.shield = 0;
+        target.shieldTimer = 0;
+      }
       if (shielded > 0) {
-        addFloat(`-${Math.round(shielded)}`, target.x, target.y - 26, "#8fe9ff");
+        addFloat(`${Math.round(shielded)}`, target.x, target.y - 26, damageFloatColor);
       }
     }
 
     finalAmount = Math.max(0, finalAmount);
     let delayedAmount = 0;
     if (target.id === "rihas" && finalAmount > 0 && !options.delayed) {
+      addRihasPassiveStack(target);
       delayedAmount = finalAmount / 3;
       finalAmount -= delayedAmount;
       target.delayedDamageQueue.push({
         timer: 1,
         ticks: 5,
         amount: delayedAmount / 5,
+        color: damageFloatColor,
       });
     }
 
@@ -1792,7 +1805,7 @@
       target.hp = Math.max(0, target.hp - finalAmount);
       target.hurt = 0.22;
       target.noDamage = 0;
-      addFloat(`-${Math.round(finalAmount)}`, target.x, target.y - 24, getDamageFloatColor(source, target));
+      addFloat(`${Math.round(finalAmount)}`, target.x, target.y - 24, damageFloatColor);
       if (target === player && player.channel) {
         cancelPlayerChannel();
       }
@@ -1807,9 +1820,9 @@
     if (source && source.team === "party") {
       source.ult = clamp(source.ult + rewardDamage * 0.22, 0, 100);
       if (source.id === "sushia" && target.team === "enemy" && rewardDamage > 0 && options.magic && source.stackCooldown <= 0) {
-        source.castStacks = clamp(source.castStacks + 1, 0, 15);
-        source.stackTimer = 8;
-        source.stackCooldown = 1;
+        source.castStacks = clamp(source.castStacks + 1, 0, SUSHIA_PASSIVE_MAX_STACKS);
+        source.stackTimer = SUSHIA_PASSIVE_STACK_DURATION;
+        source.stackCooldown = SUSHIA_PASSIVE_STACK_COOLDOWN;
       }
       if (source.mood !== null && target.team === "enemy") {
         const distanceMult = getMoodDistanceMultiplier(source, target);
@@ -1828,10 +1841,7 @@
 
     if (target.hp <= 0) {
       if (wasTargetAlive && target.team === "enemy" && source && source.team === "party" && source.mood !== null) {
-        const gained = addMoodGain(source, MOOD_KILL_BONUS);
-        if (gained > 0) {
-          addFloat(`撃破+${Math.round(gained)}`, source.x, source.y - 46, COLORS.mood);
-        }
+        addMoodGain(source, MOOD_KILL_BONUS);
       }
       target.dead = true;
       target.hp = 0;
@@ -1847,12 +1857,13 @@
     const before = target.hp;
     target.hp = clamp(target.hp + amount, 0, target.maxHp);
     const healed = target.hp - before;
+    const healFloatColor = getHealFloatColor(target);
     if (healed <= 0) {
-      addFloat("+0", target.x, target.y - 28, "#79ff8d");
+      addFloat("+0", target.x, target.y - 28, healFloatColor);
       return 0;
     }
 
-    addFloat(`+${Math.round(healed)}`, target.x, target.y - 28, "#79ff8d");
+    addFloat(`+${Math.round(healed)}`, target.x, target.y - 28, healFloatColor);
     target.hurt = 0;
     if (source && source.team === "party") {
       source.ult = clamp(source.ult + healed * 0.22, 0, 100);
@@ -1881,15 +1892,56 @@
     return "#ffffff";
   }
 
+  function getHealFloatColor(target) {
+    return target && target.team === "enemy" ? COLORS.enemyHeal : COLORS.heal;
+  }
+
   function getEffectiveDefense(unit) {
-    if (unit.id === "rihas" && hasDelayedDamage(unit)) {
-      return unit.defense + 8;
-    }
     return unit.defense;
   }
 
-  function hasDelayedDamage(unit) {
-    return unit.delayedDamageQueue && unit.delayedDamageQueue.length > 0;
+  function addRihasPassiveStack(unit) {
+    if (!unit || unit.id !== "rihas") {
+      return;
+    }
+    if ((unit.rihasPassiveStackCooldown || 0) > 0) {
+      return;
+    }
+    const before = unit.rihasPassiveStacks || 0;
+    unit.rihasPassiveStacks = clamp(before + 1, 0, RIHAS_PASSIVE_MAX_STACKS);
+    unit.rihasPassiveTimer = RIHAS_PASSIVE_STACK_DURATION;
+    unit.rihasPassiveStackCooldown = RIHAS_PASSIVE_STACK_COOLDOWN;
+  }
+
+  function updateRihasPassiveStacks(unit, dt) {
+    if (!unit || unit.id !== "rihas") {
+      return;
+    }
+    unit.rihasPassiveStackCooldown = Math.max(0, (unit.rihasPassiveStackCooldown || 0) - dt);
+    if ((unit.rihasPassiveStacks || 0) <= 0) {
+      return;
+    }
+    unit.rihasPassiveTimer -= dt;
+    if (unit.rihasPassiveTimer <= 0) {
+      unit.rihasPassiveStacks = 0;
+      unit.rihasPassiveTimer = 0;
+      unit.rihasPassiveStackCooldown = 0;
+    }
+  }
+
+  function getRihasPassiveRatio(unit) {
+    if (!unit || unit.id !== "rihas") {
+      return 0;
+    }
+    return clamp((unit.rihasPassiveStacks || 0) / RIHAS_PASSIVE_MAX_STACKS, 0, 1);
+  }
+
+  function getRihasPassiveDamageMultiplier(unit) {
+    return 1 + getRihasPassiveRatio(unit) * RIHAS_PASSIVE_MAX_DAMAGE_BONUS;
+  }
+
+  function getRihasPassiveIncomingMultiplier(unit) {
+    return 1 - getRihasPassiveRatio(unit) * RIHAS_PASSIVE_MAX_DAMAGE_REDUCTION;
   }
 
   function updateDelayedDamage(unit, dt) {
@@ -1901,7 +1953,7 @@
       const entry = unit.delayedDamageQueue[i];
       entry.timer -= dt;
       while (entry.timer <= 0 && entry.ticks > 0 && !unit.dead) {
-        applyDelayedDamage(unit, entry.amount);
+        applyDelayedDamage(unit, entry.amount, entry.color);
         entry.ticks -= 1;
         entry.timer += 1;
       }
@@ -1911,14 +1963,19 @@
     }
   }
 
-  function applyDelayedDamage(unit, amount) {
+  function applyDelayedDamage(unit, amount, color = "#ff4f4f") {
     const damage = Math.max(0, amount);
     if (damage <= 0 || unit.dead) {
       return;
     }
+    const before = unit.hp;
     unit.hp = Math.max(0, unit.hp - damage);
+    const actualDamage = before - unit.hp;
+    if (unit.id === "rihas" && actualDamage > 0) {
+      addRihasPassiveStack(unit);
+    }
     unit.hurt = 0.18;
-    addFloat(`-${Math.round(damage)}`, unit.x, unit.y - 24, "#ff4f4f");
+    addFloat(`${Math.round(damage)}`, unit.x, unit.y - 24, color);
     if (unit.hp <= 0) {
       unit.dead = true;
       unit.hp = 0;
@@ -1927,13 +1984,6 @@
   }
 
   function tryGuard(unit) {
-    if (unit === player) {
-      if (isPlayerGuarding() && !player.channel && !player.cast && player.actionLock <= 0 && player.frozen <= 0) {
-        player.guardFlash = 0.18;
-        return true;
-      }
-      return false;
-    }
     if (unit.frozen > 0 || unit.actionLock > 0) {
       return false;
     }
@@ -1976,7 +2026,7 @@
         continue;
       }
       const d = distPoint(input.mouse.x, input.mouse.y, member.x, member.y);
-      if (d <= member.radius + 8 && d < bestDist) {
+      if (d <= member.radius + battlePx(8) && d < bestDist) {
         best = member;
         bestDist = d;
       }
@@ -2002,11 +2052,11 @@
 
   function getSupportOrigin(target = null) {
     const bounds = getBattleBounds();
-    const fallbackY = bounds.bottom - 42;
+    const fallbackY = bounds.bottom - battlePx(42);
     const y = target && Number.isFinite(target.y)
-      ? clamp(target.y, bounds.top + 28, bounds.bottom - 28)
+      ? clamp(target.y, bounds.top + battlePx(28), bounds.bottom - battlePx(28))
       : fallbackY;
-    return { x: bounds.left - 36, y };
+    return { x: bounds.left - battlePx(36), y };
   }
 
   function addTelegraph(data) {
@@ -2087,28 +2137,52 @@
     drawSupportCastPreview();
     drawProjectiles();
     drawUnits();
+    drawFloatingArjuna();
     drawEffects();
     drawHud();
     drawResultOverlay();
   }
 
   function drawTown() {
-    updateTownCamera();
     ctx.fillStyle = "#3f6a48";
     ctx.fillRect(0, 0, view.w, view.h);
 
+    const transform = getTownMapTransform();
     ctx.save();
-    ctx.translate(-town.camera.x, -town.camera.y);
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.scale, transform.scale);
     drawTownTerrain();
     drawTownRoads();
     drawTownProps();
     drawTownBuildings();
     drawTownCompanions();
-    drawTownPlayer();
     ctx.restore();
 
     drawTownHud();
     drawTownPanel();
+  }
+
+  function getTownMapTransform() {
+    const marginX = 28;
+    const marginTop = 112;
+    const marginBottom = 34;
+    const scale = Math.min((view.w - marginX * 2) / TOWN_WIDTH, (view.h - marginTop - marginBottom) / TOWN_HEIGHT);
+    const safeScale = Math.max(0.18, scale);
+    return {
+      scale: safeScale,
+      x: (view.w - TOWN_WIDTH * safeScale) / 2,
+      y: marginTop + Math.max(0, view.h - marginTop - marginBottom - TOWN_HEIGHT * safeScale) / 2,
+    };
+  }
+
+  function screenToTownPoint(x, y) {
+    const transform = getTownMapTransform();
+    const worldX = (x - transform.x) / transform.scale;
+    const worldY = (y - transform.y) / transform.scale;
+    if (worldX < 0 || worldY < 0 || worldX > TOWN_WIDTH || worldY > TOWN_HEIGHT) {
+      return null;
+    }
+    return { x: worldX, y: worldY };
   }
 
   function drawTownTerrain() {
@@ -2248,20 +2322,18 @@
     if (town.interaction === building && !town.panel) {
       const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
       ctx.strokeStyle = `rgba(255,255,255,${0.62 + pulse * 0.3})`;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(building.door.x, building.door.y, 34 + pulse * 5, 0, TAU);
+      ctx.lineWidth = 5;
+      roundRect(building.x - 12, building.y - 48, building.w + 24, building.h + 104, 14);
       ctx.stroke();
-      ctx.fillStyle = "#111714";
+      ctx.fillStyle = "rgba(17,23,20,0.86)";
       ctx.strokeStyle = "#f7fff6";
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(building.door.x, building.door.y - 48, 17, 0, TAU);
+      roundRect(building.x + building.w / 2 - 50, building.y - 78, 100, 30, 8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#f7fff6";
-      ctx.font = "800 16px 'Segoe UI', sans-serif";
-      ctx.fillText("E", building.door.x, building.door.y - 48);
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("クリック", building.x + building.w / 2, building.y - 63);
     }
     ctx.restore();
   }
@@ -2282,9 +2354,11 @@
       drawArgumentMark(baseX + 66, baseY - 18);
       return;
     }
-    for (const follower of town.followers) {
-      drawTownNpc(follower.x, follower.y, follower.color, follower.label);
-    }
+    const plazaX = TOWN_WIDTH * 0.5;
+    const plazaY = 560;
+    drawTownNpc(plazaX - 48, plazaY + 54, COLORS.ulpes, "ウ");
+    drawTownNpc(plazaX, plazaY + 74, COLORS.rihas, "リ");
+    drawTownNpc(plazaX + 48, plazaY + 54, COLORS.sushia, "ス");
   }
 
   function drawTownNpc(x, y, color, label) {
@@ -2330,47 +2404,8 @@
     ctx.restore();
   }
 
-  function drawTownPlayer() {
-    const unit = town.player;
-    ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.24)";
-    ctx.beginPath();
-    ctx.ellipse(unit.x, unit.y + unit.radius + 4, unit.radius + 4, 7, 0, 0, TAU);
-    ctx.fill();
-
-    ctx.fillStyle = unit.color;
-    ctx.strokeStyle = "#101814";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(unit.x, unit.y, unit.radius, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#101814";
-    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("主", unit.x, unit.y + 1);
-
-    ctx.strokeStyle = "#6a4a2e";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(unit.x + 14, unit.y + 20);
-    ctx.lineTo(unit.x + 30, unit.y - 14);
-    ctx.stroke();
-    ctx.fillStyle = "#a8fbff";
-    ctx.strokeStyle = "#f7fff6";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(unit.x + 31, unit.y - 16, 6, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
   function drawTownHud() {
-    drawPanel(18, 18, 300, 80);
+    drawPanel(18, 18, Math.min(430, view.w - 36), 80);
     ctx.fillStyle = "#f7fff6";
     ctx.font = "800 19px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
@@ -2378,8 +2413,8 @@
     ctx.fillText("はじまりの町", 34, 47);
     ctx.font = "13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#d4e4d5";
-    const target = town.interaction ? town.interaction.name : "広場";
-    ctx.fillText(`現在地: ${target}`, 34, 73);
+    const target = town.interaction ? `${town.interaction.name}をクリックで利用` : "施設をクリックして利用";
+    ctx.fillText(target, 34, 73);
   }
 
   function drawTownPanel() {
@@ -2637,49 +2672,53 @@
     ctx.fillStyle = "#1d3f2b";
     ctx.fillRect(0, 0, view.w, view.h);
 
+    ctx.fillStyle = "#173620";
+    ctx.fillRect(0, bounds.top, bounds.left, bounds.height);
+    ctx.fillRect(bounds.right, bounds.top, view.w - bounds.right, bounds.height);
+
     ctx.fillStyle = "#4d7f4c";
-    ctx.fillRect(0, bounds.top, view.w, bounds.height);
+    ctx.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
 
     drawGrassField(bounds);
     drawBattleTreeBand(0, bounds.top, true);
     drawBattleTreeBand(bounds.bottom, view.h, false);
+    drawBattleSideTreeBand(0, bounds.left, bounds.top, bounds.bottom, true);
+    drawBattleSideTreeBand(bounds.right, view.w, bounds.top, bounds.bottom, false);
 
     ctx.strokeStyle = "rgba(20,45,24,0.45)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = 0; x <= view.w; x += 64) {
+    const gridGap = battlePx(64);
+    for (let x = bounds.left; x <= bounds.right; x += gridGap) {
       ctx.moveTo(x, bounds.top);
       ctx.lineTo(x, bounds.bottom);
     }
-    for (let y = bounds.top; y <= bounds.bottom; y += 64) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(view.w, y);
+    for (let y = bounds.top; y <= bounds.bottom; y += gridGap) {
+      ctx.moveTo(bounds.left, y);
+      ctx.lineTo(bounds.right, y);
     }
     ctx.stroke();
 
     ctx.strokeStyle = "rgba(9,28,16,0.75)";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = Math.max(3, battlePx(5));
     ctx.beginPath();
-    ctx.moveTo(0, bounds.top);
-    ctx.lineTo(view.w, bounds.top);
-    ctx.moveTo(0, bounds.bottom);
-    ctx.lineTo(view.w, bounds.bottom);
+    ctx.rect(bounds.left, bounds.top, bounds.width, bounds.height);
     ctx.stroke();
   }
 
   function drawGrassField(bounds) {
     ctx.save();
     ctx.lineCap = "round";
-    for (let y = bounds.top + 24; y < bounds.bottom - 18; y += 38) {
-      for (let x = 18 + ((Math.floor(y) * 7) % 31); x < view.w; x += 46) {
+    for (let y = bounds.top + battlePx(24); y < bounds.bottom - battlePx(18); y += battlePx(38)) {
+      for (let x = bounds.left + battlePx(18) + ((Math.floor(y) * 7) % battlePx(31)); x < bounds.right; x += battlePx(46)) {
         const sway = Math.sin(x * 0.09 + y * 0.04) * 3;
-        ctx.strokeStyle = (Math.floor((x + y) / 46) % 2) ? "rgba(126,178,94,0.38)" : "rgba(57,117,57,0.38)";
+        ctx.strokeStyle = (Math.floor((x + y) / battlePx(46)) % 2) ? "rgba(126,178,94,0.38)" : "rgba(57,117,57,0.38)";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(x, y + 7);
-        ctx.lineTo(x + sway, y - 4);
-        ctx.moveTo(x + 7, y + 6);
-        ctx.lineTo(x + 10 + sway * 0.4, y - 2);
+        ctx.moveTo(x, y + battlePx(7));
+        ctx.lineTo(x + sway, y - battlePx(4));
+        ctx.moveTo(x + battlePx(7), y + battlePx(6));
+        ctx.lineTo(x + battlePx(10) + sway * 0.4, y - battlePx(2));
         ctx.stroke();
       }
     }
@@ -2694,27 +2733,65 @@
     ctx.fillStyle = topBand ? "#173620" : "#15341f";
     ctx.fillRect(0, y0, view.w, y1 - y0);
 
-    const rowGap = 42;
-    const colGap = 54;
+    const rowGap = battlePx(42);
+    const colGap = battlePx(54);
     let row = 0;
-    const treeEndY = topBand ? y1 - 18 : y1 + 24;
-    for (let y = y0 + 18; y < treeEndY; y += rowGap) {
-      const offset = row % 2 ? 24 : -4;
+    const treeEndY = topBand ? y1 - battlePx(18) : y1 + battlePx(24);
+    for (let y = y0 + battlePx(18); y < treeEndY; y += rowGap) {
+      const offset = row % 2 ? battlePx(24) : -battlePx(4);
       for (let x = offset; x < view.w + colGap; x += colGap) {
         const wobble = Math.sin(x * 0.13 + y * 0.17) * 5;
         const trunkX = x + wobble;
-        const trunkY = y + 10;
+        const trunkY = y + battlePx(10);
         ctx.fillStyle = "#6a4428";
-        roundRect(trunkX - 5, trunkY, 10, 22, 3);
+        roundRect(trunkX - battlePx(5), trunkY, battlePx(10), battlePx(22), battlePx(3));
         ctx.fill();
         ctx.fillStyle = row % 2 ? "#27653a" : "#225a34";
         ctx.beginPath();
-        ctx.arc(trunkX, y, 24, 0, TAU);
+        ctx.arc(trunkX, y, battlePx(24), 0, TAU);
         ctx.fill();
         ctx.fillStyle = row % 2 ? "#2f7845" : "#2b7040";
         ctx.beginPath();
-        ctx.arc(trunkX - 10, y - 7, 15, 0, TAU);
-        ctx.arc(trunkX + 11, y - 8, 16, 0, TAU);
+        ctx.arc(trunkX - battlePx(10), y - battlePx(7), battlePx(15), 0, TAU);
+        ctx.arc(trunkX + battlePx(11), y - battlePx(8), battlePx(16), 0, TAU);
+        ctx.fill();
+      }
+      row += 1;
+    }
+    ctx.restore();
+  }
+
+  function drawBattleSideTreeBand(x0, x1, y0, y1, leftBand) {
+    if (x1 <= x0 || y1 <= y0) {
+      return;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, x1 - x0, y1 - y0);
+    ctx.clip();
+    ctx.fillStyle = leftBand ? "#173620" : "#15341f";
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+
+    const rowGap = battlePx(48);
+    const colGap = battlePx(46);
+    let row = 0;
+    for (let y = y0 + battlePx(20); y < y1 + battlePx(24); y += rowGap) {
+      const offset = row % 2 ? battlePx(18) : -battlePx(8);
+      for (let x = x0 + offset; x < x1 + colGap; x += colGap) {
+        const wobble = Math.sin(x * 0.11 + y * 0.19) * battlePx(4);
+        const trunkX = x + wobble;
+        const trunkY = y + battlePx(11);
+        ctx.fillStyle = "#6a4428";
+        roundRect(trunkX - battlePx(4), trunkY, battlePx(9), battlePx(21), battlePx(3));
+        ctx.fill();
+        ctx.fillStyle = row % 2 ? "#28673d" : "#225a34";
+        ctx.beginPath();
+        ctx.arc(trunkX, y, battlePx(23), 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = row % 2 ? "#327947" : "#2b7040";
+        ctx.beginPath();
+        ctx.arc(trunkX - battlePx(9), y - battlePx(7), battlePx(14), 0, TAU);
+        ctx.arc(trunkX + battlePx(10), y - battlePx(8), battlePx(15), 0, TAU);
         ctx.fill();
       }
       row += 1;
@@ -2770,7 +2847,7 @@
         ctx.stroke();
       } else if (telegraph.type === "line") {
         ctx.strokeStyle = fill;
-        ctx.lineWidth = telegraph.width + 10;
+        ctx.lineWidth = telegraph.width + battlePx(10);
         ctx.beginPath();
         ctx.moveTo(telegraph.x, telegraph.y);
         ctx.lineTo(telegraph.x2, telegraph.y2);
@@ -2817,11 +2894,19 @@
     if (player.cast) {
       const progress = 1 - clamp(player.cast.time / Math.max(player.cast.total || 1, 0.001), 0, 1);
       if (player.cast.type === "heal" && player.cast.target && !player.cast.target.dead) {
-        drawSupportCastingAt(player.cast.target.x, player.cast.target.y, player.cast.target.radius + 22, "#79ff8d", progress);
+        drawSupportCastingAt(player.cast.target.x, player.cast.target.y, player.cast.target.radius + battlePx(22), "#79ff8d", progress);
       } else if (player.cast.type === "shield") {
-        drawSupportCastingAt(player.cast.x, player.cast.y, 30, "#8fe9ff", progress);
+        drawSupportCastingAt(player.cast.x, player.cast.y, battlePx(30), "#8fe9ff", progress);
       } else if (player.cast.type === "attack" && player.cast.target) {
-        drawSupportCastingAt(player.cast.target.x, player.cast.target.y, 22, "#9ef7ff", progress);
+        const skill = skillSystem.requireSkill("finald", "attack");
+        drawSupportCastingAt(player.cast.target.x, player.cast.target.y, skill.radius, "#9ef7ff", progress);
+      } else if (player.cast.type === "ult") {
+        const pulse = 0.5 + Math.sin(game.time * 8) * 0.5;
+        for (const member of getFieldPartyMembers()) {
+          if (!member.dead) {
+            drawSupportCastingAt(member.x, member.y, member.radius + battlePx(20) + pulse * battlePx(5), "#79ff8d", progress);
+          }
+        }
       }
     }
 
@@ -2831,7 +2916,7 @@
         if (member.dead) {
           continue;
         }
-        drawSupportCastingAt(member.x, member.y, member.radius + 18 + pulse * 5, "#79ff8d", pulse);
+        drawSupportCastingAt(member.x, member.y, member.radius + battlePx(18) + pulse * battlePx(5), "#79ff8d", pulse);
       }
     }
     ctx.restore();
@@ -2841,7 +2926,7 @@
     const angle = game.time * 4.4;
     ctx.strokeStyle = color;
     ctx.globalAlpha = 0.32 + progress * 0.28;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = Math.max(1, battlePx(2.5));
     ctx.beginPath();
     ctx.arc(x, y, radius, angle, angle + TAU * 0.72);
     ctx.stroke();
@@ -2851,7 +2936,7 @@
       ctx.fillStyle = color;
       ctx.globalAlpha = 0.55 + progress * 0.35;
       ctx.beginPath();
-      ctx.arc(x + Math.cos(a) * radius, y + Math.sin(a) * radius, 4, 0, TAU);
+      ctx.arc(x + Math.cos(a) * radius, y + Math.sin(a) * radius, battlePx(4), 0, TAU);
       ctx.fill();
     }
   }
@@ -2860,7 +2945,7 @@
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
-    ctx.setLineDash([10, 12]);
+    ctx.setLineDash([battlePx(10), battlePx(12)]);
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, TAU);
     ctx.stroke();
@@ -2885,6 +2970,64 @@
     for (const unit of units) {
       drawUnit(unit);
     }
+  }
+
+  function drawFloatingArjuna() {
+    if (!player || player.dead) {
+      return;
+    }
+
+    const bounds = getBattleBounds();
+    const radius = player.radius || battlePx(15);
+    const x = clamp(bounds.left + battlePx(240), bounds.left + radius + battlePx(8), bounds.right - radius - battlePx(8));
+    const groundY = clamp(bounds.centerY + battlePx(22), bounds.top + battlePx(72), bounds.bottom - battlePx(34));
+    const bob = Math.sin(game.time * 2.3) * battlePx(6);
+    const y = groundY - battlePx(170) + bob;
+    const visualUnit = { ...player, x, y, radius };
+    const pulse = 0.55 + Math.sin(game.time * 4.1) * 0.18;
+
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#06120f";
+    ctx.beginPath();
+    ctx.ellipse(x, groundY, radius * 1.75, Math.max(3, radius * 0.35), 0, 0, TAU);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.28 + pulse * 0.18;
+    ctx.strokeStyle = "#a8fbff";
+    ctx.lineWidth = Math.max(1, battlePx(2));
+    ctx.beginPath();
+    ctx.ellipse(x, y + radius + battlePx(6), radius * 1.55, Math.max(4, radius * 0.35), 0, 0, TAU);
+    ctx.stroke();
+
+    ctx.globalAlpha = 1;
+    if (player.cast || player.channel) {
+      drawCastOrbit(visualUnit);
+    }
+
+    ctx.globalAlpha = 0.22 + pulse * 0.18;
+    ctx.fillStyle = "#a8fbff";
+    ctx.beginPath();
+    ctx.arc(x, y, radius + battlePx(11), 0, TAU);
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = player.frozen > 0 ? "#cfefff" : player.color;
+    ctx.strokeStyle = "#101814";
+    ctx.lineWidth = Math.max(2, battlePx(3));
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+
+    drawUnitGear(visualUnit);
+
+    ctx.fillStyle = "#101814";
+    ctx.font = `700 ${Math.max(12, radius)}px "Segoe UI", "Yu Gothic UI", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(player.label, x, y + 0.5);
+    ctx.restore();
   }
 
 
@@ -2923,17 +3066,17 @@
       const start = -Math.PI / 2;
       const end = start + TAU * (mood / 100);
       ctx.strokeStyle = getMoodColor(mood);
-      ctx.lineWidth = 3;
+      ctx.lineWidth = Math.max(2, battlePx(3));
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + 7, start, end);
+      ctx.arc(unit.x, unit.y, unit.radius + battlePx(7), start, end);
       ctx.stroke();
     }
 
     if (unit.shield > 0) {
       ctx.strokeStyle = COLORS.shield;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = Math.max(2, battlePx(3));
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + 4, 0, TAU);
+      ctx.arc(unit.x, unit.y, unit.radius + battlePx(4), 0, TAU);
       ctx.stroke();
     }
 
@@ -2943,23 +3086,32 @@
 
     if (isHovered) {
       ctx.strokeStyle = COLORS.white;
-      ctx.lineWidth = 5;
+      ctx.lineWidth = Math.max(3, battlePx(5));
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + 10, 0, TAU);
+      ctx.arc(unit.x, unit.y, unit.radius + battlePx(10), 0, TAU);
       ctx.stroke();
     }
 
-    if (unit.guardFlash > 0 || unit.guarding) {
+    if (unit.guardFlash > 0) {
       ctx.strokeStyle = "#f6f6f6";
-      ctx.lineWidth = 4;
+      ctx.lineWidth = Math.max(2, battlePx(4));
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + 13, -0.7, 0.7);
+      ctx.arc(unit.x, unit.y, unit.radius + battlePx(13), -0.7, 0.7);
+      ctx.stroke();
+    }
+
+    if (isLowHp(unit)) {
+      const pulse = 0.45 + Math.sin(game.time * 11) * 0.3;
+      ctx.strokeStyle = `rgba(255,65,65,${0.6 + pulse * 0.3})`;
+      ctx.lineWidth = Math.max(3, battlePx(5));
+      ctx.beginPath();
+      ctx.arc(unit.x, unit.y, unit.radius + battlePx(17), 0, TAU);
       ctx.stroke();
     }
 
     ctx.fillStyle = unit.frozen > 0 ? "#cfefff" : unit.color;
     ctx.strokeStyle = unit.team === "enemy" ? "#3a1816" : "#101814";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(2, battlePx(3));
     ctx.beginPath();
     ctx.arc(unit.x, unit.y, unit.radius, 0, TAU);
     ctx.fill();
@@ -2974,16 +3126,10 @@
     ctx.fillText(unit.label, unit.x, unit.y + 0.5);
 
     if (unit.team === "enemy") {
-      const barWidth = Math.max(44, unit.radius * 2.8);
-      drawBar(unit.x - barWidth / 2, unit.y + unit.radius + 9, barWidth, 6, unit.hp / unit.maxHp, "#241312", COLORS.hp);
+      const barWidth = Math.max(battlePx(44), unit.radius * 2.8);
+      drawFieldHpBar(unit, unit.x - barWidth / 2, unit.y + unit.radius + battlePx(9), barWidth, battlePx(6), "#241312");
     } else {
-      drawBar(unit.x - 24, unit.y - unit.radius - 20, 48, 5, unit.hp / unit.maxHp, "#132115", COLORS.hp);
-    }
-    if (unit.team === "party" && unit.maxMp > 0) {
-      drawBar(unit.x - 24, unit.y - unit.radius - 13, 48, 4, unit.mp / unit.maxMp, "#131b2a", COLORS.mp);
-    }
-    if (unit.shield > 0) {
-      drawBar(unit.x - 24, unit.y - unit.radius - 7, 48, 3, unit.shield / 60, "#0d2b34", COLORS.shield);
+      drawFieldHpBar(unit);
     }
 
     if (unit.tauntTimer > 0 && unit.forcedTarget) {
@@ -2999,18 +3145,34 @@
     ctx.restore();
   }
 
+  function drawFieldHpBar(unit, x = null, y = null, w = null, h = null, back = "#132115") {
+    const barW = w || battlePx(48);
+    const barH = h || battlePx(6);
+    const barX = x ?? unit.x - barW / 2;
+    const barY = y ?? unit.y - unit.radius - battlePx(19);
+    drawBar(barX, barY, barW, barH, unit.hp / unit.maxHp, back, COLORS.hp);
+    if (unit.shield > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.78;
+      ctx.fillStyle = COLORS.shield;
+      roundRect(barX, barY, barW * clamp(unit.shield / unit.maxHp, 0, 1), barH, Math.min(4, barH / 2));
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   function drawTauntMark(unit) {
     const pulse = 0.75 + Math.sin(game.time * 11) * 0.25;
-    const x = unit.x + unit.radius + 12;
-    const y = unit.y - unit.radius - 14;
-    const size = 12 + pulse * 2;
+    const x = unit.x + unit.radius + battlePx(12);
+    const y = unit.y - unit.radius - battlePx(14);
+    const size = battlePx(12) + pulse * battlePx(2);
 
     ctx.save();
     ctx.globalAlpha = 0.78 + pulse * 0.18;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#2b1210";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = Math.max(3, battlePx(5));
     ctx.beginPath();
     ctx.moveTo(x - size * 0.7, y);
     ctx.lineTo(x - size * 0.15, y - size * 0.62);
@@ -3021,7 +3183,7 @@
     ctx.stroke();
 
     ctx.strokeStyle = "#ff5d3f";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(2, battlePx(3));
     ctx.beginPath();
     ctx.moveTo(x - size * 0.7, y);
     ctx.lineTo(x - size * 0.15, y - size * 0.62);
@@ -3036,19 +3198,19 @@
     const castProgress = player.cast
       ? 1 - clamp(player.cast.time / player.cast.total, 0, 1)
       : 1;
-    const orbitRadius = unit.radius + 20;
+    const orbitRadius = unit.radius + battlePx(20);
     const pulse = 0.55 + Math.sin(game.time * 10) * 0.18;
 
     ctx.save();
     ctx.lineCap = "round";
     ctx.strokeStyle = "rgba(124, 255, 148, 0.24)";
-    ctx.lineWidth = 8;
+    ctx.lineWidth = Math.max(4, battlePx(8));
     ctx.beginPath();
     ctx.arc(unit.x, unit.y, orbitRadius, 0, TAU);
     ctx.stroke();
 
     ctx.strokeStyle = "rgba(190, 255, 203, 0.95)";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(2, battlePx(3));
     ctx.beginPath();
     ctx.arc(unit.x, unit.y, orbitRadius, -Math.PI / 2, -Math.PI / 2 + TAU * castProgress);
     ctx.stroke();
@@ -3057,7 +3219,7 @@
       const angle = game.time * 4.2 + i * (TAU / 4);
       const x = unit.x + Math.cos(angle) * orbitRadius;
       const y = unit.y + Math.sin(angle) * orbitRadius;
-      const size = i === 0 ? 5.5 : 4;
+      const size = i === 0 ? battlePx(5.5) : battlePx(4);
       ctx.fillStyle = `rgba(142, 255, 160, ${0.58 + pulse * 0.34})`;
       ctx.shadowColor = "#86ff9a";
       ctx.shadowBlur = 14;
@@ -3083,93 +3245,93 @@
   }
 
   function drawStaffIcon(unit, orbColor) {
-    const x = unit.x + unit.radius + 7;
-    const y = unit.y - unit.radius - 2;
+    const x = unit.x + unit.radius + battlePx(7);
+    const y = unit.y - unit.radius - battlePx(2);
 
     ctx.save();
     ctx.lineCap = "round";
     ctx.strokeStyle = "#6a4a2e";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = Math.max(2, battlePx(4));
     ctx.beginPath();
-    ctx.moveTo(x - 8, y + 25);
-    ctx.lineTo(x + 9, y - 10);
+    ctx.moveTo(x - battlePx(8), y + battlePx(25));
+    ctx.lineTo(x + battlePx(9), y - battlePx(10));
     ctx.stroke();
 
     ctx.strokeStyle = "#f7fff6";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1, battlePx(1.5));
     ctx.beginPath();
-    ctx.moveTo(x - 8, y + 25);
-    ctx.lineTo(x + 9, y - 10);
+    ctx.moveTo(x - battlePx(8), y + battlePx(25));
+    ctx.lineTo(x + battlePx(9), y - battlePx(10));
     ctx.stroke();
 
     ctx.fillStyle = orbColor;
     ctx.strokeStyle = "#f7fff6";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, battlePx(2));
     ctx.beginPath();
-    ctx.arc(x + 10, y - 12, 6, 0, TAU);
+    ctx.arc(x + battlePx(10), y - battlePx(12), battlePx(6), 0, TAU);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
   }
 
   function drawSwordIcon(unit) {
-    const x = unit.x + unit.radius + 5;
-    const y = unit.y - unit.radius + 1;
+    const x = unit.x + unit.radius + battlePx(5);
+    const y = unit.y - unit.radius + battlePx(1);
 
     ctx.save();
     ctx.lineCap = "round";
     ctx.strokeStyle = "#f4f6f7";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = Math.max(3, battlePx(5));
     ctx.beginPath();
-    ctx.moveTo(x - 9, y + 24);
-    ctx.lineTo(x + 13, y - 12);
+    ctx.moveTo(x - battlePx(9), y + battlePx(24));
+    ctx.lineTo(x + battlePx(13), y - battlePx(12));
     ctx.stroke();
 
     ctx.strokeStyle = "#7e8b91";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1, battlePx(1.5));
     ctx.beginPath();
-    ctx.moveTo(x - 9, y + 24);
-    ctx.lineTo(x + 13, y - 12);
+    ctx.moveTo(x - battlePx(9), y + battlePx(24));
+    ctx.lineTo(x + battlePx(13), y - battlePx(12));
     ctx.stroke();
 
     ctx.strokeStyle = "#493327";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = Math.max(2, battlePx(4));
     ctx.beginPath();
-    ctx.moveTo(x - 15, y + 15);
-    ctx.lineTo(x + 3, y + 26);
+    ctx.moveTo(x - battlePx(15), y + battlePx(15));
+    ctx.lineTo(x + battlePx(3), y + battlePx(26));
     ctx.stroke();
 
     ctx.strokeStyle = "#b58b40";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(2, battlePx(3));
     ctx.beginPath();
-    ctx.moveTo(x - 13, y + 24);
-    ctx.lineTo(x - 5, y + 33);
+    ctx.moveTo(x - battlePx(13), y + battlePx(24));
+    ctx.lineTo(x - battlePx(5), y + battlePx(33));
     ctx.stroke();
     ctx.restore();
   }
 
   function drawFistIcon(unit) {
-    const x = unit.x + unit.radius + 8;
-    const y = unit.y - unit.radius + 1;
+    const x = unit.x + unit.radius + battlePx(8);
+    const y = unit.y - unit.radius + battlePx(1);
 
     ctx.save();
     ctx.fillStyle = "#f7b05e";
     ctx.strokeStyle = "#3a2115";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, battlePx(2));
 
     for (let i = 0; i < 4; i += 1) {
       ctx.beginPath();
-      ctx.arc(x + i * 5, y, 4.7, 0, TAU);
+      ctx.arc(x + i * battlePx(5), y, battlePx(4.7), 0, TAU);
       ctx.fill();
       ctx.stroke();
     }
 
-    roundRect(x - 3, y + 3, 25, 17, 7);
+    roundRect(x - battlePx(3), y + battlePx(3), battlePx(25), battlePx(17), battlePx(7));
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = "#e37a3f";
-    roundRect(x + 1, y + 17, 16, 9, 4);
+    roundRect(x + battlePx(1), y + battlePx(17), battlePx(16), battlePx(9), battlePx(4));
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -3182,7 +3344,7 @@
     }
     const alpha = clamp(Math.min(effect.age / 0.12, effect.time / 0.22), 0, 1);
     const anchorX = source.x;
-    const anchorY = source.y - (source.radius || 14) - 20;
+    const anchorY = source.y - (source.radius || battlePx(14)) - battlePx(20);
 
     ctx.globalAlpha = alpha;
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -3192,7 +3354,7 @@
     const bubbleW = Math.min(Math.max(textWidth + 20, 46), 190);
     const bubbleH = 27;
     const bubbleX = clamp(anchorX - bubbleW / 2, 8, view.w - bubbleW - 8);
-    const bubbleY = clamp(anchorY - bubbleH - 12 - Math.sin(effect.age * 7) * 1.5, 8, view.h - bubbleH - 20);
+    const bubbleY = clamp(anchorY - bubbleH - battlePx(12) - Math.sin(effect.age * 7) * 1.5, battlePx(8), view.h - bubbleH - battlePx(20));
     const tailX = clamp(anchorX, bubbleX + 12, bubbleX + bubbleW - 12);
     const tailY = bubbleY + bubbleH - 1;
 
@@ -3255,116 +3417,799 @@
   }
 
   function drawHud() {
-    drawPanel(18, 18, 300, 78);
-    ctx.fillStyle = "#f7fff6";
-    ctx.font = "700 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(game.message, 34, 47);
-    ctx.font = "13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillStyle = "#d4e4d5";
-    const aliveEnemies = enemies.filter((enemy) => !enemy.dead).length;
-    ctx.fillText(`残り魔物 ${aliveEnemies} / ${enemies.length}`, 34, 72);
-
-    const hudW = Math.min(390, view.w - 32);
-    const rowH = 43;
-    const hudH = 18 + rowH * party.length;
-    const x = 18;
-    const y = view.h - hudH - 16;
-    drawPanel(x, y, hudW, hudH);
-    for (let i = 0; i < party.length; i += 1) {
-      drawPartyRow(party[i], x + 16, y + 14 + i * rowH, hudW - 32);
-    }
-
-    const skillW = Math.min(460, view.w - hudW - 64);
-    if (skillW > 220) {
-      drawSkillPanel(view.w - skillW - 18, view.h - 116, skillW, 100);
-    }
+    drawAllyStatusCards();
+    drawArjunaHud();
   }
 
-  function drawPartyRow(unit, x, y, width) {
-    const iconX = x + 10;
-    const iconY = y + 13;
-    const barX = x + 112;
-    const barW = width - 118;
+  function drawAllyStatusCards() {
+    statusUiButtons = [];
+    statusCardMetas = [];
+    const allies = party.filter((member) => member.id !== "finald");
+    const units = [...allies, player];
+    const bounds = getBattleBounds();
+    const gap = clamp(view.w * 0.009, 6, 10);
+    const margin = clamp(view.w * 0.016, 10, 18);
+    const cardW = (view.w - margin * 2 - gap * (units.length - 1)) / Math.max(1, units.length);
+    const y = 6;
+    const idealH = clamp(view.h * 0.16, 112, 136);
+    const cardH = Math.min(idealH, Math.max(78, bounds.top - y - 6));
+    for (let i = 0; i < units.length; i += 1) {
+      drawAllyCard(units[i], margin + i * (cardW + gap), y, cardW, cardH);
+    }
+    drawExpandedStatusPanels();
+  }
 
-    drawCircleGauge(iconX, iconY, 13, unit.ult / 100, "rgba(0,0,0,0.45)", COLORS.ult);
-    ctx.fillStyle = unit.color;
+  function drawAllyCard(unit, x, y, w, h) {
+    const isArjuna = unit.id === "finald";
+    const pad = clamp(w * 0.06, 8, 14);
+    const compact = w < 220 || h < 116;
+    const actionGaugeRadius = compact ? 15 : 18;
+    const ultGaugeRadius = compact ? 16 : 18;
+    const iconAreaX = x + pad;
+    const iconAreaW = clamp(w * 0.25, compact ? 44 : 58, compact ? 58 : 76);
+    const iconCenterX = iconAreaX + iconAreaW / 2;
+    const portraitSize = Math.min(compact ? 44 : 64, iconAreaW, Math.max(30, h - pad * 2 - 38));
+    const portraitX = iconCenterX - portraitSize / 2;
+    const portraitY = y + h - pad - portraitSize - 3;
+    const barGap = compact ? 5 : 8;
+    const barX = iconAreaX + iconAreaW + barGap;
+    const ultGaugeX = x + w - pad - ultGaugeRadius - 3;
+    const actionGaugeX = ultGaugeX - ultGaugeRadius - actionGaugeRadius - 8;
+    const statusRight = isArjuna ? ultGaugeX - ultGaugeRadius - 8 : actionGaugeX - actionGaugeRadius - 6;
+    const barW = Math.max(0, x + w - pad - barX);
+    const barH = compact ? 7 : 8;
+    const barStep = compact ? 15 : 17;
+    const hpY = y + pad + (compact ? 0 : 2);
+    const mpY = hpY + barStep;
+    const moodY = mpY + barStep;
+    const commandY = moodY + (compact ? 16 : 18);
+    const gaugeY = y + h - Math.max(ultGaugeRadius + 9, pad * 0.45 + 8);
+    const statusIconSize = compact ? 14 : 16;
+    const statusIconY = gaugeY - statusIconSize - 2;
+    const statusIconMaxWidth = Math.max(0, statusRight - barX);
+    statusCardMetas.push({ unitId: unit.id, x, y, w, h, statusIconMaxWidth, statusIconSize });
+
+    drawPanel(x, y, w, h);
+    drawDangerCardFlash(unit, x, y, w, h);
+    statusUiButtons.push({ action: "consume", x, y, w, h });
+
+    drawFittedText(getStatusDisplayName(unit), iconCenterX, y + pad + 11, iconAreaW + 10, 800, compact ? 11 : 13, 9, "#f7fff6", "center");
+    drawFittedText(getRoleLabel(unit), iconCenterX, y + pad + 26, iconAreaW + 10, 700, compact ? 9 : 10, 8, "#cfe0d2", "center");
+
+    drawCharacterUiPortrait(unit, portraitX, portraitY, portraitSize);
+
+    if (!isArjuna) {
+      drawActionCooldownGauge(unit, actionGaugeX, gaugeY, actionGaugeRadius);
+    }
+    drawCircleGauge(ultGaugeX, gaugeY, ultGaugeRadius, unit.ult / 100, "rgba(0,0,0,0.45)", "#73dfff");
+    ctx.fillStyle = "rgba(10,13,12,0.84)";
     ctx.beginPath();
-    ctx.arc(iconX, iconY, 8, 0, TAU);
+    ctx.arc(ultGaugeX, gaugeY, Math.max(7, ultGaugeRadius - 6), 0, TAU);
     ctx.fill();
 
     if (unit.ult >= 100) {
       ctx.strokeStyle = "rgba(255,255,255,0.82)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(iconX, iconY, 16, 0, TAU);
+      ctx.arc(ultGaugeX, gaugeY, ultGaugeRadius + 3, 0, TAU);
       ctx.stroke();
     }
 
     const ultKey = ULTIMATE_KEYS[unit.id];
     if (ultKey) {
-      const keyX = iconX - 11;
-      const keyY = iconY - 18;
-      ctx.fillStyle = unit.ult >= 100 ? COLORS.ult : "rgba(7,10,9,0.88)";
+      const keyX = ultGaugeX;
+      const keyY = gaugeY;
+      ctx.fillStyle = unit.ult >= 100 ? "#73dfff" : "rgba(7,10,9,0.88)";
       ctx.strokeStyle = unit.ult >= 100 ? "#ffffff" : "rgba(255,255,255,0.55)";
       ctx.lineWidth = 1;
-      roundRect(keyX - 7, keyY - 7, 14, 14, 4);
+      roundRect(keyX - 8, keyY - 8, 16, 16, 4);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = unit.ult >= 100 ? "#111111" : "#f7fff6";
-      ctx.font = "800 10px 'Segoe UI', sans-serif";
+      ctx.font = "800 11px 'Segoe UI', sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(ultKey, keyX, keyY + 0.5);
       ctx.textBaseline = "alphabetic";
     }
 
-    ctx.fillStyle = "#f7fff6";
-    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(unit.name, x + 25, y + 8);
-    ctx.font = "11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillStyle = "#cfe0d2";
-    ctx.fillText(`${Math.ceil(unit.hp)}/${unit.maxHp}`, x + 25, y + 25);
+    drawStatusIcons(unit, barX, statusIconY, statusIconMaxWidth, statusIconSize);
 
-    drawBar(barX, y + 2, barW, 8, unit.hp / unit.maxHp, "#132115", COLORS.hp);
+    drawLabeledBar("HP", barX, hpY, barW, barH, unit.hp / unit.maxHp, "#132115", COLORS.hp, {
+      text: `${Math.ceil(unit.hp)}/${unit.maxHp}${unit.shield > 0 ? ` +${Math.ceil(unit.shield)}` : ""}`,
+      shieldRatio: unit.maxHp > 0 ? unit.shield / unit.maxHp : 0,
+    });
     if (unit.maxMp > 0) {
-      drawBar(barX, y + 14, barW, 6, unit.mp / unit.maxMp, "#131b2a", COLORS.mp);
+      drawLabeledBar("MP", barX, mpY, barW, Math.max(5, barH - 1), unit.mp / unit.maxMp, "#131b2a", COLORS.mp, {
+        text: `${Math.ceil(unit.mp)}/${unit.maxMp}`,
+      });
     }
     if (unit.mood !== null) {
-      const marker = barX + barW * 0.5;
-      drawBar(barX, y + 25, barW, 6, unit.mood / 100, "#2b2615", getMoodColor(unit.mood));
-      ctx.strokeStyle = "#f6f6f6";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(marker, y + 24);
-      ctx.lineTo(marker, y + 33);
-      ctx.stroke();
+      drawLabeledBar("調子", barX, moodY, barW, Math.max(5, barH - 1), unit.mood / 100, "#2b2615", getMoodColor(unit.mood), {
+        text: `${Math.round(unit.mood)}%`,
+      });
+    }
+    if (!isArjuna) {
+      drawCommandBiasMeter(barX, commandY, barW, 8, unit.commandBias || 0);
+    }
+
+    const triangleSize = 15;
+    const buttonSize = 34;
+    const buttonOutset = 10;
+    const bx = x + w - buttonSize;
+    const by = y + h - buttonSize;
+    statusUiButtons.push({ action: "toggle", unitId: unit.id, x: bx, y: by, w: buttonSize + buttonOutset, h: buttonSize + buttonOutset });
+    drawCornerTriangleButton(x + w - triangleSize, y + h - triangleSize, triangleSize, expandedStatusUnitIds.has(unit.id) ? "close" : "expand");
+  }
+
+  function drawExpandedStatusPanels() {
+    if (!expandedStatusUnitIds.size) {
+      return;
+    }
+    for (const unitId of [...expandedStatusUnitIds]) {
+      drawExpandedStatusPanel(unitId);
     }
   }
-  function drawSkillPanel(x, y, w, h) {
+
+  function drawExpandedStatusPanel(unitId) {
+    const unit = getPartyUnitById(unitId);
+    const meta = statusCardMetas.find((item) => item.unitId === unitId);
+    if (!unit || !meta) {
+      expandedStatusUnitIds.delete(unitId);
+      return;
+    }
+
+    const battleBounds = getBattleBounds();
+    const panelW = Math.min(meta.w, view.w - 24);
+    const panelY = meta.y + meta.h + 7;
+    const availableH = Math.max(210, Math.min(view.h - panelY - 12, battleBounds.bottom - panelY - 8));
+    const panelH = Math.min(clamp(view.h * 0.46, 320, 430), availableH);
+    const panelX = clamp(meta.x, 12, view.w - panelW - 12);
+    drawPanel(panelX, panelY, panelW, panelH);
+    statusUiButtons.push({ action: "consume", x: panelX, y: panelY, w: panelW, h: panelH });
+
+    const innerX = panelX + 14;
+    const innerY = panelY + 16;
+    const innerW = panelW - 28;
+    const hiddenIcons = getOverflowStatusIcons(unit, meta.statusIconMaxWidth, meta.statusIconSize);
+
+    const hiddenH = drawHiddenStatusDetails(hiddenIcons, innerX, innerY, innerW);
+    const statsY = innerY + hiddenH + 10;
+    const statsH = drawDetailedStats(unit, innerX, statsY, innerW, panelH - hiddenH - 82);
+    const skillsY = statsY + statsH + 10;
+    drawDetailedSkills(unit, innerX, skillsY, innerW, panelY + panelH - skillsY - 24);
+
+    const triangleSize = 16;
+    const buttonSize = 36;
+    const buttonOutset = 10;
+    const bx = panelX + panelW - buttonSize;
+    const by = panelY + panelH - buttonSize;
+    statusUiButtons.push({ action: "close", unitId, x: bx, y: by, w: buttonSize + buttonOutset, h: buttonSize + buttonOutset });
+    drawCornerTriangleButton(panelX + panelW - triangleSize, panelY + panelH - triangleSize, triangleSize, "close");
+  }
+
+  function drawCornerTriangleButton(x, y, size, mode) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.strokeStyle = "rgba(0,0,0,0.34)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (mode === "close") {
+      ctx.moveTo(x + size, y);
+      ctx.lineTo(x + size, y + size);
+      ctx.lineTo(x, y + size);
+    } else {
+      ctx.moveTo(x + size, y);
+      ctx.lineTo(x + size, y + size);
+      ctx.lineTo(x, y + size);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function getPartyUnitById(id) {
+    return party.find((unit) => unit.id === id) || (player.id === id ? player : null);
+  }
+
+  function drawHiddenStatusDetails(hiddenIcons, x, y, w) {
+    const iconSize = 18;
+    const gap = 4;
+    const rows = 3;
+    const columns = Math.max(3, Math.floor((w + gap) / (iconSize + gap)));
+    const capacity = columns * rows;
+    const gridW = columns * iconSize + (columns - 1) * gap;
+    const startX = x + Math.max(0, (w - gridW) / 2);
+    if (hiddenIcons.length) {
+      const hasOverflow = hiddenIcons.length > capacity;
+      const count = hasOverflow ? capacity - 1 : Math.min(hiddenIcons.length, capacity);
+      for (let i = 0; i < count; i += 1) {
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+        drawStatusIcon(hiddenIcons[i], startX + col * (iconSize + gap), y + row * (iconSize + gap), iconSize);
+      }
+      if (hasOverflow) {
+        const lastIndex = capacity - 1;
+        const col = lastIndex % columns;
+        const row = Math.floor(lastIndex / columns);
+        drawStatusIcon({ label: "…", color: "#5d6864", ratio: 1 }, startX + col * (iconSize + gap), y + row * (iconSize + gap), iconSize);
+      }
+      return Math.ceil((hasOverflow ? capacity : count) / columns) * (iconSize + gap);
+    }
+
+    return 0;
+  }
+
+  function drawDetailedStats(unit, x, y, w, h) {
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("詳細ステータス", x, y);
+
+    const stats = getDetailedStats(unit);
+    const rowH = 25;
+    const colGap = 10;
+    const columns = w < 230 ? 1 : 2;
+    const colW = (w - colGap * (columns - 1)) / columns;
+    const startY = y + 29;
+    for (let i = 0; i < stats.length; i += 1) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const sx = x + col * (colW + colGap);
+      const sy = startY + row * rowH;
+      if (sy > y + h - 8) {
+        return Math.max(36, sy - y);
+      }
+      drawDetailStatRow(stats[i].label, stats[i].value, sx, sy, colW);
+    }
+    return 29 + Math.ceil(stats.length / columns) * rowH;
+  }
+
+  function drawDetailStatRow(label, value, x, y, w) {
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#aebdb4";
+    ctx.fillText(label, x, y);
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#f7fff6";
+    ctx.fillText(value, x + w, y);
+  }
+
+  function getDetailedStats(unit) {
+    const outgoing = getUnitOutgoingDamageMultiplier(unit);
+    const incoming = getUnitIncomingDamageMultiplier(unit);
+    const castSpeed = 1 / getUnitCastTimeMultiplier(unit) - 1;
+    const skillSpeed = 1 / getMoodCooldownMultiplier(unit) - 1;
+    return [
+      { label: "攻撃力", value: formatNumber(unit.attack) },
+      { label: "魔力", value: formatNumber(unit.magic) },
+      { label: "防御力", value: formatNumber(getEffectiveDefense(unit)) },
+      { label: "魔法防御力", value: formatNumber(unit.magicDefense) },
+      { label: "会心率", value: formatPercent(BASE_CRIT_CHANCE) },
+      { label: "会心ダメージ", value: formatPercent(BASE_CRIT_DAMAGE) },
+      { label: "与ダメ補正", value: formatSignedPercent(outgoing - 1) },
+      { label: "被ダメ補正", value: formatSignedPercent(incoming - 1) },
+      { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
+      { label: "スキルヘイスト", value: formatSignedPercent(skillSpeed) },
+      { label: "ガード率", value: formatPercent(getMoodGuardChance(unit)) },
+      { label: "移動速度", value: `${Math.round(unit.speed)}` },
+    ];
+  }
+
+  function getUnitOutgoingDamageMultiplier(unit) {
+    let multiplier = getMoodOutgoingDamageMultiplier(unit);
+    if (unit.id === "rihas") {
+      multiplier *= getRihasPassiveDamageMultiplier(unit);
+    }
+    return multiplier;
+  }
+
+  function getUnitIncomingDamageMultiplier(unit) {
+    let multiplier = getMoodIncomingDamageMultiplier(unit);
+    if (unit.id === "rihas") {
+      multiplier *= getRihasPassiveIncomingMultiplier(unit);
+    }
+    return multiplier;
+  }
+
+  function getUnitCastTimeMultiplier(unit) {
+    if (unit.id === "sushia") {
+      return getSushiaCastTime(1, unit);
+    }
+    return getMoodCastTimeMultiplier(unit);
+  }
+
+  function drawDetailedSkills(unit, x, y, w, h) {
+    if (w < 70) {
+      return;
+    }
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("スキル", x, y);
+
+    const skills = getDetailedSkillEntries(unit);
+    const iconSize = 35;
+    const gapX = 7;
+    const gapY = 26;
+    const columns = Math.max(1, Math.floor((w + gapX) / (iconSize + gapX)));
+    for (let i = 0; i < skills.length; i += 1) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const sx = x + col * (iconSize + gapX);
+      const sy = y + 20 + row * (iconSize + gapY);
+      if (sy + iconSize > y + h) {
+        break;
+      }
+      drawSkillCooldownIcon(skills[i], sx, sy, iconSize);
+    }
+  }
+
+  function getDetailedSkillEntries(unit) {
+    const data = skillSystem.data[unit.id] || {};
+    return Object.entries(data).map(([key, skill]) => {
+      const cooldown = getSkillCooldownDetail(unit, key, skill);
+      return { key, skill, ...cooldown };
+    });
+  }
+
+  function getSkillCooldownDetail(unit, key, skill) {
+    if (key === "ult") {
+      const remaining = unit.ult >= 100 ? 0 : 100 - unit.ult;
+      return { remaining, max: 100, text: unit.ult >= 100 ? "OK" : `${Math.round(unit.ult)}%`, gauge: true };
+    }
+    const max = key === "attack" && unit.id !== "finald"
+      ? skillSystem.getActionCooldown(unit)
+      : (skill.cd ? getMoodCooldown(unit, skill.cd) : 0);
+    const remaining = unit.cds[key] || 0;
+    return { remaining, max: Math.max(0.1, max), text: remaining > 0 ? remaining.toFixed(1) : "OK", gauge: false };
+  }
+
+  function drawSkillCooldownIcon(entry, x, y, size) {
+    const ratio = entry.max > 0 ? clamp(entry.remaining / entry.max, 0, 1) : 0;
+    ctx.save();
+    ctx.fillStyle = entry.gauge ? "#73dfff" : "#d4e4d5";
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, size, size, 7);
+    ctx.fill();
+    ctx.stroke();
+    roundRect(x, y, size, size, 7);
+    ctx.clip();
+    if (ratio > 0) {
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      ctx.fillStyle = "rgba(0,0,0,0.58)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, size * 0.82, -Math.PI / 2, -Math.PI / 2 + TAU * ratio);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = "#101814";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(getSkillIconLabel(entry.skill), x + size / 2, y + size / 2 + 0.5);
+    ctx.restore();
+
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(entry.text, x + size / 2, y + size + 11);
+  }
+
+  function getSkillIconLabel(skill) {
+    return Array.from(skill.name || "?")[0] || "?";
+  }
+
+  function formatNumber(value) {
+    return `${Math.floor(value)}`;
+  }
+
+  function formatPercent(value) {
+    return `${Math.round(value * 100)}%`;
+  }
+
+  function formatSignedPercent(value) {
+    const rounded = Math.round(value * 100);
+    return `${rounded > 0 ? "+" : ""}${rounded}%`;
+  }
+
+  function drawCharacterUiPortrait(unit, x, y, size) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    roundRect(x, y, size, size, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    roundRect(x, y, size, size, 8);
+    ctx.clip();
+    ctx.fillStyle = unit.color;
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size * 0.28, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#111111";
+    ctx.font = `800 ${Math.max(11, size * 0.34)}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(unit.label || unit.name.slice(0, 1), x + size / 2, y + size / 2 + 0.5);
+    ctx.textBaseline = "alphabetic";
+    ctx.restore();
+  }
+
+  function getRoleLabel(unit) {
+    if (unit.id === "ulpes") return "勇者";
+    if (unit.id === "rihas") return "モンク";
+    if (unit.id === "sushia") return "黒魔法士";
+    if (unit.id === "finald") return "白魔法士";
+    return unit.role || "";
+  }
+
+  function getStatusDisplayName(unit) {
+    return STATUS_FULL_NAMES[unit.id] || unit.name;
+  }
+
+  function isLowHp(unit) {
+    return Boolean(unit && unit.team === "party" && unit.maxHp > 0 && unit.hp / unit.maxHp <= 0.25);
+  }
+
+  function drawDangerCardFlash(unit, x, y, w, h) {
+    if (!isLowHp(unit)) {
+      return;
+    }
+    const pulse = 0.45 + Math.sin(game.time * 10) * 0.28;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,68,68,${0.62 + pulse * 0.28})`;
+    ctx.lineWidth = 3;
+    roundRect(x + 1.5, y + 1.5, w - 3, h - 3, 8);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawActionCooldownGauge(unit, x, y, radius) {
+    const max = Math.max(0.1, skillSystem.getActionCooldown(unit) || 1);
+    const remaining = clamp(unit.cds.attack || 0, 0, max);
+    const readyRatio = 1 - remaining / max;
+    drawCircleGauge(x, y, radius, readyRatio, "rgba(0,0,0,0.45)", "#ffd86b");
+    ctx.fillStyle = remaining > 0 ? "#dff9ff" : "#101814";
+    ctx.font = `800 ${radius <= 10 ? 8 : 9}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("行", x, y + 0.5);
+    ctx.textBaseline = "alphabetic";
+  }
+
+  function drawStatusIcons(unit, x, y, maxWidth, size) {
+    const icons = getSortedStatusIcons(unit);
+    if (!icons.length || maxWidth < size) {
+      return;
+    }
+    const gap = 3;
+    const columns = getStatusIconColumns(maxWidth, size, gap);
+    const capacity = getStatusIconCapacity(maxWidth, size, gap);
+    const hasOverflow = icons.length > capacity;
+    const visibleCount = hasOverflow ? Math.max(0, capacity - 1) : Math.min(icons.length, capacity);
+    for (let i = 0; i < visibleCount; i += 1) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      drawStatusIcon(icons[i], x + col * (size + gap), y + row * (size + gap), size);
+    }
+    if (hasOverflow) {
+      drawStatusIcon({ label: "…", color: "#5d6864", ratio: 1 }, x + (columns - 1) * (size + gap), y + size + gap, size);
+    }
+  }
+
+  function getSortedStatusIcons(unit) {
+    return getStatusIcons(unit).sort((a, b) => getStatusIconSortTime(b) - getStatusIconSortTime(a));
+  }
+
+  function getStatusIconColumns(maxWidth, size, gap = 3) {
+    return Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
+  }
+
+  function getStatusIconCapacity(maxWidth, size, gap = 3) {
+    return getStatusIconColumns(maxWidth, size, gap) * 2;
+  }
+
+  function getOverflowStatusIcons(unit, maxWidth, size) {
+    const icons = getSortedStatusIcons(unit);
+    const capacity = getStatusIconCapacity(maxWidth, size);
+    if (icons.length <= capacity) {
+      return [];
+    }
+    return icons.slice(Math.max(0, capacity - 1));
+  }
+
+  function getStatusIconSortTime(icon) {
+    if (icon.permanent) {
+      return Infinity;
+    }
+    return Number.isFinite(icon.remaining) ? icon.remaining : (Number.isFinite(icon.ratio) ? icon.ratio : 0);
+  }
+
+  function getStatusIcons(unit) {
+    const icons = [];
+    if (unit.id === "finald") {
+      icons.push({ label: "空", color: "#73dfff", ratio: 1, permanent: true });
+    }
+    if (unit.actionLock > ACTION_GAP) {
+      const total = Math.max(unit.actionTotal || unit.actionLock, unit.actionLock, 0.1);
+      icons.push({ label: "詠", color: "#73ff91", ratio: unit.actionLock / total, remaining: unit.actionLock });
+    }
+    if (unit.frozen > 0) {
+      const frozenMax = Math.max(0.1, unit.frozenMax || unit.frozen);
+      icons.push({ label: "凍", color: "#b8e7ff", ratio: unit.frozen / frozenMax, remaining: unit.frozen });
+    }
+    if (unit.id === "sushia" && (unit.castStacks || 0) > 0) {
+      icons.push({ label: "熱", color: "#ff9f43", ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer });
+    }
+    if (unit.tauntTimer > 0) {
+      const duration = skillSystem.requireSkill("rihas", "ult").duration || 5.5;
+      icons.push({ label: "怒", color: "#ff6b44", ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer });
+    }
+    if ((unit.rihasPassiveStacks || 0) > 0) {
+      icons.push({ label: "拳", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
+    }
+    return icons;
+  }
+
+  function drawStatusIcon(icon, x, y, size) {
+    const r = Math.max(4, size * 0.28);
+    ctx.save();
+    ctx.fillStyle = icon.color;
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, size, size, r);
+    ctx.fill();
+    ctx.stroke();
+
+    const elapsedRatio = 1 - clamp(icon.ratio || 0, 0, 1);
+    if (elapsedRatio > 0) {
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      ctx.fillStyle = "rgba(0,0,0,0.52)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, size * 0.72, -Math.PI / 2, -Math.PI / 2 - TAU * elapsedRatio, true);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `800 ${Math.max(9, size - 5)}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeStyle = "rgba(0,0,0,0.72)";
+    ctx.lineWidth = 2;
+    ctx.strokeText(icon.label, x + size / 2, y + size / 2 + 0.5);
+    ctx.fillText(icon.label, x + size / 2, y + size / 2 + 0.5);
+
+    if ((icon.stack || 0) > 1) {
+      const badge = Math.max(10, size * 0.58);
+      ctx.fillStyle = "rgba(0,0,0,0.82)";
+      roundRect(x + size - badge + 2, y + size - badge + 2, badge, badge, 4);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `800 ${Math.max(8, badge - 3)}px 'Segoe UI', sans-serif`;
+      ctx.fillText(String(icon.stack), x + size - badge / 2 + 2, y + size - badge / 2 + 2.5);
+    }
+    ctx.restore();
+  }
+
+  function drawCommandBiasMeter(x, y, w, h, value) {
+    const labelW = 22;
+    const gap = 3;
+    const segmentW = Math.max(8, (w - labelW * 2 - gap * 4) / 5);
+    const startX = x + labelW;
+    const active = clamp(Math.round(value) + 2, 0, 4);
+
+    ctx.save();
+    ctx.font = "800 9px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#b7c7bd";
+    ctx.fillText("防", x + labelW / 2 - 2, y + h / 2);
+    ctx.fillText("攻", x + w - labelW / 2 + 2, y + h / 2);
+    for (let i = 0; i < 5; i += 1) {
+      const sx = startX + i * (segmentW + gap);
+      const isActive = i === active;
+      ctx.fillStyle = isActive ? (i < 2 ? "#8fe9ff" : i > 2 ? "#ffb15e" : "#d4e4d5") : "rgba(255,255,255,0.11)";
+      roundRect(sx, y, segmentW, h, 3);
+      ctx.fill();
+      if (isActive) {
+        ctx.strokeStyle = "rgba(255,255,255,0.75)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawArjunaHud() {
+    const bounds = getBattleBounds();
+    const margin = clamp(view.w * 0.018, 12, 22);
+    const bottomReserve = view.h - bounds.bottom;
+    const idealH = clamp(view.h * 0.19, 128, 168);
+    const h = Math.min(idealH, Math.max(92, bottomReserve - 14));
+    const x = margin;
+    const y = view.h - h - 8;
+    const w = view.w - margin * 2;
     drawPanel(x, y, w, h);
+
+    const aliveEnemies = enemies.filter((enemy) => !enemy.dead).length;
+    ctx.fillStyle = "#d4e4d5";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(`${game.message} / 残り魔物 ${aliveEnemies}/${enemies.length}`, x + 18, y - 8);
+
+    const skillX = x + 16;
+    const skillW = w - 32;
+    if (skillW > 220) {
+      drawSkillPanel(skillX, y + 10, skillW, h - 20);
+    }
+  }
+
+  function drawArjunaStats(x, y, w, h) {
+    const compact = h < 92;
+    const iconAreaW = clamp(w * 0.34, compact ? 56 : 74, compact ? 76 : 96);
+    const iconCenterX = x + iconAreaW / 2;
+    const labelBottom = compact ? 33 : 38;
+    const portraitSize = Math.min(compact ? 52 : 78, iconAreaW, Math.max(28, h - labelBottom - 2));
+    const portraitX = iconCenterX - portraitSize / 2;
+    const portraitY = y + h - portraitSize;
+    const barX = x + iconAreaW + 10;
+    const barW = Math.max(0, w - iconAreaW - 10);
+    const barH = compact ? 6 : 8;
+    const ultRadius = compact ? 17 : 20;
+    const ultX = x + w - ultRadius;
+    const ultY = y + ultRadius + (compact ? 2 : 4);
+
+    drawFittedText(getStatusDisplayName(player), iconCenterX, y + (compact ? 14 : 16), iconAreaW + 10, 800, compact ? 12 : 14, 9, "#f7fff6", "center");
+    drawFittedText(getRoleLabel(player), iconCenterX, y + (compact ? 29 : 33), iconAreaW + 10, 700, compact ? 10 : 11, 8, "#cfe0d2", "center");
+    drawCharacterUiPortrait(player, portraitX, portraitY, portraitSize);
+
+    drawCircleGauge(ultX, ultY, ultRadius, player.ult / 100, "rgba(0,0,0,0.45)", "#73dfff");
+    ctx.fillStyle = "rgba(10,13,12,0.84)";
+    ctx.beginPath();
+    ctx.arc(ultX, ultY, Math.max(7, ultRadius - 6), 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = player.ult >= 100 ? "#101814" : "#f7fff6";
+    ctx.font = "800 11px 'Segoe UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("4", ultX, ultY + 0.5);
+    ctx.textBaseline = "alphabetic";
+
+    const firstBarY = y + (compact ? clamp(h * 0.52, 44, 52) : clamp(h * 0.54, 58, 72));
+    const lastBarY = y + h - barH;
+    const barGap = Math.max(14, lastBarY - firstBarY - (compact ? 5 : 7));
+    drawLabeledBar("HP", barX, firstBarY, barW, barH, player.hp / player.maxHp, "#132115", COLORS.hp, {
+      text: `${Math.ceil(player.hp)}/${player.maxHp}${player.shield > 0 ? ` +${Math.ceil(player.shield)}` : ""}`,
+      shieldRatio: player.maxHp > 0 ? player.shield / player.maxHp : 0,
+    });
+    drawLabeledBar("MP", barX, firstBarY + barGap, barW, Math.max(6, barH - 1), player.mp / player.maxMp, "#131b2a", COLORS.mp, {
+      text: `${Math.ceil(player.mp)}/${player.maxMp}`,
+    });
+  }
+
+  function drawFittedText(text, x, y, maxWidth, weight, maxSize, minSize, color, align = "left") {
+    let size = maxSize;
+    do {
+      ctx.font = `${weight} ${size}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      if (ctx.measureText(text).width <= maxWidth || size <= minSize) {
+        break;
+      }
+      size -= 1;
+    } while (size > minSize);
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(text, x, y);
+  }
+
+  function drawLabeledBar(label, x, y, w, h, ratio, back, fill, options = {}) {
+    const labelW = 26;
+    const valueW = options.text ? clamp(w * 0.31, 48, 72) : 0;
+    const valueGap = options.text ? 5 : 0;
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x, y + h / 2);
+    const barX = x + labelW;
+    const barW = Math.max(0, w - labelW - valueW - valueGap);
+    drawBar(barX, y, barW, h, ratio, back, fill);
+    if (options.shieldRatio > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.78;
+      ctx.fillStyle = COLORS.shield;
+      roundRect(barX, y, barW * clamp(options.shieldRatio, 0, 1), h, Math.min(4, h / 2));
+      ctx.fill();
+      ctx.restore();
+    }
+    if (options.text) {
+      const valueX = barX + barW + valueGap;
+      let valueSize = 11;
+      do {
+        ctx.font = `800 ${valueSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+        if (ctx.measureText(options.text).width <= valueW || valueSize <= 9) {
+          break;
+        }
+        valueSize -= 1;
+      } while (valueSize > 9);
+      ctx.textAlign = "left";
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "rgba(0,0,0,0.72)";
+      ctx.strokeText(options.text, valueX, y + h / 2 + 0.5);
+      ctx.fillStyle = "#f7fff6";
+      ctx.fillText(options.text, valueX, y + h / 2 + 0.5);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawSkillPanel(x, y, w, h) {
     const skills = skillSystem.getPanelSkills(player);
+    const inputLabels = ["左クリック", "F", "G", "R"];
     const gap = 10;
     const itemW = (w - 32 - gap * 3) / 4;
+    const itemY = y + 8;
+    const itemH = h - 16;
+    const nameY = y + Math.max(26, h * 0.33);
+    const barY = y + Math.max(44, h * 0.58);
+    const cdY = y + Math.min(h - 11, Math.max(62, h * 0.82));
     for (let i = 0; i < skills.length; i += 1) {
       const sx = x + 16 + i * (itemW + gap);
       const skill = skills[i];
       ctx.fillStyle = "rgba(255,255,255,0.08)";
-      roundRect(sx, y + 18, itemW, h - 36, 8);
+      roundRect(sx, itemY, itemW, itemH, 8);
       ctx.fill();
+      drawSkillInputBadge(inputLabels[i], sx + 8, itemY + 7, itemW - 16);
       ctx.fillStyle = "#eff9ef";
-      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = `700 ${itemW < 82 ? 10 : 12}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(skill.name, sx + itemW / 2, y + 42);
+      ctx.fillText(skill.name, sx + itemW / 2, nameY);
       const ratio = skill.gauge ? player.ult / 100 : 1 - clamp(skill.cd / skill.max, 0, 1);
-      drawBar(sx + 12, y + 60, itemW - 24, 7, ratio, "rgba(0,0,0,0.35)", skill.gauge ? COLORS.ult : COLORS.mp);
+      drawBar(sx + 12, barY, itemW - 24, 7, ratio, "rgba(0,0,0,0.35)", skill.gauge ? COLORS.ult : COLORS.mp);
       if (skill.cd > 0 && !skill.gauge) {
         ctx.fillStyle = "#ffffff";
         ctx.font = "700 13px 'Segoe UI', sans-serif";
-        ctx.fillText(skill.cd.toFixed(1), sx + itemW / 2, y + 82);
+        ctx.fillText(skill.cd.toFixed(1), sx + itemW / 2, cdY);
       }
     }
+  }
+
+  function drawSkillInputBadge(label, x, y, maxW) {
+    if (!label) {
+      return;
+    }
+    ctx.save();
+    let fontSize = 10;
+    do {
+      ctx.font = `800 ${fontSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      if (ctx.measureText(label).width <= Math.max(22, maxW - 16) || fontSize <= 8) {
+        break;
+      }
+      fontSize -= 1;
+    } while (fontSize > 8);
+    const textW = ctx.measureText(label).width;
+    const badgeW = Math.min(maxW, Math.max(24, textW + 14));
+    const badgeH = 17;
+    ctx.fillStyle = "rgba(9,14,13,0.78)";
+    ctx.strokeStyle = "rgba(255,255,255,0.42)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, badgeW, badgeH, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + badgeW / 2, y + badgeH / 2 + 0.5);
+    ctx.restore();
   }
 
   function drawResultOverlay() {
@@ -3443,11 +4288,6 @@
     town.player.y = clamp(town.player.y, town.player.radius, TOWN_HEIGHT - town.player.radius);
   }
 
-  function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
-    const nearestX = clamp(cx, rx, rx + rw);
-    const nearestY = clamp(cy, ry, ry + rh);
-    return distPoint(cx, cy, nearestX, nearestY) <= r;
-  }
   function separateUnits(dt) {
     const all = [...party, ...enemies].filter((unit) => !unit.dead && isFieldUnit(unit) && unit.collidable !== false);
     for (let i = 0; i < all.length; i += 1) {
@@ -3471,20 +4311,6 @@
         }
       }
     }
-  }
-
-  function getMoveVector() {
-    let x = 0;
-    let y = 0;
-    if (input.keys.w || input.keys.arrowup) y -= 1;
-    if (input.keys.s || input.keys.arrowdown) y += 1;
-    if (input.keys.a || input.keys.arrowleft) x -= 1;
-    if (input.keys.d || input.keys.arrowright) x += 1;
-    return normalize(x, y);
-  }
-
-  function hasMoveInput() {
-    return Boolean(input.keys.w || input.keys.a || input.keys.s || input.keys.d || input.keys.arrowup || input.keys.arrowdown || input.keys.arrowleft || input.keys.arrowright);
   }
 
   function nearestAlive(from, list) {
@@ -3512,23 +4338,28 @@
   }
 
   function getBattleBounds() {
-    let top = clamp(view.h * 0.16, 88, 132);
-    let bottomBand = clamp(view.h * 0.18, 108, 160);
+    let top = clamp(view.h * 0.22, 136, 176);
+    let bottomBand = clamp(view.h * 0.22, 136, 184);
     const shortage = BATTLE_MIN_PLAY_HEIGHT - (view.h - top - bottomBand);
     if (shortage > 0) {
       top = Math.max(64, top - shortage * 0.45);
       bottomBand = Math.max(76, bottomBand - shortage * 0.55);
     }
     const bottom = view.h - bottomBand;
+    const side = getBattleSideMargin();
     return {
-      left: BATTLE_SIDE_MARGIN,
-      right: view.w - BATTLE_SIDE_MARGIN,
+      left: side,
+      right: view.w - side,
       top,
       bottom,
-      width: Math.max(0, view.w - BATTLE_SIDE_MARGIN * 2),
+      width: Math.max(0, view.w - side * 2),
       height: Math.max(0, bottom - top),
       centerY: (top + bottom) / 2,
     };
+  }
+
+  function getBattleSideMargin() {
+    return Math.round((view.w * (1 - BATTLE_SPATIAL_SCALE)) / 2 + BATTLE_SIDE_MARGIN);
   }
 
   function clampBattlePoint(x, y, margin = 0) {
@@ -3606,5 +4437,9 @@
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function battlePx(value) {
+    return Math.max(1, Math.round(value * BATTLE_SPATIAL_SCALE));
   }
 })();

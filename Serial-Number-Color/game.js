@@ -12,8 +12,10 @@ const CLEAR_STEP_DELAY = 400;
 const CLEAR_ANIMATION_DURATION = 260;
 const BLAST_EFFECT_DURATION = 620;
 const BLAST_WAVE_DELAY = 55;
+const TUTORIAL_SCORE_DISPLAY_DELAY = 2100;
 
 const DIFFICULTIES = {
+  tutorial: { key: "tutorial", label: "Tutorial", colorCount: 2, boardSize: 10, isTutorial: true },
   baby: { key: "baby", label: "Baby", colorCount: 2, boardSize: 10 },
   easy: { key: "easy", label: "Easy", colorCount: 3, boardSize: 12 },
   normal: { key: "normal", label: "Normal", colorCount: 4, boardSize: 13 },
@@ -66,6 +68,11 @@ const SHAPES = [
 
 const boardElement = document.querySelector("#board");
 const rackElement = document.querySelector("#piece-rack");
+const tutorialBoardTip = document.querySelector("#tutorial-board-tip");
+const tutorialRackTip = document.querySelector("#tutorial-rack-tip");
+const tutorialFailOverlay = document.querySelector("#tutorial-fail-overlay");
+const tutorialCompleteModal = document.querySelector("#tutorial-complete-modal");
+const tutorialMenuButton = document.querySelector("#tutorial-menu-button");
 const scoreElement = document.querySelector("#score");
 const bestScoreElement = document.querySelector("#best-score");
 const timerElement = document.querySelector("#timer");
@@ -92,6 +99,7 @@ const startModal = document.querySelector("#start-modal");
 const startRulesButton = document.querySelector("#start-rules-button");
 const startDifficultyButtons = document.querySelectorAll("[data-start-difficulty]");
 const playModeButtons = document.querySelectorAll("[data-play-mode]");
+const startButton = document.querySelector("#start-button");
 const itemModeButtons = document.querySelectorAll("[data-item-mode]");
 const itemEffectButtons = document.querySelectorAll("[data-item-effect]");
 const itemPicker = document.querySelector("#start-item-picker");
@@ -131,6 +139,7 @@ let clearingIds = new Set();
 let lastWheelRotateAt = 0;
 let audioContext = null;
 let resolveRunId = 0;
+let tutorialState = createTutorialState();
 
 init();
 
@@ -141,7 +150,6 @@ function init() {
   restartGame();
   bindEvents();
   openStartModal();
-  openRules();
 }
 
 function bindEvents() {
@@ -185,6 +193,7 @@ function bindEvents() {
   document.addEventListener("keydown", handleKeydown);
   restartButton.addEventListener("click", prepareStart);
   playAgainButton.addEventListener("click", prepareStart);
+  tutorialMenuButton.addEventListener("click", returnToMenuFromTutorial);
   rulesButton.addEventListener("click", toggleRules);
   startRulesButton.addEventListener("click", openRules);
   rulesCloseButton.addEventListener("click", closeRules);
@@ -209,8 +218,9 @@ function bindEvents() {
     button.addEventListener("click", () => setDifficulty(button.dataset.startDifficulty));
   });
   playModeButtons.forEach((button) => {
-    button.addEventListener("click", () => startGame(button.dataset.playMode));
+    button.addEventListener("click", () => setPlayMode(button.dataset.playMode));
   });
+  startButton.addEventListener("click", () => startGame());
   itemModeButtons.forEach((button) => {
     button.addEventListener("click", () => setItemEffectsEnabled(button.dataset.itemMode === "on"));
   });
@@ -241,7 +251,8 @@ function restartGame() {
   buildBoardElements();
   board = Array.from({ length: boardSize }, () => Array(boardSize).fill(null));
   placedParts = new Map();
-  rack = [createRandomPart(), createRandomPart()];
+  tutorialState = createTutorialState();
+  rack = createStartingRack();
   activeSlot = 0;
   cursor = createDefaultCursor();
   clampCursorForActivePart();
@@ -257,6 +268,7 @@ function restartGame() {
   clearBombEffects();
   gameOverTitle.textContent = "Game Over";
   gameOverElement.hidden = true;
+  tutorialCompleteModal.hidden = true;
   setStatus("スロットAを選択中");
   if (isGameStarted) {
     startTimerForCurrentMode();
@@ -266,16 +278,32 @@ function restartGame() {
   render();
 }
 
+function returnToMenuFromTutorial() {
+  tutorialCompleteModal.hidden = true;
+  prepareStart();
+}
+
+function showTutorialCompleteModal() {
+  tutorialState.phase = "complete";
+  clearScorePopups();
+  render();
+  tutorialCompleteModal.hidden = false;
+  tutorialMenuButton.focus();
+}
+
 function prepareStart() {
   isGameStarted = false;
   stopTimer();
   gameOverElement.hidden = true;
+  tutorialCompleteModal.hidden = true;
   restartGame();
   openStartModal();
 }
 
-function startGame(modeKey) {
-  const nextMode = PLAY_MODES[modeKey];
+function startGame(modeKey = currentPlayMode.key) {
+  applyDifficultyLocks();
+  const effectiveModeKey = isTutorialDifficulty() ? "endless" : modeKey;
+  const nextMode = PLAY_MODES[effectiveModeKey];
   if (!nextMode) {
     return;
   }
@@ -291,6 +319,9 @@ function startGame(modeKey) {
 }
 
 function openStartModal() {
+  applyDifficultyLocks();
+  syncDifficultyUI();
+  syncPlayModeUI();
   syncItemSettingsUI();
   startModal.hidden = false;
 }
@@ -366,6 +397,662 @@ function updateTimerDisplay(seconds) {
   const rest = seconds % 60;
   timerElement.textContent = `${minutes}:${String(rest).padStart(2, "0")}`;
   timerElement.parentElement.classList.toggle("timer-ending", seconds <= 30);
+}
+
+function createTutorialState() {
+  return {
+    phase: isTutorialDifficulty() ? "place-first" : "inactive",
+    colorKey: null,
+    anchorPartId: null,
+  };
+}
+
+function getTutorialMessages() {
+  if (!isTutorialDifficulty() || !isGameStarted || isGameOver) {
+    return null;
+  }
+
+  if (tutorialState.phase === "place-first") {
+    return {
+      board: "自由にパーツを設置しよう！",
+      rack: "好きなブロックを選ぼう！",
+    };
+  }
+
+  if (tutorialState.phase === "place-second") {
+    return {
+      board: "順番に数字が並ぶように置こう！",
+      rack: "同じ色のパーツを選ぼう！",
+    };
+  }
+
+  if (tutorialState.phase === "place-third" || tutorialState.phase === "resolving-third") {
+    return {
+      board: "３つ以上の数字が並ぶように設置しよう！",
+      rack: "同じ色のパーツを選ぼう！",
+    };
+  }
+
+  if (tutorialState.phase === "wild" || tutorialState.phase === "resolving-wild") {
+    return {
+      board: "？がついたパーツはどの数字にもなれます！",
+      rack: "アイテム効果が付いたパーツを選ぼう！",
+    };
+  }
+
+  if (tutorialState.phase === "rainbow" || tutorialState.phase === "resolving-rainbow") {
+    return {
+      board: "本来は違う色同士は消すことができません！",
+      rack: "アイテム効果が付いたパーツを選ぼう！",
+    };
+  }
+
+  if (tutorialState.phase === "multiplier" || tutorialState.phase === "resolving-multiplier") {
+    return {
+      board: "パーツの数を増やしたり、倍率パーツを使用することで獲得できるスコアが増えます！",
+      rack: "倍率パーツを使うことでより多くのスコアを獲得できます！",
+    };
+  }
+
+  if (tutorialState.phase === "bomb" || tutorialState.phase === "resolving-bomb") {
+    return {
+      board: "爆弾パーツを消すと色や数字に関係なく周りのパーツも巻き込むことができます！",
+      rack: "フィールド上のパーツをすべて消せるパーツを選ぼう！",
+    };
+  }
+
+  if (tutorialState.phase === "rotate" || tutorialState.phase === "resolving-rotate") {
+    return {
+      board: "回転パーツは回してから設置できます！工夫して数字を繋げましょう！",
+      rack: "効果がついたパーツを選ぼう！",
+    };
+  }
+
+  return null;
+}
+
+function handleTutorialPlacement(placed, slotIndex) {
+  if (!isTutorialDifficulty()) {
+    return false;
+  }
+
+  if (tutorialState.phase === "place-first") {
+    tutorialState = {
+      phase: "place-second",
+      colorKey: placed.color.key,
+      anchorPartId: placed.id,
+    };
+    rack[slotIndex] = createTutorialPart(placed.color.key, 2);
+    activeSlot = slotIndex;
+    clampCursorForActivePart();
+    finishTurn("同じ色の2を選んで、1の隣に置こう");
+    return true;
+  }
+
+  if (tutorialState.phase === "place-second") {
+    if (!isValidTutorialSecondPlacement(placed)) {
+      failTutorialSecondPlacement(placed, slotIndex);
+      return true;
+    }
+
+    tutorialState.phase = "place-third";
+    rack[slotIndex] = createTutorialPart(tutorialState.colorKey, 3);
+    activeSlot = slotIndex;
+    clampCursorForActivePart();
+    finishTurn("3を置いて、1-2-3をつなげよう");
+    return true;
+  }
+
+  if (tutorialState.phase === "place-third") {
+    if (!isValidTutorialComboPlacement(placed)) {
+      failTutorialThirdPlacement(placed, slotIndex);
+      return true;
+    }
+
+    tutorialState.phase = "resolving-third";
+    return false;
+  }
+
+  if (tutorialState.phase === "wild") {
+    if (!isValidTutorialWildPlacement(placed)) {
+      failTutorialWildPlacement(placed);
+      return true;
+    }
+
+    tutorialState.phase = "resolving-wild";
+    return false;
+  }
+
+  if (tutorialState.phase === "rainbow") {
+    if (!isValidTutorialRainbowPlacement(placed)) {
+      failTutorialRainbowPlacement(placed);
+      return true;
+    }
+
+    tutorialState.phase = "resolving-rainbow";
+    return false;
+  }
+
+  if (tutorialState.phase === "multiplier") {
+    if (!isValidTutorialMultiplierPlacement(placed)) {
+      failTutorialMultiplierPlacement(placed);
+      return true;
+    }
+
+    tutorialState.phase = "resolving-multiplier";
+    return false;
+  }
+
+  if (tutorialState.phase === "bomb") {
+    if (!isValidTutorialBombPlacement(placed)) {
+      failTutorialBombPlacement(placed);
+      return true;
+    }
+
+    tutorialState.phase = "resolving-bomb";
+    return false;
+  }
+
+  if (tutorialState.phase === "rotate") {
+    if (!isValidTutorialRotatePlacement(placed)) {
+      failTutorialRotatePlacement(placed);
+      return true;
+    }
+
+    tutorialState.phase = "resolving-rotate";
+    return false;
+  }
+
+  return false;
+}
+function isValidTutorialSecondPlacement(placed) {
+  const anchor = placedParts.get(tutorialState.anchorPartId);
+  return Boolean(
+    anchor &&
+    placed.color.key === tutorialState.colorKey &&
+    placed.number === 2 &&
+    partsTouch(placed, anchor)
+  );
+}
+
+function isValidTutorialComboPlacement(placed) {
+  return Boolean(
+    placed.color.key === tutorialState.colorKey &&
+    placed.number === 3 &&
+    findMatches().some((match) => match.ids.includes(placed.id))
+  );
+}
+
+function isValidTutorialWildPlacement(placed) {
+  return Boolean(
+    placed.isWild &&
+    placed.color.key === "red" &&
+    findMatches().some((match) => match.ids.includes(placed.id))
+  );
+}
+
+function isValidTutorialRainbowPlacement(placed) {
+  return Boolean(
+    placed.color.isRainbow &&
+    placed.number === 5 &&
+    findMatches().some((match) => match.ids.includes(placed.id))
+  );
+}
+
+function isValidTutorialMultiplierPlacement(placed) {
+  return Boolean(
+    placed.color.key === "blue" &&
+    placed.number === 4 &&
+    placed.multiplier > 1 &&
+    findMatches().some((match) => match.ids.includes(placed.id))
+  );
+}
+
+function isValidTutorialBombPlacement(placed) {
+  return Boolean(
+    placed.hasBomb &&
+    placed.color.key === "red" &&
+    placed.number === 4 &&
+    tutorialPlacementClearsAllParts(placed)
+  );
+}
+
+function isValidTutorialRotatePlacement(placed) {
+  return Boolean(
+    placed.canRotate &&
+    placed.color.key === "blue" &&
+    placed.number === 8 &&
+    findMatches().some((match) => match.ids.includes(placed.id))
+  );
+}
+
+function tutorialPlacementClearsAllParts(placed) {
+  const matches = findMatches().filter((match) => match.ids.includes(placed.id));
+  if (matches.length === 0) {
+    return false;
+  }
+
+  const clearedIds = new Set(buildClearGroups(matches).flatMap((group) => group.ids));
+  return [...placedParts.keys()].every((id) => clearedIds.has(id));
+}
+
+function failTutorialThirdPlacement(placed, slotIndex) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  rack[slotIndex] = createTutorialPart(tutorialState.colorKey, 3);
+  activeSlot = slotIndex;
+  clampCursorForActivePart();
+  setStatus("3を、1-2とつながる場所に置こう");
+  render();
+}
+
+function failTutorialWildPlacement(placed) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  setupTutorialWildStep({ keepBoard: true });
+  setStatus("？を赤の6と8の間に置こう");
+}
+
+function failTutorialRainbowPlacement(placed) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  setupTutorialRainbowStep({ keepBoard: true });
+  setStatus("虹色の5を、赤の4と青の6の間に置こう");
+}
+
+function failTutorialMultiplierPlacement(placed) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  setupTutorialMultiplierStep({ keepBoard: true });
+  setStatus("倍率付きの青の4を、青の3と青の4の間に置こう");
+}
+
+function failTutorialBombPlacement(placed) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  setupTutorialBombStep({ keepBoard: true });
+  setStatus("赤の4爆弾で、すべてのパーツを巻き込もう");
+}
+
+function failTutorialRotatePlacement(placed) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  setupTutorialRotateStep({ keepBoard: true });
+  setStatus("回転付きの青の8を回して、7と9につなげよう");
+}
+
+function handleTutorialClearComplete(resolveRunIdAtClear) {
+  if (!isTutorialDifficulty()) {
+    return;
+  }
+
+  if (tutorialState.phase === "resolving-third") {
+    window.setTimeout(() => {
+      if (resolveRunId !== resolveRunIdAtClear || !isGameStarted || isGameOver || tutorialState.phase !== "resolving-third") {
+        return;
+      }
+      transitionTutorialScene(() => setupTutorialWildStep());
+    }, TUTORIAL_SCORE_DISPLAY_DELAY);
+    return;
+  }
+
+  if (tutorialState.phase === "resolving-wild") {
+    window.setTimeout(() => {
+      if (resolveRunId !== resolveRunIdAtClear || !isGameStarted || isGameOver || tutorialState.phase !== "resolving-wild") {
+        return;
+      }
+      transitionTutorialScene(() => setupTutorialRainbowStep());
+    }, TUTORIAL_SCORE_DISPLAY_DELAY);
+    return;
+  }
+
+  if (tutorialState.phase === "resolving-rainbow") {
+    window.setTimeout(() => {
+      if (resolveRunId !== resolveRunIdAtClear || !isGameStarted || isGameOver || tutorialState.phase !== "resolving-rainbow") {
+        return;
+      }
+      transitionTutorialScene(() => setupTutorialMultiplierStep());
+    }, TUTORIAL_SCORE_DISPLAY_DELAY);
+    return;
+  }
+
+  if (tutorialState.phase === "resolving-multiplier") {
+    window.setTimeout(() => {
+      if (resolveRunId !== resolveRunIdAtClear || !isGameStarted || isGameOver || tutorialState.phase !== "resolving-multiplier") {
+        return;
+      }
+      transitionTutorialScene(() => setupTutorialBombStep());
+    }, TUTORIAL_SCORE_DISPLAY_DELAY);
+    return;
+  }
+
+  if (tutorialState.phase === "resolving-bomb") {
+    window.setTimeout(() => {
+      if (resolveRunId !== resolveRunIdAtClear || !isGameStarted || isGameOver || tutorialState.phase !== "resolving-bomb") {
+        return;
+      }
+      transitionTutorialScene(() => setupTutorialRotateStep());
+    }, TUTORIAL_SCORE_DISPLAY_DELAY);
+    return;
+  }
+
+  if (tutorialState.phase === "resolving-rotate") {
+    window.setTimeout(() => {
+      if (resolveRunId !== resolveRunIdAtClear || !isGameStarted || isGameOver || tutorialState.phase !== "resolving-rotate") {
+        return;
+      }
+      showTutorialCompleteModal();
+    }, TUTORIAL_SCORE_DISPLAY_DELAY);
+  }
+}
+
+function transitionTutorialScene(callback) {
+  tutorialFailOverlay.hidden = false;
+  tutorialFailOverlay.classList.remove("show");
+  window.requestAnimationFrame(() => {
+    tutorialFailOverlay.classList.add("show");
+  });
+
+  window.setTimeout(() => {
+    callback();
+    window.setTimeout(() => {
+      tutorialFailOverlay.classList.remove("show");
+      window.setTimeout(() => {
+        tutorialFailOverlay.hidden = true;
+      }, 220);
+    }, 220);
+  }, 260);
+}
+
+function setupTutorialWildStep(options = {}) {
+  tutorialState = {
+    phase: "wild",
+    colorKey: "red",
+    anchorPartId: null,
+  };
+
+  if (!options.keepBoard) {
+    clearTutorialBoard();
+    const y = Math.floor(boardSize / 2);
+    const centerX = Math.floor(boardSize / 2);
+    addTutorialBoardPart(createTutorialPart("red", 6, { shapeName: "Dot" }), centerX - 1, y);
+    addTutorialBoardPart(createTutorialPart("red", 8, { shapeName: "Dot" }), centerX + 1, y);
+  }
+
+  rack = createTutorialWildRack();
+  activeSlot = 0;
+  cursor = clampCursorForPart(rack[activeSlot], {
+    x: Math.floor(boardSize / 2),
+    y: Math.floor(boardSize / 2),
+  });
+  clearScorePopups();
+  setStatus("ワイルド数字を使ってみよう");
+  render();
+}
+
+function setupTutorialRainbowStep(options = {}) {
+  tutorialState = {
+    phase: "rainbow",
+    colorKey: "rainbow",
+    anchorPartId: null,
+  };
+
+  if (!options.keepBoard) {
+    clearTutorialBoard();
+    const y = Math.floor(boardSize / 2);
+    const centerX = Math.floor(boardSize / 2);
+    addTutorialBoardPart(createTutorialPart("red", 4, { shapeName: "Dot" }), centerX - 1, y);
+    addTutorialBoardPart(createTutorialPart("blue", 6, { shapeName: "Dot" }), centerX + 1, y);
+  }
+
+  rack = createTutorialRainbowRack();
+  activeSlot = 0;
+  cursor = clampCursorForPart(rack[activeSlot], {
+    x: Math.floor(boardSize / 2),
+    y: Math.floor(boardSize / 2),
+  });
+  clearScorePopups();
+  setStatus("虹色パーツを使ってみよう");
+  render();
+}
+
+function setupTutorialMultiplierStep(options = {}) {
+  tutorialState = {
+    phase: "multiplier",
+    colorKey: "blue",
+    anchorPartId: null,
+  };
+
+  if (!options.keepBoard) {
+    clearTutorialBoard();
+    const y = Math.floor(boardSize / 2);
+    const centerX = Math.floor(boardSize / 2);
+    addTutorialBoardPart(createTutorialPart("blue", 2, { shapeName: "Dot" }), centerX - 2, y);
+    addTutorialBoardPart(createTutorialPart("blue", 3, { shapeName: "Dot" }), centerX - 1, y);
+    addTutorialBoardPart(createTutorialPart("blue", 4, { shapeName: "Dot" }), centerX + 1, y);
+  }
+
+  rack = createTutorialMultiplierRack();
+  activeSlot = 0;
+  cursor = clampCursorForPart(rack[activeSlot], {
+    x: Math.floor(boardSize / 2),
+    y: Math.floor(boardSize / 2),
+  });
+  clearScorePopups();
+  setStatus("倍率パーツを使ってみよう");
+  render();
+}
+
+function createTutorialWildRack() {
+  return [
+    createTutorialPart("red", null, { shapeName: "Dot", isWild: true }),
+    createTutorialPart("blue", 7, { shapeName: "Dot" }),
+  ];
+}
+
+function createTutorialRainbowRack() {
+  return [
+    createTutorialPart("blue", 5, { shapeName: "Dot" }),
+    createTutorialPart("rainbow", 5, { shapeName: "Dot", isRainbow: true }),
+  ];
+}
+
+function createTutorialMultiplierRack() {
+  return [
+    createTutorialPart("blue", 4, { shapeName: "Dot" }),
+    createTutorialPart("blue", 4, { shapeName: "Dot", multiplier: 2 }),
+  ];
+}
+
+function setupTutorialBombStep(options = {}) {
+  tutorialState = {
+    phase: "bomb",
+    colorKey: "red",
+    anchorPartId: null,
+  };
+
+  if (!options.keepBoard) {
+    clearTutorialBoard();
+    const y = Math.floor(boardSize / 2);
+    const centerX = Math.floor(boardSize / 2);
+    addTutorialBoardPart(createTutorialPart("red", 3, { shapeName: "Dot" }), centerX - 1, y);
+    addTutorialBoardPart(createTutorialPart("red", 5, { shapeName: "Dot" }), centerX + 1, y);
+    addTutorialBoardPart(createTutorialPart("red", 9, { shapeName: "Dot" }), centerX, y - 1);
+    addTutorialBoardPart(createTutorialPart("blue", 6, { shapeName: "Dot" }), centerX, y + 1);
+  }
+
+  rack = createTutorialBombRack();
+  activeSlot = 0;
+  cursor = clampCursorForPart(rack[activeSlot], {
+    x: Math.floor(boardSize / 2),
+    y: Math.floor(boardSize / 2),
+  });
+  clearScorePopups();
+  setStatus("爆弾パーツを使ってみよう");
+  render();
+}
+
+function setupTutorialRotateStep(options = {}) {
+  tutorialState = {
+    phase: "rotate",
+    colorKey: "blue",
+    anchorPartId: null,
+  };
+
+  if (!options.keepBoard) {
+    clearTutorialBoard();
+    const y = Math.floor(boardSize / 2);
+    const centerX = Math.floor(boardSize / 2);
+    addTutorialBoardPart(createTutorialPart("blue", 7, { shapeName: "Dot" }), centerX - 2, y);
+    addTutorialBoardPart(createTutorialPart("blue", 9, { shapeName: "Dot" }), centerX + 2, y);
+  }
+
+  rack = createTutorialRotateRack();
+  activeSlot = 0;
+  cursor = clampCursorForPart(rack[activeSlot], {
+    x: Math.floor(boardSize / 2) - 1,
+    y: Math.floor(boardSize / 2),
+  });
+  clearScorePopups();
+  setStatus("回転パーツを使ってみよう");
+  render();
+}
+
+function createTutorialBombRack() {
+  return [
+    createTutorialPart("red", 4, { shapeName: "Dot", hasBomb: true }),
+    createTutorialPart("blue", 7, { shapeName: "Dot", hasBomb: true }),
+  ];
+}
+
+function createTutorialRotateRack() {
+  return [
+    createTutorialPart("blue", 8, { shapeName: "Three", rotation: 1, canRotate: true }),
+    createTutorialPart("blue", 8, { shapeName: "Three", rotation: 1 }),
+  ];
+}
+
+function clearTutorialBoard() {
+  for (let y = 0; y < boardSize; y += 1) {
+    for (let x = 0; x < boardSize; x += 1) {
+      board[y][x] = null;
+    }
+  }
+  placedParts.clear();
+  clearingIds = new Set();
+  clearBombEffects();
+}
+
+function addTutorialBoardPart(part, x, y) {
+  const placed = {
+    id: nextPartId,
+    shapeName: part.shapeName,
+    baseCells: part.baseCells.map((cell) => ({ ...cell })),
+    color: { ...part.color },
+    number: part.number,
+    rotation: part.rotation,
+    effect: part.effect,
+    isWild: part.isWild,
+    hasBomb: part.hasBomb,
+    canRotate: part.canRotate,
+    multiplier: part.multiplier,
+    cells: getAbsoluteCells(part, x, y, part.rotation),
+  };
+  nextPartId += 1;
+  placed.cellKeys = new Set(placed.cells.map(cellKey));
+  placedParts.set(placed.id, placed);
+  for (const cell of placed.cells) {
+    board[cell.y][cell.x] = placed.id;
+  }
+  return placed;
+}
+function failTutorialSecondPlacement(placed, slotIndex) {
+  flashTutorialFailure();
+  removePlacedPart(placed);
+  rack[slotIndex] = createTutorialPart(tutorialState.colorKey, 2);
+  activeSlot = slotIndex;
+  clampCursorForActivePart();
+  setStatus("同じ色の2を、1とつながる場所に置こう");
+  render();
+}
+
+function removePlacedPart(part) {
+  for (const cell of part.cells) {
+    if (board[cell.y][cell.x] === part.id) {
+      board[cell.y][cell.x] = null;
+    }
+  }
+  placedParts.delete(part.id);
+}
+
+function partsTouch(a, b) {
+  for (const aCell of a.cells) {
+    for (const bCell of b.cells) {
+      if (Math.abs(aCell.x - bCell.x) + Math.abs(aCell.y - bCell.y) === 1) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function flashTutorialFailure() {
+  tutorialFailOverlay.hidden = false;
+  tutorialFailOverlay.classList.remove("show");
+  window.requestAnimationFrame(() => {
+    tutorialFailOverlay.classList.add("show");
+  });
+  window.setTimeout(() => {
+    tutorialFailOverlay.classList.remove("show");
+    window.setTimeout(() => {
+      tutorialFailOverlay.hidden = true;
+    }, 180);
+  }, 220);
+}
+function createStartingRack() {
+  return isTutorialDifficulty()
+    ? createTutorialStartingRack()
+    : [createRandomPart(), createRandomPart()];
+}
+
+function createTutorialStartingRack() {
+  return [createTutorialPart("red", 1), createTutorialPart("blue", 1)];
+}
+
+function createTutorialPart(colorKey, number, options = {}) {
+  const color = colorKey === "rainbow"
+    ? RAINBOW_COLOR
+    : COLOR_POOL.find((entry) => entry.key === colorKey) || COLOR_POOL[0];
+  const shape = options.shapeName
+    ? SHAPES.find((entry) => entry.name === options.shapeName) || SHAPES[0]
+    : weightedPick(SHAPES);
+  const isWild = Boolean(options.isWild);
+  const hasBomb = Boolean(options.hasBomb);
+  const canRotate = Boolean(options.canRotate);
+  const multiplier = options.multiplier || 1;
+  const effect = isWild
+    ? "wild"
+    : color.isRainbow
+      ? "rainbow"
+      : hasBomb
+        ? "bomb"
+        : canRotate
+          ? "rotate"
+          : multiplier > 1
+            ? "multiplier"
+            : "none";
+  return {
+    shapeName: shape.name,
+    baseCells: shape.cells.map(([x, y]) => ({ x, y })),
+    color: { ...color },
+    number: isWild ? null : number,
+    rotation: options.rotation ?? (options.shapeName ? 0 : randomInt(0, 3)),
+    effect,
+    isWild,
+    hasBomb,
+    canRotate,
+    multiplier,
+  };
 }
 
 function createRandomPart() {
@@ -557,10 +1244,17 @@ function handleKeydown(event) {
     return;
   }
 
+  if (!tutorialCompleteModal.hidden) {
+    if (key === "enter") {
+      event.preventDefault();
+      returnToMenuFromTutorial();
+    }
+    return;
+  }
   if (!startModal.hidden) {
     if (key === "enter") {
       event.preventDefault();
-      startGame(DEFAULT_PLAY_MODE);
+      startGame();
     }
     return;
   }
@@ -683,13 +1377,20 @@ function setDifficulty(key) {
   }
 
   closeDifficultyPopover();
+  const wasTutorial = isTutorialDifficulty();
   if (nextDifficulty.key === currentDifficulty.key) {
     return;
   }
 
   currentDifficulty = nextDifficulty;
   boardSize = nextDifficulty.boardSize;
+  if (wasTutorial && !isTutorialDifficulty()) {
+    currentPlayMode = PLAY_MODES[DEFAULT_PLAY_MODE];
+  }
+  applyDifficultyLocks();
   syncDifficultyUI();
+  syncPlayModeUI();
+  syncItemSettingsUI();
   restartGame();
   renderBestScoreList();
 }
@@ -707,8 +1408,55 @@ function syncDifficultyUI() {
   });
 }
 
+function isTutorialDifficulty() {
+  return currentDifficulty.key === "tutorial";
+}
+
+function applyDifficultyLocks() {
+  if (!isTutorialDifficulty()) {
+    return;
+  }
+
+  currentPlayMode = PLAY_MODES.endless;
+  itemEffectsEnabled = false;
+}
+
+function syncPlayModeUI() {
+  const tutorial = isTutorialDifficulty();
+  playModeButtons.forEach((button) => {
+    const mode = PLAY_MODES[button.dataset.playMode];
+    if (!mode) {
+      return;
+    }
+
+    const isActive = tutorial ? mode.key === "endless" : mode.key === currentPlayMode.key;
+    button.classList.toggle("active", isActive);
+    button.disabled = tutorial && mode.key !== "endless";
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function setPlayMode(modeKey) {
+  if (isTutorialDifficulty()) {
+    applyDifficultyLocks();
+    syncPlayModeUI();
+    return;
+  }
+
+  const nextMode = PLAY_MODES[modeKey];
+  if (!nextMode || nextMode.key === currentPlayMode.key) {
+    syncPlayModeUI();
+    return;
+  }
+
+  currentPlayMode = nextMode;
+  syncPlayModeUI();
+  syncBestScoreForCurrentPattern();
+  renderBestScoreList();
+  render();
+}
 function setItemEffectsEnabled(enabled) {
-  itemEffectsEnabled = enabled;
+  itemEffectsEnabled = isTutorialDifficulty() ? false : enabled;
   syncItemSettingsUI();
   syncBestScoreForCurrentPattern();
   renderBestScoreList();
@@ -733,13 +1481,15 @@ function toggleItemEffect(key) {
 }
 
 function syncItemSettingsUI() {
+  const tutorial = isTutorialDifficulty();
   itemModeButtons.forEach((button) => {
     const isActive = button.dataset.itemMode === (itemEffectsEnabled ? "on" : "off");
     button.classList.toggle("active", isActive);
+    button.disabled = tutorial;
     button.setAttribute("aria-pressed", String(isActive));
   });
 
-  itemPicker.classList.toggle("disabled", !itemEffectsEnabled);
+  itemPicker.classList.toggle("disabled", !itemEffectsEnabled || tutorial);
   itemEffectButtons.forEach((button) => {
     const isSelected = selectedItemEffects.includes(button.dataset.itemEffect);
     button.classList.toggle("active", isSelected);
@@ -747,7 +1497,9 @@ function syncItemSettingsUI() {
     button.setAttribute("aria-pressed", String(isSelected));
   });
 
-  if (itemEffectsEnabled) {
+  if (tutorial) {
+    itemSettingNote.textContent = "チュートリアル: アイテムOFF固定";
+  } else if (itemEffectsEnabled) {
     const selectedLabels = selectedItemEffects.map((key) => ITEM_EFFECTS[key].label).join(" / ");
     itemSettingNote.textContent = `ON: ${selectedLabels}のみ有効`;
   } else {
@@ -774,7 +1526,7 @@ function writeBestScoreForCurrentPattern(value) {
 }
 
 function isBestScoreEnabled() {
-  return currentPlayMode.seconds !== null;
+  return currentPlayMode.seconds !== null && !isTutorialDifficulty();
 }
 
 function bestScoreKey(difficultyKey, itemsEnabled) {
@@ -783,7 +1535,7 @@ function bestScoreKey(difficultyKey, itemsEnabled) {
 
 function renderBestScoreList() {
   scoreListBody.replaceChildren();
-  Object.values(DIFFICULTIES).forEach((difficulty) => {
+  Object.values(DIFFICULTIES).filter((difficulty) => !difficulty.isTutorial).forEach((difficulty) => {
     const row = document.createElement("tr");
     const mode = document.createElement("th");
     mode.scope = "row";
@@ -983,6 +1735,11 @@ function placeActivePart() {
     board[cell.y][cell.x] = placed.id;
   }
 
+  const placedSlot = activeSlot;
+  if (handleTutorialPlacement(placed, placedSlot)) {
+    return;
+  }
+
   rack[activeSlot] = createRandomPart();
   clampCursorForActivePart();
   render();
@@ -1068,6 +1825,7 @@ function resolveMatches(matches, originPartId) {
       return;
     }
     finishTurn(`${clearGroups.length}連鎖消去`);
+    handleTutorialClearComplete(currentResolveRunId);
   }, Math.max(0, clearSteps.length - 1) * CLEAR_STEP_DELAY + CLEAR_ANIMATION_DURATION);
 }
 
@@ -1844,7 +2602,20 @@ function componentHasRun(componentIds) {
   return false;
 }
 
+function syncTutorialUI() {
+  const messages = getTutorialMessages();
+  const show = Boolean(messages);
+  tutorialBoardTip.hidden = !show;
+  tutorialRackTip.hidden = !show;
+  if (!show) {
+    return;
+  }
+
+  tutorialBoardTip.textContent = messages.board;
+  tutorialRackTip.textContent = messages.rack;
+}
 function render() {
+  syncTutorialUI();
   scoreElement.textContent = score.toLocaleString("ja-JP");
   bestScoreElement.textContent = isBestScoreEnabled() ? bestScore.toLocaleString("ja-JP") : "-";
   renderRack();
@@ -2047,3 +2818,24 @@ function writeBestScores() {
     // Best score persistence is optional; the game should keep running.
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

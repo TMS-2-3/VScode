@@ -260,11 +260,73 @@ h1 {
 }
 
 .board-wrap {
+  position: relative;
   width: 100%;
   display: grid;
   place-items: center;
 }
 
+.tutorial-bubble {
+  --bubble-x: 0;
+  --bubble-y: 0;
+  position: relative;
+  z-index: 5;
+  max-width: 260px;
+  padding: 11px 14px;
+  border: 2px solid rgba(45, 111, 203, 0.28);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #12385d;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+  box-shadow: 0 12px 28px rgba(31, 41, 55, 0.14);
+  pointer-events: none;
+  transform: translate(var(--bubble-x), var(--bubble-y)) scale(1);
+  transform-origin: center bottom;
+  animation: tutorial-bubble-pulse 1.35s ease-in-out infinite;
+}
+
+@keyframes tutorial-bubble-pulse {
+  0%, 100% {
+    transform: translate(var(--bubble-x), var(--bubble-y)) scale(1);
+  }
+  50% {
+    transform: translate(var(--bubble-x), var(--bubble-y)) scale(1.045);
+  }
+}
+.tutorial-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -9px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid rgba(45, 111, 203, 0.28);
+  border-bottom: 2px solid rgba(45, 111, 203, 0.28);
+  background: #ffffff;
+  transform: rotate(45deg);
+}
+
+.tutorial-bubble-board {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  --bubble-x: -50%;
+  --bubble-y: -100%;
+  text-align: center;
+}
+
+.tutorial-bubble-board::after {
+  left: calc(50% - 7px);
+}
+
+.tutorial-bubble-rack {
+  margin: 0 0 12px;
+}
+
+.tutorial-bubble-rack::after {
+  left: 24px;
+}
 .board {
   --board-size: 10;
   position: relative;
@@ -842,6 +904,20 @@ h1 {
   line-height: 1.35;
 }
 
+
+.tutorial-fail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(8, 13, 24, 0.58);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+
+.tutorial-fail-overlay.show {
+  opacity: 1;
+}
 .rules-overlay {
   position: fixed;
   inset: 0;
@@ -1205,7 +1281,8 @@ h1 {
 }
 
 .start-modal,
-.game-over {
+.game-over,
+.tutorial-complete-modal {
   position: fixed;
   inset: 0;
   display: grid;
@@ -1224,13 +1301,19 @@ h1 {
   z-index: 40;
 }
 
+.tutorial-complete-modal {
+  z-index: 55;
+}
+
 .start-modal[hidden],
-.game-over[hidden] {
+.game-over[hidden],
+.tutorial-complete-modal[hidden] {
   display: none;
 }
 
 .start-dialog,
-.dialog {
+.dialog,
+.tutorial-complete-dialog {
   width: min(360px, 100%);
   padding: 24px;
   border-radius: 8px;
@@ -1245,14 +1328,20 @@ h1 {
   overflow-y: auto;
 }
 
+.tutorial-complete-dialog {
+  width: min(420px, 100%);
+}
+
 .start-dialog p,
-.dialog p {
+.dialog p,
+.tutorial-complete-dialog p {
   margin: 0 0 10px;
   color: var(--muted);
   font-weight: 800;
 }
 
-.start-dialog h2 {
+.start-dialog h2,
+.tutorial-complete-dialog h2 {
   margin: 0 0 12px;
   font-size: 30px;
   line-height: 1.1;
@@ -1330,7 +1419,7 @@ h1 {
 }
 
 .start-difficulty-options {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .play-mode-options {
@@ -1370,6 +1459,7 @@ h1 {
 .start-difficulty-options button:hover,
 .start-difficulty-options button.active,
 .play-mode-options button:hover,
+.play-mode-options button.active,
 .item-picker button:hover,
 .item-picker button.active {
   border-color: var(--accent);
@@ -1377,6 +1467,7 @@ h1 {
 }
 
 .start-difficulty-options button.active,
+.play-mode-options button.active,
 .item-picker button.active {
   box-shadow: 0 0 0 3px rgba(45, 111, 203, 0.16), 0 12px 26px rgba(45, 111, 203, 0.14);
 }
@@ -1413,8 +1504,11 @@ h1 {
   opacity: 0.58;
 }
 
-.item-picker button:disabled {
+.item-picker button:disabled,
+.play-mode-options button:disabled,
+.item-mode-options button:disabled {
   cursor: not-allowed;
+  opacity: 0.54;
 }
 
 .item-setting-note {
@@ -1424,6 +1518,41 @@ h1 {
   font-weight: 800;
 }
 
+
+.start-button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2d6fcb, #1e58ad);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 900;
+  box-shadow: 0 14px 28px rgba(45, 111, 203, 0.26);
+}
+
+.start-button:hover {
+  background: linear-gradient(180deg, #367ee1, #2567c5);
+}
+
+.tutorial-complete-dialog button {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2d6fcb, #1e58ad);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 900;
+  box-shadow: 0 14px 28px rgba(45, 111, 203, 0.24);
+}
+
+.tutorial-complete-dialog button:hover {
+  background: linear-gradient(180deg, #367ee1, #2567c5);
+}
 .dialog strong {
   display: block;
   margin-bottom: 18px;
@@ -1525,6 +1654,14 @@ h1 {
     writing-mode: horizontal-tb;
   }
 
+  .tutorial-bubble-board {
+    --bubble-x: 0;
+    --bubble-y: 0;
+    position: relative;
+    top: auto;
+    left: auto;
+    margin: 0 auto 12px;
+  }
   .board {
     width: min(100%, 88vh);
   }
@@ -1632,3 +1769,14 @@ h1 {
     --rule-cell: 21px;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
