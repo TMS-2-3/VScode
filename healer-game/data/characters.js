@@ -43,7 +43,7 @@
         magic: 4,
         defense: 11,
         magicDefense: 8,
-        guardChance: 0.24,
+        guardChance: 0.2,
         preferredRange: px(42),
       },
       {
@@ -61,7 +61,7 @@
         magic: 2,
         defense: 15,
         magicDefense: 7,
-        guardChance: 0.22,
+        guardChance: 0.2,
         preferredRange: px(56),
       },
       {
@@ -79,7 +79,7 @@
         magic: 15,
         defense: 5,
         magicDefense: 14,
-        guardChance: 0.16,
+        guardChance: 0.2,
         preferredRange: px(260),
       },
     ],

@@ -1,0 +1,83 @@
+(() => {
+  "use strict";
+
+  window.HEALER_BALANCE = {
+    battleSideMargin: 24,
+    battleMinPlayHeight: 320,
+
+    interruptedCastCooldownReduction: 0.8,
+    selfHealDelay: 5,
+    selfHealLimit: 0.8,
+    selfHealMpPerSec: 22,
+    selfHealHpPerSec: 14,
+    aiIdleRecheck: 0.2,
+    actionGap: 0.2,
+    actionCooldownBase: 7,
+
+    guardDamageMultiplier: 0.5,
+    guardOverflowReductionRate: 1 / 3,
+    guardMaxDamageReduction: 0.85,
+    defaultMpRegenRate: 0.05,
+
+    commandBiasConfigs: [
+      { value: -2, guard: 3, actionCd: 2.5, moodGain: 0.6, moodLoss: 1.5, damageOut: 1, damageIn: 0.9 },
+      { value: -1, guard: 1.8, actionCd: 1.6, moodGain: 0.8, moodLoss: 1.2, damageOut: 1, damageIn: 0.95 },
+      { value: 0, guard: 1, actionCd: 1, moodGain: 1, moodLoss: 1, damageOut: 1, damageIn: 1 },
+      { value: 1, guard: 0.6, actionCd: 0.7, moodGain: 1, moodLoss: 1, damageOut: 1.05, damageIn: 1 },
+      { value: 2, guard: 0, actionCd: 0.5, moodGain: 1.1, moodLoss: 0.9, damageOut: 1.1, damageIn: 1 },
+    ],
+    commandBiasAutoGraceActions: 5,
+
+    moodBaseline: 50,
+    moodInitial: 35,
+    moodNaturalHpSteps: [
+      { hp: 0.85, delta: 1 },
+      { hp: 0.7, delta: 0.5 },
+      { hp: 0.6, delta: 0.2 },
+      { hp: 0.5, delta: -0.3 },
+      { hp: 0.4, delta: -0.5 },
+      { hp: 0.3, delta: -0.8 },
+      { hp: 0.2, delta: -1 },
+      { hp: 0.1, delta: -1.5 },
+    ],
+    moodNaturalHpBottomDelta: -3,
+    moodEventMult: 1.2,
+    moodNoDamageGainBonusStart: 3,
+    moodNoDamageGainBonusMaxTime: 18,
+    moodNoDamageGainBonusMax: 1.3,
+    moodHighGainDampingStart: 90,
+    moodHighGainDampingMult: 0.7,
+    moodDistanceBonusStart: 200,
+    moodDistanceBonusEnd: 420,
+    moodDistanceBonusMax: 1.5,
+    moodMultiHitMin: 2,
+    moodMultiHitBase: 3,
+    moodDamageDealtRate: 0.035,
+    moodDamageDealtMult: 0.85,
+    moodKillBonus: 3,
+    moodDamageTakenRate: 0.0495,
+    moodHealRate: 0.1104,
+    moodQuickHealBonus: 2,
+    moodReferenceHpById: {
+      ulpes: 190,
+      rihas: 230,
+      sushia: 135,
+    },
+
+    telegraphAvoidPadding: 18,
+    telegraphAvoidSpeedMult: 1.15,
+
+    rihasPassiveMaxStacks: 30,
+    rihasPassiveStackDuration: 2,
+    rihasPassiveStackCooldown: 0.8,
+    rihasPassiveMaxDamageBonus: 0.15,
+    rihasPassiveMaxDamageReduction: 0.15,
+
+    sushiaPassiveMaxStacks: 15,
+    sushiaPassiveStackDuration: 8,
+    sushiaPassiveStackCooldown: 1,
+
+    baseCritChance: 0.1,
+    baseCritDamage: 1.65,
+  };
+})();

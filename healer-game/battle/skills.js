@@ -1,46 +1,10 @@
 (() => {
   "use strict";
 
-  const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
-    ? window.HEALER_CONFIG.battleSpatialScale
-    : 1;
-  const px = (value) => Math.max(1, Math.round(value * spatialScale));
-
-  const DATA = {
-    finald: {
-      attack: { id: "finald_attack", key: "attack", owner: "finald", name: "援護射撃", cd: 5, cast: 1, cost: 6, radius: px(54), burstRadius: px(62), damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["援護します"] },
-      heal: { id: "finald_heal", key: "heal", owner: "finald", name: "ヒール", cd: 6, cast: 2, cost: 18, range: px(520), healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール!", "回復!"] },
-      shield: { id: "finald_shield", key: "shield", owner: "finald", name: "バリア", cd: 8, cast: 2, cost: 24, range: px(340), radius: px(92), shieldBase: 40, magicScale: 0.45, duration: 6, moodGain: 4, lines: ["バリア展開!", "守るよ!"] },
-      ult: { id: "finald_ult", key: "ult", owner: "finald", name: "フルヒール", cast: 3, baseHealRatio: 0.25, missingHealRatio: 0.5, lines: ["フルヒール!!"] },
-    },
-    ulpes: {
-      attack: { id: "ulpes_attack", key: "attack", owner: "ulpes", name: "通常攻撃", cd: 3, range: px(52), hitRange: px(62), repeat: 3, repeatDelayMs: 120, damageBase: 8, attackScale: 0.38, lines: ["てやっ!", "くらえ!"] },
-      heroSlash: { id: "ulpes_hero_slash", key: "heroSlash", owner: "ulpes", name: "ヒーロースラッシュ", cd: 10, range: px(128), radius: px(122), arcDeg: 200, cast: 0.62, damageBase: 18, attackScale: 0.7, minCdAfterHit: 1.5, cdRefundPerHit: 0.5, burstRadius: px(116), lines: ["ヒーロースラッシュ!!"] },
-      ult: { id: "ulpes_ult", key: "ult", owner: "ulpes", name: "正義の一撃", cast: 0.7, autoCast: 0.45, radius: px(72), hitRadius: px(70), damageBase: 74, attackScale: 1.4, autoDamageScale: 0.65, teleportOffset: px(22), burstRadius: px(84), lines: ["正義の一撃!!"] },
-    },
-    rihas: {
-      attack: { id: "rihas_attack", key: "attack", owner: "rihas", name: "台地揺るがす拳", cd: 4, range: px(75), radius: px(66), cast: 0.38, damageBase: 16, attackScale: 0.55, burstRadius: px(72), lines: ["どりゃぁ!", "しねぇ!"] },
-      quake: { id: "rihas_quake", key: "quake", owner: "rihas", name: "台地よ!揺れよ!", cd: 13, range: px(260), radius: px(92), shockRadius: px(160), cast: 0.82, landingOffset: px(18), damageBase: 22, attackScale: 0.8, shockDamageBase: 10, shockAttackScale: 0.25, burstRadius: px(158), approach: true, lines: ["台地よ!揺れよ!"] },
-      ult: { id: "rihas_ult", key: "ult", owner: "rihas", name: "俺ァ無敵!!", radius: px(350), duration: 5.5, shieldBase: 25, shieldPerTarget: 8, burstExtraRadius: px(10), lines: ["相手してやる"] },
-    },
-    sushia: {
-      attack: { id: "sushia_attack", key: "attack", owner: "sushia", name: "拡散弾", cd: 5, range: px(340), cast: 1, projectileCount: 3, spread: 0.08, lineWidth: px(16), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.35, life: 1.4, color: "#d9afff", lines: ["とうっ!", "拡散弾!"] },
-      bomb: { id: "sushia_bomb", key: "bomb", owner: "sushia", name: "インパクトボム", cd: 15, range: px(430), cast: 3, radius: px(108), innerRadius: px(32), nearDamageBase: 32, nearMagicScale: 0.95, farDamageBase: 16, farMagicScale: 0.48, burstRadius: px(118), lines: ["インパクトボム!!"] },
-      ult: {
-        id: "sushia_ult", key: "ult", owner: "sushia", name: "アイスワールド",
-        cast: 5, autoCast: 3.5, radius: px(330), manualRadiusBonus: px(50),
-        duration: 4.2, autoDuration: 2.6, tickRate: 0.4,
-        freezeEnemy: 3, freezeAlly: 1, autoFreezeEnemy: 1, autoFreezeAlly: 3,
-        manualAllyDamageMultiplier: 0.5,
-        damageBase: 8, magicScale: 0.22, lines: ["全部凍っちゃえ!!"],
-      },
-    },
-    enemy: {
-      attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", cd: 4, bruteRange: px(48), eliteRange: px(58), cast: 0.32, radius: px(42), damageBonus: 8 },
-      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", actionCd: 5.2, cdBase: 6.6, cdRandom: 1.5, cast: 0.86, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
-      heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", cd: 8.4, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
-    },
-  };
+  const DATA = window.HEALER_SKILL_DATA;
+  if (!DATA) {
+    throw new Error("HEALER_SKILL_DATA must be loaded before battle/skills.js");
+  }
 
   function get(owner, key) {
     return DATA[owner] && DATA[owner][key] ? DATA[owner][key] : null;
@@ -53,6 +17,8 @@
   }
 
   function createHealerSkillSystem(ctx) {
+    const COMMAND_SKILL_KEYS = ["commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"];
+
     function speakSkill(unit, key) {
       if (unit.id === "finald") {
         return;
@@ -71,15 +37,15 @@
       return true;
     }
     function getActionCooldown(unit) {
-      if (unit.id === "ulpes") return ctx.getMoodCooldown(unit, need("ulpes", "attack").cd);
-      if (unit.id === "rihas") return ctx.getMoodCooldown(unit, need("rihas", "attack").cd);
-      if (unit.id === "sushia") return ctx.getMoodCooldown(unit, need("sushia", "attack").cd);
-      if (unit.role === "caster") return need("enemy", "casterLine").actionCd;
-      if (unit.team === "enemy") return need("enemy", "attack").cd;
-      return 1.5;
+      const base = ctx.ACTION_COOLDOWN_BASE || 7;
+      if (unit.team === "party" && unit.id !== "finald") return ctx.getCommandActionCooldown(unit, base);
+      if (unit.team === "enemy") return base;
+      return base;
     }
 
     function setActionCooldown(unit) {
+      if (ctx.applyMoodCommandBiasAuto) ctx.applyMoodCommandBiasAuto(unit);
+      if (ctx.commitCommandBias) ctx.commitCommandBias(unit);
       unit.cds.attack = Math.max(unit.cds.attack || 0, getActionCooldown(unit));
     }
 
@@ -292,6 +258,14 @@
     function startPlayerAim(type) {
       const player = ctx.player;
       if (player.dead || player.channel || player.cast || player.frozen > 0) return false;
+      if (isCommandSkill(type)) {
+        const skill = get("finald", type);
+        if (!skill || (player.cds[type] || 0) > 0) {
+          const origin = ctx.getSupportOrigin();
+          ctx.addFloat("再指示中", origin.x + 26, origin.y - 28, "#ffffff");
+          return false;
+        }
+      }
       player.aim = { type };
       ctx.game.hover = ctx.getHoveredPartyMember();
       return true;
@@ -308,6 +282,7 @@
       if (player.aim.type === "attack") return firePlayerShot();
       if (player.aim.type === "heal") return castHeal();
       if (player.aim.type === "shield") return castShield();
+      if (isCommandSkill(player.aim.type)) return usePlayerCommand(player.aim.type);
       return false;
     }
 
@@ -408,6 +383,100 @@
       ctx.addBurst(x, y, skill.radius + 4, "rgba(143,233,255,0.25)");
     }
 
+    function isCommandSkill(key) {
+      return COMMAND_SKILL_KEYS.includes(key);
+    }
+
+    function usePlayerCommand(key) {
+      const player = ctx.player;
+      const skill = get("finald", key);
+      if (!skill || !isCommandSkill(key)) {
+        return false;
+      }
+      if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
+        return false;
+      }
+      const origin = ctx.getSupportOrigin();
+      if ((player.cds[key] || 0) > 0) {
+        ctx.addFloat("再指示中", origin.x + 26, origin.y - 28, "#ffffff");
+        return false;
+      }
+
+      if (skill.target === "ally") {
+        const target = ctx.game.hover;
+        if (!isCommandTarget(target)) {
+          ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff");
+          return false;
+        }
+        const changed = applyCommandBiasChange(target, skill.commandDelta);
+        player.cds[key] = skill.cd;
+        player.aim = null;
+        player.actionLock = Math.max(player.actionLock, ctx.ACTION_GAP);
+        ctx.addFloat(changed ? skill.name : "無視", target.x, target.y - 34, changed ? getCommandFloatColor(skill.commandDelta) : "#f7fff6");
+        return true;
+      }
+
+      if (skill.target === "allAllies") {
+        let targets = 0;
+        for (const member of ctx.getFieldPartyMembers()) {
+          if (isCommandTarget(member)) {
+            const changed = applyCommandBiasChange(member, skill.commandDelta);
+            ctx.addFloat(changed ? getCommandFloatText(skill.commandDelta) : "無視", member.x, member.y - 34, changed ? getCommandFloatColor(skill.commandDelta) : "#f7fff6");
+            targets += 1;
+          }
+        }
+        if (targets <= 0) {
+          ctx.addFloat("対象なし", origin.x + 26, origin.y - 28, "#ffffff");
+          return false;
+        }
+        player.cds[key] = skill.cd;
+        player.aim = null;
+        player.actionLock = Math.max(player.actionLock, ctx.ACTION_GAP);
+        return true;
+      }
+
+      return false;
+    }
+
+    function isCommandTarget(unit) {
+      return unit && !unit.dead && unit.team === "party" && unit.id !== "finald" && ctx.isFieldUnit(unit);
+    }
+
+    function applyCommandBiasChange(unit, delta) {
+      if (shouldIgnoreCommandBiasChange(unit, delta)) {
+        return false;
+      }
+      unit.commandBias = ctx.clampCommandBias((unit.commandBias || 0) + delta);
+      return true;
+    }
+
+    function shouldIgnoreCommandBiasChange(unit, delta) {
+      if (!unit || unit.mood === null) {
+        return false;
+      }
+      if (delta > 0 && unit.mood <= 5) {
+        return Math.random() < 0.9;
+      }
+      if (delta > 0 && unit.mood <= 30) {
+        return Math.random() < 0.2;
+      }
+      if (delta < 0 && unit.mood >= 95) {
+        return Math.random() < 0.9;
+      }
+      if (delta < 0 && unit.mood >= 70) {
+        return Math.random() < 0.25;
+      }
+      return false;
+    }
+
+    function getCommandFloatText(delta) {
+      return delta < 0 ? "防御指示" : "攻撃指示";
+    }
+
+    function getCommandFloatColor(delta) {
+      return delta < 0 ? "#9cc6ff" : "#ffd56b";
+    }
+
     function completePlayerCast(cast) {
       if (cast.type === "attack") completePlayerShot(cast.target);
       else if (cast.type === "heal") completeHeal(cast.target);
@@ -424,7 +493,7 @@
     function triggerUltimate(id, automatic = false) {
       const unit = ctx.party.find((member) => member.id === id);
       if (!unit || unit.dead || unit.frozen > 0 || unit.ult < 100 || unit.actionLock > 0 || unit.cast || unit.channel) return false;
-      if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 40) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
+      if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 50) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
       unit.ult = 0;
       if (id === "ulpes") ultUlpes(unit, automatic);
       else if (id === "rihas") ultRihas(unit);
@@ -668,6 +737,13 @@
         draw.strokeStyle = "#8fe9ff";
         draw.lineWidth = 3;
         draw.beginPath(); draw.arc(x, y, skill.radius, 0, ctx.TAU); draw.fill(); draw.stroke();
+      } else if (player.aim.type === "commandDefend" || player.aim.type === "commandAttack") {
+        const target = ctx.game.hover;
+        if (isCommandTarget(target)) {
+          draw.strokeStyle = player.aim.type === "commandDefend" ? "#9cc6ff" : "#ffd56b";
+          draw.lineWidth = 3;
+          draw.beginPath(); draw.arc(target.x, target.y, target.radius + 17, 0, ctx.TAU); draw.stroke();
+        }
       }
       draw.restore();
     }
@@ -677,11 +753,25 @@
       const shield = need("finald", "shield");
       const ult = need("finald", "ult");
       return [
-        { name: attack.name, cd: player.cds.attack || 0, max: attack.cd },
-        { name: heal.name, cd: player.cds.heal || 0, max: heal.cd },
-        { name: shield.name, cd: player.cds.shield || 0, max: shield.cd },
-        { name: ult.name, cd: player.ult < 100 ? 100 - player.ult : 0, max: 100, gauge: true },
+        { key: "attack", name: attack.name, cd: player.cds.attack || 0, max: attack.cd },
+        { key: "heal", name: heal.name, cd: player.cds.heal || 0, max: heal.cd },
+        { key: "shield", name: shield.name, cd: player.cds.shield || 0, max: shield.cd },
+        { key: "ult", name: ult.name, cd: player.ult < 100 ? 100 - player.ult : 0, max: 100, gauge: true },
       ];
+    }
+
+    function getCommandPanelSkills(player) {
+      return COMMAND_SKILL_KEYS.map((key) => {
+        const skill = need("finald", key);
+        return {
+          key,
+          name: skill.name,
+          cd: player.cds[key] || 0,
+          max: skill.cd,
+          targeted: skill.target === "ally",
+          commandDelta: skill.commandDelta,
+        };
+      });
     }
 
     function skillNumber(owner, key, field) {
@@ -711,6 +801,7 @@
       startPlayerAim,
       cancelPlayerAim,
       confirmPlayerAim,
+      usePlayerCommand,
       firePlayerShot,
       completePlayerShot,
       castHeal,
@@ -730,9 +821,9 @@
       enemyHeavySlam,
       drawPlayerAimPreview,
       getPanelSkills,
+      getCommandPanelSkills,
     };
   }
 
-  window.HEALER_SKILL_DATA = DATA;
   window.createHealerSkillSystem = createHealerSkillSystem;
 })();
