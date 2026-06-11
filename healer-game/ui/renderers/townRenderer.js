@@ -14,7 +14,7 @@
       profileClickTargets,
       COLORS,
       getPronounChoices,
-      getProfileNameInputRect,
+      getProfileNameInputRects,
       updateProfileNameInput,
       selectProfileGender,
       selectProfilePronoun,
@@ -596,13 +596,17 @@
       drawProfilePrompt(x, y, w, "名前を入力してください");
       ctx.fillStyle = "#cfe1d0";
       ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText("フィナルドの前につく名前。6文字まで。未入力ならアルジュナになります。", x + w / 2, y + 132);
-      const inputRect = getProfileNameInputRect();
+      ctx.fillText("姓名を入力してください。各8文字まで。未入力ならアルジュナ・フィナルドになります。", x + w / 2, y + 132);
+      const inputRects = getProfileNameInputRects();
       ctx.fillStyle = "#f7fff6";
       ctx.font = "800 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.textAlign = "left";
+      ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("・フィナルド", inputRect.x + inputRect.w + 14, inputRect.y + inputRect.h / 2 + 1);
+      ctx.fillText("・", inputRects.separator.x, inputRects.separator.y + 1);
+      ctx.fillStyle = "rgba(247,255,246,0.7)";
+      ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("名", inputRects.first.x + inputRects.first.w / 2, inputRects.first.y - 9);
+      ctx.fillText("姓", inputRects.last.x + inputRects.last.w / 2, inputRects.last.y - 9);
       drawProfileButton(x + w / 2 - 100, y + 255, 200, 46, "決定", false, confirmProfileName);
     } else if (playerProfile.step === "pronoun") {
       drawProfilePrompt(x, y, w, "一人称を選択してください");

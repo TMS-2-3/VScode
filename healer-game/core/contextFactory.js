@@ -68,6 +68,7 @@
     function createStoryContext() {
       return {
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
+        getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
       };
     }
 
@@ -224,7 +225,9 @@
         ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER: balance.ulpesPassiveCritDamageBonusMultiplier,
         skillSystem: systems.skillSystem,
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
+        getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getPronounChoices: callLater("profileSystem", "getPronounChoices"),
+        getProfileNameInputRects: callLater("profileSystem", "getProfileNameInputRects"),
         getProfileNameInputRect: callLater("profileSystem", "getProfileNameInputRect"),
         updateProfileNameInput: callLater("profileSystem", "updateProfileNameInput"),
         selectProfileGender: callLater("profileSystem", "selectProfileGender"),
@@ -363,6 +366,7 @@
         updateProfileNameInput: callLater("profileSystem", "updateProfileNameInput"),
         beginOpeningStory: callLater("profileSystem", "beginOpeningStory"),
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
+        getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getMeetingStory: callLater("storyData", "getMeetingStory"),
       };
     }

@@ -14,20 +14,34 @@
       startTownStory,
     } = context;
 
-    let profileNameInput = null;
+    const PROFILE_NAME_MAX_LENGTH = 8;
+    const DEFAULT_FIRST_NAME = "アルジュナ";
+    const DEFAULT_LAST_NAME = "フィナルド";
+    const profileNameInputs = {
+      first: null,
+      last: null,
+    };
 
     function createProfileNameInput() {
+      profileNameInputs.first = createNameInput("firstName", DEFAULT_FIRST_NAME, "主人公の名前");
+      profileNameInputs.last = createNameInput("lastName", DEFAULT_LAST_NAME, "主人公の姓");
+      return profileNameInputs;
+    }
+
+    function createNameInput(profileKey, fallback, label) {
       const inputEl = document.createElement("input");
       inputEl.type = "text";
-      inputEl.maxLength = 6;
-      inputEl.value = playerProfile.firstName;
+      inputEl.maxLength = PROFILE_NAME_MAX_LENGTH;
+      inputEl.value = playerProfile[profileKey] || fallback;
       inputEl.className = "profile-name-input";
-      inputEl.setAttribute("aria-label", "主人公の名前");
+      inputEl.placeholder = fallback;
+      inputEl.hidden = true;
+      inputEl.setAttribute("aria-label", label);
       document.body.appendChild(inputEl);
       inputEl.addEventListener("input", () => {
-        playerProfile.firstName = clampProfileName(inputEl.value);
-        if (inputEl.value !== playerProfile.firstName) {
-          inputEl.value = playerProfile.firstName;
+        playerProfile[profileKey] = clampProfileName(inputEl.value);
+        if (inputEl.value !== playerProfile[profileKey]) {
+          inputEl.value = playerProfile[profileKey];
         }
       });
       inputEl.addEventListener("keydown", (event) => {
@@ -37,16 +51,23 @@
           confirmProfileName();
         }
       });
-      profileNameInput = inputEl;
       return inputEl;
     }
 
     function getPlayerFirstName() {
-      return playerProfile.firstName || "アルジュナ";
+      return playerProfile.firstName || DEFAULT_FIRST_NAME;
+    }
+
+    function getPlayerLastName() {
+      return playerProfile.lastName || DEFAULT_LAST_NAME;
+    }
+
+    function getPlayerFullName() {
+      return `${getPlayerFirstName()}・${getPlayerLastName()}`;
     }
 
     function clampProfileName(value) {
-      return Array.from((value || "").trim()).slice(0, 6).join("");
+      return Array.from((value || "").trim()).slice(0, PROFILE_NAME_MAX_LENGTH).join("");
     }
 
     function handleProfileSetupKey(key) {
@@ -85,9 +106,13 @@
     }
 
     function confirmProfileName() {
-      playerProfile.firstName = clampProfileName(profileNameInput ? profileNameInput.value : playerProfile.firstName) || "アルジュナ";
-      if (profileNameInput) {
-        profileNameInput.value = playerProfile.firstName;
+      playerProfile.firstName = clampProfileName(profileNameInputs.first ? profileNameInputs.first.value : playerProfile.firstName) || DEFAULT_FIRST_NAME;
+      playerProfile.lastName = clampProfileName(profileNameInputs.last ? profileNameInputs.last.value : playerProfile.lastName) || DEFAULT_LAST_NAME;
+      if (profileNameInputs.first) {
+        profileNameInputs.first.value = playerProfile.firstName;
+      }
+      if (profileNameInputs.last) {
+        profileNameInputs.last.value = playerProfile.lastName;
       }
       playerProfile.step = "pronoun";
       updateProfileNameInput();
@@ -101,7 +126,7 @@
     function completeProfileSetup() {
       const player = getPlayer();
       playerProfile.done = true;
-      player.name = getPlayerFirstName();
+      player.name = getPlayerFullName();
       updateProfileNameInput();
       beginOpeningStory();
     }
@@ -122,41 +147,61 @@
     }
 
     function updateProfileNameInput() {
-      if (!profileNameInput) {
+      if (!profileNameInputs.first || !profileNameInputs.last) {
         return;
       }
       const visible = game.state === "town" && !playerProfile.done && playerProfile.step === "name";
-      profileNameInput.hidden = !visible;
+      profileNameInputs.first.hidden = !visible;
+      profileNameInputs.last.hidden = !visible;
       if (!visible) {
         return;
       }
-      const rect = getProfileNameInputRect();
-      profileNameInput.style.width = `${rect.w}px`;
-      profileNameInput.style.left = `${rect.x}px`;
-      profileNameInput.style.top = `${rect.y}px`;
-      if (document.activeElement !== profileNameInput) {
-        profileNameInput.focus();
-        profileNameInput.select();
+      const rects = getProfileNameInputRects();
+      positionNameInput(profileNameInputs.first, rects.first);
+      positionNameInput(profileNameInputs.last, rects.last);
+      if (!isProfileNameInputFocused()) {
+        profileNameInputs.first.focus();
+        profileNameInputs.first.select();
       }
     }
 
-    function getProfileNameInputRect() {
-      const w = Math.max(120, Math.min(220, view.w - 190));
+    function positionNameInput(inputEl, rect) {
+      inputEl.style.width = `${rect.w}px`;
+      inputEl.style.left = `${rect.x}px`;
+      inputEl.style.top = `${rect.y}px`;
+    }
+
+    function isProfileNameInputFocused() {
+      return document.activeElement === profileNameInputs.first || document.activeElement === profileNameInputs.last;
+    }
+
+    function getProfileNameInputRects() {
+      const gap = 30;
+      const availableW = Math.max(160, view.w - 84);
+      const w = Math.max(76, Math.min(190, (availableW - gap) / 2));
+      const totalW = w * 2 + gap;
+      const y = Math.max(138, view.h * 0.5 - 14);
+      const firstX = view.w / 2 - totalW / 2;
       return {
-        x: view.w / 2 - w / 2 - 58,
-        y: Math.max(138, view.h * 0.5 - 14),
-        w,
-        h: 46,
+        first: { x: firstX, y, w, h: 46 },
+        last: { x: firstX + w + gap, y, w, h: 46 },
+        separator: { x: firstX + w + gap / 2, y: y + 23 },
       };
     }
 
+    function getProfileNameInputRect() {
+      return getProfileNameInputRects().first;
+    }
+
     function getProfileNameInput() {
-      return profileNameInput;
+      return profileNameInputs;
     }
 
     return {
       createProfileNameInput,
       getPlayerFirstName,
+      getPlayerLastName,
+      getPlayerFullName,
       clampProfileName,
       handleProfileSetupKey,
       handleProfileSetupClick,
@@ -167,6 +212,7 @@
       beginOpeningStory,
       getPronounChoices,
       updateProfileNameInput,
+      getProfileNameInputRects,
       getProfileNameInputRect,
       getProfileNameInput,
     };

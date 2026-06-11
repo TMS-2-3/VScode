@@ -94,7 +94,7 @@
 
   state.player = systems.unitFactory.makeUnit({
     ...data.CHARACTER_DEFS.player,
-    name: systems.profileSystem.getPlayerFirstName(),
+    name: systems.profileSystem.getPlayerFullName(),
   });
 
   systems.townController = modules.createTownController(contexts.createTownContext());
@@ -163,6 +163,7 @@
       playerProfile: {
         gender: "",
         firstName: "アルジュナ",
+        lastName: "フィナルド",
         pronoun: "",
         done: false,
         step: "gender",

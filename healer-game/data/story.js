@@ -2,7 +2,7 @@
   "use strict";
 
   window.createHealerStoryData = function createHealerStoryData(context) {
-    const { getPlayerFirstName } = context;
+    const { getPlayerFirstName, getPlayerFullName } = context;
 
     function getOpeningStory() {
       const name = getPlayerFirstName();
@@ -25,7 +25,7 @@
         { speaker: "ウルペス＆リハス", text: "誰がアホ/バカだ！" },
         { speaker: "スシア", text: "４人目、来たわよ。ほんと、呆れる" },
         { speaker: name, text: "(もしかしてずっと喧嘩してた…？)" },
-        { speaker: name, text: `えーと、サポートの${getPlayerFirstName()}です。よろしくお願いします…` },
+        { speaker: name, text: `えーと、白魔法士の${getPlayerFullName()}です。よろしくお願いします…` },
         { speaker: "ウルペス", text: "イケメン剣士のウルペス・トゥルスだ。よろしく頼む" },
         { speaker: "リハス", text: "一番強い、モンクのリハス・タインだ。せいぜい足引っ張んなよ" },
         { speaker: "ウルペス", text: "なっ、僕の方が強いと言っているだろう！" },
