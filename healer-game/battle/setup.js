@@ -35,6 +35,7 @@
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
       game.priorityTarget = null;
+      game.skillPage = "page1";
       game.currentQuest = quest;
       game.message = quest ? `依頼: ${quest.name}` : "依頼: 魔物を全滅させる";
       game.messageTimer = 4;

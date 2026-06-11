@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   "use strict";
 
   window.createHealerStatusRenderer = function createHealerStatusRenderer(context) {
@@ -59,22 +59,23 @@
       getEquippedPassive,
     } = context;
   function drawHud() {
-    drawAllyStatusCards();
+    statusUiButtons.length = 0;
+    statusCardMetas.length = 0;
     drawArjunaHud();
+    drawAllyStatusCards();
   }
 
   function drawAllyStatusCards() {
-    statusUiButtons.length = 0;
-    statusCardMetas.length = 0;
     const allies = party.filter((member) => member.id !== "finald");
     const units = [...allies, player];
     const bounds = getBattleBounds();
     const gap = clamp(view.w * 0.009, 6, 10);
     const margin = clamp(view.w * 0.016, 10, 18);
     const cardW = (view.w - margin * 2 - gap * (units.length - 1)) / Math.max(1, units.length);
-    const y = 6;
+    const bottomReserve = view.h - bounds.bottom;
     const idealH = clamp(view.h * 0.16, 112, 136);
-    const cardH = Math.min(idealH, Math.max(78, bounds.top - y - 6));
+    const cardH = Math.min(idealH, Math.max(78, bottomReserve - 14));
+    const y = view.h - cardH - 8;
     for (let i = 0; i < units.length; i += 1) {
       drawAllyCard(units[i], margin + i * (cardW + gap), y, cardW, cardH);
     }
@@ -179,9 +180,9 @@
     const buttonSize = 34;
     const buttonOutset = 10;
     const bx = x + w - buttonSize;
-    const by = y + h - buttonSize;
+    const by = y - buttonOutset;
     statusUiButtons.push({ action: "toggle", unitId: unit.id, x: bx, y: by, w: buttonSize + buttonOutset, h: buttonSize + buttonOutset });
-    drawCornerTriangleButton(x + w - triangleSize, y + h - triangleSize, triangleSize, expandedStatusUnitIds.has(unit.id) ? "close" : "expand");
+    drawCornerTriangleButton(x + w - triangleSize, y, triangleSize, expandedStatusUnitIds.has(unit.id) ? "close" : "expand", "topRight");
   }
 
   function drawExpandedStatusPanels() {
@@ -203,9 +204,10 @@
 
     const battleBounds = getBattleBounds();
     const panelW = Math.min(meta.w, view.w - 24);
-    const panelY = meta.y + meta.h + 7;
-    const availableH = Math.max(210, Math.min(view.h - panelY - 12, battleBounds.bottom - panelY - 8));
+    const panelBottom = meta.y - 7;
+    const availableH = Math.max(210, panelBottom - battleBounds.top - 8);
     const panelH = Math.min(clamp(view.h * 0.66, 430, 620), availableH);
+    const panelY = Math.max(battleBounds.top + 4, panelBottom - panelH);
     const panelX = clamp(meta.x, 12, view.w - panelW - 12);
     drawPanel(panelX, panelY, panelW, panelH);
     statusUiButtons.push({ action: "consume", x: panelX, y: panelY, w: panelW, h: panelH });
@@ -225,21 +227,21 @@
     const buttonSize = 36;
     const buttonOutset = 10;
     const bx = panelX + panelW - buttonSize;
-    const by = panelY + panelH - buttonSize;
+    const by = panelY - buttonOutset;
     statusUiButtons.push({ action: "close", unitId, x: bx, y: by, w: buttonSize + buttonOutset, h: buttonSize + buttonOutset });
-    drawCornerTriangleButton(panelX + panelW - triangleSize, panelY + panelH - triangleSize, triangleSize, "close");
+    drawCornerTriangleButton(panelX + panelW - triangleSize, panelY, triangleSize, "close", "topRight");
   }
 
-  function drawCornerTriangleButton(x, y, size, mode) {
+  function drawCornerTriangleButton(x, y, size, mode, corner = "bottomRight") {
     ctx.save();
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.strokeStyle = "rgba(0,0,0,0.34)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    if (mode === "close") {
+    if (corner === "topRight") {
       ctx.moveTo(x + size, y);
       ctx.lineTo(x + size, y + size);
-      ctx.lineTo(x, y + size);
+      ctx.lineTo(x, y);
     } else {
       ctx.moveTo(x + size, y);
       ctx.lineTo(x + size, y + size);
@@ -834,30 +836,64 @@
   function drawArjunaHud() {
     const bounds = getBattleBounds();
     const margin = clamp(view.w * 0.018, 12, 22);
-    const bottomReserve = view.h - bounds.bottom;
-    const idealH = clamp(view.h * 0.19, 128, 168);
-    const h = Math.min(idealH, Math.max(92, bottomReserve - 14));
+    const topReserve = bounds.top;
+    const idealH = clamp(view.h * 0.17, 116, 154);
+    const h = Math.min(idealH, Math.max(92, topReserve - 12));
     const x = margin;
-    const y = view.h - h - 8;
+    const y = 6;
     const w = view.w - margin * 2;
     drawPanel(x, y, w, h);
 
     const aliveEnemies = enemies.filter((enemy) => !enemy.dead).length;
-    ctx.fillStyle = "#d4e4d5";
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`${game.message} / 残り魔物 ${aliveEnemies}/${enemies.length}`, x + 18, y - 8);
-
     const skillX = x + 16;
-    const skillW = Math.min(w - 32, clamp(view.w * 0.38, 360, 500));
-    if (skillW > 220) {
-      drawSkillPanel(skillX, y + 10, skillW, h - 20);
+    const skillW = Math.min(w - 32, clamp(view.w * 0.56, 480, 760));
+    if (skillW > 300) {
+      const page = game.skillPage === "page2" ? "page2" : "page1";
+      drawSkillPanel(skillX, y + 10, skillW, h - 20, page);
     }
+    const infoX = skillX + skillW + 14;
+    const infoW = x + w - 16 - infoX;
+    if (infoW > 160) {
+      drawQuestInfoPanel(infoX, y + 16, infoW, h - 32, aliveEnemies);
+    }
+  }
 
-    const commandW = Math.min(w - skillW - 64, clamp(view.w * 0.34, 330, 470));
-    if (commandW > 260) {
-      drawCommandSkillPanel(x + w - 16 - commandW, y + 10, commandW, h - 20);
+  function drawQuestInfoPanel(x, y, w, h, aliveEnemies) {
+    ctx.save();
+    ctx.fillStyle = "rgba(6,12,10,0.3)";
+    ctx.strokeStyle = "rgba(247,255,246,0.14)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const questName = game.currentQuest && game.currentQuest.name ? game.currentQuest.name : "仮依頼";
+    const targetName = game.priorityTarget && !game.priorityTarget.dead ? game.priorityTarget.name : "なし";
+    const lines = [
+      { label: "状況", value: game.message || "-" },
+      { label: "依頼", value: questName },
+      { label: "時間", value: formatBattleTime(game.time) },
+      { label: "敵", value: `${aliveEnemies}/${enemies.length}` },
+      { label: "狙い", value: targetName },
+    ];
+    const rowH = Math.max(18, Math.min(22, h / Math.max(1, lines.length)));
+    for (let i = 0; i < lines.length; i += 1) {
+      const rowY = y + 17 + i * rowH;
+      ctx.fillStyle = "#aebdb4";
+      ctx.font = "800 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(lines[i].label, x + 10, rowY);
+      drawFittedText(lines[i].value, x + 48, rowY, w - 58, 800, 12, 8, "#f7fff6", "left");
     }
+    ctx.restore();
+  }
+
+  function formatBattleTime(time) {
+    const total = Math.max(0, Math.floor(time || 0));
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
   }
 
   function drawFittedText(text, x, y, maxWidth, weight, maxSize, minSize, color, align = "left") {
@@ -914,19 +950,42 @@
     }
     ctx.textBaseline = "alphabetic";
   }
-  function drawSkillPanel(x, y, w, h) {
-    const skills = skillSystem.getPanelSkills(player);
+  function drawSkillPanel(x, y, w, h, page = "page1") {
+    const pageTwo = page === "page2";
+    const skills = skillSystem.getPanelSkills(player, pageTwo ? 1 : 0);
+    const slots = 6;
     const gap = 8;
-    const itemW = (w - gap * Math.max(0, skills.length - 1)) / Math.max(1, skills.length);
+    const toggleW = clamp(w * 0.14, 72, 92);
+    const listOffset = 10;
+    const listX = x + toggleW + gap + listOffset;
+    const listW = Math.max(0, w - toggleW - gap - listOffset);
+    const itemW = (listW - gap * Math.max(0, slots - 1)) / Math.max(1, slots);
     const itemY = y + 8;
     const itemH = h - 16;
     const nameY = itemY + itemH * 0.62;
-    for (let i = 0; i < skills.length; i += 1) {
-      const sx = x + i * (itemW + gap);
+    drawSkillRoleToggle(x, itemY, toggleW, itemH, page);
+    for (let i = 0; i < slots; i += 1) {
+      const sx = listX + i * (itemW + gap);
       const skill = skills[i];
+      if (!skill) {
+        ctx.fillStyle = "rgba(247,255,246,0.34)";
+        ctx.strokeStyle = "rgba(8,14,12,0.3)";
+        ctx.lineWidth = 1.2;
+        roundRect(sx, itemY, itemW, itemH, 8);
+        ctx.fill();
+        ctx.stroke();
+        if (skillSystem.getPlayerSkillSlotInputLabel) {
+          drawSkillInputBadge(skillSystem.getPlayerSkillSlotInputLabel(i), sx + 8, itemY + 7, itemW - 16);
+        }
+        continue;
+      }
       ctx.fillStyle = "#f7fff6";
-      ctx.strokeStyle = "rgba(8,14,12,0.64)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = skill.gauge
+        ? "rgba(115,223,255,0.86)"
+        : skill.command
+        ? (skill.commandDelta < 0 ? "rgba(86,140,255,0.78)" : "rgba(255,185,67,0.78)")
+        : "rgba(8,14,12,0.64)";
+      ctx.lineWidth = skill.command ? 1.8 : 1.5;
       roundRect(sx, itemY, itemW, itemH, 8);
       ctx.fill();
       ctx.stroke();
@@ -944,9 +1003,10 @@
       ctx.strokeText(skill.name, sx + itemW / 2, nameY);
       ctx.fillText(skill.name, sx + itemW / 2, nameY);
       statusUiButtons.push({
-        action: "playerSkill",
+        action: skill.gauge || !skill.command ? "playerSkill" : "playerCommand",
         skillKey: skill.key,
         ultimate: Boolean(skill.gauge),
+        targeted: skill.targeted,
         x: sx,
         y: itemY,
         w: itemW,
@@ -956,43 +1016,62 @@
     ctx.textBaseline = "alphabetic";
   }
 
-  function drawCommandSkillPanel(x, y, w, h) {
-    const skills = skillSystem.getCommandPanelSkills(player);
-    const gap = 8;
-    const itemW = (w - gap * Math.max(0, skills.length - 1)) / Math.max(1, skills.length);
-    const itemY = y + 8;
-    const itemH = h - 16;
-    const nameY = itemY + itemH * 0.62;
-    for (let i = 0; i < skills.length; i += 1) {
-      const sx = x + i * (itemW + gap);
-      const skill = skills[i];
-      ctx.fillStyle = "#f7fff6";
-      ctx.strokeStyle = skill.commandDelta < 0 ? "rgba(86,140,255,0.78)" : "rgba(255,185,67,0.78)";
-      ctx.lineWidth = 1.8;
-      roundRect(sx, itemY, itemW, itemH, 8);
+  function drawSkillRoleToggle(x, y, w, h, page) {
+    const pageTwo = page === "page2";
+    ctx.save();
+    ctx.lineWidth = 1.2;
+    const stackedCards = [
+      { dx: 21, dy: 12, alpha: 0.34 },
+      { dx: 15, dy: 8, alpha: 0.42 },
+      { dx: 9, dy: 4, alpha: 0.52 },
+    ];
+    for (const card of stackedCards) {
+      ctx.fillStyle = `rgba(247,255,246,${card.alpha})`;
+      ctx.strokeStyle = "rgba(8,14,12,0.3)";
+      roundRect(x + card.dx, y + card.dy, w - 12, h - 9, 8);
       ctx.fill();
       ctx.stroke();
-      drawSkillCooldownShadow(sx, itemY, itemW, itemH, clamp(skill.cd / Math.max(0.1, skill.max), 0, 1));
-      drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);
-      ctx.fillStyle = "#102018";
-      ctx.font = `800 ${itemW < 92 ? 10 : 11}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = "rgba(247,255,246,0.86)";
-      ctx.strokeText(skill.name, sx + itemW / 2, nameY);
-      ctx.fillText(skill.name, sx + itemW / 2, nameY);
-      statusUiButtons.push({
-        action: "playerCommand",
-        skillKey: skill.key,
-        targeted: skill.targeted,
-        x: sx,
-        y: itemY,
-        w: itemW,
-        h: itemH,
-      });
     }
-    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    roundRect(x + 24, y + 15, w - 12, h - 12, 8);
+    ctx.fill();
+    ctx.fillStyle = pageTwo ? "#fff2bd" : "#eef8ff";
+    ctx.strokeStyle = pageTwo ? "rgba(255,185,67,0.9)" : "rgba(151,247,255,0.84)";
+    ctx.lineWidth = 2;
+    roundRect(x, y, w - 6, h - 6, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const cx = x + (w - 6) / 2;
+    const cy = y + (h - 6) / 2;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `900 ${Math.max(68, Math.min(96, h * 1.22))}px 'Segoe UI Symbol', 'Segoe UI', sans-serif`;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,255,255,0.54)";
+    ctx.strokeText("↻", cx, cy - 1);
+    ctx.fillStyle = "rgba(22,37,29,0.6)";
+    ctx.fillText("↻", cx, cy - 1);
+    ctx.fillStyle = "rgba(9,14,13,0.82)";
+    roundRect(cx - Math.min(19, w * 0.3), cy - 13, Math.min(38, w * 0.6), 16, 5);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.42)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 9px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("Space", cx, cy - 5);
+    ctx.fillStyle = "#102018";
+    ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(pageTwo ? "ページ２" : "ページ１", cx, y + h - 16);
+    statusUiButtons.push({
+      action: "toggleSkillPage",
+      x,
+      y,
+      w,
+      h,
+    });
+    ctx.restore();
   }
 
   function drawSkillCooldownShadow(x, y, w, h, ratio) {

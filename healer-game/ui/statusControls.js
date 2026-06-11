@@ -3,10 +3,12 @@
 
   window.createHealerStatusControls = function createHealerStatusControls(context) {
     const {
+      game,
       expandedStatusUnitIds,
       statusUiButtons,
       startPlayerAim,
       usePlayerCommand,
+      cancelPlayerAim,
       triggerUltimate,
     } = context;
 
@@ -22,6 +24,9 @@
             } else {
               expandedStatusUnitIds.add(button.unitId);
             }
+          } else if (button.action === "toggleSkillPage") {
+            game.skillPage = game.skillPage === "page2" ? "page1" : "page2";
+            cancelPlayerAim();
           } else if (button.action === "playerCommand") {
             if (button.targeted) {
               startPlayerAim(button.skillKey);

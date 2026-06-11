@@ -94,7 +94,7 @@
 
     function getDefaultLoadout(unitOrOwner) {
       const ownerKey = getKnownOwner(getOwnerKey(unitOrOwner));
-      return normalizeLoadout(ownerKey, LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults[ownerKey] || {}, { enforceLimit: false });
+      return normalizeLoadout(ownerKey, LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults[ownerKey] || {}, { enforceLimit: true });
     }
 
     function setUnitLoadout(unit, loadout) {

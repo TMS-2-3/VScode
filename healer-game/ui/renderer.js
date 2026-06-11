@@ -372,12 +372,7 @@
       return;
     }
 
-    const bounds = getBattleBounds();
-    const radius = player.radius || battlePx(15);
-    const x = clamp(bounds.left + battlePx(240), bounds.left + radius + battlePx(8), bounds.right - radius - battlePx(8));
-    const groundY = clamp(bounds.centerY + battlePx(22), bounds.top + battlePx(72), bounds.bottom - battlePx(34));
-    const bob = Math.sin(game.time * 2.3) * battlePx(6);
-    const y = groundY - battlePx(170) + bob;
+    const { x, y, groundY, radius } = getFloatingArjunaVisualPosition();
     const visualUnit = { ...player, x, y, radius };
     const pulse = 0.55 + Math.sin(game.time * 4.1) * 0.18;
 
@@ -423,6 +418,31 @@
     ctx.textBaseline = "middle";
     ctx.fillText(player.label, x, y + 0.5);
     ctx.restore();
+  }
+
+  function getFloatingArjunaVisualPosition() {
+    const bounds = getBattleBounds();
+    const radius = player.radius || battlePx(15);
+    const x = clamp(bounds.left + battlePx(240), bounds.left + radius + battlePx(8), bounds.right - radius - battlePx(8));
+    const groundY = clamp(bounds.centerY + battlePx(22), bounds.top + battlePx(72), bounds.bottom - battlePx(34));
+    const bob = Math.sin(game.time * 2.3) * battlePx(6);
+    return {
+      x,
+      y: groundY - battlePx(170) + bob,
+      groundY,
+      radius,
+    };
+  }
+
+  function getSpeechAnchorPosition(source) {
+    const visual = source.id === "finald" ? getFloatingArjunaVisualPosition() : null;
+    const x = visual ? visual.x : source.x;
+    const y = visual ? visual.y : source.y;
+    const radius = visual ? visual.radius : (source.radius || battlePx(14));
+    return {
+      x,
+      y: y - radius - battlePx(6),
+    };
   }
 
 
@@ -773,8 +793,9 @@
       return;
     }
     const alpha = clamp(Math.min(effect.age / 0.12, effect.time / 0.22), 0, 1);
-    const anchorX = source.x;
-    const anchorY = source.y - (source.radius || battlePx(14)) - battlePx(20);
+    const anchor = getSpeechAnchorPosition(source);
+    const anchorX = anchor.x;
+    const anchorY = anchor.y;
 
     ctx.globalAlpha = alpha;
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";

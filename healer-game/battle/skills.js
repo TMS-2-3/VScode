@@ -18,6 +18,49 @@
 
   function createHealerSkillSystem(ctx) {
     const COMMAND_SKILL_KEYS = ["commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"];
+    const PLAYER_SKILL_SLOT_KEYS = Array.isArray(ctx.PLAYER_SKILL_SLOT_KEYS) && ctx.PLAYER_SKILL_SLOT_KEYS.length
+      ? ctx.PLAYER_SKILL_SLOT_KEYS
+      : ["q", "e", "r", "f", "g"];
+    const PLAYER_SKILL_PANEL_SLOTS = 6;
+    const PLAYER_ULTIMATE_SLOT_INDEX = PLAYER_SKILL_PANEL_SLOTS - 1;
+    const PLAYER_ULTIMATE_INPUT_LABEL = "4";
+
+    function getSlotInputLabel(index) {
+      if (index === PLAYER_ULTIMATE_SLOT_INDEX) {
+        return PLAYER_ULTIMATE_INPUT_LABEL;
+      }
+      const key = PLAYER_SKILL_SLOT_KEYS[index];
+      return key ? key.toUpperCase() : "";
+    }
+
+    function getEquippedFinaldSkillKeys(player) {
+      if (ctx.getEquippedActiveSkillKeys) {
+        return ctx.getEquippedActiveSkillKeys(player);
+      }
+      return ["attack", "heal", "shield", "commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"];
+    }
+
+    function getPlayerSkillCooldown(player, key) {
+      return player.cds[key] || 0;
+    }
+
+    function createPlayerSkillPanelEntries(pageEntries, player) {
+      const entries = new Array(PLAYER_SKILL_PANEL_SLOTS).fill(null);
+      pageEntries.slice(0, PLAYER_ULTIMATE_SLOT_INDEX).forEach((entry, index) => {
+        entry.input = getSlotInputLabel(index);
+        entries[index] = entry;
+      });
+      const ult = need("finald", "ult");
+      entries[PLAYER_ULTIMATE_SLOT_INDEX] = {
+        key: "ult",
+        input: getSlotInputLabel(PLAYER_ULTIMATE_SLOT_INDEX),
+        name: ult.name,
+        cd: player.ult < 100 ? 100 - player.ult : 0,
+        max: 100,
+        gauge: true,
+      };
+      return entries;
+    }
 
     function getSkillOwner(unit) {
       return unit && (unit.skillOwner || unit.id) || "";
@@ -836,34 +879,31 @@
       }
       draw.restore();
     }
-    function getPanelSkills(player) {
-      const entries = [];
-      const attack = get("finald", "attack");
-      const heal = get("finald", "heal");
-      const shield = get("finald", "shield");
-      const ult = need("finald", "ult");
-      if (attack && isSkillEquipped(player, "attack")) entries.push({ key: "attack", input: "A", name: attack.name, cd: player.cds.attack || 0, max: attack.cd });
-      if (heal && isSkillEquipped(player, "heal")) entries.push({ key: "heal", input: "S", name: heal.name, cd: player.cds.heal || 0, max: heal.cd });
-      if (shield && isSkillEquipped(player, "shield")) entries.push({ key: "shield", input: "D", name: shield.name, cd: player.cds.shield || 0, max: shield.cd });
-      entries.push({ key: "ult", input: "4", name: ult.name, cd: player.ult < 100 ? 100 - player.ult : 0, max: 100, gauge: true });
-      return entries;
+    function getPanelSkills(player, pageIndex = 0) {
+      const page = Math.max(0, Math.floor(Number(pageIndex) || 0));
+      const pageStart = page * PLAYER_ULTIMATE_SLOT_INDEX;
+      const pageKeys = getEquippedFinaldSkillKeys(player).slice(pageStart, pageStart + PLAYER_ULTIMATE_SLOT_INDEX);
+      const entries = pageKeys
+        .map((key) => {
+          const skill = get("finald", key);
+          if (!skill) {
+            return null;
+          }
+          const command = isCommandSkill(key);
+          return {
+            key,
+            name: skill.name,
+            cd: getPlayerSkillCooldown(player, key),
+            max: skill.cd || 0.1,
+            targeted: command && skill.target === "ally",
+            command,
+            commandDelta: command ? skill.commandDelta : 0,
+          };
+        })
+        .filter(Boolean);
+      return createPlayerSkillPanelEntries(entries, player);
     }
 
-    function getCommandPanelSkills(player) {
-      const inputLabels = { commandDefend: "G", commandAttack: "H", commandDefendAll: "J", commandAttackAll: "K" };
-      return COMMAND_SKILL_KEYS.filter((key) => isSkillEquipped(player, key)).map((key) => {
-        const skill = need("finald", key);
-        return {
-          key,
-          input: inputLabels[key],
-          name: skill.name,
-          cd: player.cds[key] || 0,
-          max: skill.cd,
-          targeted: skill.target === "ally",
-          commandDelta: skill.commandDelta,
-        };
-      });
-    }
 
     function getUnitSkillEntries(unit) {
       const owner = getSkillOwner(unit);
@@ -887,6 +927,7 @@
       data: DATA,
       getSkill: get,
       requireSkill: need,
+      getPlayerSkillSlotInputLabel: getSlotInputLabel,
       skillNumber,
       speakSkill,
       getActionCooldown,
@@ -925,7 +966,6 @@
       enemyHeavySlam,
       drawPlayerAimPreview,
       getPanelSkills,
-      getCommandPanelSkills,
       executePartyIntent,
     };
   }

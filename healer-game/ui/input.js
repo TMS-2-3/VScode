@@ -17,6 +17,8 @@
       advanceTownStory,
       interactTown,
       closeTownPanel,
+      PLAYER_SKILL_SLOT_KEYS,
+      getPanelSkills,
       startPlayerAim,
       usePlayerCommand,
       cancelPlayerAim,
@@ -45,10 +47,14 @@
       });
     }
 
+    const playerSkillSlotKeys = Array.isArray(PLAYER_SKILL_SLOT_KEYS) && PLAYER_SKILL_SLOT_KEYS.length
+      ? PLAYER_SKILL_SLOT_KEYS.map((key) => String(key).toLowerCase())
+      : ["q", "e", "r", "f", "g"];
+
     function handleKeyDown(event) {
       const key = event.key === " " ? "space" : event.key.toLowerCase();
 
-      if (["a", "s", "d", "g", "h", "j", "k", "r", "e", "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
+      if ([...playerSkillSlotKeys, "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
         event.preventDefault();
       }
       if (event.repeat) {
@@ -85,30 +91,55 @@
         return;
       }
 
-      if (key === "a") {
-        startPlayerAim("attack");
-      } else if (key === "s") {
-        startPlayerAim("heal");
-      } else if (key === "d") {
-        startPlayerAim("shield");
-      } else if (key === "g") {
-        startPlayerAim("commandDefend");
-      } else if (key === "h") {
-        startPlayerAim("commandAttack");
-      } else if (key === "j") {
-        usePlayerCommand("commandDefendAll");
-      } else if (key === "k") {
-        usePlayerCommand("commandAttackAll");
-      } else if (key === "escape") {
+      if (key === "space") {
+        game.skillPage = game.skillPage === "page2" ? "page1" : "page2";
         cancelPlayerAim();
-      } else if (key === "1") {
+        return;
+      }
+      if (key === "escape") {
+        cancelPlayerAim();
+        return;
+      }
+      if (key === "1") {
         triggerUltimate("ulpes");
-      } else if (key === "2") {
+        return;
+      }
+      if (key === "2") {
         triggerUltimate("rihas");
-      } else if (key === "3") {
+        return;
+      }
+      if (key === "3") {
         triggerUltimate("sushia");
-      } else if (key === "4") {
+        return;
+      }
+      if (key === "4") {
         triggerUltimate("finald");
+        return;
+      }
+
+      const slotIndex = playerSkillSlotKeys.indexOf(key);
+      if (slotIndex >= 0) {
+        usePlayerSkillSlot(slotIndex);
+      }
+    }
+
+    function usePlayerSkillSlot(slotIndex) {
+      const pageIndex = game.skillPage === "page2" ? 1 : 0;
+      const skills = getPanelSkills(player, pageIndex);
+      const skill = skills[slotIndex];
+      if (!skill) {
+        return;
+      }
+      if (skill.gauge) {
+        triggerUltimate("finald");
+      } else if (skill.command) {
+        if (skill.targeted) {
+          startPlayerAim(skill.key);
+        } else {
+          usePlayerCommand(skill.key);
+        }
+      } else {
+        startPlayerAim(skill.key);
       }
     }
 

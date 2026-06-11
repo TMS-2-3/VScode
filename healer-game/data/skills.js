@@ -65,7 +65,7 @@
     passiveSlots: 1,
     activeSlots: 5,
     activeSlotsByOwner: {
-      finald: 15,
+      finald: 10,
     },
     defaults: {
       finald: {

@@ -6,6 +6,7 @@
       state,
       systems,
       data,
+      config,
       balance,
       theme,
       spatial,
@@ -35,6 +36,9 @@
     const COLORS = theme.colors;
     const ULTIMATE_KEYS = theme.ultimateKeys;
     const STATUS_FULL_NAMES = theme.statusFullNames;
+    const PLAYER_SKILL_SLOT_KEYS = Array.isArray(config && config.playerSkillSlotKeys)
+      ? config.playerSkillSlotKeys
+      : ["q", "e", "r", "f", "g"];
 
     function callLater(systemName, methodName) {
       return (...args) => {
@@ -130,6 +134,7 @@
         view: state.view,
         input: state.input,
         game: state.game,
+        PLAYER_SKILL_SLOT_KEYS,
         COLORS,
         ACTION_GAP: balance.actionGap,
         ACTION_COOLDOWN_BASE: balance.actionCooldownBase,
@@ -299,10 +304,12 @@
 
     function createStatusControlsContext() {
       return {
+        game: state.game,
         expandedStatusUnitIds: state.expandedStatusUnitIds,
         statusUiButtons: state.statusUiButtons,
         startPlayerAim: callLater("skillSystem", "startPlayerAim"),
         usePlayerCommand: callLater("skillSystem", "usePlayerCommand"),
+        cancelPlayerAim: callLater("skillSystem", "cancelPlayerAim"),
         triggerUltimate: callLater("skillSystem", "triggerUltimate"),
       };
     }
@@ -330,6 +337,8 @@
         advanceTownStory: callLater("townController", "advanceTownStory"),
         interactTown: callLater("townController", "interactTown"),
         closeTownPanel: callLater("townController", "closeTownPanel"),
+        PLAYER_SKILL_SLOT_KEYS,
+        getPanelSkills: callLater("skillSystem", "getPanelSkills"),
         startPlayerAim: callLater("skillSystem", "startPlayerAim"),
         usePlayerCommand: callLater("skillSystem", "usePlayerCommand"),
         cancelPlayerAim: callLater("skillSystem", "cancelPlayerAim"),
