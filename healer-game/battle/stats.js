@@ -24,14 +24,31 @@
       RIHAS_PASSIVE_MAX_STACKS,
       RIHAS_PASSIVE_STACK_DURATION,
       RIHAS_PASSIVE_STACK_COOLDOWN,
-      RIHAS_PASSIVE_MAX_DAMAGE_BONUS,
-      RIHAS_PASSIVE_MAX_DAMAGE_REDUCTION,
+      RIHAS_PASSIVE_MAX_ATTACK_BONUS,
+      RIHAS_PASSIVE_MAX_DEFENSE_BONUS,
       clamp,
       dist,
       hasPassive,
       getEquipmentEffectiveStat,
       getEquipmentStatBonusSum,
+      getEquipmentFlatStatBonusSum,
     } = context;
+
+    const STAT_MINIMUMS = {
+      maxHp: 1,
+      hp: 0,
+      maxMp: 0,
+      mp: 0,
+      attack: 0,
+      magic: 0,
+      defense: 1,
+      magicDefense: 1,
+      guardChance: 0,
+      guardDamageReduction: 0,
+      speed: 0,
+      critChance: 0,
+      critDamage: 1,
+    };
 
     function getCommandActionCooldown(unit, baseTime) {
       return baseTime * getCommandBiasConfig(unit, "active").actionCd;
@@ -141,8 +158,11 @@
     }
 
     function getMpRegenRate(unit) {
-      const base = unit && Number.isFinite(unit.mpRegenRate) ? unit.mpRegenRate : DEFAULT_MP_REGEN_RATE;
-      return base * Math.max(0, 1 + getEquipmentBonus(unit, "mpRegenRate"));
+      return getEffectiveStatValue(unit, "mpRegenRate", DEFAULT_MP_REGEN_RATE);
+    }
+
+    function getHpRegenRate(unit) {
+      return getEffectiveStatValue(unit, "hpRegenRate", 0);
     }
 
     function regenerateMp(unit, dt) {
@@ -150,6 +170,16 @@
         return;
       }
       unit.mp = clamp(unit.mp + unit.maxMp * getMpRegenRate(unit) * dt, 0, unit.maxMp);
+    }
+
+    function regenerateHp(unit, dt) {
+      if (!unit || unit.dead || unit.maxHp <= 0) {
+        return;
+      }
+      unit.hp = clamp(unit.hp + unit.maxHp * getHpRegenRate(unit) * dt, 0, unit.maxHp);
+      if (unit.hp <= 0) {
+        unit.dead = true;
+      }
     }
 
     function applyMoodHighGainDamping(unit, amount) {
@@ -304,17 +334,73 @@
     }
 
     function getEffectiveStat(unit, statKey) {
-      if (!unit) {
-        return 0;
-      }
-      if (typeof getEquipmentEffectiveStat === "function") {
-        return getEquipmentEffectiveStat(unit, statKey);
-      }
-      return Number.isFinite(unit[statKey]) ? unit[statKey] : 0;
+      return getEffectiveStatValue(unit, statKey, 0);
+    }
+
+    function getEffectiveStatValue(unit, statKey, fallback = 0) {
+      const base = getBaseStat(unit, statKey, fallback) + getEquipmentFlatBonus(unit, statKey);
+      const percentBonus = getEquipmentBonus(unit, statKey) + getStatusStatBonus(unit, statKey);
+      return applyStatMinimum(statKey, base + base * percentBonus);
+    }
+
+    function getBaseStat(unit, statKey, fallback = 0) {
+      return unit && Number.isFinite(unit[statKey]) ? unit[statKey] : fallback;
     }
 
     function getEquipmentBonus(unit, statKey) {
       return typeof getEquipmentStatBonusSum === "function" ? getEquipmentStatBonusSum(unit, statKey) : 0;
+    }
+
+    function getEquipmentFlatBonus(unit, statKey) {
+      if (typeof getEquipmentFlatStatBonusSum === "function") {
+        return getEquipmentFlatStatBonusSum(unit, statKey);
+      }
+      if (typeof getEquipmentEffectiveStat === "function") {
+        const base = getBaseStat(unit, statKey, 0);
+        return getEquipmentEffectiveStat(unit, statKey) - base;
+      }
+      return 0;
+    }
+
+    function getStatusStatBonus(unit, statKey) {
+      let bonus = 0;
+      if (hasPassive(unit, "painless")) {
+        if (statKey === "attack") {
+          bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_ATTACK_BONUS, 0);
+        } else if (statKey === "defense") {
+          bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_DEFENSE_BONUS, 0);
+        }
+      }
+      return bonus;
+    }
+
+    function applyStatMinimum(statKey, value) {
+      const minimum = STAT_MINIMUMS[statKey];
+      if (!Number.isFinite(minimum)) {
+        return value;
+      }
+      return Math.max(minimum, value);
+    }
+
+    function getInternalBonus(unit, statKey) {
+      const base = unit && Number.isFinite(unit[statKey]) ? unit[statKey] : 0;
+      return base + getEquipmentBonus(unit, statKey);
+    }
+
+    function getPhysicalDamageBoost(unit) {
+      return getInternalBonus(unit, "physicalDamageBoost");
+    }
+
+    function getMagicDamageBoost(unit) {
+      return getInternalBonus(unit, "magicDamageBoost");
+    }
+
+    function getPhysicalDamageResistance(unit) {
+      return getInternalBonus(unit, "physicalDamageResistance");
+    }
+
+    function getMagicDamageResistance(unit) {
+      return getInternalBonus(unit, "magicDamageResistance");
     }
 
     function addRihasPassiveStack(unit) {
@@ -358,12 +444,36 @@
       return clamp((unit.rihasPassiveStacks || 0) / RIHAS_PASSIVE_MAX_STACKS, 0, 1);
     }
 
+    function getRihasPassiveAttackMultiplier(unit) {
+      const maxBonus = getSafeNumber(RIHAS_PASSIVE_MAX_ATTACK_BONUS, 0);
+      return 1 + getRihasPassiveRatio(unit) * maxBonus;
+    }
+
+    function getRihasPassiveDefenseMultiplier(unit) {
+      const maxBonus = getSafeNumber(RIHAS_PASSIVE_MAX_DEFENSE_BONUS, 0);
+      return 1 + getRihasPassiveRatio(unit) * maxBonus;
+    }
+
+    function getRihasPassiveStatMultiplier(unit, statKey) {
+      if (statKey === "attack") {
+        return getRihasPassiveAttackMultiplier(unit);
+      }
+      if (statKey === "defense") {
+        return getRihasPassiveDefenseMultiplier(unit);
+      }
+      return 1;
+    }
+
     function getRihasPassiveDamageMultiplier(unit) {
-      return 1 + getRihasPassiveRatio(unit) * RIHAS_PASSIVE_MAX_DAMAGE_BONUS;
+      return 1;
     }
 
     function getRihasPassiveIncomingMultiplier(unit) {
-      return 1 - getRihasPassiveRatio(unit) * RIHAS_PASSIVE_MAX_DAMAGE_REDUCTION;
+      return 1;
+    }
+
+    function getSafeNumber(value, fallback = 0) {
+      return Number.isFinite(value) ? value : fallback;
     }
 
     return {
@@ -377,7 +487,9 @@
       moodLerp,
       getMoodNaturalDelta,
       getMoodGainMultiplier,
+      getHpRegenRate,
       getMpRegenRate,
+      regenerateHp,
       regenerateMp,
       applyMoodHighGainDamping,
       getHpRatio,
@@ -404,9 +516,15 @@
       getEffectiveMagic,
       getEffectiveMagicDefense,
       getEffectiveStat,
+      getPhysicalDamageBoost,
+      getMagicDamageBoost,
+      getPhysicalDamageResistance,
+      getMagicDamageResistance,
       addRihasPassiveStack,
       updateRihasPassiveStacks,
       getRihasPassiveRatio,
+      getRihasPassiveAttackMultiplier,
+      getRihasPassiveDefenseMultiplier,
       getRihasPassiveDamageMultiplier,
       getRihasPassiveIncomingMultiplier,
     };

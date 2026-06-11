@@ -36,6 +36,10 @@
       getCommandIncomingDamageMultiplier,
       getRihasPassiveDamageMultiplier,
       getRihasPassiveIncomingMultiplier,
+      getPhysicalDamageBoost,
+      getMagicDamageBoost,
+      getPhysicalDamageResistance,
+      getMagicDamageResistance,
       getGuardDamageMultiplier,
       getEffectiveGuardChance,
       getEffectiveDefense,
@@ -74,7 +78,7 @@
       }
 
       finalAmount = reduceByDefense(target, finalAmount, options.magic);
-      finalAmount = applyDamageModifierSum(source, target, finalAmount);
+      finalAmount = applyDamageModifierSum(source, target, finalAmount, options);
       finalAmount *= getElementDamageMultiplier(source, target, options);
       finalAmount *= getFriendlyFireDamageMultiplier(source, target);
 
@@ -205,12 +209,13 @@
       return Math.max(0, getRawCritChance(unit) - 1) * rate;
     }
 
-    function applyDamageModifierSum(source, target, amount) {
+    function applyDamageModifierSum(source, target, amount, options = {}) {
       let bonus = 0;
       if (source && source.team === "party" && source.id !== "finald" && source.mood !== null) {
         bonus += multiplierToBonus(getMoodOutgoingDamageMultiplier(source));
         bonus += multiplierToBonus(getCommandOutgoingDamageMultiplier(source));
       }
+      bonus += getDamageTypeBoost(source, options);
       if (source && hasPassive(source, "painless")) {
         bonus += multiplierToBonus(getRihasPassiveDamageMultiplier(source));
       }
@@ -218,6 +223,7 @@
         bonus += multiplierToBonus(getMoodIncomingDamageMultiplier(target));
         bonus += multiplierToBonus(getCommandIncomingDamageMultiplier(target));
       }
+      bonus -= getDamageTypeResistance(target, options);
       if (source && source.team === "enemy" && hasPassive(target, "painless") && source.forcedTarget === target && source.tauntTimer > 0) {
         bonus += multiplierToBonus(0.6);
       }
@@ -225,6 +231,22 @@
         bonus += multiplierToBonus(getRihasPassiveIncomingMultiplier(target));
       }
       return amount * Math.max(0, 1 + bonus);
+    }
+
+    function getDamageTypeBoost(unit, options = {}) {
+      if (!unit) {
+        return 0;
+      }
+      const getter = options.magic ? getMagicDamageBoost : getPhysicalDamageBoost;
+      return typeof getter === "function" ? getSafeNumber(getter(unit), 0) : 0;
+    }
+
+    function getDamageTypeResistance(unit, options = {}) {
+      if (!unit) {
+        return 0;
+      }
+      const getter = options.magic ? getMagicDamageResistance : getPhysicalDamageResistance;
+      return typeof getter === "function" ? getSafeNumber(getter(unit), 0) : 0;
     }
 
     function getElementDamageMultiplier(source, target, options = {}) {

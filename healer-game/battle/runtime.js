@@ -29,6 +29,7 @@
       updateEnemyAi,
       separateUnits,
       spawnRearVanguardWave,
+      regenerateHp,
       regenerateMp,
       getMoodNaturalDelta,
       applyCommandMoodDelta,
@@ -117,6 +118,7 @@
           unit.cds[key] = Math.max(0, unit.cds[key] - dt);
         }
 
+        regenerateHp(unit, dt);
         regenerateMp(unit, dt);
 
         if (unit.team === "party") {

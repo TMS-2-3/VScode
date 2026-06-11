@@ -80,11 +80,11 @@
     telegraphAvoidPadding: 18,
     telegraphAvoidSpeedMult: 1.15,
 
-    rihasPassiveMaxStacks: 30,
-    rihasPassiveStackDuration: 2,
+    rihasPassiveMaxStacks: 20,
+    rihasPassiveStackDuration: 3,
     rihasPassiveStackCooldown: 0.8,
-    rihasPassiveMaxDamageBonus: 0.15,
-    rihasPassiveMaxDamageReduction: 0.15,
+    rihasPassiveMaxAttackBonus: 0.1,
+    rihasPassiveMaxDefenseBonus: 0.1,
 
     sushiaPassiveMaxStacks: 10,
     sushiaPassiveStackDuration: 8,

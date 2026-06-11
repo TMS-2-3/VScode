@@ -146,7 +146,8 @@
       }
       const base = getNumber(unit[statKey]);
       const flatBonus = getFlatStatBonusSum(unit, statKey);
-      return (base + flatBonus) * Math.max(0, 1 + getStatBonusSum(unit, statKey));
+      const baseValue = base + flatBonus;
+      return baseValue + baseValue * getStatBonusSum(unit, statKey);
     }
 
     function getWeaponElement(unit) {
@@ -224,6 +225,7 @@
       getSetCounts,
       getActiveSetEffects,
       getStatBonusSum,
+      getFlatStatBonusSum,
       getEffectiveStat,
       getWeaponElement,
       getElementKeys,

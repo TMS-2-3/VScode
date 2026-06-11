@@ -47,6 +47,7 @@
       getEffectiveMagicDefense,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
+      getHpRegenRate,
       getMpRegenRate,
       getElementKeys,
       getElementName,
@@ -343,13 +344,7 @@
       { label: "HP再生率", value: formatPercent(getHpRegenRate(unit)) },
       { label: "MP回復率", value: formatPercent(getMpRegenRate(unit)) },
       { label: "移動速度", value: `${Math.round(unit.speed)}` },
-      { label: "通常属性", value: getUnitElementName(unit) },
-      { breakAfter: true },
     ];
-    for (const elementKey of getUnitElementKeys()) {
-      stats.push({ label: `${getUnitElementShortLabel(elementKey)}強化`, value: formatSignedPercent(getElementBoostValue(unit, elementKey)) });
-      stats.push({ label: `${getUnitElementShortLabel(elementKey)}耐性`, value: formatSignedPercent(getElementResistanceValue(unit, elementKey)) });
-    }
     return stats;
   }
 
@@ -362,10 +357,6 @@
 
   function getUltimateChargeRate(unit) {
     return unit && Number.isFinite(unit.ultimateChargeRate) ? unit.ultimateChargeRate : 1;
-  }
-
-  function getHpRegenRate(unit) {
-    return unit && Number.isFinite(unit.hpRegenRate) ? unit.hpRegenRate : 0;
   }
 
   function getUnitElementKeys() {
@@ -689,7 +680,7 @@
       icons.push({ label: "怒", color: "#ff6b44", ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer });
     }
     if (hasPassive(unit, "painless") && (unit.rihasPassiveStacks || 0) > 0) {
-      icons.push({ label: "拳", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
+      icons.push({ label: "逆", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
     }
     return icons;
   }
