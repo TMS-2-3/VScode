@@ -8,6 +8,9 @@
       ACTION_GAP,
       BASE_CRIT_CHANCE,
       BASE_CRIT_DAMAGE,
+      CRIT_OVERFLOW_DAMAGE_RATE,
+      ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER,
+      ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER,
       SUSHIA_PASSIVE_MAX_STACKS,
       SUSHIA_PASSIVE_STACK_DURATION,
       SUSHIA_PASSIVE_STACK_COOLDOWN,
@@ -18,6 +21,10 @@
       MOOD_QUICK_HEAL_BONUS,
       MOOD_EVENT_MULT,
       MOOD_KILL_BONUS,
+      FRIENDLY_FIRE_MOOD_SAFE_LIMIT,
+      FRIENDLY_FIRE_MOOD_MAX,
+      FRIENDLY_FIRE_MIN_DAMAGE_MULTIPLIER,
+      FRIENDLY_FIRE_MAX_DAMAGE_MULTIPLIER,
       clamp,
       addFloat,
       addBurst,
@@ -32,12 +39,16 @@
       getGuardDamageMultiplier,
       getEffectiveGuardChance,
       getEffectiveDefense,
+      getEffectiveMagicDefense,
       addRihasPassiveStack,
+      getElementOutgoingDamageMultiplier,
+      getElementIncomingDamageMultiplier,
       getMoodDistanceMultiplier,
       getHpRatio,
       getMoodReferenceHp,
       addMoodGain,
       addMoodLoss,
+      hasPassive,
     } = context;
 
     function addShield(unit, amount, duration) {
@@ -57,30 +68,15 @@
       let finalAmount = amount;
       let criticalHit = false;
 
-      if (options.crit && source && source.team === "party" && source.id !== "finald" && Math.random() < BASE_CRIT_CHANCE) {
-        finalAmount *= BASE_CRIT_DAMAGE;
+      if (options.crit && source && source.team === "party" && source.id !== "finald" && Math.random() < getCritChance(source)) {
+        finalAmount *= getCritDamage(source);
         criticalHit = true;
       }
 
       finalAmount = reduceByDefense(target, finalAmount, options.magic);
-
-      if (source && source.team === "party" && source.id !== "finald" && source.mood !== null) {
-        finalAmount *= getMoodOutgoingDamageMultiplier(source);
-        finalAmount *= getCommandOutgoingDamageMultiplier(source);
-      }
-      if (source && source.id === "rihas") {
-        finalAmount *= getRihasPassiveDamageMultiplier(source);
-      }
-      if (target.team === "party" && target.id !== "finald" && target.mood !== null) {
-        finalAmount *= getMoodIncomingDamageMultiplier(target);
-        finalAmount *= getCommandIncomingDamageMultiplier(target);
-      }
-      if (source && source.team === "enemy" && target.id === "rihas" && source.forcedTarget === target && source.tauntTimer > 0) {
-        finalAmount *= 0.6;
-      }
-      if (target.id === "rihas") {
-        finalAmount *= getRihasPassiveIncomingMultiplier(target);
-      }
+      finalAmount = applyDamageModifierSum(source, target, finalAmount);
+      finalAmount *= getElementDamageMultiplier(source, target, options);
+      finalAmount *= getFriendlyFireDamageMultiplier(source, target);
 
       let guarded = false;
       if (target.team === "party" && target.id !== "finald") {
@@ -112,7 +108,7 @@
 
       finalAmount = Math.max(0, finalAmount);
       let delayedAmount = 0;
-      if (target.id === "rihas" && finalAmount > 0 && !options.delayed) {
+      if (hasPassive(target, "painless") && finalAmount > 0 && !options.delayed) {
         addRihasPassiveStack(target);
         delayedAmount = finalAmount / 3;
         finalAmount -= delayedAmount;
@@ -147,7 +143,7 @@
       const rewardDamage = finalAmount + delayedAmount;
       if (source && source.team === "party") {
         source.ult = clamp(source.ult + rewardDamage * 0.22, 0, 100);
-        if (source.id === "sushia" && target.team === "enemy" && rewardDamage > 0 && options.magic && source.stackCooldown <= 0) {
+        if (hasPassive(source, "warmup") && target.team === "enemy" && rewardDamage > 0 && options.magic && source.stackCooldown <= 0) {
           source.castStacks = clamp(source.castStacks + 1, 0, SUSHIA_PASSIVE_MAX_STACKS);
           source.stackTimer = SUSHIA_PASSIVE_STACK_DURATION;
           source.stackCooldown = SUSHIA_PASSIVE_STACK_COOLDOWN;
@@ -183,6 +179,93 @@
       return `${prefix}${Math.round(amount)}`;
     }
 
+    function getCritChance(unit) {
+      return clamp(getRawCritChance(unit), 0, 1);
+    }
+
+    function getRawCritChance(unit) {
+      const multiplier = unit && hasPassive(unit, "swordwork") ? ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER : 1;
+      return BASE_CRIT_CHANCE * (Number.isFinite(multiplier) ? multiplier : 1);
+    }
+
+    function getCritDamage(unit) {
+      let damage = BASE_CRIT_DAMAGE;
+      if (unit && hasPassive(unit, "swordwork")) {
+        const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER)
+          ? ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER
+          : 0.5;
+        const bonusPercent = Math.max(0, Math.floor((BASE_CRIT_DAMAGE - 1) * 100 * multiplier));
+        damage = 1 + bonusPercent / 100;
+      }
+      return damage + getCritOverflowDamageBonus(unit);
+    }
+
+    function getCritOverflowDamageBonus(unit) {
+      const rate = Number.isFinite(CRIT_OVERFLOW_DAMAGE_RATE) ? CRIT_OVERFLOW_DAMAGE_RATE : 0.5;
+      return Math.max(0, getRawCritChance(unit) - 1) * rate;
+    }
+
+    function applyDamageModifierSum(source, target, amount) {
+      let bonus = 0;
+      if (source && source.team === "party" && source.id !== "finald" && source.mood !== null) {
+        bonus += multiplierToBonus(getMoodOutgoingDamageMultiplier(source));
+        bonus += multiplierToBonus(getCommandOutgoingDamageMultiplier(source));
+      }
+      if (source && hasPassive(source, "painless")) {
+        bonus += multiplierToBonus(getRihasPassiveDamageMultiplier(source));
+      }
+      if (target.team === "party" && target.id !== "finald" && target.mood !== null) {
+        bonus += multiplierToBonus(getMoodIncomingDamageMultiplier(target));
+        bonus += multiplierToBonus(getCommandIncomingDamageMultiplier(target));
+      }
+      if (source && source.team === "enemy" && hasPassive(target, "painless") && source.forcedTarget === target && source.tauntTimer > 0) {
+        bonus += multiplierToBonus(0.6);
+      }
+      if (hasPassive(target, "painless")) {
+        bonus += multiplierToBonus(getRihasPassiveIncomingMultiplier(target));
+      }
+      return amount * Math.max(0, 1 + bonus);
+    }
+
+    function getElementDamageMultiplier(source, target, options = {}) {
+      let multiplier = 1;
+      if (source && typeof getElementOutgoingDamageMultiplier === "function") {
+        multiplier *= getSafeMultiplier(getElementOutgoingDamageMultiplier(source, target, options));
+      }
+      if (target && typeof getElementIncomingDamageMultiplier === "function") {
+        multiplier *= getSafeMultiplier(getElementIncomingDamageMultiplier(target, source, options));
+      }
+      return Math.max(0, multiplier);
+    }
+
+    function getFriendlyFireDamageMultiplier(source, target) {
+      if (!source || !target || source === target || source.team !== "party" || target.team !== "party") {
+        return 1;
+      }
+      const safeLimit = getSafeNumber(FRIENDLY_FIRE_MOOD_SAFE_LIMIT, 70);
+      const maxMood = getSafeNumber(FRIENDLY_FIRE_MOOD_MAX, 100);
+      const minMultiplier = getSafeNumber(FRIENDLY_FIRE_MIN_DAMAGE_MULTIPLIER, 0.1);
+      const maxMultiplier = getSafeNumber(FRIENDLY_FIRE_MAX_DAMAGE_MULTIPLIER, 0.7);
+      const mood = Number.isFinite(source.mood) ? source.mood : safeLimit;
+      if (mood <= safeLimit) {
+        return minMultiplier;
+      }
+      const t = clamp((mood - safeLimit) / Math.max(1, maxMood - safeLimit), 0, 1);
+      return minMultiplier + (maxMultiplier - minMultiplier) * t;
+    }
+
+    function getSafeNumber(value, fallback) {
+      return Number.isFinite(value) ? value : fallback;
+    }
+
+    function getSafeMultiplier(multiplier) {
+      return Number.isFinite(multiplier) ? multiplier : 1;
+    }
+
+    function multiplierToBonus(multiplier) {
+      return getSafeMultiplier(multiplier) - 1;
+    }
+
     function healUnit(source, target, amount, options = {}) {
       if (!target || target.dead) {
         return 0;
@@ -211,8 +294,8 @@
     }
 
     function reduceByDefense(target, amount, isMagic) {
-      const defense = isMagic ? target.magicDefense : getEffectiveDefense(target);
-      return amount * (100 / (100 + Math.max(0, defense)));
+      const defense = isMagic ? getEffectiveMagicDefense(target) : getEffectiveDefense(target);
+      return amount * (100 / Math.max(1, defense));
     }
 
     function getDamageFloatColor(source, target) {
@@ -256,7 +339,7 @@
       const before = unit.hp;
       unit.hp = Math.max(0, unit.hp - damage);
       const actualDamage = before - unit.hp;
-      if (unit.id === "rihas" && actualDamage > 0) {
+      if (hasPassive(unit, "painless") && actualDamage > 0) {
         addRihasPassiveStack(unit);
       }
       unit.hurt = 0.18;

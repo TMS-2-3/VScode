@@ -11,10 +11,10 @@
       attack: { id: "finald_attack", key: "attack", owner: "finald", name: "援護射撃", cd: 5, cast: 1, cost: 6, radius: px(54), burstRadius: px(62), damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["援護します"] },
       heal: { id: "finald_heal", key: "heal", owner: "finald", name: "ヒール", cd: 6, cast: 2, cost: 18, range: px(520), healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール!", "回復!"] },
       shield: { id: "finald_shield", key: "shield", owner: "finald", name: "バリア", cd: 8, cast: 2, cost: 24, range: px(340), radius: px(92), shieldBase: 40, magicScale: 0.45, duration: 6, moodGain: 4, lines: ["バリア展開!", "守るよ!"] },
-      commandDefend: { id: "finald_command_defend", key: "commandDefend", owner: "finald", name: "耐えて!", cd: 7.5, cost: 0, commandDelta: -1, target: "ally" },
-      commandAttack: { id: "finald_command_attack", key: "commandAttack", owner: "finald", name: "攻めて!", cd: 7.5, cost: 0, commandDelta: 1, target: "ally" },
-      commandDefendAll: { id: "finald_command_defend_all", key: "commandDefendAll", owner: "finald", name: "全員下がって!", cd: 20, cost: 0, commandDelta: -1, target: "allAllies" },
-      commandAttackAll: { id: "finald_command_attack_all", key: "commandAttackAll", owner: "finald", name: "今が攻め時!", cd: 20, cost: 0, commandDelta: 1, target: "allAllies" },
+      commandDefend: { id: "finald_command_defend", key: "commandDefend", owner: "finald", name: "防御指示", cd: 7.5, cost: 0, commandDelta: -1, target: "ally", lines: ["下がって!"] },
+      commandAttack: { id: "finald_command_attack", key: "commandAttack", owner: "finald", name: "攻撃指示", cd: 7.5, cost: 0, commandDelta: 1, target: "ally", lines: ["攻めて!"] },
+      commandDefendAll: { id: "finald_command_defend_all", key: "commandDefendAll", owner: "finald", name: "防御陣形", cd: 20, cost: 0, commandDelta: -1, target: "allAllies", lines: ["みんな下がって!"] },
+      commandAttackAll: { id: "finald_command_attack_all", key: "commandAttackAll", owner: "finald", name: "攻撃陣形", cd: 20, cost: 0, commandDelta: 1, target: "allAllies", lines: ["みんな攻めて!"] },
       ult: { id: "finald_ult", key: "ult", owner: "finald", name: "フルヒール", cast: 3, baseHealRatio: 0.25, missingHealRatio: 0.5, lines: ["フルヒール!!"] },
     },
     ulpes: {
@@ -43,6 +43,39 @@
       attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", cd: 5, bruteRange: px(48), eliteRange: px(58), cast: 0.32, radius: px(42), damageBonus: 8 },
       casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", cdBase: 12, cdRandom: 0, cast: 0.86, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
       heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", cd: 17, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
+    },
+  };
+
+  window.HEALER_PASSIVE_DATA = {
+    finald: {
+      flotict: { id: "finald_passive_flotict", key: "flotict", owner: "finald", name: "フロティクト" },
+    },
+    ulpes: {
+      swordwork: { id: "ulpes_passive_swordwork", key: "swordwork", owner: "ulpes", name: "勇者の剣捌き" },
+    },
+    rihas: {
+      painless: { id: "rihas_passive_painless", key: "painless", owner: "rihas", name: "痛みなし" },
+    },
+    sushia: {
+      warmup: { id: "sushia_passive_warmup", key: "warmup", owner: "sushia", name: "あったまってきたよ！" },
+    },
+  };
+
+  window.HEALER_LOADOUT_CONFIG = {
+    passiveSlots: 1,
+    activeSlots: 5,
+    activeSlotsByOwner: {
+      finald: 15,
+    },
+    defaults: {
+      finald: {
+        passive: "flotict",
+        active: ["attack", "heal", "shield", "commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"],
+      },
+      ulpes: { passive: "swordwork", active: ["attack", "heroSlash"] },
+      rihas: { passive: "painless", active: ["attack", "quake"] },
+      sushia: { passive: "warmup", active: ["attack", "bomb"] },
+      enemy: { passive: null, active: ["attack", "casterLine", "heavySlam"] },
     },
   };
 })();

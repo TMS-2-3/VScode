@@ -23,6 +23,8 @@
     createScreenSystem: window.createHealerScreenSystem,
     createStatusControls: window.createHealerStatusControls,
     createContextFactory: window.createHealerContextFactory,
+    createLoadoutSystem: window.createHealerLoadoutSystem,
+    createEquipmentSystem: window.createHealerEquipmentSystem,
     createStoryData: window.createHealerStoryData,
   };
 
@@ -30,6 +32,15 @@
     CHARACTER_DEFS: window.HEALER_CHARACTER_DEFS,
     ENEMY_DEFS: window.HEALER_ENEMY_DEFS,
     SKILL_DATA: window.HEALER_SKILL_DATA,
+    PASSIVE_DATA: window.HEALER_PASSIVE_DATA,
+    LOADOUT_CONFIG: window.HEALER_LOADOUT_CONFIG,
+    ELEMENT_DATA: window.HEALER_ELEMENT_DATA,
+    EQUIPMENT_DATA: window.HEALER_EQUIPMENT_DATA,
+    EQUIPMENT_SERIES_DATA: window.HEALER_EQUIPMENT_SERIES_DATA,
+    MATERIAL_DATA: window.HEALER_MATERIAL_DATA,
+    RANK_DATA: window.HEALER_RANK_DATA,
+    QUEST_DATA: window.HEALER_QUEST_DATA,
+    FACILITY_DATA: window.HEALER_FACILITY_DATA,
     TOWN_DATA: window.HEALER_TOWN_DATA,
   };
   const CONFIG = window.HEALER_CONFIG;
@@ -77,6 +88,8 @@
   systems.geometry = modules.createGeometrySystem(contexts.createGeometryContext());
   systems.storyData = modules.createStoryData(contexts.createStoryContext());
   systems.profileSystem = modules.createProfileSystem(contexts.createProfileContext());
+  systems.loadoutSystem = modules.createLoadoutSystem(contexts.createLoadoutContext());
+  systems.equipmentSystem = modules.createEquipmentSystem(contexts.createEquipmentContext());
   systems.unitFactory = modules.createUnitFactory(contexts.createUnitFactoryContext());
 
   state.player = systems.unitFactory.makeUnit({
@@ -121,6 +134,8 @@
         message: "はじまりの町",
         messageTimer: 5,
         hover: null,
+        priorityTarget: null,
+        currentQuest: null,
         stageClearTimer: 0,
         reinforcementsSpawned: false,
       },
@@ -140,6 +155,7 @@
         props: [],
         interaction: null,
         panel: null,
+        selectedQuest: null,
         story: null,
         introDone: false,
         meetingDone: false,

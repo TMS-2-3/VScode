@@ -480,6 +480,10 @@
       ctx.stroke();
     }
 
+    if (unit.team === "enemy" && unit === game.priorityTarget) {
+      drawPriorityTargetMark(unit);
+    }
+
     if (unit === player && (player.cast || player.channel)) {
       drawCastOrbit(unit);
     }
@@ -542,6 +546,32 @@
       drawTauntMark(unit);
     }
 
+    ctx.restore();
+  }
+
+  function drawPriorityTargetMark(unit) {
+    const radius = unit.radius + battlePx(13);
+    const pulse = 0.65 + Math.sin(game.time * 8) * 0.18;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,213,107,${pulse})`;
+    ctx.lineWidth = Math.max(2, battlePx(3));
+    ctx.beginPath();
+    ctx.arc(unit.x, unit.y, radius, 0, TAU);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = Math.max(1, battlePx(2));
+    for (let i = 0; i < 4; i += 1) {
+      const angle = -Math.PI / 2 + i * Math.PI / 2;
+      const x1 = unit.x + Math.cos(angle) * (radius - battlePx(5));
+      const y1 = unit.y + Math.sin(angle) * (radius - battlePx(5));
+      const x2 = unit.x + Math.cos(angle) * (radius + battlePx(5));
+      const y2 = unit.y + Math.sin(angle) * (radius + battlePx(5));
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 

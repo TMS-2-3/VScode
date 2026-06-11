@@ -23,6 +23,7 @@
       confirmPlayerAim,
       triggerUltimate,
       handleStatusUiClick,
+      togglePriorityTargetAt,
       hasCommandBiasDrag,
       clearCommandBiasDrag,
       updateCommandBiasDrag,
@@ -131,11 +132,11 @@
           return;
         }
         if (town.panel && town.panel.action === "battleGuide" && event.button === 0) {
-          interactTown();
+          interactTown({ pointer: true });
           return;
         }
         if (event.button === 0) {
-          interactTown();
+          interactTown({ pointer: true });
         }
         return;
       }
@@ -148,6 +149,10 @@
         }
         if (player.aim) {
           confirmPlayerAim();
+          return;
+        }
+        if (togglePriorityTargetAt(input.mouse.x, input.mouse.y)) {
+          return;
         }
       }
       if (event.button === 2) {

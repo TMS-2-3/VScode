@@ -9,6 +9,9 @@
       telegraphs,
       skillSystem,
       MOOD_BASELINE,
+      COMMAND_BIAS_PREFERRED_RANGES,
+      MOOD_PREFERRED_RANGE_HIGH,
+      MOOD_PREFERRED_RANGE_LOW,
       TELEGRAPH_AVOID_PADDING,
       TELEGRAPH_AVOID_SPEED_MULT,
       battlePx,
@@ -21,6 +24,7 @@
       clampUnit,
       updateTelegraphDynamic,
       getTargetablePartyMembers,
+      getPriorityTarget,
       triggerUltimate,
       setActionCooldown,
     } = context;
@@ -33,6 +37,9 @@
 
         member.aiTick -= dt;
         const avoidingTelegraph = member.actionLock <= 0 && updatePartyMovement(member, dt);
+        if (member.aiIntent) {
+          continue;
+        }
         if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= 100 && member.mood >= 95) {
           if (triggerUltimate(member.id, true)) {
             setActionCooldown(member);
@@ -62,7 +69,12 @@
     }
 
     function updatePartyMovement(unit, dt) {
-      const target = nearestAlive(unit, enemies);
+      if (unit.aiIntent && (!unit.aiIntent.target || unit.aiIntent.target.dead)) {
+        unit.aiIntent = null;
+      }
+      const target = unit.aiIntent && unit.aiIntent.target
+        ? unit.aiIntent.target
+        : getPriorityTarget() || nearestAlive(unit, enemies);
       if (!target) {
         return false;
       }
@@ -76,7 +88,19 @@
         return true;
       }
 
-      const desired = unit.preferredRange * (unit.mood > 80 ? 0.62 : 1);
+      if (unit.aiIntent) {
+        if (d <= unit.aiIntent.range) {
+          skillSystem.executePartyIntent(unit);
+          return false;
+        }
+        const dir = normalize(target.x - unit.x, target.y - unit.y);
+        unit.x += dir.x * unit.speed * moodSpeed * dt;
+        unit.y += dir.y * unit.speed * moodSpeed * dt;
+        clampUnit(unit);
+        return false;
+      }
+
+      const desired = getPartyPreferredRange(unit);
       let dir = { x: 0, y: 0 };
       if (d > desired + battlePx(18)) {
         dir = normalize(target.x - unit.x, target.y - unit.y);
@@ -88,6 +112,51 @@
       unit.y += dir.y * unit.speed * moodSpeed * dt;
       clampUnit(unit);
       return false;
+    }
+
+    function getPartyPreferredRange(unit) {
+      const bias = clampCommandBias(unit ? unit.commandBias : 0);
+      return getPreferredRangeForBias(unit, bias) * getMoodPreferredRangeMultiplier(unit);
+    }
+
+    function getEnemyPreferredRange(enemy) {
+      return getPreferredRangeForBias(enemy, 0);
+    }
+
+    function getPreferredRangeForBias(unit, bias) {
+      const ranges = COMMAND_BIAS_PREFERRED_RANGES || {};
+      const config = ranges[String(clampCommandBias(bias))] || ranges["0"];
+      if (!config) {
+        return unit && unit.preferredRange ? unit.preferredRange : battlePx(90);
+      }
+      const role = getPreferredRangeRole(unit);
+      const range = Number.isFinite(config[role]) ? config[role] : config.front;
+      return Number.isFinite(range) ? battlePx(range) : battlePx(90);
+    }
+
+    function getPreferredRangeRole(unit) {
+      return unit && (unit.role === "mage" || unit.role === "caster") ? "back" : "front";
+    }
+
+    function clampCommandBias(value) {
+      return clamp(Math.round(Number.isFinite(value) ? value : 0), -2, 2);
+    }
+
+    function getMoodPreferredRangeMultiplier(unit) {
+      if (!unit || unit.mood === null || !Number.isFinite(unit.mood)) {
+        return 1;
+      }
+      const high = MOOD_PREFERRED_RANGE_HIGH || { start: 75, end: 100, multiplier: 0.6 };
+      const low = MOOD_PREFERRED_RANGE_LOW || { start: 30, end: 0, multiplier: 1.4 };
+      if (unit.mood >= high.start) {
+        const ratio = clamp((unit.mood - high.start) / (high.end - high.start), 0, 1);
+        return 1 + (high.multiplier - 1) * ratio;
+      }
+      if (unit.mood <= low.start) {
+        const ratio = clamp((low.start - unit.mood) / (low.start - low.end), 0, 1);
+        return 1 + (low.multiplier - 1) * ratio;
+      }
+      return 1;
     }
 
     function getTelegraphAvoidance(unit) {
@@ -198,12 +267,12 @@
         }
 
         const d = dist(enemy, target);
-        const preferred = enemy.role === "caster" ? battlePx(330) : battlePx(36);
+        const preferred = getEnemyPreferredRange(enemy);
         const dir = normalize(target.x - enemy.x, target.y - enemy.y);
         if (enemy.actionLock <= 0 && d > preferred + battlePx(10)) {
           enemy.x += dir.x * enemy.speed * dt;
           enemy.y += dir.y * enemy.speed * dt;
-        } else if (enemy.actionLock <= 0 && d < preferred - battlePx(20) && enemy.role === "caster") {
+        } else if (enemy.actionLock <= 0 && d < preferred - battlePx(20) && getPreferredRangeRole(enemy) === "back") {
           enemy.x -= dir.x * enemy.speed * 0.65 * dt;
           enemy.y -= dir.y * enemy.speed * 0.65 * dt;
         }

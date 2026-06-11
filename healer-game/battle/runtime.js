@@ -37,6 +37,7 @@
       updateRihasPassiveStacks,
       dealDamage,
       healUnit,
+      hasPassive,
     } = context;
 
     function update(dt) {
@@ -63,6 +64,7 @@
       updateTelegraphs(dt);
       updateAreas(dt);
       separateUnits(dt);
+      clearInvalidPriorityTarget();
       checkBattleState(dt);
     }
 
@@ -152,7 +154,7 @@
     function updateSelfHeal(dt) {
       const limit = player.maxHp * SELF_HEAL_LIMIT;
       player.selfHealing = false;
-      if (player.noDamage < SELF_HEAL_DELAY || player.hp >= limit || player.mp <= 0 || player.dead) {
+      if (!hasPassive(player, "flotict") || player.noDamage < SELF_HEAL_DELAY || player.hp >= limit || player.mp <= 0 || player.dead) {
         return;
       }
 
@@ -336,6 +338,59 @@
       return best;
     }
 
+    function getHoveredEnemy(x = input.mouse.x, y = input.mouse.y) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const enemy of enemies) {
+        if (enemy.dead) {
+          continue;
+        }
+        const d = distPoint(x, y, enemy.x, enemy.y);
+        if (d <= enemy.radius + battlePx(10) && d < bestDist) {
+          best = enemy;
+          bestDist = d;
+        }
+      }
+      return best;
+    }
+
+    function getPriorityTarget() {
+      clearInvalidPriorityTarget();
+      return game.priorityTarget || null;
+    }
+
+    function togglePriorityTargetAt(x, y) {
+      const enemy = getHoveredEnemy(x, y);
+      if (!enemy) {
+        return false;
+      }
+      if (getPriorityTarget() === enemy) {
+        game.priorityTarget = null;
+        clearPartyAttackIntents();
+        addFloat("ターゲット解除", enemy.x, enemy.y - 36, "#f7fff6");
+      } else {
+        game.priorityTarget = enemy;
+        clearPartyAttackIntents();
+        addFloat("ターゲット指定", enemy.x, enemy.y - 36, "#ffd56b");
+      }
+      return true;
+    }
+
+    function clearPartyAttackIntents() {
+      for (const member of party) {
+        if (member.id !== "finald") {
+          member.aiIntent = null;
+        }
+      }
+    }
+
+    function clearInvalidPriorityTarget() {
+      if (game.priorityTarget && (game.priorityTarget.dead || !enemies.includes(game.priorityTarget))) {
+        game.priorityTarget = null;
+        clearPartyAttackIntents();
+      }
+    }
+
     function isFieldUnit(unit) {
       return Boolean(unit && unit.field !== false);
     }
@@ -435,6 +490,11 @@
       updateEffects,
       checkBattleState,
       getHoveredPartyMember,
+      getHoveredEnemy,
+      getPriorityTarget,
+      togglePriorityTargetAt,
+      clearPartyAttackIntents,
+      clearInvalidPriorityTarget,
       isFieldUnit,
       isTargetableUnit,
       getFieldPartyMembers,

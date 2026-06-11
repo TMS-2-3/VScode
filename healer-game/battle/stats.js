@@ -28,6 +28,9 @@
       RIHAS_PASSIVE_MAX_DAMAGE_REDUCTION,
       clamp,
       dist,
+      hasPassive,
+      getEquipmentEffectiveStat,
+      getEquipmentStatBonusSum,
     } = context;
 
     function getCommandActionCooldown(unit, baseTime) {
@@ -138,7 +141,8 @@
     }
 
     function getMpRegenRate(unit) {
-      return unit && Number.isFinite(unit.mpRegenRate) ? unit.mpRegenRate : DEFAULT_MP_REGEN_RATE;
+      const base = unit && Number.isFinite(unit.mpRegenRate) ? unit.mpRegenRate : DEFAULT_MP_REGEN_RATE;
+      return base * Math.max(0, 1 + getEquipmentBonus(unit, "mpRegenRate"));
     }
 
     function regenerateMp(unit, dt) {
@@ -233,7 +237,7 @@
 
     function getMoodGuardChance(unit) {
       if (unit && unit.id === "finald") return 0;
-      return unit ? unit.guardChance * getCommandBiasConfig(unit, "active").guard : 0;
+      return unit ? getEffectiveStat(unit, "guardChance") * getCommandBiasConfig(unit, "active").guard : 0;
     }
 
     function getMoodCooldownMultiplier() {
@@ -244,13 +248,29 @@
       return baseTime * getMoodCooldownMultiplier(unit);
     }
 
-    function getMoodCastTimeMultiplier() {
-      return 1;
+    function getCastSpeed(unit) {
+      const base = unit && Number.isFinite(unit.castSpeed) ? unit.castSpeed : 0;
+      const warmup = unit && hasPassive(unit, "warmup") ? (unit.castStacks || 0) * 0.05 : 0;
+      return Math.min(1, base + warmup + getEquipmentBonus(unit, "castSpeed"));
+    }
+
+    function getCastTimeMultiplier(unit) {
+      return Math.max(0, 1 - getCastSpeed(unit));
+    }
+
+    function getCastTime(baseTime, unit) {
+      if (!Number.isFinite(baseTime) || baseTime <= 0) {
+        return 0;
+      }
+      return Math.max(0.0001, baseTime * getCastTimeMultiplier(unit));
+    }
+
+    function getMoodCastTimeMultiplier(unit) {
+      return getCastTimeMultiplier(unit);
     }
 
     function getSushiaCastTime(baseTime, unit) {
-      const stackMultiplier = 1 - unit.castStacks * 0.05;
-      return Math.max(baseTime * 0.25, baseTime * stackMultiplier * getMoodCastTimeMultiplier(unit));
+      return getCastTime(baseTime, unit);
     }
 
     function getEffectiveGuardChance(unit) {
@@ -268,11 +288,37 @@
     }
 
     function getEffectiveDefense(unit) {
-      return unit.defense;
+      return getEffectiveStat(unit, "defense");
+    }
+
+    function getEffectiveAttack(unit) {
+      return getEffectiveStat(unit, "attack");
+    }
+
+    function getEffectiveMagic(unit) {
+      return getEffectiveStat(unit, "magic");
+    }
+
+    function getEffectiveMagicDefense(unit) {
+      return getEffectiveStat(unit, "magicDefense");
+    }
+
+    function getEffectiveStat(unit, statKey) {
+      if (!unit) {
+        return 0;
+      }
+      if (typeof getEquipmentEffectiveStat === "function") {
+        return getEquipmentEffectiveStat(unit, statKey);
+      }
+      return Number.isFinite(unit[statKey]) ? unit[statKey] : 0;
+    }
+
+    function getEquipmentBonus(unit, statKey) {
+      return typeof getEquipmentStatBonusSum === "function" ? getEquipmentStatBonusSum(unit, statKey) : 0;
     }
 
     function addRihasPassiveStack(unit) {
-      if (!unit || unit.id !== "rihas") {
+      if (!unit || !hasPassive(unit, "painless")) {
         return;
       }
       if ((unit.rihasPassiveStackCooldown || 0) > 0) {
@@ -285,7 +331,12 @@
     }
 
     function updateRihasPassiveStacks(unit, dt) {
-      if (!unit || unit.id !== "rihas") {
+      if (!unit || !hasPassive(unit, "painless")) {
+        if (unit) {
+          unit.rihasPassiveStacks = 0;
+          unit.rihasPassiveTimer = 0;
+          unit.rihasPassiveStackCooldown = 0;
+        }
         return;
       }
       unit.rihasPassiveStackCooldown = Math.max(0, (unit.rihasPassiveStackCooldown || 0) - dt);
@@ -301,7 +352,7 @@
     }
 
     function getRihasPassiveRatio(unit) {
-      if (!unit || unit.id !== "rihas") {
+      if (!unit || !hasPassive(unit, "painless")) {
         return 0;
       }
       return clamp((unit.rihasPassiveStacks || 0) / RIHAS_PASSIVE_MAX_STACKS, 0, 1);
@@ -342,11 +393,17 @@
       getMoodCooldownMultiplier,
       getMoodCooldown,
       getMoodCastTimeMultiplier,
+      getCastSpeed,
+      getCastTime,
       getSushiaCastTime,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
       getGuardDamageMultiplier,
       getEffectiveDefense,
+      getEffectiveAttack,
+      getEffectiveMagic,
+      getEffectiveMagicDefense,
+      getEffectiveStat,
       addRihasPassiveStack,
       updateRihasPassiveStacks,
       getRihasPassiveRatio,

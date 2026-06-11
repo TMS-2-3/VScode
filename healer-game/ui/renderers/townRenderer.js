@@ -20,6 +20,9 @@
       selectProfilePronoun,
       confirmProfileName,
       getTownBuilding,
+      getQuestTypes,
+      getQuestsByType,
+      getQuestById,
     } = context;
 
   function drawTown() {
@@ -300,8 +303,21 @@
     if (!town.panel) {
       return;
     }
+    town.panel.clickTargets = [];
     if (town.panel.action === "battleGuide") {
       drawBattleGuidePanel();
+      return;
+    }
+    if (town.panel.action === "questType") {
+      drawQuestTypePanel();
+      return;
+    }
+    if (town.panel.action === "questList") {
+      drawQuestListPanel();
+      return;
+    }
+    if (town.panel.action === "questDecision") {
+      drawQuestDecisionPanel();
       return;
     }
     const w = Math.min(560, view.w - 32);
@@ -325,7 +341,178 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText(town.panel.action === "quest" ? "E  出発" : "E  閉じる", x + w - 24, y + h - 24);
+    ctx.fillText("E  閉じる", x + w - 24, y + h - 24);
+  }
+
+  function drawQuestTypePanel() {
+    const w = Math.min(640, view.w - 32);
+    const h = 260;
+    const x = (view.w - w) / 2;
+    const y = view.h - h - 28;
+    drawPanel(x, y, w, h);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("依頼所", x + 26, y + 44);
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("受ける依頼の種類を選択してください。", x + 26, y + 74);
+
+    const types = getQuestTypes();
+    const buttonGap = 16;
+    const buttonW = Math.min(250, (w - 52 - buttonGap) / 2);
+    const buttonH = 82;
+    const startX = x + (w - (buttonW * 2 + buttonGap)) / 2;
+    const startY = y + 104;
+    for (let i = 0; i < types.length; i += 1) {
+      const type = types[i];
+      const bx = startX + i * (buttonW + buttonGap);
+      const by = startY;
+      const questCount = getQuestsByType(type.key).length;
+      drawQuestButton(bx, by, buttonW, buttonH, type.name, questCount ? `${questCount}件` : "準備中", {
+        kind: "selectQuestType",
+        type: type.key,
+      }, questCount === 0);
+    }
+
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("E  ストーリー依頼 / Esc  閉じる", x + w - 24, y + h - 22);
+  }
+
+  function drawQuestListPanel() {
+    const type = town.panel.questType || "story";
+    const quests = Array.isArray(town.panel.quests) ? town.panel.quests : getQuestsByType(type);
+    const w = Math.min(760, view.w - 32);
+    const h = Math.min(430, view.h - 56);
+    const x = (view.w - w) / 2;
+    const y = view.h - h - 28;
+    drawPanel(x, y, w, h);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(town.panel.title || "依頼一覧", x + 26, y + 44);
+
+    let cursorY = y + 76;
+    if (quests.length === 0) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("今はこの種類の依頼がありません。", x + 26, cursorY);
+    } else {
+      for (const quest of quests) {
+        const buttonH = 82;
+        drawQuestButton(x + 24, cursorY, w - 48, buttonH, `${quest.rank || "-"}  ${quest.name}`, quest.summary || "", {
+          kind: "selectQuest",
+          questId: quest.id,
+        });
+        cursorY += buttonH + 12;
+        if (cursorY > y + h - 84) {
+          break;
+        }
+      }
+    }
+
+    drawTextButton(x + 24, y + h - 54, 130, 34, "戻る", { kind: "backToQuestTypes" });
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("E  一番上を選択 / Esc  閉じる", x + w - 24, y + h - 22);
+  }
+
+  function drawQuestDecisionPanel() {
+    const quest = getQuestById(town.panel.questId);
+    const w = Math.min(720, view.w - 32);
+    const h = 360;
+    const x = (view.w - w) / 2;
+    const y = view.h - h - 28;
+    drawPanel(x, y, w, h);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("依頼の決定", x + 26, y + 44);
+
+    if (!quest) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("依頼データが見つかりません。", x + 26, y + 84);
+      drawTextButton(x + 24, y + h - 58, 130, 36, "戻る", { kind: "backToQuestTypes" });
+      return;
+    }
+
+    ctx.fillStyle = "#ffd86b";
+    ctx.font = "800 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(`${quest.rank || "-"}  ${quest.name}`, x + 26, y + 82);
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const lines = [
+      quest.summary,
+      `目的: ${quest.objective || "敵を全滅させる"}`,
+      `敵情報: ${quest.enemyPreview || "不明"}`,
+      `推奨: ${quest.recommended || "-"}`,
+      `報酬: ${quest.reward || "未定"}`,
+    ].filter(Boolean);
+    let cursorY = y + 116;
+    for (const line of lines) {
+      const wrapped = wrapCanvasText(line, w - 52);
+      for (const textLine of wrapped) {
+        ctx.fillText(textLine, x + 26, cursorY);
+        cursorY += 22;
+      }
+    }
+
+    drawTextButton(x + 24, y + h - 60, 130, 38, "戻る", { kind: "backToQuestList", type: quest.type });
+    drawTextButton(x + w - 214, y + h - 60, 190, 38, "この依頼を受ける", { kind: "confirmQuest" }, true);
+    ctx.textAlign = "right";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("E  決定 / Esc  閉じる", x + w - 24, y + h - 76);
+  }
+
+  function drawQuestButton(x, y, w, h, title, subText, action, disabled = false) {
+    town.panel.clickTargets.push({ x, y, w, h, action });
+    ctx.save();
+    ctx.fillStyle = disabled ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.11)";
+    ctx.strokeStyle = disabled ? "rgba(255,255,255,0.12)" : "rgba(255,216,107,0.52)";
+    ctx.lineWidth = disabled ? 1 : 2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = disabled ? "rgba(247,255,246,0.48)" : "#f7fff6";
+    ctx.font = "800 17px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(title, x + 18, y + 30);
+    ctx.fillStyle = disabled ? "rgba(220,233,220,0.42)" : "#dce9dc";
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const wrapped = wrapCanvasText(subText || "", w - 36);
+    for (let i = 0; i < Math.min(2, wrapped.length); i += 1) {
+      ctx.fillText(wrapped[i], x + 18, y + 54 + i * 17);
+    }
+    ctx.restore();
+  }
+
+  function drawTextButton(x, y, w, h, label, action, primary = false) {
+    town.panel.clickTargets.push({ x, y, w, h, action });
+    ctx.save();
+    ctx.fillStyle = primary ? "rgba(255,216,107,0.24)" : "rgba(255,255,255,0.1)";
+    ctx.strokeStyle = primary ? "#ffd86b" : "rgba(255,255,255,0.24)";
+    ctx.lineWidth = primary ? 2 : 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = primary ? "#fff6c2" : "#f7fff6";
+    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+    ctx.restore();
   }
 
   function drawBattleGuidePanel() {

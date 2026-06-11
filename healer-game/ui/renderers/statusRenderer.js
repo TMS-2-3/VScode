@@ -24,6 +24,9 @@
       SUSHIA_PASSIVE_STACK_DURATION,
       BASE_CRIT_CHANCE,
       BASE_CRIT_DAMAGE,
+      CRIT_OVERFLOW_DAMAGE_RATE,
+      ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER,
+      ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER,
       skillSystem,
       getBattleBounds,
       clamp,
@@ -34,13 +37,25 @@
       getMoodCooldownMultiplier,
       getMoodCooldown,
       getMoodCastTimeMultiplier,
+      getCastSpeed,
       getSushiaCastTime,
       getRihasPassiveDamageMultiplier,
       getRihasPassiveIncomingMultiplier,
+      getEffectiveAttack,
+      getEffectiveMagic,
       getEffectiveDefense,
+      getEffectiveMagicDefense,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
       getMpRegenRate,
+      getElementKeys,
+      getElementName,
+      getElementShortName,
+      getNormalElement,
+      getElementBoostBonus,
+      getElementResistanceBonus,
+      hasPassive,
+      getEquippedPassive,
     } = context;
   function drawHud() {
     drawAllyStatusCards();
@@ -189,7 +204,7 @@
     const panelW = Math.min(meta.w, view.w - 24);
     const panelY = meta.y + meta.h + 7;
     const availableH = Math.max(210, Math.min(view.h - panelY - 12, battleBounds.bottom - panelY - 8));
-    const panelH = Math.min(clamp(view.h * 0.46, 320, 430), availableH);
+    const panelH = Math.min(clamp(view.h * 0.66, 430, 620), availableH);
     const panelX = clamp(meta.x, 12, view.w - panelW - 12);
     drawPanel(panelX, panelY, panelW, panelH);
     statusUiButtons.push({ action: "consume", x: panelX, y: panelY, w: panelW, h: panelH });
@@ -201,7 +216,7 @@
 
     const hiddenH = drawHiddenStatusDetails(hiddenIcons, innerX, innerY, innerW);
     const statsY = innerY + hiddenH + 10;
-    const statsH = drawDetailedStats(unit, innerX, statsY, innerW, panelH - hiddenH - 82);
+    const statsH = drawDetailedStats(unit, innerX, statsY, innerW, panelH - hiddenH - 96);
     const skillsY = statsY + statsH + 10;
     drawDetailedSkills(unit, innerX, skillsY, innerW, panelY + panelH - skillsY - 24);
 
@@ -274,79 +289,168 @@
     ctx.fillText("詳細ステータス", x, y);
 
     const stats = getDetailedStats(unit);
-    const rowH = 25;
-    const colGap = 10;
-    const columns = w < 230 ? 1 : 2;
+    const rowH = w >= 250 ? 26 : (w >= 230 ? 28 : 27);
+    const colGap = 7;
+    const columns = w < 190 ? 1 : (w < 230 ? 2 : (w < 250 ? 3 : 4));
     const colW = (w - colGap * (columns - 1)) / columns;
     const startY = y + 29;
-    for (let i = 0; i < stats.length; i += 1) {
-      const col = i % columns;
-      const row = Math.floor(i / columns);
-      const sx = x + col * (colW + colGap);
-      const sy = startY + row * rowH;
-      if (sy > y + h - 8) {
-        return Math.max(36, sy - y);
+    let cellIndex = 0;
+    let extraY = 0;
+    for (const stat of stats) {
+      if (stat.breakAfter) {
+        cellIndex = Math.ceil(cellIndex / columns) * columns;
+        extraY += 4;
+        continue;
       }
-      drawDetailStatRow(stats[i].label, stats[i].value, sx, sy, colW);
+      const col = cellIndex % columns;
+      const row = Math.floor(cellIndex / columns);
+      const sx = x + col * (colW + colGap);
+      const sy = startY + row * rowH + extraY;
+      if (sy > y + h - 18) {
+        return Math.max(36, h);
+      }
+      drawDetailStatRow(stat.label, stat.value, sx, sy, colW);
+      cellIndex += 1;
     }
-    return 29 + Math.ceil(stats.length / columns) * rowH;
+    return 29 + Math.ceil(cellIndex / columns) * rowH + extraY;
   }
 
   function drawDetailStatRow(label, value, x, y, w) {
-    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#aebdb4";
-    ctx.fillText(label, x, y);
-    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#f7fff6";
-    ctx.fillText(value, x + w, y);
+    drawFittedText(label, x, y, w, 700, 12, 8, "#aebdb4", "left");
+    drawFittedText(value, x, y + 15, w, 800, 14, 9, "#f7fff6", "left");
   }
 
   function getDetailedStats(unit) {
     const outgoing = getUnitOutgoingDamageMultiplier(unit);
     const incoming = getUnitIncomingDamageMultiplier(unit);
-    const castSpeed = 1 / getUnitCastTimeMultiplier(unit) - 1;
+    const castSpeed = getUnitCastSpeed(unit);
     const skillSpeed = 1 / getMoodCooldownMultiplier(unit) - 1;
-    return [
-      { label: "攻撃力", value: formatNumber(unit.attack) },
-      { label: "魔力", value: formatNumber(unit.magic) },
+    const stats = [
+      { label: "攻撃力", value: formatNumber(getEffectiveAttack(unit)) },
+      { label: "魔力", value: formatNumber(getEffectiveMagic(unit)) },
       { label: "防御力", value: formatNumber(getEffectiveDefense(unit)) },
-      { label: "魔法防御力", value: formatNumber(unit.magicDefense) },
-      { label: "会心率", value: formatPercent(BASE_CRIT_CHANCE) },
-      { label: "会心ダメージ", value: formatPercent(BASE_CRIT_DAMAGE) },
-      { label: "与ダメ補正", value: formatSignedPercent(outgoing - 1) },
-      { label: "被ダメ補正", value: formatSignedPercent(incoming - 1) },
+      { label: "魔法防御力", value: formatNumber(getEffectiveMagicDefense(unit)) },
+      { label: "会心率", value: formatPercent(getUnitCritChance(unit)) },
+      { label: "会心ダメージ", value: formatPercent(getUnitCritDamage(unit)) },
+      { label: "与ダメージ率", value: formatPercent(outgoing) },
+      { label: "被ダメージ率", value: formatPercent(incoming) },
       { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
       { label: "スキルヘイスト", value: formatSignedPercent(skillSpeed) },
+      { label: "行動クールタイム", value: getActionCooldownText(unit) },
+      { label: "必殺チャージ率", value: formatPercent(getUltimateChargeRate(unit)) },
       { label: "ガード率", value: formatPercent(getEffectiveGuardChance(unit)) },
       { label: "ガード軽減率", value: formatPercent(getGuardDamageReductionRate(unit)) },
-      { label: "移動速度", value: `${Math.round(unit.speed)}` },
+      { label: "HP再生率", value: formatPercent(getHpRegenRate(unit)) },
       { label: "MP回復率", value: formatPercent(getMpRegenRate(unit)) },
+      { label: "移動速度", value: `${Math.round(unit.speed)}` },
+      { label: "通常属性", value: getUnitElementName(unit) },
+      { breakAfter: true },
     ];
+    for (const elementKey of getUnitElementKeys()) {
+      stats.push({ label: `${getUnitElementShortLabel(elementKey)}強化`, value: formatSignedPercent(getElementBoostValue(unit, elementKey)) });
+      stats.push({ label: `${getUnitElementShortLabel(elementKey)}耐性`, value: formatSignedPercent(getElementResistanceValue(unit, elementKey)) });
+    }
+    return stats;
+  }
+
+  function getActionCooldownText(unit) {
+    if (!unit || unit.id === "finald" || !skillSystem.getActionCooldown) {
+      return "-";
+    }
+    return `${skillSystem.getActionCooldown(unit).toFixed(1)}秒`;
+  }
+
+  function getUltimateChargeRate(unit) {
+    return unit && Number.isFinite(unit.ultimateChargeRate) ? unit.ultimateChargeRate : 1;
+  }
+
+  function getHpRegenRate(unit) {
+    return unit && Number.isFinite(unit.hpRegenRate) ? unit.hpRegenRate : 0;
+  }
+
+  function getUnitElementKeys() {
+    return typeof getElementKeys === "function" ? getElementKeys() : ["none"];
+  }
+
+  function getUnitElementLabel(elementKey) {
+    return typeof getElementName === "function" ? getElementName(elementKey) : elementKey;
+  }
+
+  function getUnitElementShortLabel(elementKey) {
+    if (typeof getElementShortName === "function") {
+      return getElementShortName(elementKey);
+    }
+    return getUnitElementLabel(elementKey).replace(/属性/g, "");
+  }
+
+  function getUnitElementName(unit) {
+    const elementKey = typeof getNormalElement === "function" ? getNormalElement(unit) : "none";
+    return getUnitElementLabel(elementKey);
+  }
+
+  function getElementBoostValue(unit, elementKey) {
+    return typeof getElementBoostBonus === "function" ? getElementBoostBonus(unit, elementKey) : 0;
+  }
+
+  function getElementResistanceValue(unit, elementKey) {
+    return typeof getElementResistanceBonus === "function" ? getElementResistanceBonus(unit, elementKey) : 0;
   }
 
   function getUnitOutgoingDamageMultiplier(unit) {
-    let multiplier = getMoodOutgoingDamageMultiplier(unit) * getCommandOutgoingDamageMultiplier(unit);
-    if (unit.id === "rihas") {
-      multiplier *= getRihasPassiveDamageMultiplier(unit);
+    let bonus = multiplierToBonus(getMoodOutgoingDamageMultiplier(unit)) + multiplierToBonus(getCommandOutgoingDamageMultiplier(unit));
+    if (hasPassive(unit, "painless")) {
+      bonus += multiplierToBonus(getRihasPassiveDamageMultiplier(unit));
     }
-    return multiplier;
+    return Math.max(0, 1 + bonus);
   }
 
   function getUnitIncomingDamageMultiplier(unit) {
-    let multiplier = getMoodIncomingDamageMultiplier(unit) * getCommandIncomingDamageMultiplier(unit);
-    if (unit.id === "rihas") {
-      multiplier *= getRihasPassiveIncomingMultiplier(unit);
+    let bonus = multiplierToBonus(getMoodIncomingDamageMultiplier(unit)) + multiplierToBonus(getCommandIncomingDamageMultiplier(unit));
+    if (hasPassive(unit, "painless")) {
+      bonus += multiplierToBonus(getRihasPassiveIncomingMultiplier(unit));
     }
-    return multiplier;
+    return Math.max(0, 1 + bonus);
+  }
+
+  function multiplierToBonus(multiplier) {
+    return (Number.isFinite(multiplier) ? multiplier : 1) - 1;
+  }
+
+  function getUnitCritChance(unit) {
+    return clamp(getUnitRawCritChance(unit), 0, 1);
+  }
+
+  function getUnitRawCritChance(unit) {
+    const multiplier = unit && hasPassive(unit, "swordwork") ? ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER : 1;
+    return BASE_CRIT_CHANCE * (Number.isFinite(multiplier) ? multiplier : 1);
+  }
+
+  function getUnitCritDamage(unit) {
+    let damage = BASE_CRIT_DAMAGE;
+    if (unit && hasPassive(unit, "swordwork")) {
+      const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER)
+        ? ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER
+        : 0.5;
+      const bonusPercent = Math.max(0, Math.floor((BASE_CRIT_DAMAGE - 1) * 100 * multiplier));
+      damage = 1 + bonusPercent / 100;
+    }
+    return damage + getUnitCritOverflowDamageBonus(unit);
+  }
+
+  function getUnitCritOverflowDamageBonus(unit) {
+    const rate = Number.isFinite(CRIT_OVERFLOW_DAMAGE_RATE) ? CRIT_OVERFLOW_DAMAGE_RATE : 0.5;
+    return Math.max(0, getUnitRawCritChance(unit) - 1) * rate;
   }
 
   function getUnitCastTimeMultiplier(unit) {
-    if (unit.id === "sushia") {
+    if (hasPassive(unit, "warmup")) {
       return getSushiaCastTime(1, unit);
     }
     return getMoodCastTimeMultiplier(unit);
+  }
+
+  function getUnitCastSpeed(unit) {
+    return typeof getCastSpeed === "function" ? getCastSpeed(unit) : 1 - getUnitCastTimeMultiplier(unit);
   }
 
   function drawDetailedSkills(unit, x, y, w, h) {
@@ -376,8 +480,10 @@
   }
 
   function getDetailedSkillEntries(unit) {
-    const data = skillSystem.data[unit.id] || {};
-    return Object.entries(data).map(([key, skill]) => {
+    const entries = skillSystem.getUnitSkillEntries
+      ? skillSystem.getUnitSkillEntries(unit)
+      : Object.entries(skillSystem.data[unit.id] || {}).map(([key, skill]) => ({ key, skill }));
+    return entries.map(({ key, skill }) => {
       const cooldown = getSkillCooldownDetail(unit, key, skill);
       return { key, skill, ...cooldown };
     });
@@ -563,7 +669,8 @@
 
   function getStatusIcons(unit) {
     const icons = [];
-    if (unit.id === "finald") {
+    const passive = getEquippedPassive ? getEquippedPassive(unit) : null;
+    if (passive && unit.id === "finald") {
       icons.push({ label: "空", color: "#73dfff", ratio: 1, permanent: true });
     }
     if (unit.actionLock > ACTION_GAP) {
@@ -574,14 +681,14 @@
       const frozenMax = Math.max(0.1, unit.frozenMax || unit.frozen);
       icons.push({ label: "凍", color: "#b8e7ff", ratio: unit.frozen / frozenMax, remaining: unit.frozen });
     }
-    if (unit.id === "sushia" && (unit.castStacks || 0) > 0) {
+    if (hasPassive(unit, "warmup") && (unit.castStacks || 0) > 0) {
       icons.push({ label: "熱", color: "#ff9f43", ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer });
     }
     if (unit.tauntTimer > 0) {
       const duration = skillSystem.requireSkill("rihas", "ult").duration || 5.5;
       icons.push({ label: "怒", color: "#ff6b44", ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer });
     }
-    if ((unit.rihasPassiveStacks || 0) > 0) {
+    if (hasPassive(unit, "painless") && (unit.rihasPassiveStacks || 0) > 0) {
       icons.push({ label: "拳", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
     }
     return icons;
@@ -818,7 +925,6 @@
   }
   function drawSkillPanel(x, y, w, h) {
     const skills = skillSystem.getPanelSkills(player);
-    const inputLabels = ["A", "S", "D", "4"];
     const gap = 8;
     const itemW = (w - gap * Math.max(0, skills.length - 1)) / Math.max(1, skills.length);
     const itemY = y + 8;
@@ -837,7 +943,7 @@
         ? 1 - clamp(player.ult / 100, 0, 1)
         : clamp(skill.cd / Math.max(0.1, skill.max), 0, 1);
       drawSkillCooldownShadow(sx, itemY, itemW, itemH, shadowRatio);
-      drawSkillInputBadge(inputLabels[i], sx + 8, itemY + 7, itemW - 16);
+      drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);
       ctx.fillStyle = "#102018";
       ctx.font = `800 ${itemW < 92 ? 11 : 12}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
       ctx.textAlign = "center";
@@ -861,7 +967,6 @@
 
   function drawCommandSkillPanel(x, y, w, h) {
     const skills = skillSystem.getCommandPanelSkills(player);
-    const inputLabels = ["G", "H", "J", "K"];
     const gap = 8;
     const itemW = (w - gap * Math.max(0, skills.length - 1)) / Math.max(1, skills.length);
     const itemY = y + 8;
@@ -877,7 +982,7 @@
       ctx.fill();
       ctx.stroke();
       drawSkillCooldownShadow(sx, itemY, itemW, itemH, clamp(skill.cd / Math.max(0.1, skill.max), 0, 1));
-      drawSkillInputBadge(inputLabels[i], sx + 8, itemY + 7, itemW - 16);
+      drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);
       ctx.fillStyle = "#102018";
       ctx.font = `800 ${itemW < 92 ? 10 : 11}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
       ctx.textAlign = "center";

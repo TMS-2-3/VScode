@@ -15,6 +15,7 @@
       areas,
       effects,
       TOWN_DATA,
+      QUEST_DATA,
       TOWN_WIDTH,
       TOWN_HEIGHT,
       resetGame,
@@ -37,9 +38,11 @@
       game.hover = null;
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
+      game.currentQuest = null;
       game.message = "はじまりの町";
       game.messageTimer = 4;
       town.panel = null;
+      town.selectedQuest = null;
       town.interaction = null;
       player.aim = null;
       if (town.buildings.length === 0) {
@@ -133,15 +136,24 @@
       return null;
     }
 
-    function interactTown() {
+    function interactTown(options = {}) {
       if (town.story) {
         return;
       }
       if (town.panel) {
-        if (town.panel.action === "quest") {
-          showBattleGuidePanel();
+        const clicked = options.pointer ? getTownPanelClickAction() : null;
+        if (clicked) {
+          runTownPanelAction(clicked);
+        } else if (options.pointer && ["questType", "questList", "questDecision"].includes(town.panel.action)) {
+          return;
+        } else if (town.panel.action === "questType") {
+          showQuestListPanel("story");
+        } else if (town.panel.action === "questList") {
+          selectFirstQuestInPanel();
+        } else if (town.panel.action === "questDecision") {
+          confirmSelectedQuest();
         } else if (town.panel.action === "battleGuide") {
-          resetGame();
+          resetGame(town.selectedQuest);
         } else {
           closeTownPanel();
         }
@@ -185,19 +197,129 @@
           startGuildMeetingStory();
           return;
         }
-        town.panel = {
-          title: "依頼所",
-          lines: ["依頼: 町外れの魔物討伐", "報酬や難易度選択はあとで追加する。"],
-          action: "quest",
-        };
+        showQuestTypePanel();
       }
     }
 
-    function showBattleGuidePanel() {
+    function showQuestTypePanel() {
+      town.selectedQuest = null;
       town.panel = {
-        title: "出発前の確認",
+        title: "依頼所",
+        action: "questType",
+        clickTargets: [],
+      };
+    }
+
+    function showQuestListPanel(typeKey) {
+      const type = getQuestType(typeKey);
+      town.selectedQuest = null;
+      town.panel = {
+        title: type ? type.name : "依頼一覧",
+        action: "questList",
+        questType: typeKey,
+        quests: getQuestsByType(typeKey),
+        clickTargets: [],
+      };
+    }
+
+    function showQuestDecisionPanel(questId) {
+      const quest = getQuestById(questId);
+      if (!quest) {
+        game.message = "依頼データが見つからない";
+        game.messageTimer = 3;
+        return;
+      }
+      town.selectedQuest = quest;
+      town.panel = {
+        title: "依頼の決定",
+        action: "questDecision",
+        questId: quest.id,
+        clickTargets: [],
+      };
+    }
+
+    function confirmSelectedQuest() {
+      const quest = town.selectedQuest || getQuestById(town.panel && town.panel.questId);
+      if (!quest) {
+        game.message = "依頼を選択してください";
+        game.messageTimer = 3;
+        return;
+      }
+      town.selectedQuest = quest;
+      showBattleGuidePanel(quest);
+    }
+
+    function selectFirstQuestInPanel() {
+      if (!town.panel || !Array.isArray(town.panel.quests) || town.panel.quests.length === 0) {
+        return;
+      }
+      showQuestDecisionPanel(town.panel.quests[0].id);
+    }
+
+    function runTownPanelAction(action) {
+      if (action.kind === "selectQuestType") {
+        showQuestListPanel(action.type);
+      } else if (action.kind === "selectQuest") {
+        showQuestDecisionPanel(action.questId);
+      } else if (action.kind === "confirmQuest") {
+        confirmSelectedQuest();
+      } else if (action.kind === "backToQuestTypes") {
+        showQuestTypePanel();
+      } else if (action.kind === "backToQuestList") {
+        showQuestListPanel(action.type || (town.selectedQuest && town.selectedQuest.type) || "story");
+      } else if (action.kind === "startBattle") {
+        resetGame(town.selectedQuest);
+      } else if (action.kind === "close") {
+        closeTownPanel();
+      }
+    }
+
+    function getTownPanelClickAction() {
+      const targets = town.panel && Array.isArray(town.panel.clickTargets) ? town.panel.clickTargets : [];
+      for (let i = targets.length - 1; i >= 0; i -= 1) {
+        const target = targets[i];
+        if (input.mouse.x >= target.x && input.mouse.x <= target.x + target.w && input.mouse.y >= target.y && input.mouse.y <= target.y + target.h) {
+          return target.action;
+        }
+      }
+      return null;
+    }
+
+    function getQuestType(typeKey) {
+      return QUEST_DATA.types[typeKey] || null;
+    }
+
+    function getQuestTypes() {
+      return Object.values(QUEST_DATA.types);
+    }
+
+    function getQuestById(questId) {
+      return QUEST_DATA.quests.find((quest) => quest.id === questId) || null;
+    }
+
+    function getQuestsByType(typeKey) {
+      return QUEST_DATA.quests.filter((quest) => quest.type === typeKey);
+    }
+
+    function showBattleGuidePanel(quest = town.selectedQuest) {
+      if (quest) {
+        town.selectedQuest = quest;
+      }
+      town.panel = {
+        title: quest ? `出発前の確認: ${quest.name}` : "出発前の確認",
         action: "battleGuide",
+        questId: quest ? quest.id : null,
+        clickTargets: [],
         sections: [
+          quest ? {
+            title: "依頼内容",
+            lines: [
+              `ランク: ${quest.rank || "-"}`,
+              `目的: ${quest.objective || "敵を全滅させる"}`,
+              `敵情報: ${quest.enemyPreview || "不明"}`,
+              `報酬: ${quest.reward || "未定"}`,
+            ],
+          } : null,
           {
             title: `${getPlayerFirstName()}の技`,
             lines: [
@@ -230,10 +352,11 @@
             lines: [
               "主人公は戦場に出ず、後方から味方を支援する。",
               "A: 援護射撃 / S: ヒール / D: バリア / 左クリック: 構え中スキルの発動 / 右クリック: 構えキャンセル",
-              "G: 耐えて! / H: 攻めて! / J: 全員下がって! / K: 今が攻め時! / 1-4: 必殺技 / 勝利条件: 敵全滅",
+              "何も構えていない時は、敵を左クリックでターゲット指定。同じ敵をもう一度押すと解除。",
+              "G: 防御指示 / H: 攻撃指示 / J: 防御陣形 / K: 攻撃陣形 / 1-4: 必殺技 / 勝利条件: 敵全滅",
             ],
           },
-        ],
+        ].filter(Boolean),
       };
     }
 
@@ -288,9 +411,15 @@
       interactTown,
       showBattleGuidePanel,
       closeTownPanel,
+      showQuestTypePanel,
+      showQuestListPanel,
+      showQuestDecisionPanel,
       startGuildMeetingStory,
       startTownStory,
       advanceTownStory,
+      getQuestTypes,
+      getQuestsByType,
+      getQuestById,
     };
   };
 })();

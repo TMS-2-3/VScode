@@ -11,11 +11,17 @@
       battlePx,
       getSkillSystem,
       getActionCooldown,
+      getDefaultLoadout,
+      normalizeLoadout,
+      getEmptyEquipment,
+      normalizeEquipment,
     } = context;
 
     function makeUnit(options) {
-      return {
+      const skillOwner = options.skillOwner || options.id;
+      const unit = {
         id: options.id,
+        skillOwner,
         name: options.name,
         label: options.label || "?",
         team: options.team,
@@ -24,6 +30,9 @@
         y: options.y || 0,
         radius: options.radius || battlePx(14),
         color: options.color || "#ffffff",
+        element: "none",
+        elementBoosts: {},
+        elementResistances: {},
         maxHp: options.maxHp || 100,
         hp: options.maxHp || 100,
         moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || options.maxHp || 100,
@@ -35,6 +44,7 @@
         magic: options.magic || 10,
         defense: options.defense || 0,
         magicDefense: options.magicDefense || 0,
+        castSpeed: Number.isFinite(options.castSpeed) ? options.castSpeed : 0,
         guardChance: options.guardChance || 0,
         commandBias: 0,
         activeCommandBias: 0,
@@ -45,9 +55,12 @@
         shield: 0,
         shieldTimer: 0,
         cds: {},
+        loadout: options.loadout ? normalizeLoadout(skillOwner, options.loadout) : getDefaultLoadout(skillOwner),
+        equipment: getEmptyEquipment(),
         actionLock: 0,
         actionTotal: 0,
         aiTick: 0,
+        aiIntent: null,
         hurt: 0,
         guardFlash: 0,
         frozen: 0,
@@ -72,6 +85,8 @@
         targetable: options.targetable !== false,
         collidable: options.collidable !== false,
       };
+      unit.equipment = normalizeEquipment(options.equipment || {}, unit);
+      return unit;
     }
 
     function makePartyMember(id) {
@@ -90,6 +105,7 @@
 
       const enemy = makeUnit({
         id: `${kind}-${Math.random().toString(16).slice(2)}`,
+        skillOwner: "enemy",
         name,
         label: stats.label,
         team: "enemy",
@@ -103,6 +119,9 @@
         defense: stats.defense,
         magicDefense: stats.magicDefense,
         magic: 0,
+        element: stats.element,
+        elementBoosts: stats.elementBoosts,
+        elementResistances: stats.elementResistances,
       });
       enemy.x = x;
       enemy.y = y;

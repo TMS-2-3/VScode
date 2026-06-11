@@ -24,7 +24,7 @@
       addFloat,
     } = context;
 
-    function resetGame() {
+    function resetGame(quest = null) {
       projectiles.length = 0;
       telegraphs.length = 0;
       areas.length = 0;
@@ -34,7 +34,9 @@
       game.time = 0;
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
-      game.message = "依頼: 魔物を全滅させる";
+      game.priorityTarget = null;
+      game.currentQuest = quest;
+      game.message = quest ? `依頼: ${quest.name}` : "依頼: 魔物を全滅させる";
       game.messageTimer = 4;
 
       const bounds = getBattleBounds();

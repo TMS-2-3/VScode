@@ -12,7 +12,7 @@
     selfHealHpPerSec: 14,
     aiIdleRecheck: 0.2,
     actionGap: 0.2,
-    actionCooldownBase: 7,
+    actionCooldownBase: 6,
 
     guardDamageMultiplier: 0.5,
     guardOverflowReductionRate: 1 / 3,
@@ -27,6 +27,15 @@
       { value: 2, guard: 0, actionCd: 0.5, moodGain: 1.1, moodLoss: 0.9, damageOut: 1.1, damageIn: 1 },
     ],
     commandBiasAutoGraceActions: 5,
+    commandBiasPreferredRanges: {
+      "-2": { front: 160, back: 270 },
+      "-1": { front: 100, back: 250 },
+      "0": { front: 65, back: 230 },
+      "1": { front: 50, back: 210 },
+      "2": { front: 40, back: 200 },
+    },
+    moodPreferredRangeHigh: { start: 75, end: 100, multiplier: 0.6 },
+    moodPreferredRangeLow: { start: 30, end: 0, multiplier: 1.4 },
 
     moodBaseline: 50,
     moodInitial: 35,
@@ -58,6 +67,10 @@
     moodDamageTakenRate: 0.0495,
     moodHealRate: 0.1104,
     moodQuickHealBonus: 2,
+    friendlyFireMoodSafeLimit: 70,
+    friendlyFireMoodMax: 100,
+    friendlyFireMinDamageMultiplier: 0.1,
+    friendlyFireMaxDamageMultiplier: 0.7,
     moodReferenceHpById: {
       ulpes: 190,
       rihas: 230,
@@ -73,11 +86,14 @@
     rihasPassiveMaxDamageBonus: 0.15,
     rihasPassiveMaxDamageReduction: 0.15,
 
-    sushiaPassiveMaxStacks: 15,
+    sushiaPassiveMaxStacks: 10,
     sushiaPassiveStackDuration: 8,
     sushiaPassiveStackCooldown: 1,
 
     baseCritChance: 0.1,
-    baseCritDamage: 1.65,
+    baseCritDamage: 1.5,
+    critOverflowDamageRate: 0.5,
+    ulpesPassiveCritChanceMultiplier: 2,
+    ulpesPassiveCritDamageBonusMultiplier: 0.5,
   };
 })();
