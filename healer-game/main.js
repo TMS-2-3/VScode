@@ -16,6 +16,7 @@
     createBattleAi: window.createHealerBattleAi,
     createBattleSetup: window.createHealerBattleSetup,
     createBattleRuntime: window.createHealerBattleRuntime,
+    createItemSystem: window.createHealerItemSystem,
     createInputSystem: window.createHealerInputSystem,
     createRenderer: window.createHealerRenderer,
     createBattleScaler: window.createHealerBattleScaler,
@@ -105,6 +106,7 @@
   systems.battleAi = modules.createBattleAi(contexts.createBattleAiContext());
   systems.battleSetup = modules.createBattleSetup(contexts.createBattleSetupContext());
   systems.battleRuntime = modules.createBattleRuntime(contexts.createBattleRuntimeContext());
+  systems.itemSystem = modules.createItemSystem(contexts.createItemContext());
 
   state.profileNameInput = systems.profileSystem.createProfileNameInput();
   systems.renderer = modules.createRenderer(contexts.createRenderContext());
@@ -137,6 +139,7 @@
         hover: null,
         priorityTarget: null,
         skillPage: "page1",
+        itemSlots: null,
         currentQuest: null,
         stageClearTimer: 0,
         reinforcementsSpawned: false,

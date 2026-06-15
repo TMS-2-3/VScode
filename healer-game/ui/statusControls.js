@@ -10,6 +10,8 @@
       usePlayerCommand,
       cancelPlayerAim,
       triggerUltimate,
+      useItemSlot,
+      cancelItemAim,
     } = context;
 
     function handleStatusUiClick(x, y) {
@@ -27,13 +29,18 @@
           } else if (button.action === "toggleSkillPage") {
             game.skillPage = game.skillPage === "page2" ? "page1" : "page2";
             cancelPlayerAim();
+            cancelItemAim();
           } else if (button.action === "playerCommand") {
+            cancelItemAim();
             if (button.targeted) {
               startPlayerAim(button.skillKey);
             } else {
               usePlayerCommand(button.skillKey);
             }
+          } else if (button.action === "itemSlot") {
+            useItemSlot(button.slotIndex);
           } else if (button.action === "playerSkill") {
+            cancelItemAim();
             if (button.ultimate) {
               triggerUltimate("finald");
             } else {

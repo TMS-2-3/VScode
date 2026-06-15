@@ -63,6 +63,7 @@
         noDamage: 999,
         cast: null,
         aim: null,
+        itemAim: null,
         selfHealFloat: 0,
         delayedDamageQueue: [],
         field: false,

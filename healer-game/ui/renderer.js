@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   "use strict";
 
   window.createHealerRenderer = function createHealerRenderer(context) {
@@ -19,6 +19,7 @@
       COLORS,
       MOOD_BASELINE,
       skillSystem,
+      itemSystem,
       getBattleBounds,
       updateTelegraphDynamic,
       battlePx,
@@ -277,7 +278,10 @@
 
 
   function drawPlayerAimPreview() {
-    return skillSystem.drawPlayerAimPreview();
+    skillSystem.drawPlayerAimPreview();
+    if (itemSystem && itemSystem.drawItemAimPreview) {
+      itemSystem.drawItemAimPreview();
+    }
   }
 
   function drawSupportCastPreview() {

@@ -18,12 +18,16 @@
       interactTown,
       closeTownPanel,
       PLAYER_SKILL_SLOT_KEYS,
+      ITEM_SLOT_KEYS,
       getPanelSkills,
       startPlayerAim,
       usePlayerCommand,
       cancelPlayerAim,
       confirmPlayerAim,
       triggerUltimate,
+      useItemSlot,
+      cancelItemAim,
+      confirmItemAim,
       handleStatusUiClick,
       togglePriorityTargetAt,
       hasCommandBiasDrag,
@@ -50,11 +54,14 @@
     const playerSkillSlotKeys = Array.isArray(PLAYER_SKILL_SLOT_KEYS) && PLAYER_SKILL_SLOT_KEYS.length
       ? PLAYER_SKILL_SLOT_KEYS.map((key) => String(key).toLowerCase())
       : ["q", "e", "r", "f", "g"];
+    const itemSlotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length
+      ? ITEM_SLOT_KEYS.map((key) => String(key).toLowerCase())
+      : ["c", "v", "b"];
 
     function handleKeyDown(event) {
       const key = event.key === " " ? "space" : event.key.toLowerCase();
 
-      if ([...playerSkillSlotKeys, "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
+      if ([...playerSkillSlotKeys, ...itemSlotKeys, "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
         event.preventDefault();
       }
       if (event.repeat) {
@@ -94,26 +101,38 @@
       if (key === "space") {
         game.skillPage = game.skillPage === "page2" ? "page1" : "page2";
         cancelPlayerAim();
+        cancelItemAim();
         return;
       }
       if (key === "escape") {
         cancelPlayerAim();
+        cancelItemAim();
         return;
       }
       if (key === "1") {
+        cancelItemAim();
         triggerUltimate("ulpes");
         return;
       }
       if (key === "2") {
+        cancelItemAim();
         triggerUltimate("rihas");
         return;
       }
       if (key === "3") {
+        cancelItemAim();
         triggerUltimate("sushia");
         return;
       }
       if (key === "4") {
+        cancelItemAim();
         triggerUltimate("finald");
+        return;
+      }
+
+      const itemSlotIndex = itemSlotKeys.indexOf(key);
+      if (itemSlotIndex >= 0) {
+        useItemSlot(itemSlotIndex);
         return;
       }
 
@@ -131,14 +150,17 @@
         return;
       }
       if (skill.gauge) {
+        cancelItemAim();
         triggerUltimate("finald");
       } else if (skill.command) {
+        cancelItemAim();
         if (skill.targeted) {
           startPlayerAim(skill.key);
         } else {
           usePlayerCommand(skill.key);
         }
       } else {
+        cancelItemAim();
         startPlayerAim(skill.key);
       }
     }
@@ -178,6 +200,10 @@
         if (handleStatusUiClick(input.mouse.x, input.mouse.y)) {
           return;
         }
+        if (player.itemAim) {
+          confirmItemAim();
+          return;
+        }
         if (player.aim) {
           confirmPlayerAim();
           return;
@@ -188,8 +214,9 @@
       }
       if (event.button === 2) {
         input.mouse.right = true;
-        if (player.aim) {
+        if (player.aim || player.itemAim) {
           cancelPlayerAim();
+          cancelItemAim();
         }
       }
     }

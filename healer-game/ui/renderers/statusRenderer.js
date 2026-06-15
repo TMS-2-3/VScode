@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   "use strict";
 
   window.createHealerStatusRenderer = function createHealerStatusRenderer(context) {
@@ -17,6 +17,7 @@
       ACTION_GAP,
       ULTIMATE_KEYS,
       STATUS_FULL_NAMES,
+      ITEM_SLOT_KEYS,
       COMMAND_BIAS_CONFIGS,
       RIHAS_PASSIVE_MAX_STACKS,
       RIHAS_PASSIVE_STACK_DURATION,
@@ -845,19 +846,130 @@
     drawPanel(x, y, w, h);
 
     const aliveEnemies = enemies.filter((enemy) => !enemy.dead).length;
-    const skillX = x + 16;
-    const skillW = Math.min(w - 32, clamp(view.w * 0.56, 480, 760));
+    const innerX = x + 16;
+    const innerW = w - 32;
+    const gap = 12;
+    const itemW = clamp(view.w * 0.15, 198, 252);
+    const minInfoW = 160;
+    let skillW = Math.min(clamp(view.w * 0.49, 430, 690), innerW - itemW - gap * 2 - minInfoW);
+    skillW = Math.max(320, skillW);
+    if (skillW + itemW + gap > innerW) {
+      skillW = Math.min(innerW, skillW);
+    }
+    const skillX = innerX;
     if (skillW > 300) {
       const page = game.skillPage === "page2" ? "page2" : "page1";
       drawSkillPanel(skillX, y + 10, skillW, h - 20, page);
     }
-    const infoX = skillX + skillW + 14;
+    const itemX = skillX + skillW + gap;
+    const canDrawItems = itemX + itemW <= x + w - 16;
+    if (canDrawItems) {
+      drawItemPanel(itemX, y + 10, itemW, h - 20);
+    }
+    const infoX = canDrawItems ? itemX + itemW + gap : skillX + skillW + gap;
     const infoW = x + w - 16 - infoX;
-    if (infoW > 160) {
+    if (infoW > 150) {
       drawQuestInfoPanel(infoX, y + 16, infoW, h - 32, aliveEnemies);
     }
   }
 
+  function drawItemPanel(x, y, w, h) {
+    const slotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length ? ITEM_SLOT_KEYS : ["c", "v", "b"];
+    const slots = Array.isArray(game.itemSlots) ? game.itemSlots : [];
+    const gap = 7;
+    const bagW = clamp(w * 0.22, 42, 54);
+    const slotCount = 3;
+    const slotW = Math.max(34, (w - bagW - gap * slotCount) / slotCount);
+    const slotH = h;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(6,12,10,0.24)";
+    ctx.strokeStyle = "rgba(247,255,246,0.13)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    drawBagIcon(x + bagW / 2, y + h * 0.45, Math.min(bagW * 0.72, h * 0.54));
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("鞄", x + bagW / 2, y + h - 13);
+
+    for (let i = 0; i < slotCount; i += 1) {
+      const sx = x + bagW + gap + i * (slotW + gap);
+      const item = slots[i];
+      const selected = Boolean(player.itemAim && player.itemAim.slotIndex === i);
+      drawItemSlot(sx, y, slotW, slotH, item, slotKeys[i] || "", selected);
+      statusUiButtons.push({
+        action: "itemSlot",
+        slotIndex: i,
+        x: sx,
+        y,
+        w: slotW,
+        h: slotH,
+      });
+    }
+    ctx.restore();
+  }
+
+  function drawItemSlot(x, y, w, h, item, key, selected = false) {
+    const hasItem = Boolean(item && item.count > 0);
+    ctx.fillStyle = hasItem ? "#f7fff6" : "rgba(247,255,246,0.32)";
+    ctx.strokeStyle = selected ? "rgba(141,226,161,1)" : hasItem ? "rgba(126,210,153,0.78)" : "rgba(8,14,12,0.28)";
+    ctx.lineWidth = selected ? 2.6 : hasItem ? 1.6 : 1.1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const cdRatio = hasItem && item.maxCd > 0 ? clamp((item.cd || 0) / item.maxCd, 0, 1) : 0;
+    drawSkillCooldownShadow(x, y, w, h, cdRatio);
+    drawSkillInputBadge(String(key).toUpperCase(), x + 7, y + 7, w - 14);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (hasItem) {
+      const iconR = Math.min(w * 0.24, h * 0.2, 17);
+      ctx.fillStyle = "#8de2a1";
+      ctx.strokeStyle = "rgba(9,14,13,0.5)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(x + w / 2, y + h * 0.4, iconR, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#102018";
+      ctx.font = `900 ${Math.max(11, Math.min(14, iconR * 0.82))}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      ctx.fillText(item.shortName || "道", x + w / 2, y + h * 0.4 + 0.5);
+      drawFittedText(item.name || "アイテム", x + 4, y + h * 0.69, w - 8, 800, 10, 8, "#102018", "center");
+      ctx.fillStyle = "#102018";
+      ctx.font = "900 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(`x${item.count}`, x + w - 7, y + h - 10);
+    } else {
+      ctx.fillStyle = "rgba(16,32,24,0.62)";
+      ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("空", x + w / 2, y + h * 0.54);
+    }
+  }
+
+  function drawBagIcon(cx, cy, size) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = "#d2a36b";
+    ctx.strokeStyle = "rgba(7,11,10,0.55)";
+    ctx.lineWidth = Math.max(1.2, size * 0.06);
+    roundRect(-size * 0.42, -size * 0.14, size * 0.84, size * 0.62, size * 0.12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.13, size * 0.24, Math.PI, 0);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(102,63,36,0.8)";
+    roundRect(-size * 0.12, size * 0.07, size * 0.24, size * 0.14, 2);
+    ctx.fill();
+    ctx.restore();
+  }
   function drawQuestInfoPanel(x, y, w, h, aliveEnemies) {
     ctx.save();
     ctx.fillStyle = "rgba(6,12,10,0.3)";

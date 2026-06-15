@@ -39,6 +39,9 @@
     const PLAYER_SKILL_SLOT_KEYS = Array.isArray(config && config.playerSkillSlotKeys)
       ? config.playerSkillSlotKeys
       : ["q", "e", "r", "f", "g"];
+    const ITEM_SLOT_KEYS = Array.isArray(config && config.itemSlotKeys)
+      ? config.itemSlotKeys
+      : ["c", "v", "b"];
 
     function callLater(systemName, methodName) {
       return (...args) => {
@@ -218,6 +221,7 @@
         MOOD_BASELINE: balance.moodBaseline,
         ULTIMATE_KEYS,
         STATUS_FULL_NAMES,
+        ITEM_SLOT_KEYS,
         COMMAND_BIAS_CONFIGS: balance.commandBiasConfigs,
         RIHAS_PASSIVE_MAX_STACKS: balance.rihasPassiveMaxStacks,
         RIHAS_PASSIVE_STACK_DURATION: balance.rihasPassiveStackDuration,
@@ -229,6 +233,7 @@
         ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER: balance.ulpesPassiveCritChanceMultiplier,
         ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER: balance.ulpesPassiveCritDamageBonusMultiplier,
         skillSystem: systems.skillSystem,
+        itemSystem: systems.itemSystem,
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getPronounChoices: callLater("profileSystem", "getPronounChoices"),
@@ -311,6 +316,8 @@
         usePlayerCommand: callLater("skillSystem", "usePlayerCommand"),
         cancelPlayerAim: callLater("skillSystem", "cancelPlayerAim"),
         triggerUltimate: callLater("skillSystem", "triggerUltimate"),
+        useItemSlot: callLater("itemSystem", "useItemSlot"),
+        cancelItemAim: callLater("itemSystem", "cancelItemAim"),
       };
     }
 
@@ -338,12 +345,16 @@
         interactTown: callLater("townController", "interactTown"),
         closeTownPanel: callLater("townController", "closeTownPanel"),
         PLAYER_SKILL_SLOT_KEYS,
+        ITEM_SLOT_KEYS,
         getPanelSkills: callLater("skillSystem", "getPanelSkills"),
         startPlayerAim: callLater("skillSystem", "startPlayerAim"),
         usePlayerCommand: callLater("skillSystem", "usePlayerCommand"),
         cancelPlayerAim: callLater("skillSystem", "cancelPlayerAim"),
         confirmPlayerAim: callLater("skillSystem", "confirmPlayerAim"),
         triggerUltimate: callLater("skillSystem", "triggerUltimate"),
+        useItemSlot: callLater("itemSystem", "useItemSlot"),
+        cancelItemAim: callLater("itemSystem", "cancelItemAim"),
+        confirmItemAim: callLater("itemSystem", "confirmItemAim"),
         handleStatusUiClick: systems.statusControls.handleStatusUiClick,
         togglePriorityTargetAt: callLater("battleRuntime", "togglePriorityTargetAt"),
         hasCommandBiasDrag: systems.statusControls.hasCommandBiasDrag,
@@ -522,6 +533,22 @@
       };
     }
 
+
+    function createItemContext() {
+      return {
+        canvasCtx: state.canvasCtx,
+        TAU,
+        game: state.game,
+        player: state.player,
+        input: state.input,
+        ITEM_SLOT_KEYS,
+        healUnit: callLater("combatSystem", "healUnit"),
+        addFloat: callLater("battleRuntime", "addFloat"),
+        getHoveredPartyMember: callLater("battleRuntime", "getHoveredPartyMember"),
+        getSupportOrigin: callLater("battleRuntime", "getSupportOrigin"),
+        cancelPlayerAim: callLater("skillSystem", "cancelPlayerAim"),
+      };
+    }
     function createBattleRuntimeContext() {
       return {
         view: state.view,
@@ -581,6 +608,7 @@
       createBattleStatsContext,
       createCombatContext,
       createBattleAiContext,
+      createItemContext,
       createBattleRuntimeContext,
     };
   };
