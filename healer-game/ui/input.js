@@ -42,6 +42,7 @@
       startGameLoop();
 
       window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keyup", handleKeyUp);
       canvas.addEventListener("mousemove", handleMouseMove);
       canvas.addEventListener("mousedown", handleMouseDown);
       canvas.addEventListener("mouseup", handleMouseUp);
@@ -57,12 +58,20 @@
     const itemSlotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length
       ? ITEM_SLOT_KEYS.map((key) => String(key).toLowerCase())
       : ["c", "v", "b"];
+    const movementKeys = ["w", "a", "s", "d"];
 
     function handleKeyDown(event) {
       const key = event.key === " " ? "space" : event.key.toLowerCase();
 
-      if ([...playerSkillSlotKeys, ...itemSlotKeys, "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
+      if ([...playerSkillSlotKeys, ...itemSlotKeys, ...movementKeys, "enter", "escape", "space", "1", "2", "3", "4"].includes(key)) {
         event.preventDefault();
+      }
+      if ((game.state === "playing" || game.state === "town") && movementKeys.includes(key)) {
+        input.keys = input.keys || {};
+        input.keys[key] = true;
+        if (game.state === "playing") {
+          return;
+        }
       }
       if (event.repeat) {
         return;
@@ -142,6 +151,18 @@
       }
     }
 
+    function handleKeyUp(event) {
+      const key = event.key === " " ? "space" : event.key.toLowerCase();
+      if (!movementKeys.includes(key)) {
+        return;
+      }
+      input.keys = input.keys || {};
+      input.keys[key] = false;
+      if (game.state === "playing" || game.state === "town") {
+        event.preventDefault();
+      }
+    }
+
     function usePlayerSkillSlot(slotIndex) {
       const pageIndex = game.skillPage === "page2" ? 1 : 0;
       const skills = getPanelSkills(player, pageIndex);
@@ -188,7 +209,7 @@
           interactTown({ pointer: true });
           return;
         }
-        if (event.button === 0) {
+        if (town.panel && event.button === 0) {
           interactTown({ pointer: true });
         }
         return;

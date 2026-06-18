@@ -19,8 +19,9 @@
       TOWN_WIDTH,
       TOWN_HEIGHT,
       resetGame,
-      screenToTownPoint,
       clampTownPlayer,
+      clamp,
+      distPoint,
       updateProfileNameInput,
       beginOpeningStory,
       getPlayerFirstName,
@@ -57,6 +58,8 @@
         town.player.y = TOWN_HEIGHT - 155;
       }
       clampTownPlayer();
+      initializeTownFollowers(true);
+      resetTownTrail();
       town.interaction = getTownInteraction();
       updateTownCamera();
       updateProfileNameInput();
@@ -102,7 +105,7 @@
       return town.buildings.find((building) => building.id === id) || null;
     }
 
-    function updateTown() {
+    function updateTown(dt = 0) {
       if (!playerProfile.done) {
         updateProfileNameInput();
         town.interaction = getTownInteraction();
@@ -112,6 +115,8 @@
         town.interaction = null;
         return;
       }
+      updateTownMovement(dt);
+      updateTownFollowers();
       town.interaction = getTownInteraction();
     }
 
@@ -120,20 +125,151 @@
       town.camera.y = 0;
     }
 
+    function updateTownMovement(dt) {
+      if (town.panel || dt <= 0) {
+        return;
+      }
+      const keys = input.keys || {};
+      const dx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+      const dy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+      const len = Math.hypot(dx, dy);
+      if (len <= 0) {
+        return;
+      }
+      const speed = town.player.speed || 235;
+      const vx = (dx / len) * speed * dt;
+      const vy = (dy / len) * speed * dt;
+      moveTownPlayerAxis(vx, 0);
+      moveTownPlayerAxis(0, vy);
+      appendTownTrailPoint();
+    }
+
+    function moveTownPlayerAxis(dx, dy) {
+      const nextX = town.player.x + dx;
+      const nextY = town.player.y + dy;
+      if (!isTownBlockedAt(nextX, nextY, town.player.radius || 15)) {
+        town.player.x = nextX;
+        town.player.y = nextY;
+      }
+      clampTownPlayer();
+    }
+
+    function isTownBlockedAt(x, y, radius) {
+      for (const building of town.buildings) {
+        if (circleRectIntersects(x, y, radius, building.x - 10, building.y - 42, building.w + 20, building.h + 46)) {
+          return true;
+        }
+      }
+      for (const prop of town.props) {
+        if (prop.type === "tree" || prop.type === "well") {
+          const propRadius = (prop.r || 20) + radius + 5;
+          if (distPoint(x, y, prop.x, prop.y) <= propRadius) {
+            return true;
+          }
+        } else if (prop.type === "crate") {
+          if (circleRectIntersects(x, y, radius, prop.x - 3, prop.y - 3, prop.w + 6, prop.h + 6)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function circleRectIntersects(cx, cy, radius, rx, ry, rw, rh) {
+      const closestX = clamp(cx, rx, rx + rw);
+      const closestY = clamp(cy, ry, ry + rh);
+      return distPoint(cx, cy, closestX, closestY) <= radius;
+    }
+
+    function initializeTownFollowers(force = false) {
+      if (!town.meetingDone) {
+        town.followers = [];
+        return;
+      }
+      if (!force && Array.isArray(town.followers) && town.followers.length === 3) {
+        return;
+      }
+      const startX = town.player.x;
+      const startY = town.player.y;
+      town.followers = [
+        { id: "ulpes", label: "ウ", color: "#f4c54f", x: startX - 44, y: startY + 52 },
+        { id: "rihas", label: "リ", color: "#e37a3f", x: startX, y: startY + 72 },
+        { id: "sushia", label: "ス", color: "#b985ee", x: startX + 44, y: startY + 52 },
+      ];
+    }
+
+    function resetTownTrail() {
+      town.trail = [{ x: town.player.x, y: town.player.y }];
+    }
+
+    function appendTownTrailPoint() {
+      if (!Array.isArray(town.trail) || town.trail.length === 0) {
+        resetTownTrail();
+        return;
+      }
+      const last = town.trail[town.trail.length - 1];
+      if (distPoint(last.x, last.y, town.player.x, town.player.y) < 8) {
+        return;
+      }
+      town.trail.push({ x: town.player.x, y: town.player.y });
+      if (town.trail.length > 420) {
+        town.trail.splice(0, town.trail.length - 420);
+      }
+    }
+
+    function updateTownFollowers() {
+      if (!town.meetingDone) {
+        town.followers = [];
+        return;
+      }
+      initializeTownFollowers();
+      if (!Array.isArray(town.trail) || town.trail.length === 0) {
+        resetTownTrail();
+      }
+      for (let i = 0; i < town.followers.length; i += 1) {
+        const target = getTrailPointBehind((i + 1) * 58);
+        town.followers[i].x = target.x;
+        town.followers[i].y = target.y;
+      }
+    }
+
+    function getTrailPointBehind(distance) {
+      const trail = town.trail || [];
+      if (trail.length === 0) {
+        return { x: town.player.x, y: town.player.y };
+      }
+      let remaining = distance;
+      let current = { x: town.player.x, y: town.player.y };
+      for (let i = trail.length - 1; i >= 0; i -= 1) {
+        const next = trail[i];
+        const segment = distPoint(current.x, current.y, next.x, next.y);
+        if (segment >= remaining && segment > 0) {
+          const t = remaining / segment;
+          return {
+            x: current.x + (next.x - current.x) * t,
+            y: current.y + (next.y - current.y) * t,
+          };
+        }
+        remaining -= segment;
+        current = next;
+      }
+      const fallback = trail[0];
+      return { x: fallback.x, y: fallback.y };
+    }
     function getTownInteraction() {
       if (town.panel || town.story) {
         return null;
       }
-      const point = screenToTownPoint(input.mouse.x, input.mouse.y);
-      if (!point) {
-        return null;
-      }
+      let best = null;
+      let bestDist = Infinity;
       for (const building of town.buildings) {
-        if (point.x >= building.x && point.x <= building.x + building.w && point.y >= building.y - 44 && point.y <= building.y + building.h + 46) {
-          return building;
+        const d = distPoint(town.player.x, town.player.y, building.door.x, building.door.y);
+        if (d <= 82 && d < bestDist) {
+          best = building;
+          bestDist = d;
         }
       }
-      return null;
+      return best;
     }
 
     function interactTown(options = {}) {
@@ -172,6 +308,7 @@
           member.dead = false;
           member.shield = 0;
           member.shieldTimer = 0;
+          member.shields = [];
         }
         town.panel = {
           title: "宿屋",
@@ -350,7 +487,8 @@
           {
             title: "操作",
             lines: [
-              "主人公は戦場に出ず、後方から味方を支援する。",
+              "主人公はWASDで戦場を移動しながら、味方を支援する。",
+              "構え中は主人公中心の射程円が出る。射程外の対象・地点には発動できない。",
               "ページ内の左5枠は Q/E/R/F/G で左から順に構える。右端の必殺技は4で発動。左クリック: 発動 / 右クリック: 構えキャンセル",
               "Space: ページ１とページ２を切り替える。通常スキルも指示スキルも自由に配置できる。",
               "何も構えていない時は、敵を左クリックでターゲット指定。同じ敵をもう一度押すと解除。",
@@ -373,6 +511,8 @@
       closeTownPanel();
       startTownStory("meeting", getMeetingStory(), () => {
         town.meetingDone = true;
+        initializeTownFollowers(true);
+        resetTownTrail();
         game.message = "依頼所で依頼を受けよう";
         game.messageTimer = 5;
       });

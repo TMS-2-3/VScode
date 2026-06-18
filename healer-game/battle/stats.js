@@ -18,6 +18,9 @@
       MOOD_MULTI_HIT_MIN,
       MOOD_MULTI_HIT_BASE,
       DEFAULT_MP_REGEN_RATE,
+      CRIT_OVERFLOW_DAMAGE_RATE,
+      ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER,
+      ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER,
       GUARD_DAMAGE_MULTIPLIER,
       GUARD_OVERFLOW_REDUCTION_RATE,
       GUARD_MAX_DAMAGE_REDUCTION,
@@ -47,7 +50,7 @@
       guardDamageReduction: 0,
       speed: 0,
       critChance: 0,
-      critDamage: 1,
+      critDamage: 0,
     };
 
     function getCommandActionCooldown(unit, baseTime) {
@@ -303,6 +306,34 @@
       return getCastTime(baseTime, unit);
     }
 
+    function getRawCritChance(unit) {
+      let chance = getEffectiveStat(unit, "critChance");
+      if (hasPassive(unit, "swordwork")) {
+        const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER) ? ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER : 1;
+        chance *= multiplier;
+      }
+      return Math.max(0, chance);
+    }
+
+    function getEffectiveCritChance(unit) {
+      return clamp(getRawCritChance(unit), 0, 1);
+    }
+
+    function getEffectiveCritDamageRate(unit) {
+      let rate = getEffectiveStat(unit, "critDamage");
+      if (hasPassive(unit, "swordwork")) {
+        const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER)
+          ? ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER
+          : 0.5;
+        rate *= multiplier;
+      }
+      rate += Math.max(0, getRawCritChance(unit) - 1) * getSafeNumber(CRIT_OVERFLOW_DAMAGE_RATE, 0.5);
+      return Math.max(0, rate);
+    }
+
+    function getCritDamageMultiplier(unit) {
+      return 1 + getEffectiveCritDamageRate(unit);
+    }
     function getEffectiveGuardChance(unit) {
       return clamp(getMoodGuardChance(unit), 0, 1);
     }
@@ -508,6 +539,10 @@
       getCastSpeed,
       getCastTime,
       getSushiaCastTime,
+      getRawCritChance,
+      getEffectiveCritChance,
+      getEffectiveCritDamageRate,
+      getCritDamageMultiplier,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
       getGuardDamageMultiplier,

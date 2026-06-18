@@ -372,7 +372,7 @@
   }
 
   function drawFloatingArjuna() {
-    if (!player || player.dead) {
+    if (!player || player.dead || isFieldUnit(player)) {
       return;
     }
 
@@ -439,7 +439,7 @@
   }
 
   function getSpeechAnchorPosition(source) {
-    const visual = source.id === "finald" ? getFloatingArjunaVisualPosition() : null;
+    const visual = source.id === "finald" && !isFieldUnit(source) ? getFloatingArjunaVisualPosition() : null;
     const x = visual ? visual.x : source.x;
     const y = visual ? visual.y : source.y;
     const radius = visual ? visual.radius : (source.radius || battlePx(14));

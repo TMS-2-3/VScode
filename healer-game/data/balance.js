@@ -5,7 +5,6 @@
     battleSideMargin: 24,
     battleMinPlayHeight: 320,
 
-    interruptedCastCooldownReduction: 0.8,
     selfHealDelay: 5,
     selfHealLimit: 0.8,
     selfHealMpPerSec: 22,
@@ -13,6 +12,8 @@
     aiIdleRecheck: 0.2,
     actionGap: 0.2,
     actionCooldownBase: 6,
+    hilmentSelfHealRatio: 0.3,
+    shieldMoodGainPerSec: 0.3,
 
     guardDamageMultiplier: 0.5,
     guardOverflowReductionRate: 1 / 3,
@@ -20,11 +21,11 @@
     defaultMpRegenRate: 0.05,
 
     commandBiasConfigs: [
-      { value: -2, guard: 3, actionCd: 2.5, moodGain: 0.6, moodLoss: 1.5, damageOut: 1, damageIn: 0.9 },
-      { value: -1, guard: 1.8, actionCd: 1.6, moodGain: 0.8, moodLoss: 1.2, damageOut: 1, damageIn: 0.95 },
+      { value: -2, guard: 3, actionCd: 2.5, moodGain: 0.6, moodLoss: 1.5, damageOut: 0.8, damageIn: 0.8 },
+      { value: -1, guard: 1.8, actionCd: 1.6, moodGain: 0.8, moodLoss: 1.2, damageOut: 0.9, damageIn: 0.9 },
       { value: 0, guard: 1, actionCd: 1, moodGain: 1, moodLoss: 1, damageOut: 1, damageIn: 1 },
-      { value: 1, guard: 0.6, actionCd: 0.7, moodGain: 1, moodLoss: 1, damageOut: 1.05, damageIn: 1 },
-      { value: 2, guard: 0, actionCd: 0.5, moodGain: 1.1, moodLoss: 0.9, damageOut: 1.1, damageIn: 1 },
+      { value: 1, guard: 0.6, actionCd: 0.7, moodGain: 1, moodLoss: 1, damageOut: 1.1, damageIn: 1.15 },
+      { value: 2, guard: 0, actionCd: 0.5, moodGain: 1.1, moodLoss: 0.9, damageOut: 1.2, damageIn: 1.3 },
     ],
     commandBiasAutoGraceActions: 5,
     commandBiasPreferredRanges: {
@@ -67,10 +68,14 @@
     moodDamageTakenRate: 0.0495,
     moodHealRate: 0.1104,
     moodQuickHealBonus: 2,
-    friendlyFireMoodSafeLimit: 70,
-    friendlyFireMoodMax: 100,
-    friendlyFireMinDamageMultiplier: 0.1,
-    friendlyFireMaxDamageMultiplier: 0.7,
+    friendlyFireMoodSafeLimit: 80,
+    friendlyFireMoodMax: 90,
+    friendlyFireMinDamageMultiplier: 0.3,
+    friendlyFireMaxDamageMultiplier: 0.8,
+    friendlyFireLowEffectDurationMultiplier: 0.5,
+    friendlyFireHighEffectDurationMultiplier: 1,
+    autoUltimateEnemyDamageMultiplier: 0.6,
+    autoUltimateEnemyEffectMultiplier: 0.6,
     moodReferenceHpById: {
       ulpes: 190,
       rihas: 230,
@@ -91,7 +96,7 @@
     sushiaPassiveStackCooldown: 1,
 
     baseCritChance: 0.1,
-    baseCritDamage: 1.5,
+    baseCritDamageRate: 0.5,
     critOverflowDamageRate: 0.5,
     ulpesPassiveCritChanceMultiplier: 2,
     ulpesPassiveCritDamageBonusMultiplier: 0.5,

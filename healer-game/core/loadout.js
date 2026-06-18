@@ -134,7 +134,15 @@
     }
 
     function hasPassive(unit, key) {
-      return Boolean(unit && ensureUnitLoadout(unit).passive === key);
+      if (!unit) {
+        return false;
+      }
+      const loadout = ensureUnitLoadout(unit);
+      if (loadout.passive !== key) {
+        return false;
+      }
+      const passive = getPassive(getOwnerKey(unit), key);
+      return Boolean(passive && !passive.disabled);
     }
 
     function getEquippedPassive(unit) {

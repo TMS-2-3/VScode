@@ -27,9 +27,9 @@
       speed: px(230),
       guardChance: 0,
       equipment: { weapon: "default_a" },
-      field: false,
-      targetable: false,
-      collidable: false,
+      field: true,
+      targetable: true,
+      collidable: true,
     },
     allies: [
       {

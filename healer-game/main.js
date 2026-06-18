@@ -130,6 +130,7 @@
       view,
       input: {
         mouse: { x: view.w / 2, y: view.h / 2, right: false },
+        keys: {},
       },
       game: {
         state: "town",
@@ -153,11 +154,14 @@
       expandedStatusUnitIds: new Set(),
       statusUiButtons: [],
       statusCardMetas: [],
+      statusTooltipTargets: [],
       town: {
         player: { ...townData.player },
         camera: { x: 0, y: 0 },
         buildings: [],
         props: [],
+        followers: [],
+        trail: [],
         interaction: null,
         panel: null,
         selectedQuest: null,

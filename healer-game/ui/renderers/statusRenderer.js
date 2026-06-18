@@ -7,12 +7,14 @@
       TAU,
       view,
       game,
+      input,
       player,
       party,
       enemies,
       expandedStatusUnitIds,
       statusUiButtons,
       statusCardMetas,
+      statusTooltipTargets,
       COLORS,
       ACTION_GAP,
       ULTIMATE_KEYS,
@@ -23,11 +25,6 @@
       RIHAS_PASSIVE_STACK_DURATION,
       SUSHIA_PASSIVE_MAX_STACKS,
       SUSHIA_PASSIVE_STACK_DURATION,
-      BASE_CRIT_CHANCE,
-      BASE_CRIT_DAMAGE,
-      CRIT_OVERFLOW_DAMAGE_RATE,
-      ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER,
-      ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER,
       skillSystem,
       getBattleBounds,
       clamp,
@@ -48,6 +45,8 @@
       getEffectiveMagicDefense,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
+      getEffectiveCritChance,
+      getEffectiveCritDamageRate,
       getHpRegenRate,
       getMpRegenRate,
       getElementKeys,
@@ -62,8 +61,12 @@
   function drawHud() {
     statusUiButtons.length = 0;
     statusCardMetas.length = 0;
+    if (Array.isArray(statusTooltipTargets)) {
+      statusTooltipTargets.length = 0;
+    }
     drawArjunaHud();
     drawAllyStatusCards();
+    drawStatusTooltip();
   }
 
   function drawAllyStatusCards() {
@@ -272,7 +275,10 @@
       for (let i = 0; i < count; i += 1) {
         const col = i % columns;
         const row = Math.floor(i / columns);
-        drawStatusIcon(hiddenIcons[i], startX + col * (iconSize + gap), y + row * (iconSize + gap), iconSize);
+        const ix = startX + col * (iconSize + gap);
+        const iy = y + row * (iconSize + gap);
+        drawStatusIcon(hiddenIcons[i], ix, iy, iconSize);
+        registerStatusTooltip(hiddenIcons[i], ix, iy, iconSize);
       }
       if (hasOverflow) {
         const lastIndex = capacity - 1;
@@ -335,7 +341,7 @@
       { label: "防御力", value: formatNumber(getEffectiveDefense(unit)) },
       { label: "魔法防御力", value: formatNumber(getEffectiveMagicDefense(unit)) },
       { label: "会心率", value: formatPercent(getUnitCritChance(unit)) },
-      { label: "会心ダメージ", value: formatPercent(getUnitCritDamage(unit)) },
+      { label: "会心ダメージ", value: formatPercent(getUnitCritDamageRate(unit)) },
       { label: "与ダメージ率", value: formatPercent(outgoing) },
       { label: "被ダメージ率", value: formatPercent(incoming) },
       { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
@@ -411,31 +417,12 @@
   }
 
   function getUnitCritChance(unit) {
-    return clamp(getUnitRawCritChance(unit), 0, 1);
+    return typeof getEffectiveCritChance === "function" ? getEffectiveCritChance(unit) : 0;
   }
 
-  function getUnitRawCritChance(unit) {
-    const multiplier = unit && hasPassive(unit, "swordwork") ? ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER : 1;
-    return BASE_CRIT_CHANCE * (Number.isFinite(multiplier) ? multiplier : 1);
+  function getUnitCritDamageRate(unit) {
+    return typeof getEffectiveCritDamageRate === "function" ? getEffectiveCritDamageRate(unit) : 0;
   }
-
-  function getUnitCritDamage(unit) {
-    let damage = BASE_CRIT_DAMAGE;
-    if (unit && hasPassive(unit, "swordwork")) {
-      const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER)
-        ? ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER
-        : 0.5;
-      const bonusPercent = Math.max(0, Math.floor((BASE_CRIT_DAMAGE - 1) * 100 * multiplier));
-      damage = 1 + bonusPercent / 100;
-    }
-    return damage + getUnitCritOverflowDamageBonus(unit);
-  }
-
-  function getUnitCritOverflowDamageBonus(unit) {
-    const rate = Number.isFinite(CRIT_OVERFLOW_DAMAGE_RATE) ? CRIT_OVERFLOW_DAMAGE_RATE : 0.5;
-    return Math.max(0, getUnitRawCritChance(unit) - 1) * rate;
-  }
-
   function getUnitCastTimeMultiplier(unit) {
     if (hasPassive(unit, "warmup")) {
       return getSushiaCastTime(1, unit);
@@ -470,6 +457,7 @@
         break;
       }
       drawSkillCooldownIcon(skills[i], sx, sy, iconSize);
+      registerSkillTooltip(unit, skills[i], sx, sy, iconSize);
     }
   }
 
@@ -492,7 +480,7 @@
       ? skillSystem.getActionCooldown(unit)
       : (skill.cd ? getMoodCooldown(unit, skill.cd) : 0);
     const remaining = unit.cds[key] || 0;
-    return { remaining, max: Math.max(0.1, max), text: remaining > 0 ? remaining.toFixed(1) : "OK", gauge: false };
+    return { remaining, max: Math.max(0.1, max), text: remaining > 0 ? `${Math.ceil(Math.max(0, remaining))}` : "OK", gauge: false };
   }
 
   function drawSkillCooldownIcon(entry, x, y, size) {
@@ -626,7 +614,10 @@
     for (let i = 0; i < visibleCount; i += 1) {
       const col = i % columns;
       const row = Math.floor(i / columns);
-      drawStatusIcon(icons[i], x + col * (size + gap), y + row * (size + gap), size);
+      const ix = x + col * (size + gap);
+      const iy = y + row * (size + gap);
+      drawStatusIcon(icons[i], ix, iy, size);
+      registerStatusTooltip(icons[i], ix, iy, size);
     }
     if (hasOverflow) {
       drawStatusIcon({ label: "…", color: "#5d6864", ratio: 1 }, x + (columns - 1) * (size + gap), y + size + gap, size);
@@ -664,26 +655,26 @@
   function getStatusIcons(unit) {
     const icons = [];
     const passive = getEquippedPassive ? getEquippedPassive(unit) : null;
-    if (passive && unit.id === "finald") {
-      icons.push({ label: "空", color: "#73dfff", ratio: 1, permanent: true });
+    if (passive && passive.key === "hilment" && unit.id === "finald") {
+      icons.push({ label: "癒", name: passive.name || "ヒルメント", description: passive.description || "", color: "#79ff8d", ratio: 1, permanent: true });
     }
     if (unit.actionLock > ACTION_GAP) {
       const total = Math.max(unit.actionTotal || unit.actionLock, unit.actionLock, 0.1);
-      icons.push({ label: "詠", color: "#73ff91", ratio: unit.actionLock / total, remaining: unit.actionLock });
+      icons.push({ label: "詠", name: "詠唱中", color: "#73ff91", ratio: unit.actionLock / total, remaining: unit.actionLock });
     }
     if (unit.frozen > 0) {
       const frozenMax = Math.max(0.1, unit.frozenMax || unit.frozen);
-      icons.push({ label: "凍", color: "#b8e7ff", ratio: unit.frozen / frozenMax, remaining: unit.frozen });
+      icons.push({ label: "凍", name: "凍結", color: "#b8e7ff", ratio: unit.frozen / frozenMax, remaining: unit.frozen });
     }
     if (hasPassive(unit, "warmup") && (unit.castStacks || 0) > 0) {
-      icons.push({ label: "熱", color: "#ff9f43", ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer });
+      icons.push({ label: "熱", name: "あったまってきたよ！", color: "#ff9f43", ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer });
     }
     if (unit.tauntTimer > 0) {
       const duration = skillSystem.requireSkill("rihas", "ult").duration || 5.5;
-      icons.push({ label: "怒", color: "#ff6b44", ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer });
+      icons.push({ label: "怒", name: "挑発", color: "#ff6b44", ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer });
     }
     if (hasPassive(unit, "painless") && (unit.rihasPassiveStacks || 0) > 0) {
-      icons.push({ label: "逆", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
+      icons.push({ label: "逆", name: "逆境", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
     }
     return icons;
   }
@@ -731,6 +722,117 @@
     ctx.restore();
   }
 
+
+  function registerStatusTooltip(icon, x, y, size) {
+    if (!Array.isArray(statusTooltipTargets) || !icon) {
+      return;
+    }
+    statusTooltipTargets.push({ x, y, w: size, h: size, tooltip: buildStatusTooltip(icon) });
+  }
+
+  function registerSkillTooltip(unit, entry, x, y, size) {
+    if (!Array.isArray(statusTooltipTargets) || !entry) {
+      return;
+    }
+    statusTooltipTargets.push({ x, y, w: size, h: size, tooltip: buildSkillTooltip(unit, entry) });
+  }
+
+  function buildStatusTooltip(icon) {
+    const lines = [];
+    const description = getTooltipDescription(icon);
+    lines.push(description || "説明文は未設定");
+    if (icon.permanent) {
+      lines.push("常時効果");
+    }
+    if ((icon.stack || 0) > 1) {
+      lines.push(`スタック: ${icon.stack}`);
+    }
+    if (Number.isFinite(icon.remaining)) {
+      lines.push(`残り効果時間: ${formatRemainingSeconds(icon.remaining)}`);
+    }
+    return { title: icon.name || icon.label || "状態", lines };
+  }
+
+  function buildSkillTooltip(unit, entry) {
+    const skill = entry.skill || {};
+    const lines = [];
+    const description = getTooltipDescription(skill);
+    lines.push(description || "説明文は未設定");
+    if (Number.isFinite(skill.cost)) {
+      lines.push(`MP: ${skill.cost}`);
+    }
+    if (Number.isFinite(skill.cd)) {
+      lines.push(`CD: ${formatRemainingSeconds(skill.cd)}`);
+    }
+    if (entry.gauge) {
+      lines.push(`必殺: ${entry.text}`);
+    } else if (Number.isFinite(entry.remaining)) {
+      lines.push(`残りクールタイム: ${entry.remaining > 0 ? formatRemainingSeconds(entry.remaining) : "OK"}`);
+    }
+    if (Number.isFinite(skill.range)) {
+      lines.push(`射程: ${Math.round(skill.range)}px`);
+    }
+    return { title: skill.name || entry.key || "スキル", lines };
+  }
+
+  function formatRemainingSeconds(value) {
+    return `${Math.ceil(Math.max(0, value))}秒`;
+  }
+
+  function getTooltipDescription(source) {
+    if (!source) {
+      return "";
+    }
+    return source.description || source.tooltip || source.helpText || "";
+  }
+
+  function drawStatusTooltip() {
+    if (!Array.isArray(statusTooltipTargets) || !input || !input.mouse) {
+      return;
+    }
+    const mouse = input.mouse;
+    for (let i = statusTooltipTargets.length - 1; i >= 0; i -= 1) {
+      const target = statusTooltipTargets[i];
+      if (mouse.x >= target.x && mouse.x <= target.x + target.w && mouse.y >= target.y && mouse.y <= target.y + target.h) {
+        drawTooltipBox(target.tooltip, mouse.x, mouse.y);
+        return;
+      }
+    }
+  }
+
+  function drawTooltipBox(tooltip, mouseX, mouseY) {
+    if (!tooltip) {
+      return;
+    }
+    const title = String(tooltip.title || "");
+    const lines = Array.isArray(tooltip.lines) ? tooltip.lines.map((line) => String(line)) : [];
+    ctx.save();
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    let contentW = ctx.measureText(title).width;
+    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    for (const line of lines) {
+      contentW = Math.max(contentW, ctx.measureText(line).width);
+    }
+    const maxW = Math.max(140, Math.min(300, view.w - 16));
+    const boxW = Math.min(maxW, Math.max(160, contentW + 24));
+    const lineH = 16;
+    const boxH = 34 + lines.length * lineH;
+    const boxX = clamp(mouseX + 16, 8, view.w - boxW - 8);
+    const boxY = clamp(mouseY + 16, 8, view.h - boxH - 8);
+
+    ctx.fillStyle = "rgba(8,12,10,0.94)";
+    ctx.strokeStyle = "rgba(247,255,246,0.28)";
+    ctx.lineWidth = 1;
+    roundRect(boxX, boxY, boxW, boxH, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    drawFittedText(title, boxX + 12, boxY + 19, boxW - 24, 800, 13, 10, "#f7fff6", "left");
+    for (let i = 0; i < lines.length; i += 1) {
+      drawFittedText(lines[i], boxX + 12, boxY + 38 + i * lineH, boxW - 24, 700, 11, 9, i === 0 ? "#d6e1d8" : "#aebdb4", "left");
+    }
+    ctx.restore();
+  }
   function getCommandBiasMeterLayout(x, y, w, h) {
     const labelW = 22;
     const gap = 3;
@@ -849,17 +951,18 @@
     const innerX = x + 16;
     const innerW = w - 32;
     const gap = 12;
-    const itemW = clamp(view.w * 0.15, 198, 252);
-    const minInfoW = 160;
-    let skillW = Math.min(clamp(view.w * 0.49, 430, 690), innerW - itemW - gap * 2 - minInfoW);
-    skillW = Math.max(320, skillW);
+    const itemW = clamp(view.w * 0.18 + 50, 260, 340);
+    const itemSlotW = Math.max(34, (itemW - 30) / 3);
+    const minInfoW = 70;
+    let skillW = Math.min(clamp(view.w * 0.68, 560, 760), innerW - itemW - gap * 2 - minInfoW);
+    skillW = Math.max(520, skillW);
     if (skillW + itemW + gap > innerW) {
       skillW = Math.min(innerW, skillW);
     }
     const skillX = innerX;
     if (skillW > 300) {
       const page = game.skillPage === "page2" ? "page2" : "page1";
-      drawSkillPanel(skillX, y + 10, skillW, h - 20, page);
+      drawSkillPanel(skillX, y + 10, skillW, h - 20, page, itemSlotW);
     }
     const itemX = skillX + skillW + gap;
     const canDrawItems = itemX + itemW <= x + w - 16;
@@ -877,10 +980,11 @@
     const slotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length ? ITEM_SLOT_KEYS : ["c", "v", "b"];
     const slots = Array.isArray(game.itemSlots) ? game.itemSlots : [];
     const gap = 7;
-    const bagW = clamp(w * 0.22, 42, 54);
+    const sidePadding = 8;
     const slotCount = 3;
-    const slotW = Math.max(34, (w - bagW - gap * slotCount) / slotCount);
-    const slotH = h;
+    const slotW = Math.max(34, (w - sidePadding * 2 - gap * (slotCount - 1)) / slotCount);
+    const slotY = y + 8;
+    const slotH = Math.max(34, h - 16);
 
     ctx.save();
     ctx.fillStyle = "rgba(6,12,10,0.24)";
@@ -890,18 +994,11 @@
     ctx.fill();
     ctx.stroke();
 
-    drawBagIcon(x + bagW / 2, y + h * 0.45, Math.min(bagW * 0.72, h * 0.54));
-    ctx.fillStyle = "#dce9dc";
-    ctx.font = "800 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("鞄", x + bagW / 2, y + h - 13);
-
     for (let i = 0; i < slotCount; i += 1) {
-      const sx = x + bagW + gap + i * (slotW + gap);
+      const sx = x + sidePadding + i * (slotW + gap);
       const item = slots[i];
       const selected = Boolean(player.itemAim && player.itemAim.slotIndex === i);
-      drawItemSlot(sx, y, slotW, slotH, item, slotKeys[i] || "", selected);
+      drawItemSlot(sx, slotY, slotW, slotH, item, slotKeys[i] || "", selected);
       statusUiButtons.push({
         action: "itemSlot",
         slotIndex: i,
@@ -941,7 +1038,7 @@
       ctx.fillStyle = "#102018";
       ctx.font = `900 ${Math.max(11, Math.min(14, iconR * 0.82))}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
       ctx.fillText(item.shortName || "道", x + w / 2, y + h * 0.4 + 0.5);
-      drawFittedText(item.name || "アイテム", x + 4, y + h * 0.69, w - 8, 800, 10, 8, "#102018", "center");
+      drawFittedText(item.name || "アイテム", x + w / 2, y + h * 0.69, w - 10, 800, 10, 8, "#102018", "center");
       ctx.fillStyle = "#102018";
       ctx.font = "900 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.textAlign = "right";
@@ -1062,7 +1159,16 @@
     }
     ctx.textBaseline = "alphabetic";
   }
-  function drawSkillPanel(x, y, w, h, page = "page1") {
+  function drawSkillPanel(x, y, w, h, page = "page1", desiredItemW = null) {
+    ctx.save();
+    ctx.fillStyle = "rgba(6,12,10,0.24)";
+    ctx.strokeStyle = "rgba(247,255,246,0.13)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
     const pageTwo = page === "page2";
     const skills = skillSystem.getPanelSkills(player, pageTwo ? 1 : 0);
     const slots = 6;
@@ -1071,7 +1177,8 @@
     const listOffset = 10;
     const listX = x + toggleW + gap + listOffset;
     const listW = Math.max(0, w - toggleW - gap - listOffset);
-    const itemW = (listW - gap * Math.max(0, slots - 1)) / Math.max(1, slots);
+    const availableItemW = (listW - gap * Math.max(0, slots - 1)) / Math.max(1, slots);
+    const itemW = desiredItemW !== null ? Math.min(desiredItemW, availableItemW) : availableItemW;
     const itemY = y + 8;
     const itemH = h - 16;
     const nameY = itemY + itemH * 0.62;

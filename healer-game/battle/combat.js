@@ -6,11 +6,6 @@
       player,
       COLORS,
       ACTION_GAP,
-      BASE_CRIT_CHANCE,
-      BASE_CRIT_DAMAGE,
-      CRIT_OVERFLOW_DAMAGE_RATE,
-      ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER,
-      ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER,
       SUSHIA_PASSIVE_MAX_STACKS,
       SUSHIA_PASSIVE_STACK_DURATION,
       SUSHIA_PASSIVE_STACK_COOLDOWN,
@@ -25,6 +20,9 @@
       FRIENDLY_FIRE_MOOD_MAX,
       FRIENDLY_FIRE_MIN_DAMAGE_MULTIPLIER,
       FRIENDLY_FIRE_MAX_DAMAGE_MULTIPLIER,
+      FRIENDLY_FIRE_LOW_EFFECT_DURATION_MULTIPLIER,
+      FRIENDLY_FIRE_HIGH_EFFECT_DURATION_MULTIPLIER,
+      HILMENT_SELF_HEAL_RATIO,
       clamp,
       addFloat,
       addBurst,
@@ -42,6 +40,8 @@
       getMagicDamageResistance,
       getGuardDamageMultiplier,
       getEffectiveGuardChance,
+      getEffectiveCritChance,
+      getCritDamageMultiplier,
       getEffectiveDefense,
       getEffectiveMagicDefense,
       addRihasPassiveStack,
@@ -59,8 +59,39 @@
       if (!unit || amount <= 0 || duration <= 0) {
         return;
       }
-      unit.shield = clamp(unit.shield + amount, 0, unit.maxHp);
-      unit.shieldTimer = Math.max(unit.shieldTimer, duration);
+      const currentTotal = syncShieldTotal(unit);
+      const room = Math.max(0, (unit.maxHp || 0) - currentTotal);
+      const added = Math.min(amount, room);
+      if (added <= 0) {
+        return;
+      }
+      getShieldStacks(unit).push({ amount: added, timer: duration });
+      syncShieldTotal(unit);
+    }
+
+    function getShieldStacks(unit) {
+      if (!unit) {
+        return [];
+      }
+      if (!Array.isArray(unit.shields)) {
+        unit.shields = [];
+      }
+      if (unit.shields.length === 0 && unit.shield > 0 && unit.shieldTimer > 0) {
+        unit.shields.push({ amount: unit.shield, timer: unit.shieldTimer });
+      }
+      return unit.shields;
+    }
+
+    function syncShieldTotal(unit) {
+      if (!unit) {
+        return 0;
+      }
+      const stacks = getShieldStacks(unit).filter((stack) => stack && stack.amount > 0 && stack.timer > 0);
+      unit.shields = stacks;
+      const total = stacks.reduce((sum, stack) => sum + stack.amount, 0);
+      unit.shield = clamp(total, 0, unit.maxHp || total);
+      unit.shieldTimer = stacks.reduce((max, stack) => Math.max(max, stack.timer), 0);
+      return unit.shield;
     }
 
     function dealDamage(source, target, amount, options = {}) {
@@ -68,12 +99,16 @@
         return 0;
       }
 
+      if (isFriendlyFire(source, target) && !canFriendlyFireAffect(source, target)) {
+        return 0;
+      }
+
       const wasTargetAlive = target.hp > 0;
       let finalAmount = amount;
       let criticalHit = false;
 
-      if (options.crit && source && source.team === "party" && source.id !== "finald" && Math.random() < getCritChance(source)) {
-        finalAmount *= getCritDamage(source);
+      if (shouldRollCritical(source, options)) {
+        finalAmount *= getCritDamageMultiplier(source);
         criticalHit = true;
       }
 
@@ -92,14 +127,20 @@
 
       const damageFloatColor = getDamageFloatColor(source, target);
       let shielded = 0;
-      if (target.shield > 0) {
-        shielded = Math.min(target.shield, finalAmount);
-        target.shield -= shielded;
-        finalAmount -= shielded;
-        if (target.shield <= 0) {
-          target.shield = 0;
-          target.shieldTimer = 0;
+      if (finalAmount > 0 && syncShieldTotal(target) > 0) {
+        const stacks = getShieldStacks(target).sort((a, b) => a.timer - b.timer);
+        let remainingShieldDamage = finalAmount;
+        for (const stack of stacks) {
+          if (remainingShieldDamage <= 0) {
+            break;
+          }
+          const absorbed = Math.min(stack.amount, remainingShieldDamage);
+          stack.amount -= absorbed;
+          remainingShieldDamage -= absorbed;
+          shielded += absorbed;
         }
+        finalAmount = remainingShieldDamage;
+        syncShieldTotal(target);
         if (shielded > 0) {
           addFloat(
             formatDamageFloat(shielded, { critical: criticalHit, guarded }),
@@ -136,9 +177,6 @@
         );
         if (target === player && player.channel) {
           cancelPlayerChannel();
-        }
-        if (target === player && player.cast) {
-          cancelPlayerCast();
         }
       } else if (delayedAmount > 0) {
         target.noDamage = 0;
@@ -183,30 +221,11 @@
       return `${prefix}${Math.round(amount)}`;
     }
 
-    function getCritChance(unit) {
-      return clamp(getRawCritChance(unit), 0, 1);
-    }
-
-    function getRawCritChance(unit) {
-      const multiplier = unit && hasPassive(unit, "swordwork") ? ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER : 1;
-      return BASE_CRIT_CHANCE * (Number.isFinite(multiplier) ? multiplier : 1);
-    }
-
-    function getCritDamage(unit) {
-      let damage = BASE_CRIT_DAMAGE;
-      if (unit && hasPassive(unit, "swordwork")) {
-        const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER)
-          ? ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER
-          : 0.5;
-        const bonusPercent = Math.max(0, Math.floor((BASE_CRIT_DAMAGE - 1) * 100 * multiplier));
-        damage = 1 + bonusPercent / 100;
+    function shouldRollCritical(source, options = {}) {
+      if (!source || options.noCrit === true || options.crit === false) {
+        return false;
       }
-      return damage + getCritOverflowDamageBonus(unit);
-    }
-
-    function getCritOverflowDamageBonus(unit) {
-      const rate = Number.isFinite(CRIT_OVERFLOW_DAMAGE_RATE) ? CRIT_OVERFLOW_DAMAGE_RATE : 0.5;
-      return Math.max(0, getRawCritChance(unit) - 1) * rate;
+      return Math.random() < getEffectiveCritChance(source);
     }
 
     function applyDamageModifierSum(source, target, amount, options = {}) {
@@ -260,20 +279,58 @@
       return Math.max(0, multiplier);
     }
 
+    function isFriendlyFire(source, target) {
+      return Boolean(source && target && source !== target && source.team === "party" && target.team === "party");
+    }
+
+    function getFriendlyFireMood(source) {
+      return source && Number.isFinite(source.mood) ? source.mood : -Infinity;
+    }
+
+    function isForcedHostileTarget(source, target) {
+      return Boolean(source && target && source !== target && source.forcedTarget === target && source.tauntTimer > 0);
+    }
+
+    function canFriendlyFireAffect(source, target) {
+      if (!isFriendlyFire(source, target)) {
+        return true;
+      }
+      if (isForcedHostileTarget(source, target)) {
+        return true;
+      }
+      return getFriendlyFireMood(source) >= getSafeNumber(FRIENDLY_FIRE_MOOD_SAFE_LIMIT, 80);
+    }
+
     function getFriendlyFireDamageMultiplier(source, target) {
-      if (!source || !target || source === target || source.team !== "party" || target.team !== "party") {
+      if (!isFriendlyFire(source, target)) {
         return 1;
       }
-      const safeLimit = getSafeNumber(FRIENDLY_FIRE_MOOD_SAFE_LIMIT, 70);
-      const maxMood = getSafeNumber(FRIENDLY_FIRE_MOOD_MAX, 100);
-      const minMultiplier = getSafeNumber(FRIENDLY_FIRE_MIN_DAMAGE_MULTIPLIER, 0.1);
-      const maxMultiplier = getSafeNumber(FRIENDLY_FIRE_MAX_DAMAGE_MULTIPLIER, 0.7);
-      const mood = Number.isFinite(source.mood) ? source.mood : safeLimit;
-      if (mood <= safeLimit) {
-        return minMultiplier;
+      if (isForcedHostileTarget(source, target)) {
+        return 1;
       }
-      const t = clamp((mood - safeLimit) / Math.max(1, maxMood - safeLimit), 0, 1);
-      return minMultiplier + (maxMultiplier - minMultiplier) * t;
+      if (!canFriendlyFireAffect(source, target)) {
+        return 0;
+      }
+      const highMood = getSafeNumber(FRIENDLY_FIRE_MOOD_MAX, 90);
+      const lowMultiplier = getSafeNumber(FRIENDLY_FIRE_MIN_DAMAGE_MULTIPLIER, 0.3);
+      const highMultiplier = getSafeNumber(FRIENDLY_FIRE_MAX_DAMAGE_MULTIPLIER, 0.8);
+      return getFriendlyFireMood(source) < highMood ? lowMultiplier : highMultiplier;
+    }
+
+    function getFriendlyFireEffectDurationMultiplier(source, target) {
+      if (!isFriendlyFire(source, target)) {
+        return 1;
+      }
+      if (isForcedHostileTarget(source, target)) {
+        return 1;
+      }
+      if (!canFriendlyFireAffect(source, target)) {
+        return 0;
+      }
+      const highMood = getSafeNumber(FRIENDLY_FIRE_MOOD_MAX, 90);
+      const lowMultiplier = getSafeNumber(FRIENDLY_FIRE_LOW_EFFECT_DURATION_MULTIPLIER, 0.5);
+      const highMultiplier = getSafeNumber(FRIENDLY_FIRE_HIGH_EFFECT_DURATION_MULTIPLIER, 1);
+      return getFriendlyFireMood(source) < highMood ? lowMultiplier : highMultiplier;
     }
 
     function getSafeNumber(value, fallback) {
@@ -306,6 +363,8 @@
       if (source && source.team === "party") {
         source.ult = clamp(source.ult + healed * 0.22, 0, 100);
       }
+      applyHilmentSelfHeal(source, target, healed);
+
       if (!options.noMood && target.team === "party" && target.id !== "finald") {
         const quickBonus = target.noDamage < 3 ? MOOD_QUICK_HEAL_BONUS : 0;
         const healRatio = getHpRatio(healed, target);
@@ -313,6 +372,24 @@
         addMoodGain(target, referenceHeal * MOOD_HEAL_RATE * MOOD_EVENT_MULT + quickBonus);
       }
       return healed;
+    }
+
+    function applyHilmentSelfHeal(source, target, healed) {
+      if (!source || source.dead || !target || source === target || healed <= 0) {
+        return;
+      }
+      if (source.id !== "finald" || source.team !== "party" || target.team !== "party" || !hasPassive(source, "hilment")) {
+        return;
+      }
+      const ratio = Number.isFinite(HILMENT_SELF_HEAL_RATIO) ? HILMENT_SELF_HEAL_RATIO : 0.3;
+      const before = source.hp;
+      source.hp = clamp(source.hp + healed * ratio, 0, source.maxHp);
+      const selfHealed = source.hp - before;
+      if (selfHealed <= 0) {
+        return;
+      }
+      source.hurt = 0;
+      addFloat(`+${Math.round(selfHealed)}`, source.x, source.y - 28, getHealFloatColor(source));
     }
 
     function reduceByDefense(target, amount, isMagic) {
@@ -392,6 +469,8 @@
     return {
       addShield,
       dealDamage,
+      canFriendlyFireAffect,
+      getFriendlyFireEffectDurationMultiplier,
       formatDamageFloat,
       healUnit,
       reduceByDefense,

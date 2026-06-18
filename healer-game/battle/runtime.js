@@ -15,14 +15,11 @@
       effects,
       skillSystem,
       ACTION_GAP,
-      SELF_HEAL_DELAY,
-      SELF_HEAL_LIMIT,
-      SELF_HEAL_MP_PER_SEC,
-      SELF_HEAL_HP_PER_SEC,
-      INTERRUPTED_CAST_COOLDOWN_REDUCTION,
+      SHIELD_MOOD_GAIN_PER_SEC,
       battlePx,
       clamp,
       distPoint,
+      clampUnit,
       getBattleBounds,
       updateTown,
       updatePartyAi,
@@ -34,11 +31,12 @@
       getMoodNaturalDelta,
       applyCommandMoodDelta,
       applyMoodHighGainDamping,
+      addMoodGain,
       updateDelayedDamage,
       updateRihasPassiveStacks,
       dealDamage,
+      canFriendlyFireAffect,
       healUnit,
-      hasPassive,
     } = context;
 
     function update(dt) {
@@ -107,12 +105,7 @@
           }
         }
 
-        if (unit.shieldTimer > 0) {
-          unit.shieldTimer -= dt;
-          if (unit.shieldTimer <= 0) {
-            unit.shield = 0;
-          }
-        }
+        updateShieldStacks(unit, dt);
 
         for (const key of Object.keys(unit.cds)) {
           unit.cds[key] = Math.max(0, unit.cds[key] - dt);
@@ -133,14 +126,30 @@
       }
     }
 
+    function updateShieldStacks(unit, dt) {
+      if (!Array.isArray(unit.shields)) {
+        unit.shields = [];
+      }
+      if (unit.shields.length === 0 && unit.shield > 0 && unit.shieldTimer > 0) {
+        unit.shields.push({ amount: unit.shield, timer: unit.shieldTimer });
+      }
+      for (const stack of unit.shields) {
+        stack.timer -= dt;
+      }
+      unit.shields = unit.shields.filter((stack) => stack && stack.amount > 0 && stack.timer > 0);
+      const total = unit.shields.reduce((sum, stack) => sum + stack.amount, 0);
+      unit.shield = clamp(total, 0, unit.maxHp || total);
+      unit.shieldTimer = unit.shields.reduce((max, stack) => Math.max(max, stack.timer), 0);
+      if (unit.shield > 0 && unit.team === "party" && unit.mood !== null && SHIELD_MOOD_GAIN_PER_SEC > 0) {
+        addMoodGain(unit, SHIELD_MOOD_GAIN_PER_SEC * dt);
+      }
+    }
     function updatePlayer(dt) {
       if (player.dead) {
         return;
       }
 
-      const supportOrigin = getSupportOrigin();
-      player.x = supportOrigin.x;
-      player.y = supportOrigin.y;
+      updatePlayerMovement(dt);
 
       if (player.cast) {
         player.cast.time -= dt;
@@ -148,33 +157,25 @@
           finishPlayerCast();
         }
       }
-
-      updateSelfHeal(dt);
       skillSystem.updatePlayerChannel(dt);
     }
 
-    function updateSelfHeal(dt) {
-      const limit = player.maxHp * SELF_HEAL_LIMIT;
-      player.selfHealing = false;
-      if (!hasPassive(player, "flotict") || player.noDamage < SELF_HEAL_DELAY || player.hp >= limit || player.mp <= 0 || player.dead) {
+    function updatePlayerMovement(dt) {
+      if (!isFieldUnit(player) || player.frozen > 0 || player.cast) {
         return;
       }
-
-      const mpSpend = Math.min(player.mp, SELF_HEAL_MP_PER_SEC * dt);
-      const healAmount = Math.min(SELF_HEAL_HP_PER_SEC * dt, limit - player.hp);
-      if (mpSpend <= 0 || healAmount <= 0) {
+      const keys = input.keys || {};
+      const dx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+      const dy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+      const len = Math.hypot(dx, dy);
+      if (len <= 0) {
         return;
       }
-
-      player.mp -= mpSpend;
-      player.hp = clamp(player.hp + healAmount, 0, limit);
-      player.selfHealing = true;
-      player.selfHealFloat += dt;
-      if (player.selfHealFloat >= 0.8) {
-        player.selfHealFloat = 0;
-        addFloat("自己治療", player.x, player.y - 34, "#bdfcff");
-      }
+      player.x += (dx / len) * player.speed * dt;
+      player.y += (dy / len) * player.speed * dt;
+      clampUnit(player);
     }
+
 
     function startPlayerCast(type, data, castTime) {
       if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
@@ -193,11 +194,12 @@
         return;
       }
       if (player.dead || player.frozen > 0) {
-        applyInterruptedPlayerCastCooldown(cast);
+        applyPlayerCastCooldown(cast);
         return;
       }
 
       skillSystem.completePlayerCast(cast);
+      applyPlayerCastCooldown(cast);
       player.actionLock = Math.max(player.actionLock, ACTION_GAP);
     }
 
@@ -224,6 +226,9 @@
           : getFieldPartyMembers();
         for (const unit of candidates) {
           if (unit.dead || unit === shot.owner) {
+            continue;
+          }
+          if (shot.team === "party" && unit.team === "party" && !shot.healAllies && canFriendlyFireAffect && !canFriendlyFireAffect(shot.owner, unit)) {
             continue;
           }
           if (shot.hit.has(unit)) {
@@ -410,6 +415,9 @@
     }
 
     function getSupportOrigin(target = null) {
+      if (isFieldUnit(player)) {
+        return { x: player.x, y: player.y };
+      }
       const bounds = getBattleBounds();
       const fallbackY = bounds.bottom - battlePx(42);
       const y = target && Number.isFinite(target.y)
@@ -460,18 +468,22 @@
     function cancelPlayerCast() {
       const cast = player.cast;
       player.cast = null;
-      applyInterruptedPlayerCastCooldown(cast);
+      applyPlayerCastCooldown(cast);
       player.actionLock = Math.max(player.actionLock, ACTION_GAP);
       const origin = getSupportOrigin();
       addFloat("詠唱中断", origin.x + 28, origin.y - 32, "#ffffff");
     }
 
-    function applyInterruptedPlayerCastCooldown(cast) {
+    function applyPlayerCastCooldown(cast) {
+      if (cast && cast.type === "ult") {
+        player.ult = 0;
+        return;
+      }
       const cooldown = getPlayerCastCooldown(cast && cast.type);
       if (!cooldown) {
         return;
       }
-      player.cds[cooldown.key] = cooldown.max * (1 - INTERRUPTED_CAST_COOLDOWN_REDUCTION);
+      player.cds[cooldown.key] = cooldown.max;
     }
 
     function getPlayerCastCooldown(type) {
@@ -482,7 +494,6 @@
       update,
       updateCooldownsAndTimers,
       updatePlayer,
-      updateSelfHeal,
       startPlayerCast,
       finishPlayerCast,
       updateProjectiles,
@@ -509,7 +520,7 @@
       slashEffect,
       cancelPlayerChannel,
       cancelPlayerCast,
-      applyInterruptedPlayerCastCooldown,
+      applyPlayerCastCooldown,
       getPlayerCastCooldown,
     };
   };

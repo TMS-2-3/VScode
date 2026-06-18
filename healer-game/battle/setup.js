@@ -41,17 +41,19 @@
       game.messageTimer = 4;
 
       const bounds = getBattleBounds();
-      const supportOrigin = getSupportOrigin();
       const cx = bounds.left + bounds.width * 0.33;
       const cy = bounds.centerY;
 
+      const playerStart = clampBattlePoint(bounds.left + bounds.width * 0.26, cy, player.radius);
+
       Object.assign(player, {
-        x: supportOrigin.x,
-        y: supportOrigin.y,
+        x: playerStart.x,
+        y: playerStart.y,
         hp: player.maxHp,
         mp: player.maxMp,
         shield: 0,
         shieldTimer: 0,
+        shields: [],
         ult: 0,
         dead: false,
         cds: {},
@@ -66,9 +68,9 @@
         itemAim: null,
         selfHealFloat: 0,
         delayedDamageQueue: [],
-        field: false,
-        targetable: false,
-        collidable: false,
+        field: true,
+        targetable: true,
+        collidable: true,
       });
 
       const ulpes = makePartyMember("ulpes");

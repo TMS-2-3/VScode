@@ -8,19 +8,19 @@
 
   window.HEALER_SKILL_DATA = {
     finald: {
-      attack: { id: "finald_attack", key: "attack", owner: "finald", name: "援護射撃", cd: 5, cast: 1, cost: 6, radius: px(54), burstRadius: px(62), damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["援護します"] },
-      heal: { id: "finald_heal", key: "heal", owner: "finald", name: "ヒール", cd: 6, cast: 2, cost: 18, range: px(520), healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール!", "回復!"] },
-      shield: { id: "finald_shield", key: "shield", owner: "finald", name: "バリア", cd: 8, cast: 2, cost: 24, range: px(340), radius: px(92), shieldBase: 40, magicScale: 0.45, duration: 6, moodGain: 4, lines: ["バリア展開!", "守るよ!"] },
-      commandDefend: { id: "finald_command_defend", key: "commandDefend", owner: "finald", name: "防御指示", cd: 7.5, cost: 0, commandDelta: -1, target: "ally", lines: ["下がって!"] },
-      commandAttack: { id: "finald_command_attack", key: "commandAttack", owner: "finald", name: "攻撃指示", cd: 7.5, cost: 0, commandDelta: 1, target: "ally", lines: ["攻めて!"] },
-      commandDefendAll: { id: "finald_command_defend_all", key: "commandDefendAll", owner: "finald", name: "防御陣形", cd: 20, cost: 0, commandDelta: -1, target: "allAllies", lines: ["みんな下がって!"] },
-      commandAttackAll: { id: "finald_command_attack_all", key: "commandAttackAll", owner: "finald", name: "攻撃陣形", cd: 20, cost: 0, commandDelta: 1, target: "allAllies", lines: ["みんな攻めて!"] },
-      ult: { id: "finald_ult", key: "ult", owner: "finald", name: "フルヒール", cast: 3, baseHealRatio: 0.25, missingHealRatio: 0.5, lines: ["フルヒール!!"] },
+      attack: { id: "finald_attack", key: "attack", owner: "finald", name: "援護射撃", cd: 5, cast: 1, cost: 6, range: px(200), radius: px(54), burstRadius: px(62), damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["援護します"] },
+      heal: { id: "finald_heal", key: "heal", owner: "finald", name: "ヒール", cd: 6, cast: 2, cost: 18, range: px(300), healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール!", "回復!"] },
+      shield: { id: "finald_shield", key: "shield", owner: "finald", name: "バリア", cd: 8, cast: 2, cost: 24, range: px(280), radius: px(92), shieldBase: 40, magicScale: 0.45, duration: 6, moodGain: 4, lines: ["バリア展開!", "守るよ!"] },
+      commandDefend: { id: "finald_command_defend", key: "commandDefend", owner: "finald", name: "防御指示", cd: 7.5, cost: 0, range: px(480), commandDelta: -1, target: "ally", lines: ["下がって!"] },
+      commandAttack: { id: "finald_command_attack", key: "commandAttack", owner: "finald", name: "攻撃指示", cd: 7.5, cost: 0, range: px(480), commandDelta: 1, target: "ally", lines: ["攻めて!"] },
+      commandDefendAll: { id: "finald_command_defend_all", key: "commandDefendAll", owner: "finald", name: "防御陣形", cd: 20, cost: 0, radius: px(520), commandDelta: -1, target: "allAllies", lines: ["みんな下がって!"] },
+      commandAttackAll: { id: "finald_command_attack_all", key: "commandAttackAll", owner: "finald", name: "攻撃陣形", cd: 20, cost: 0, radius: px(520), commandDelta: 1, target: "allAllies", lines: ["みんな攻めて!"] },
+      ult: { id: "finald_ult", key: "ult", owner: "finald", name: "フルヒール", cast: 3, baseHealRatio: 0.25, missingHealRatio: 0.3, lines: ["フルヒール!!"] },
     },
     ulpes: {
       attack: { id: "ulpes_attack", key: "attack", owner: "ulpes", name: "通常攻撃", cd: 2.5, range: px(52), hitRange: px(62), repeat: 3, repeatDelayMs: 120, damageBase: 8, attackScale: 0.38, lines: ["てやっ!", "くらえ!"] },
       heroSlash: { id: "ulpes_hero_slash", key: "heroSlash", owner: "ulpes", name: "ヒーロースラッシュ", cd: 10, range: px(128), radius: px(122), arcDeg: 200, cast: 0.62, damageBase: 18, attackScale: 0.7, minCdAfterHit: 1.5, cdRefundPerHit: 0.5, burstRadius: px(116), lines: ["ヒーロースラッシュ!!"] },
-      ult: { id: "ulpes_ult", key: "ult", owner: "ulpes", name: "正義の一撃", cast: 0.7, autoCast: 0.45, radius: px(72), hitRadius: px(70), damageBase: 74, attackScale: 1.4, autoDamageScale: 0.65, teleportOffset: px(22), burstRadius: px(84), lines: ["正義の一撃!!"] },
+      ult: { id: "ulpes_ult", key: "ult", owner: "ulpes", name: "正義の一撃", cast: 0.7, autoCast: 0.45, radius: px(72), hitRadius: px(70), damageBase: 74, attackScale: 1.4, teleportOffset: px(22), burstRadius: px(84), lines: ["正義の一撃!!"] },
     },
     rihas: {
       attack: { id: "rihas_attack", key: "attack", owner: "rihas", name: "台地揺るがす拳", cd: 2.5, range: px(75), radius: px(66), cast: 0.38, damageBase: 16, attackScale: 0.55, burstRadius: px(72), lines: ["どりゃぁ!", "しねぇ!"] },
@@ -34,8 +34,7 @@
         id: "sushia_ult", key: "ult", owner: "sushia", name: "アイスワールド",
         cast: 5, autoCast: 3.5, radius: px(330), manualRadiusBonus: px(50),
         duration: 4.2, autoDuration: 2.6, tickRate: 0.4,
-        freezeEnemy: 3, freezeAlly: 1, autoFreezeEnemy: 1, autoFreezeAlly: 3,
-        manualAllyDamageMultiplier: 0.5,
+        freezeEnemy: 3, freezeAlly: 1, autoFreezeAlly: 3,
         damageBase: 8, magicScale: 0.22, lines: ["全部凍っちゃえ!!"],
       },
     },
@@ -48,7 +47,7 @@
 
   window.HEALER_PASSIVE_DATA = {
     finald: {
-      flotict: { id: "finald_passive_flotict", key: "flotict", owner: "finald", name: "フロティクト" },
+      hilment: { id: "finald_passive_hilment", key: "hilment", owner: "finald", name: "ヒルメント", selfHealRatio: 0.3 },
     },
     ulpes: {
       swordwork: { id: "ulpes_passive_swordwork", key: "swordwork", owner: "ulpes", name: "勇者の剣捌き" },
@@ -69,7 +68,7 @@
     },
     defaults: {
       finald: {
-        passive: "flotict",
+        passive: "hilment",
         active: ["attack", "heal", "shield", "commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"],
       },
       ulpes: { passive: "swordwork", active: ["attack", "heroSlash"] },

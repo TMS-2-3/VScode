@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   "use strict";
 
   window.createHealerTownRenderer = function createHealerTownRenderer(context) {
@@ -37,7 +37,7 @@
     drawTownRoads();
     drawTownProps();
     drawTownBuildings();
-    drawTownCompanions();
+    drawTownCharacters();
     ctx.restore();
 
     drawTownHud();
@@ -215,15 +215,16 @@
       ctx.stroke();
       ctx.fillStyle = "#f7fff6";
       ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText("クリック", building.x + building.w / 2, building.y - 63);
+      ctx.fillText("E", building.x + building.w / 2, building.y - 63);
     }
     ctx.restore();
   }
 
-  function drawTownCompanions() {
+  function drawTownCharacters() {
     if (!playerProfile.done) {
       return;
     }
+    const actors = [{ x: town.player.x, y: town.player.y, color: town.player.color || COLORS.player, label: town.player.label || "主" }];
     if (!town.meetingDone) {
       const guild = getTownBuilding("guild");
       const baseX = guild ? guild.door.x : 800;
@@ -234,13 +235,15 @@
       drawArgumentMark(baseX - 48, baseY - 22);
       drawArgumentMark(baseX + 6, baseY + 4);
       drawArgumentMark(baseX + 66, baseY - 18);
-      return;
+    } else if (Array.isArray(town.followers)) {
+      for (const follower of town.followers) {
+        actors.push(follower);
+      }
     }
-    const plazaX = TOWN_WIDTH * 0.5;
-    const plazaY = 560;
-    drawTownNpc(plazaX - 48, plazaY + 54, COLORS.ulpes, "ウ");
-    drawTownNpc(plazaX, plazaY + 74, COLORS.rihas, "リ");
-    drawTownNpc(plazaX + 48, plazaY + 54, COLORS.sushia, "ス");
+    actors.sort((a, b) => a.y - b.y);
+    for (const actor of actors) {
+      drawTownNpc(actor.x, actor.y, actor.color, actor.label);
+    }
   }
 
   function drawTownNpc(x, y, color, label) {
@@ -295,7 +298,7 @@
     ctx.fillText("はじまりの町", 34, 47);
     ctx.font = "13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffd86b";
-    const target = town.interaction ? `${town.interaction.name}をクリックで利用` : "施設をクリックして利用";
+    const target = town.interaction ? `${town.interaction.name}: Eで利用` : "WASDで移動 / 施設の近くでE";
     ctx.fillText(target, 34, 73);
   }
 

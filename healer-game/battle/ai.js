@@ -26,7 +26,6 @@
       getTargetablePartyMembers,
       getPriorityTarget,
       triggerUltimate,
-      setActionCooldown,
     } = context;
 
     function updatePartyAi(dt) {
@@ -41,9 +40,7 @@
           continue;
         }
         if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= 100 && member.mood >= 95) {
-          if (triggerUltimate(member.id, true)) {
-            setActionCooldown(member);
-          }
+          triggerUltimate(member.id, true);
           continue;
         }
 
@@ -52,9 +49,7 @@
         }
 
         if (!avoidingTelegraph && member.mood >= 85 && member.ult >= 100 && Math.random() < 0.16) {
-          if (triggerUltimate(member.id, true)) {
-            setActionCooldown(member);
-          }
+          triggerUltimate(member.id, true);
           continue;
         }
 
@@ -72,9 +67,15 @@
       if (unit.aiIntent && (!unit.aiIntent.target || unit.aiIntent.target.dead)) {
         unit.aiIntent = null;
       }
+      if (unit.aiIntent && unit.aiIntent.target.team === unit.team && !isForcedHostileTarget(unit, unit.aiIntent.target)) {
+        unit.aiIntent = null;
+      }
+      if (unit.aiIntent && isForcedHostileTarget(unit, unit.forcedTarget) && unit.aiIntent.target !== unit.forcedTarget) {
+        unit.aiIntent = null;
+      }
       const target = unit.aiIntent && unit.aiIntent.target
         ? unit.aiIntent.target
-        : getPriorityTarget() || nearestAlive(unit, enemies);
+        : getPartyMovementTarget(unit);
       if (!target) {
         return false;
       }
@@ -112,6 +113,17 @@
       unit.y += dir.y * unit.speed * moodSpeed * dt;
       clampUnit(unit);
       return false;
+    }
+
+    function getPartyMovementTarget(unit) {
+      if (isForcedHostileTarget(unit, unit && unit.forcedTarget)) {
+        return unit.forcedTarget;
+      }
+      return getPriorityTarget() || nearestAlive(unit, enemies);
+    }
+
+    function isForcedHostileTarget(source, target) {
+      return Boolean(source && target && source !== target && source.forcedTarget === target && source.tauntTimer > 0 && !target.dead);
     }
 
     function getPartyPreferredRange(unit) {
