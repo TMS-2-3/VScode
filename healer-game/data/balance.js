@@ -24,8 +24,8 @@
       { value: -2, guard: 3, actionCd: 2.5, moodGain: 0.6, moodLoss: 1.5, damageOut: 0.8, damageIn: 0.8 },
       { value: -1, guard: 1.8, actionCd: 1.6, moodGain: 0.8, moodLoss: 1.2, damageOut: 0.9, damageIn: 0.9 },
       { value: 0, guard: 1, actionCd: 1, moodGain: 1, moodLoss: 1, damageOut: 1, damageIn: 1 },
-      { value: 1, guard: 0.6, actionCd: 0.7, moodGain: 1, moodLoss: 1, damageOut: 1.1, damageIn: 1.15 },
-      { value: 2, guard: 0, actionCd: 0.5, moodGain: 1.1, moodLoss: 0.9, damageOut: 1.2, damageIn: 1.3 },
+      { value: 1, guard: 0.6, actionCd: 0.8, moodGain: 1, moodLoss: 1, damageOut: 1.1, damageIn: 1.15 },
+      { value: 2, guard: 0, actionCd: 0.6, moodGain: 1.1, moodLoss: 0.9, damageOut: 1.2, damageIn: 1.3 },
     ],
     commandBiasAutoGraceActions: 5,
     commandBiasPreferredRanges: {

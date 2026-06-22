@@ -402,6 +402,9 @@
           bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_DEFENSE_BONUS, 0);
         }
       }
+      if (statKey === "defense" && unit && (unit.burnTimer || 0) > 0) {
+        bonus += getSafeNumber(unit.burnDefensePenalty, -0.1);
+      }
       return bonus;
     }
 

@@ -39,7 +39,7 @@
         if (member.aiIntent) {
           continue;
         }
-        if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= 100 && member.mood >= 95) {
+        if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
           triggerUltimate(member.id, true);
           continue;
         }
@@ -48,7 +48,7 @@
           continue;
         }
 
-        if (!avoidingTelegraph && member.mood >= 85 && member.ult >= 100 && Math.random() < 0.16) {
+        if (!avoidingTelegraph && member.mood >= 85 && member.ult >= skillSystem.getUltimateCost(member) && Math.random() < 0.16) {
           triggerUltimate(member.id, true);
           continue;
         }

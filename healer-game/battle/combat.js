@@ -42,6 +42,7 @@
       getEffectiveGuardChance,
       getEffectiveCritChance,
       getCritDamageMultiplier,
+      getUltimateCost,
       getEffectiveDefense,
       getEffectiveMagicDefense,
       addRihasPassiveStack,
@@ -57,16 +58,17 @@
 
     function addShield(unit, amount, duration) {
       if (!unit || amount <= 0 || duration <= 0) {
-        return;
+        return 0;
       }
       const currentTotal = syncShieldTotal(unit);
       const room = Math.max(0, (unit.maxHp || 0) - currentTotal);
       const added = Math.min(amount, room);
       if (added <= 0) {
-        return;
+        return 0;
       }
       getShieldStacks(unit).push({ amount: added, timer: duration });
       syncShieldTotal(unit);
+      return added;
     }
 
     function getShieldStacks(unit) {
@@ -81,6 +83,8 @@
       }
       return unit.shields;
     }
+
+    const ULTIMATE_GAIN_PER_AFFECTED_UNIT = 4;
 
     function syncShieldTotal(unit) {
       if (!unit) {
@@ -160,7 +164,7 @@
         target.delayedDamageQueue.push({
           timer: 1,
           ticks: 5,
-          amount: delayedAmount / 5,
+          amount: Math.max(1, delayedAmount / 5),
           color: damageFloatColor,
         });
       }
@@ -184,7 +188,9 @@
 
       const rewardDamage = finalAmount + delayedAmount;
       if (source && source.team === "party") {
-        source.ult = clamp(source.ult + rewardDamage * 0.22, 0, 100);
+        if (target.team === "enemy" && rewardDamage + shielded > 0) {
+          awardOffensiveUltimate(source, target, options);
+        }
         if (hasPassive(source, "warmup") && target.team === "enemy" && rewardDamage > 0 && options.magic && source.stackCooldown <= 0) {
           source.castStacks = clamp(source.castStacks + 1, 0, SUSHIA_PASSIVE_MAX_STACKS);
           source.stackTimer = SUSHIA_PASSIVE_STACK_DURATION;
@@ -199,7 +205,6 @@
       }
 
       if (target.team === "party" && target.id !== "finald") {
-        target.ult = clamp(target.ult + rewardDamage * 0.16, 0, 100);
         const damageRatio = getHpRatio(rewardDamage, target);
         const referenceDamage = damageRatio * getMoodReferenceHp(target);
         addMoodLoss(target, referenceDamage * MOOD_DAMAGE_TAKEN_RATE * MOOD_EVENT_MULT);
@@ -214,6 +219,33 @@
         addBurst(target.x, target.y, target.radius * 2.2, "rgba(255,255,255,0.2)");
       }
       return rewardDamage + shielded;
+    }
+
+    function awardOffensiveUltimate(source, target, options = {}) {
+      if (!target || target.team !== "enemy") {
+        return 0;
+      }
+      return awardUltimateForAffectedUnit(source, options);
+    }
+
+    function awardSupportUltimate(source, target, options = {}) {
+      if (!target || target.team !== "party") {
+        return 0;
+      }
+      return awardUltimateForAffectedUnit(source, options);
+    }
+
+    function awardUltimateForAffectedUnit(source, options = {}) {
+      if (!source || source.dead || source.team !== "party" || options.noUltGain || options.ultimate) {
+        return 0;
+      }
+      const before = Number.isFinite(source.ult) ? source.ult : 0;
+      source.ult = clamp(before + ULTIMATE_GAIN_PER_AFFECTED_UNIT, 0, getUltimateCap(source));
+      return source.ult - before;
+    }
+
+    function getUltimateCap(unit) {
+      return typeof getUltimateCost === "function" ? getUltimateCost(unit) : 100;
     }
 
     function formatDamageFloat(amount, options = {}) {
@@ -360,9 +392,7 @@
 
       addFloat(`+${Math.round(healed)}`, target.x, target.y - 28, healFloatColor);
       target.hurt = 0;
-      if (source && source.team === "party") {
-        source.ult = clamp(source.ult + healed * 0.22, 0, 100);
-      }
+      awardSupportUltimate(source, target, options);
       applyHilmentSelfHeal(source, target, healed);
 
       if (!options.noMood && target.team === "party" && target.id !== "finald") {
@@ -468,6 +498,8 @@
 
     return {
       addShield,
+      awardOffensiveUltimate,
+      awardSupportUltimate,
       dealDamage,
       canFriendlyFireAffect,
       getFriendlyFireEffectDurationMultiplier,

@@ -105,17 +105,23 @@
           }
         }
 
+        updateBurn(unit, dt);
         updateShieldStacks(unit, dt);
 
         for (const key of Object.keys(unit.cds)) {
-          unit.cds[key] = Math.max(0, unit.cds[key] - dt);
+          if (key === "attack" && unit.frozen > 0) continue;
+          const before = unit.cds[key] || 0;
+          unit.cds[key] = Math.max(0, before - dt);
+          if (before > 0 && unit.cds[key] <= 0 && skillSystem.onCooldownReady) {
+            skillSystem.onCooldownReady(unit, key);
+          }
         }
 
         regenerateHp(unit, dt);
         regenerateMp(unit, dt);
 
         if (unit.team === "party") {
-          unit.ult = clamp(unit.ult + dt * 1.2, 0, 100);
+          unit.ult = clamp(unit.ult + dt * 0.6, 0, skillSystem.getUltimateCost ? skillSystem.getUltimateCost(unit) : 100);
         }
 
         if (unit.team === "party" && unit.id !== "finald") {
@@ -124,6 +130,46 @@
           unit.mood = clamp(unit.mood + adjustedDelta, 0, 100);
         }
       }
+    }
+
+    function updateBurn(unit, dt) {
+      if (!unit || unit.dead) {
+        return;
+      }
+      if ((unit.burnTimer || 0) <= 0) {
+        clearBurn(unit);
+        return;
+      }
+      const elapsed = Math.min(dt, unit.burnTimer);
+      const tickRate = Number.isFinite(unit.burnTickRate) && unit.burnTickRate > 0 ? unit.burnTickRate : 1;
+      unit.burnTimer = Math.max(0, unit.burnTimer - dt);
+      unit.burnTick = (Number.isFinite(unit.burnTick) && unit.burnTick > 0 ? unit.burnTick : tickRate) - elapsed;
+      while (unit.burnTick <= 0 && !unit.dead) {
+        const ratio = Number.isFinite(unit.burnDamageHpRatio) ? unit.burnDamageHpRatio : 0.01;
+        const damage = Math.max(0, unit.hp * ratio);
+        if (damage > 0) {
+          const burnSource = unit.burnSource && !unit.burnSource.dead ? unit.burnSource : null;
+          const damageSource = burnSource && burnSource.team !== unit.team ? burnSource : (unit.team === "enemy" ? burnSource : null);
+          dealDamage(damageSource, unit, damage, { magic: true, noCrit: true, noUltGain: true });
+        }
+        unit.burnTick += tickRate;
+      }
+      if (unit.burnTimer <= 0 || unit.dead) {
+        clearBurn(unit);
+      }
+    }
+
+    function clearBurn(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.burnTimer = 0;
+      unit.burnMax = 0;
+      unit.burnTick = 0;
+      unit.burnTickRate = 1;
+      unit.burnDamageHpRatio = 0;
+      unit.burnDefensePenalty = 0;
+      unit.burnSource = null;
     }
 
     function updateShieldStacks(unit, dt) {
@@ -476,7 +522,7 @@
 
     function applyPlayerCastCooldown(cast) {
       if (cast && cast.type === "ult") {
-        player.ult = 0;
+        player.ult = Math.max(0, player.ult - (skillSystem.getUltimateCost ? skillSystem.getUltimateCost(player) : 100));
         return;
       }
       const cooldown = getPlayerCastCooldown(cast && cast.type);

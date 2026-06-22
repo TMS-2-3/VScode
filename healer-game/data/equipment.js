@@ -82,7 +82,7 @@
           { magic: 6 },
           { magic: 7 },
         ],
-        normalAttackSkillId: "masic_3_shot",
+        normalAttackSkillId: "masic_shot",
         effect: null,
         description: "スシア用の初期武器",
       },

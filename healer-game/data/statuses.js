@@ -1,0 +1,52 @@
+(() => {
+  "use strict";
+
+  window.HEALER_STATUS_DATA = {
+    buff_itaminasi: {
+      id: "buff_itaminasi",
+      name: "逆境",
+      type: "ステータスバフ",
+      label: "逆",
+      color: "#e37a3f",
+      description: "1スタックごとに攻撃力+0.5%、防御力+0.5%を得る。最大20スタック。\nスタックを獲得するたびに効果時間はリセットされる。スタックの獲得には0.8秒のクールタイムがある。",
+      simpleDescription: "スタック数に応じて攻撃力と防御力が上昇する。",
+    },
+    buff_warmup: {
+      id: "buff_warmup",
+      name: "ウォームアップ",
+      type: "ステータスバフ",
+      label: "熱",
+      color: "#ff9f43",
+      description: "1スタックごとに詠唱速度が5%を得る。最大10スタック。\nスタックを獲得するたびに効果時間はリセットされる。スタックの獲得には1秒のクールタイムがある。",
+      simpleDescription: "スタック数に応じて詠唱速度が速くなる。",
+    },
+    debuff_taunt: {
+      id: "debuff_taunt",
+      name: "挑発",
+      type: "対象指定デバフ",
+      label: "怒",
+      color: "#ff6b44",
+      description: "対象や範囲を指定するスキルの発動対象や位置が挑発対象に固定される。",
+      simpleDescription: "挑発してきた対象以外を攻撃できなくなる。",
+    },
+    debuff_freeze: {
+      id: "debuff_freeze",
+      name: "凍結",
+      type: "行動デバフ",
+      label: "凍",
+      color: "#b8e7ff",
+      description: "凍り付き、一切の行動ができなくなる。凍結している間、行動クールタイムは停止する。",
+      simpleDescription: "凍り付き、行動できなくなる。",
+    },
+    debuff_burn: {
+      id: "debuff_burn",
+      name: "燃焼",
+      type: "ダメージデバフ",
+      label: "燃",
+      color: "#ff8b43",
+      formula: [{ text: "現在HP * 1%", type: "burnTick" }],
+      description: "燃焼が付与されている間防御力-10%。さらに毎秒(式=値)の魔法ダメージを受ける。",
+      simpleDescription: "防御力が下がり、継続的にダメージを受ける。",
+    },
+  };
+})();

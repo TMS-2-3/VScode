@@ -149,3 +149,23 @@ TODO: Arjuna battle voice placement needs a UI-side redesign. For now Finald/Arj
 
 2026-06-17 friendly-fire/mood rework: Party offensive AoE/projectiles no longer affect allies below source mood 80. Mood 80-89 lets allies be hit for 30% damage and 50% debuff/effect duration; mood 90-100 uses 80% damage and 100% effect duration. Enemy-targeted skills still choose enemies, but high-mood splash can include allies. Mood-triggered automatic ultimates scale enemy damage/effects to 60%; ally damage/effects use the friendly-fire mood rule separately. Updated skills/runtime/combat helpers and docs.
 2026-06-18 forced hostile target: Party AI now prioritizes forcedTarget while tauntTimer > 0, including allied targets. A forced allied target bypasses the mood friendly-fire hit gate and damage/effect reduction, so future ally-attacking debuffs can reuse forcedTarget + tauntTimer. Expired forced ally intents are cleared from movement/action intent.
+2026-06-18 Sushia Chacka implementation: memo.xlsx 味方スキル row 23 added チャッカ as Sushia initial non-normal skill. Removed Impact Bomb from Sushia default loadout but kept its skill data. Removed the accidental Finald chacka data/default. Implemented useSushiaChacka as enemy target magic hit + 4s burn. Burn debuff lowers defense by 10% and ticks magic damage equal to 1% current HP per second; status UI now shows 燃 icon/tooltips.
+2026-06-19 skill overhaul follow-up: Fixed data/skills.js syntax break in Rihas/Sushia ultimate category fields. Variable ultimate gauge cost is now treated as required cap/cost, not early-use threshold: Strepion requires 110%, Ice World requires 130%, default remains 100%. Sushia normal attack ID is masic_shot; old Impact Bomb became Bomber/bomber with line ボンバー. Updated detailed handoff/spec notes to use Shock/Shelt/Strepion/Magic Bullet/Bomber naming and current values.
+2026-06-19 skill wait queue: Added per-unit skillQueue/usedSkillKeys/skillCooldownKeys. Party CPs and enemies now use random selection only when no queued usable skill exists. Once a skill has been used, it re-enters that unit's queue when its own cooldown finishes; normal attacks and other actions without a separate skill cooldown re-enter when the action cooldown finishes. Queued skills are checked from the front, skipping temporarily unusable entries to avoid stalls.`n2026-06-19 normal attack fallback: Adjusted AI skill selection so normal attacks are fallback actions. Non-normal usable skills are considered first by queue/random order; normal attack only enters candidates when no non-normal skill can currently be selected.`n`n2026-06-19 normal attacks queued again: Reverted normal attacks from fallback-only to full wait-queue candidates. Party normal attack skill CDs set to 6s for Finald/Shock, Ulpes attack, Rihas attack, and Sushia Magic Bullet.`n
+
+2026-06-19 ultimate natural gain tuning: natural passive ultimate gauge gain halved from 1.2%/s to 0.6%/s. Damage/heal ultimate gains unchanged.
+
+2026-06-19 ultimate gain flat affected-unit rule: replaced amount-based ult gains with +4% per affected enemy damaged/debuffed and +4% per affected ally healed/shielded/buffed. Ultimate effects and burn DoT ticks do not grant ultimate gauge. Sushia magic shot projectileCount is now 1.
+2026-06-22 memo.xlsx sheets: added 防具, セット効果, アイテム sheets. 防具 includes 部位 so accessories can be managed there for now; all new sheets have header filters.
+
+2026-06-22 naming: user-facing スキルヘイスト label renamed to クールタイム. Internal stat handling remains unchanged; negative values mean cooldown shortening by design.
+
+2026-06-22 command bias action CD tuning: +1 actionCd multiplier changed 0.7 -> 0.8, +2 changed 0.5 -> 0.6.
+
+2026-06-22 action speed display: detailed status 行動クールタイム seconds renamed to 行動速度 percent. Display uses 100% / active command actionCd multiplier; base action CD math remains unchanged.
+
+2026-06-22 detail stats order: reordered detailed stats to attack/magic/defenses, crit, guard, global/physical/magic damage modifiers, regen, cast/cooldown/action speed, then break before ultimate gauge charge and move speed. Added physical/magic modifier display; memo.xlsx intentionally unchanged.
+
+2026-06-22 damage rate detail display: renamed six detailed damage modifier stats to 与/被ダメージ率 variants and changed display baseline from signed +0% to 100% rate. Physical/magic incoming rates show 100% - resistance.
+2026-06-22 random equipment stats reminder: armor random stat total values are +% budget, not flat values. Accessory random stat rolls allow duplicates; duplicate rolls stack linearly (2 rolls = value x2).
+2026-06-22 field mood display: party field mood ring no longer uses a progress arc. It now draws a full ring colored by mood only.

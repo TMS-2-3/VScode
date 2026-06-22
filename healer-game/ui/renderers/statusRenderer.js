@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   "use strict";
 
   window.createHealerStatusRenderer = function createHealerStatusRenderer(context) {
@@ -19,6 +19,7 @@
       ACTION_GAP,
       ULTIMATE_KEYS,
       STATUS_FULL_NAMES,
+      STATUS_DATA,
       ITEM_SLOT_KEYS,
       COMMAND_BIAS_CONFIGS,
       RIHAS_PASSIVE_MAX_STACKS,
@@ -39,6 +40,10 @@
       getSushiaCastTime,
       getRihasPassiveDamageMultiplier,
       getRihasPassiveIncomingMultiplier,
+      getPhysicalDamageBoost,
+      getMagicDamageBoost,
+      getPhysicalDamageResistance,
+      getMagicDamageResistance,
       getEffectiveAttack,
       getEffectiveMagic,
       getEffectiveDefense,
@@ -58,6 +63,8 @@
       hasPassive,
       getEquippedPassive,
     } = context;
+    const statusData = STATUS_DATA || window.HEALER_STATUS_DATA || {};
+
   function drawHud() {
     statusUiButtons.length = 0;
     statusCardMetas.length = 0;
@@ -128,13 +135,14 @@
     if (!isArjuna) {
       drawActionCooldownGauge(unit, actionGaugeX, gaugeY, actionGaugeRadius);
     }
-    drawCircleGauge(ultGaugeX, gaugeY, ultGaugeRadius, unit.ult / 100, "rgba(0,0,0,0.45)", "#73dfff");
+    const ultimateCost = getUltimateCost(unit);
+    drawCircleGauge(ultGaugeX, gaugeY, ultGaugeRadius, unit.ult / ultimateCost, "rgba(0,0,0,0.45)", "#73dfff");
     ctx.fillStyle = "rgba(10,13,12,0.84)";
     ctx.beginPath();
     ctx.arc(ultGaugeX, gaugeY, Math.max(7, ultGaugeRadius - 6), 0, TAU);
     ctx.fill();
 
-    if (unit.ult >= 100) {
+    if (unit.ult >= ultimateCost) {
       ctx.strokeStyle = "rgba(255,255,255,0.82)";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -146,13 +154,13 @@
     if (ultKey) {
       const keyX = ultGaugeX;
       const keyY = gaugeY;
-      ctx.fillStyle = unit.ult >= 100 ? "#73dfff" : "rgba(7,10,9,0.88)";
-      ctx.strokeStyle = unit.ult >= 100 ? "#ffffff" : "rgba(255,255,255,0.55)";
+      ctx.fillStyle = unit.ult >= ultimateCost ? "#73dfff" : "rgba(7,10,9,0.88)";
+      ctx.strokeStyle = unit.ult >= ultimateCost ? "#ffffff" : "rgba(255,255,255,0.55)";
       ctx.lineWidth = 1;
       roundRect(keyX - 8, keyY - 8, 16, 16, 4);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = unit.ult >= 100 ? "#111111" : "#f7fff6";
+      ctx.fillStyle = unit.ult >= ultimateCost ? "#111111" : "#f7fff6";
       ctx.font = "800 11px 'Segoe UI', sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -342,26 +350,48 @@
       { label: "魔法防御力", value: formatNumber(getEffectiveMagicDefense(unit)) },
       { label: "会心率", value: formatPercent(getUnitCritChance(unit)) },
       { label: "会心ダメージ", value: formatPercent(getUnitCritDamageRate(unit)) },
-      { label: "与ダメージ率", value: formatPercent(outgoing) },
-      { label: "被ダメージ率", value: formatPercent(incoming) },
-      { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
-      { label: "スキルヘイスト", value: formatSignedPercent(skillSpeed) },
-      { label: "行動クールタイム", value: getActionCooldownText(unit) },
-      { label: "必殺チャージ率", value: formatPercent(getUltimateChargeRate(unit)) },
       { label: "ガード率", value: formatPercent(getEffectiveGuardChance(unit)) },
       { label: "ガード軽減率", value: formatPercent(getGuardDamageReductionRate(unit)) },
+      { label: "与ダメージ率", value: formatPercent(outgoing) },
+      { label: "被ダメージ率", value: formatPercent(incoming) },
+      { label: "物理与ダメージ率", value: formatPercent(getPhysicalOutgoingDamageRate(unit)) },
+      { label: "物理被ダメージ率", value: formatPercent(getPhysicalIncomingDamageRate(unit)) },
+      { label: "魔法与ダメージ率", value: formatPercent(getMagicOutgoingDamageRate(unit)) },
+      { label: "魔法被ダメージ率", value: formatPercent(getMagicIncomingDamageRate(unit)) },
       { label: "HP再生率", value: formatPercent(getHpRegenRate(unit)) },
       { label: "MP回復率", value: formatPercent(getMpRegenRate(unit)) },
+      { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
+      { label: "クールタイム", value: formatSignedPercent(skillSpeed) },
+      { label: "行動速度", value: getActionSpeedText(unit) },
+      { breakAfter: true },
+      { label: "必殺ゲージチャージ率", value: formatPercent(getUltimateChargeRate(unit)) },
       { label: "移動速度", value: `${Math.round(unit.speed)}` },
     ];
     return stats;
   }
 
-  function getActionCooldownText(unit) {
-    if (!unit || unit.id === "finald" || !skillSystem.getActionCooldown) {
+  function getActionSpeedText(unit) {
+    if (!unit || unit.id === "finald") {
       return "-";
     }
-    return `${skillSystem.getActionCooldown(unit).toFixed(1)}秒`;
+    const config = getCommandBiasConfig(unit.activeCommandBias || 0);
+    const actionCdMultiplier = config && Number.isFinite(config.actionCd) && config.actionCd > 0 ? config.actionCd : 1;
+    return formatPercent(1 / actionCdMultiplier);
+  }
+
+  function getCommandBiasConfig(value) {
+    const normalized = Math.max(-2, Math.min(2, Math.round(Number(value) || 0)));
+    if (Array.isArray(COMMAND_BIAS_CONFIGS)) {
+      const found = COMMAND_BIAS_CONFIGS.find((config) => config && config.value === normalized);
+      if (found) {
+        return found;
+      }
+    }
+    return { value: 0, actionCd: 1 };
+  }
+
+  function getUltimateCost(unit) {
+    return skillSystem && typeof skillSystem.getUltimateCost === "function" ? skillSystem.getUltimateCost(unit) : 100;
   }
 
   function getUltimateChargeRate(unit) {
@@ -412,6 +442,25 @@
     return Math.max(0, 1 + bonus);
   }
 
+  function getPhysicalOutgoingDamageRate(unit) {
+    const boost = typeof getPhysicalDamageBoost === "function" ? getPhysicalDamageBoost(unit) : 0;
+    return Math.max(0, 1 + boost);
+  }
+
+  function getPhysicalIncomingDamageRate(unit) {
+    const resistance = typeof getPhysicalDamageResistance === "function" ? getPhysicalDamageResistance(unit) : 0;
+    return Math.max(0, 1 - resistance);
+  }
+
+  function getMagicOutgoingDamageRate(unit) {
+    const boost = typeof getMagicDamageBoost === "function" ? getMagicDamageBoost(unit) : 0;
+    return Math.max(0, 1 + boost);
+  }
+
+  function getMagicIncomingDamageRate(unit) {
+    const resistance = typeof getMagicDamageResistance === "function" ? getMagicDamageResistance(unit) : 0;
+    return Math.max(0, 1 - resistance);
+  }
   function multiplierToBonus(multiplier) {
     return (Number.isFinite(multiplier) ? multiplier : 1) - 1;
   }
@@ -473,8 +522,9 @@
 
   function getSkillCooldownDetail(unit, key, skill) {
     if (key === "ult") {
-      const remaining = unit.ult >= 100 ? 0 : 100 - unit.ult;
-      return { remaining, max: 100, text: unit.ult >= 100 ? "OK" : `${Math.round(unit.ult)}%`, gauge: true };
+      const ultimateCost = getUltimateCost(unit);
+      const remaining = unit.ult >= ultimateCost ? 0 : ultimateCost - unit.ult;
+      return { remaining, max: ultimateCost, text: unit.ult >= ultimateCost ? "OK" : `${Math.round(unit.ult)}/${ultimateCost}%`, gauge: true };
     }
     const max = key === "attack" && unit.id !== "finald"
       ? skillSystem.getActionCooldown(unit)
@@ -652,33 +702,62 @@
     return Number.isFinite(icon.remaining) ? icon.remaining : (Number.isFinite(icon.ratio) ? icon.ratio : 0);
   }
 
+  function getStatusDef(statusIdOrName) {
+    if (!statusIdOrName || !statusData) {
+      return null;
+    }
+    if (statusData[statusIdOrName]) {
+      return statusData[statusIdOrName];
+    }
+    return Object.values(statusData).find((status) => status && status.name === statusIdOrName) || null;
+  }
+
+  function makeStatusIcon(unit, statusId, options = {}) {
+    const status = getStatusDef(statusId) || {};
+    return {
+      statusId,
+      unit,
+      label: options.label || status.label || "?",
+      name: options.name || status.name || statusId,
+      description: options.description || status.description || "",
+      color: options.color || status.color || "#d4e4d5",
+      ratio: options.ratio,
+      remaining: options.remaining,
+      stack: options.stack,
+      permanent: options.permanent,
+    };
+  }
+
   function getStatusIcons(unit) {
     const icons = [];
     const passive = getEquippedPassive ? getEquippedPassive(unit) : null;
     if (passive && passive.key === "hilment" && unit.id === "finald") {
-      icons.push({ label: "癒", name: passive.name || "ヒルメント", description: passive.description || "", color: "#79ff8d", ratio: 1, permanent: true });
+      icons.push({ label: "癒", name: passive.name || "ヒルメント", description: passive.description || "", color: "#79ff8d", ratio: 1, permanent: true, unit });
     }
     if (unit.actionLock > ACTION_GAP) {
       const total = Math.max(unit.actionTotal || unit.actionLock, unit.actionLock, 0.1);
-      icons.push({ label: "詠", name: "詠唱中", color: "#73ff91", ratio: unit.actionLock / total, remaining: unit.actionLock });
+      icons.push({ label: "詠", name: "詠唱中", color: "#73ff91", ratio: unit.actionLock / total, remaining: unit.actionLock, unit });
     }
     if (unit.frozen > 0) {
       const frozenMax = Math.max(0.1, unit.frozenMax || unit.frozen);
-      icons.push({ label: "凍", name: "凍結", color: "#b8e7ff", ratio: unit.frozen / frozenMax, remaining: unit.frozen });
+      icons.push(makeStatusIcon(unit, "debuff_freeze", { ratio: unit.frozen / frozenMax, remaining: unit.frozen }));
+    }
+    if ((unit.burnTimer || 0) > 0) {
+      const burnMax = Math.max(0.1, unit.burnMax || unit.burnTimer);
+      icons.push(makeStatusIcon(unit, "debuff_burn", { ratio: unit.burnTimer / burnMax, remaining: unit.burnTimer }));
     }
     if (hasPassive(unit, "warmup") && (unit.castStacks || 0) > 0) {
-      icons.push({ label: "熱", name: "あったまってきたよ！", color: "#ff9f43", ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer });
+      icons.push(makeStatusIcon(unit, "buff_warmup", { ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer }));
     }
     if (unit.tauntTimer > 0) {
       const duration = skillSystem.requireSkill("rihas", "ult").duration || 5.5;
-      icons.push({ label: "怒", name: "挑発", color: "#ff6b44", ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer });
+      icons.push(makeStatusIcon(unit, "debuff_taunt", { ratio: unit.tauntTimer / duration, remaining: unit.tauntTimer }));
     }
     if (hasPassive(unit, "painless") && (unit.rihasPassiveStacks || 0) > 0) {
-      icons.push({ label: "逆", name: "逆境", color: "#e37a3f", ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer });
+      icons.push(makeStatusIcon(unit, "buff_itaminasi", { ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer }));
     }
     return icons;
   }
-
   function drawStatusIcon(icon, x, y, size) {
     const r = Math.max(4, size * 0.28);
     ctx.save();
@@ -739,8 +818,8 @@
 
   function buildStatusTooltip(icon) {
     const lines = [];
-    const description = getTooltipDescription(icon);
-    lines.push(description || "説明文は未設定");
+    const description = formatDescriptionText(getTooltipDescription(icon), icon.unit, icon);
+    pushTooltipText(lines, description || "説明文は未設定");
     if (icon.permanent) {
       lines.push("常時効果");
     }
@@ -756,10 +835,19 @@
   function buildSkillTooltip(unit, entry) {
     const skill = entry.skill || {};
     const lines = [];
-    const description = getTooltipDescription(skill);
-    lines.push(description || "説明文は未設定");
+    const description = formatDescriptionText(getTooltipDescription(skill), unit, skill);
+    pushTooltipText(lines, description || "説明文は未設定");
+    const relatedStatuses = getReferencedStatuses(description, skill.statusIds);
+    if (relatedStatuses.length) {
+      lines.push("");
+      for (const status of relatedStatuses) {
+        lines.push(`${status.name}: ${formatDescriptionText(status.description || status.simpleDescription || "", unit, status)}`);
+      }
+    }
     if (Number.isFinite(skill.cost)) {
       lines.push(`MP: ${skill.cost}`);
+    } else if (Number.isFinite(skill.costMaxMpRatio)) {
+      lines.push(`MP: 最大MPの${Math.round(skill.costMaxMpRatio * 100)}%`);
     }
     if (Number.isFinite(skill.cd)) {
       lines.push(`CD: ${formatRemainingSeconds(skill.cd)}`);
@@ -775,6 +863,68 @@
     return { title: skill.name || entry.key || "スキル", lines };
   }
 
+  function pushTooltipText(lines, text) {
+    const parts = String(text || "").split(/\r?\n/);
+    for (const part of parts) {
+      lines.push(part);
+    }
+  }
+
+  function formatDescriptionText(text, unit, source) {
+    let index = 0;
+    return String(text || "").replace(/\(式=値\)/g, () => {
+      const formula = Array.isArray(source && source.formula) ? source.formula[index] : null;
+      index += 1;
+      if (!formula) {
+        return "(式=?)";
+      }
+      return `(${formula.text || "式"}=${formatNumber(getFormulaValue(unit, source, formula))})`;
+    });
+  }
+
+  function getFormulaValue(unit, source, formula) {
+    if (!unit || !formula) {
+      return 0;
+    }
+    if (formula.type === "strepionHeal") {
+      const hpPercent = unit.maxHp > 0 ? clamp(unit.hp / unit.maxHp, 0, 1) * 100 : 100;
+      const missingBelow = Math.max(0, (source.healHpThresholdPercent || 50) - hpPercent);
+      return getEffectiveMagic(unit) * (source.healMagicScale || 0) + unit.maxHp * (((source.healHpBasePercent || 5) + missingBelow) / 100);
+    }
+    if (formula.type === "rihasTauntShield") {
+      return unit.maxHp * (source.shieldHpRatio || 0.05);
+    }
+    if (formula.type === "burnTick") {
+      return Math.max(0, unit.hp * 0.01);
+    }
+    const statValue = formula.stat === "attack" ? getEffectiveAttack(unit) : formula.stat === "magic" ? getEffectiveMagic(unit) : 0;
+    const base = Number.isFinite(source[formula.baseProp]) ? source[formula.baseProp] : 0;
+    const scale = Number.isFinite(source[formula.scaleProp]) ? source[formula.scaleProp] : 0;
+    return base + statValue * scale;
+  }
+
+  function getReferencedStatuses(description, statusIds) {
+    const result = [];
+    const seen = new Set();
+    const addStatus = (status) => {
+      if (!status || seen.has(status.id || status.name)) {
+        return;
+      }
+      seen.add(status.id || status.name);
+      result.push(status);
+    };
+    if (Array.isArray(statusIds)) {
+      for (const id of statusIds) {
+        addStatus(getStatusDef(id));
+      }
+    }
+    const quoted = String(description || "").match(/"([^"\r\n]+)"/g) || [];
+    for (const raw of quoted) {
+      addStatus(getStatusDef(raw.slice(1, -1)));
+    }
+    return result;
+  }
+
   function formatRemainingSeconds(value) {
     return `${Math.ceil(Math.max(0, value))}秒`;
   }
@@ -785,7 +935,6 @@
     }
     return source.description || source.tooltip || source.helpText || "";
   }
-
   function drawStatusTooltip() {
     if (!Array.isArray(statusTooltipTargets) || !input || !input.mouse) {
       return;
@@ -805,17 +954,20 @@
       return;
     }
     const title = String(tooltip.title || "");
-    const lines = Array.isArray(tooltip.lines) ? tooltip.lines.map((line) => String(line)) : [];
+    const rawLines = Array.isArray(tooltip.lines) ? tooltip.lines.map((line) => String(line)) : [];
     ctx.save();
+    const maxW = Math.max(180, Math.min(420, view.w - 16));
+    const textW = maxW - 24;
+    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const lines = wrapTooltipLines(rawLines, textW);
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     let contentW = ctx.measureText(title).width;
     ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     for (const line of lines) {
-      contentW = Math.max(contentW, ctx.measureText(line).width);
+      contentW = Math.max(contentW, ctx.measureText(line.text).width);
     }
-    const maxW = Math.max(140, Math.min(300, view.w - 16));
-    const boxW = Math.min(maxW, Math.max(160, contentW + 24));
-    const lineH = 16;
+    const boxW = Math.min(maxW, Math.max(180, contentW + 24));
+    const lineH = 15;
     const boxH = 34 + lines.length * lineH;
     const boxX = clamp(mouseX + 16, 8, view.w - boxW - 8);
     const boxY = clamp(mouseY + 16, 8, view.h - boxH - 8);
@@ -829,9 +981,36 @@
 
     drawFittedText(title, boxX + 12, boxY + 19, boxW - 24, 800, 13, 10, "#f7fff6", "left");
     for (let i = 0; i < lines.length; i += 1) {
-      drawFittedText(lines[i], boxX + 12, boxY + 38 + i * lineH, boxW - 24, 700, 11, 9, i === 0 ? "#d6e1d8" : "#aebdb4", "left");
+      const line = lines[i];
+      if (!line.text) {
+        continue;
+      }
+      drawFittedText(line.text, boxX + 12, boxY + 38 + i * lineH, boxW - 24, 700, 11, 9, line.primary ? "#d6e1d8" : "#aebdb4", "left");
     }
     ctx.restore();
+  }
+
+  function wrapTooltipLines(rawLines, maxWidth) {
+    const wrapped = [];
+    for (let i = 0; i < rawLines.length; i += 1) {
+      const text = rawLines[i];
+      if (!text) {
+        wrapped.push({ text: "", primary: false });
+        continue;
+      }
+      let line = "";
+      for (const char of Array.from(text)) {
+        const next = line + char;
+        if (line && ctx.measureText(next).width > maxWidth) {
+          wrapped.push({ text: line, primary: i === 0 });
+          line = char;
+        } else {
+          line = next;
+        }
+      }
+      wrapped.push({ text: line, primary: i === 0 });
+    }
+    return wrapped;
   }
   function getCommandBiasMeterLayout(x, y, w, h) {
     const labelW = 22;
@@ -1209,7 +1388,7 @@
       ctx.fill();
       ctx.stroke();
       const shadowRatio = skill.gauge
-        ? 1 - clamp(player.ult / 100, 0, 1)
+        ? 1 - clamp(player.ult / getUltimateCost(player), 0, 1)
         : clamp(skill.cd / Math.max(0.1, skill.max), 0, 1);
       drawSkillCooldownShadow(sx, itemY, itemW, itemH, shadowRatio);
       drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);

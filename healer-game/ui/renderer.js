@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   "use strict";
 
   window.createHealerRenderer = function createHealerRenderer(context) {
@@ -487,12 +487,10 @@
     }
 
     if (unit.team === "party" && unit.id !== "finald") {
-      const start = -Math.PI / 2;
-      const end = start + TAU * (mood / 100);
       ctx.strokeStyle = getMoodColor(mood);
       ctx.lineWidth = Math.max(2, battlePx(3));
       ctx.beginPath();
-      ctx.arc(unit.x, unit.y, unit.radius + battlePx(7), start, end);
+      ctx.arc(unit.x, unit.y, unit.radius + battlePx(7), 0, TAU);
       ctx.stroke();
     }
 
@@ -948,3 +946,4 @@
     };
   };
 })();
+
