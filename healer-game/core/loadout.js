@@ -39,6 +39,16 @@
       return Object.keys(PASSIVE_DATA[ownerKey] || {});
     }
 
+    function isUltimateKey(owner, key) {
+      const skill = getSkill(owner, key);
+      return Boolean(skill && (key === "ult" || skill.category === "必殺技"));
+    }
+
+    function getUltimateKeys(owner) {
+      const ownerKey = getKnownOwner(owner);
+      return Object.keys(SKILL_DATA[ownerKey] || {}).filter((key) => isUltimateKey(ownerKey, key));
+    }
+
     function getRequiredPassive(owner) {
       const ownerKey = getKnownOwner(owner);
       const defaults = LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults[ownerKey] || {};
@@ -46,6 +56,19 @@
         return defaults.passive;
       }
       const keys = getPassiveKeys(ownerKey);
+      return keys.length ? keys[0] : null;
+    }
+
+    function getRequiredUltimate(owner) {
+      const ownerKey = getKnownOwner(owner);
+      const defaults = LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults[ownerKey] || {};
+      if (defaults.ultimate && isUltimateKey(ownerKey, defaults.ultimate)) {
+        return defaults.ultimate;
+      }
+      if (isUltimateKey(ownerKey, "ult")) {
+        return "ult";
+      }
+      const keys = getUltimateKeys(ownerKey);
       return keys.length ? keys[0] : null;
     }
 
@@ -63,7 +86,7 @@
       const seen = new Set();
       const rawKeys = Array.isArray(keys) ? keys : [];
       for (const key of rawKeys) {
-        if (!key || key === "ult" || seen.has(key) || !getSkill(ownerKey, key)) {
+        if (!key || isUltimateKey(ownerKey, key) || seen.has(key) || !getSkill(ownerKey, key)) {
           continue;
         }
         seen.add(key);
@@ -85,9 +108,16 @@
       const passive = requestedPassive && getPassive(ownerKey, requestedPassive)
         ? requestedPassive
         : getRequiredPassive(ownerKey);
+      const requestedUltimate = Object.prototype.hasOwnProperty.call(loadout, "ultimate")
+        ? loadout.ultimate
+        : defaults.ultimate;
+      const ultimate = requestedUltimate && isUltimateKey(ownerKey, requestedUltimate)
+        ? requestedUltimate
+        : getRequiredUltimate(ownerKey);
       const requestedActive = Array.isArray(loadout.active) ? loadout.active : defaults.active;
       return {
         passive,
+        ultimate,
         active: cleanActive(ownerKey, requestedActive, options.enforceLimit !== false),
       };
     }
@@ -120,8 +150,8 @@
     }
 
     function isActiveSkillEquipped(unit, key) {
-      if (key === "ult") {
-        return true;
+      if (isUltimateKey(getOwnerKey(unit), key)) {
+        return getEquippedUltimateSkillKey(unit) === key;
       }
       return getEquippedActiveSkillKeys(unit).includes(key);
     }
@@ -153,6 +183,15 @@
       return getPassive(getOwnerKey(unit), loadout.passive);
     }
 
+    function getEquippedUltimateSkillKey(unit) {
+      return ensureUnitLoadout(unit).ultimate;
+    }
+
+    function getEquippedUltimateSkill(unit) {
+      const key = getEquippedUltimateSkillKey(unit);
+      return key ? getSkill(getOwnerKey(unit), key) : null;
+    }
+
     return {
       activeSlotLimit,
       getActiveSlotLimit,
@@ -161,11 +200,14 @@
       setUnitLoadout,
       ensureUnitLoadout,
       getRequiredPassive,
+      getRequiredUltimate,
       getEquippedActiveSkillKeys,
       isActiveSkillEquipped,
       getEquippedActiveSkills,
       hasPassive,
       getEquippedPassive,
+      getEquippedUltimateSkillKey,
+      getEquippedUltimateSkill,
     };
   };
 })();

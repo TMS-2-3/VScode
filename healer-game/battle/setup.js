@@ -18,11 +18,44 @@
       getSupportOrigin,
       makePartyMember,
       makeEnemy,
+      normalizeEquipment,
+      normalizeLoadout,
       clampBattlePoint,
       clampAllUnits,
       addBurst,
       addFloat,
     } = context;
+
+    const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
+
+    function getCarriedHp(unit) {
+      const savedHp = game.partyHpById && game.partyHpById[unit.id];
+      if (!Number.isFinite(savedHp)) {
+        return unit.maxHp;
+      }
+      const minRecoveredHp = unit.maxHp * INCAPACITATED_HP_RECOVERY_RATIO;
+      const hp = savedHp <= 0 ? minRecoveredHp : savedHp;
+      return Math.max(0, Math.min(unit.maxHp, hp));
+    }
+
+    function applyStoredPartyConfig(unit) {
+      if (!unit || !unit.id) {
+        return;
+      }
+      const storedEquipment = game.partyEquipmentById && game.partyEquipmentById[unit.id];
+      if (storedEquipment && typeof normalizeEquipment === "function") {
+        unit.equipment = normalizeEquipment(storedEquipment, unit);
+      }
+      const storedLoadout = game.partyLoadoutById && game.partyLoadoutById[unit.id];
+      if (storedLoadout && typeof normalizeLoadout === "function") {
+        unit.loadout = normalizeLoadout(unit.skillOwner || unit.id, storedLoadout);
+      }
+    }
+
+    function applyCarriedHp(unit) {
+      unit.hp = getCarriedHp(unit);
+      unit.dead = unit.hp <= 0;
+    }
 
     function resetGame(quest = null) {
       projectiles.length = 0;
@@ -35,6 +68,7 @@
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
       game.priorityTarget = null;
+      game.priorityTargetTimer = 0;
       game.skillPage = "page1";
       game.currentQuest = quest;
       game.message = quest ? `依頼: ${quest.name}` : "依頼: 魔物を全滅させる";
@@ -45,17 +79,18 @@
       const cy = bounds.centerY;
 
       const playerStart = clampBattlePoint(bounds.left + bounds.width * 0.26, cy, player.radius);
+      const playerHp = getCarriedHp(player);
 
       Object.assign(player, {
         x: playerStart.x,
         y: playerStart.y,
-        hp: player.maxHp,
+        hp: playerHp,
         mp: player.maxMp,
         shield: 0,
         shieldTimer: 0,
         shields: [],
         ult: 0,
-        dead: false,
+        dead: playerHp <= 0,
         cds: {},
         channel: null,
         actionLock: 0,
@@ -67,7 +102,6 @@
         burnTick: 0,
         burnTickRate: 1,
         burnDamageHpRatio: 0,
-        burnDefensePenalty: 0,
         burnSource: null,
         noDamage: 999,
         cast: null,
@@ -79,14 +113,21 @@
         targetable: true,
         collidable: true,
       });
+      applyStoredPartyConfig(player);
 
       const ulpes = makePartyMember("ulpes");
       const rihas = makePartyMember("rihas");
       const sushia = makePartyMember("sushia");
+      applyStoredPartyConfig(ulpes);
+      applyStoredPartyConfig(rihas);
+      applyStoredPartyConfig(sushia);
 
       Object.assign(ulpes, { x: cx + battlePx(28), y: cy - battlePx(72) });
       Object.assign(rihas, { x: cx + battlePx(62), y: cy + battlePx(55) });
       Object.assign(sushia, { x: cx - battlePx(28), y: cy - battlePx(6) });
+      applyCarriedHp(ulpes);
+      applyCarriedHp(rihas);
+      applyCarriedHp(sushia);
       party.length = 0;
       party.push(player, ulpes, rihas, sushia);
 

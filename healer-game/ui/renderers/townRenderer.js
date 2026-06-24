@@ -23,7 +23,20 @@
       getQuestTypes,
       getQuestsByType,
       getQuestById,
+      getKeybindLabel,
     } = context;
+
+  function getActionLabel(actionId, fallback) {
+    return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
+  }
+
+  function getInteractLabel() {
+    return getActionLabel("field.interact", "E");
+  }
+
+  function getBackLabel() {
+    return getActionLabel("common.menuBack", "Esc");
+  }
 
   function drawTown() {
     ctx.fillStyle = "#3f6a48";
@@ -215,7 +228,7 @@
       ctx.stroke();
       ctx.fillStyle = "#f7fff6";
       ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText("E", building.x + building.w / 2, building.y - 63);
+      drawFittedTownText(getInteractLabel(), building.x + building.w / 2, building.y - 63, 86, 800, 15, 9, "#f7fff6", "center");
     }
     ctx.restore();
   }
@@ -344,7 +357,7 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText("E  閉じる", x + w - 24, y + h - 24);
+    ctx.fillText(`${getInteractLabel()}  閉じる`, x + w - 24, y + h - 24);
   }
 
   function drawQuestTypePanel() {
@@ -383,7 +396,7 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText("E  ストーリー依頼 / Esc  閉じる", x + w - 24, y + h - 22);
+    ctx.fillText(`${getInteractLabel()}  ストーリー依頼 / ${getBackLabel()}  閉じる`, x + w - 24, y + h - 22);
   }
 
   function drawQuestListPanel() {
@@ -424,7 +437,7 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText("E  一番上を選択 / Esc  閉じる", x + w - 24, y + h - 22);
+    ctx.fillText(`${getInteractLabel()}  一番上を選択 / ${getBackLabel()}  閉じる`, x + w - 24, y + h - 22);
   }
 
   function drawQuestDecisionPanel() {
@@ -475,7 +488,7 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText("E  決定 / Esc  閉じる", x + w - 24, y + h - 76);
+    ctx.fillText(`${getInteractLabel()}  決定 / ${getBackLabel()}  閉じる`, x + w - 24, y + h - 76);
   }
 
   function drawQuestButton(x, y, w, h, title, subText, action, disabled = false) {
@@ -566,7 +579,7 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText("E / Space / Enter / クリック で戦闘開始", x + w - 24, y + h - 20);
+    ctx.fillText(`${getInteractLabel()} で戦闘開始`, x + w - 24, y + h - 20);
     ctx.restore();
   }
 
@@ -713,7 +726,7 @@
     ctx.fillStyle = "rgba(247,255,246,0.78)";
     ctx.fillText(`${town.story.index + 1}/${town.story.lines.length}`, x + w - 30, y + 34);
     ctx.fillStyle = "#ffffff";
-    ctx.fillText("E / Space / クリック", x + w - 30, y + h - 22);
+    ctx.fillText(getInteractLabel(), x + w - 30, y + h - 22);
     ctx.restore();
   }
 
@@ -738,6 +751,21 @@
       lines.push(line);
     }
     return lines.length ? lines : [""];
+  }
+
+  function drawFittedTownText(text, x, y, maxWidth, weight, maxSize, minSize, color, align = "left") {
+    const value = String(text || "");
+    let size = maxSize;
+    do {
+      ctx.font = `${weight} ${size}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      if (ctx.measureText(value).width <= maxWidth || size <= minSize) {
+        break;
+      }
+      size -= 1;
+    } while (size > minSize);
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.fillText(value, x, y);
   }
 
 

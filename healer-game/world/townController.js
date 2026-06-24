@@ -26,9 +26,52 @@
       beginOpeningStory,
       getPlayerFirstName,
       getMeetingStory,
+      getKeybindLabel,
     } = context;
 
+    const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
+
+    function keyLabel(actionId, fallback) {
+      return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
+    }
+
+    function getPersistentHp(member) {
+      const maxHp = Number.isFinite(member.maxHp) ? member.maxHp : member.hp;
+      const hp = member.dead || member.hp <= 0
+        ? maxHp * INCAPACITATED_HP_RECOVERY_RATIO
+        : member.hp;
+      return clamp(hp, 0, maxHp);
+    }
+
+    function savePartyHp() {
+      game.partyHpById = game.partyHpById && typeof game.partyHpById === "object"
+        ? game.partyHpById
+        : {};
+      for (const member of party) {
+        if (!member || !member.id || !Number.isFinite(member.hp)) {
+          continue;
+        }
+        game.partyHpById[member.id] = getPersistentHp(member);
+      }
+    }
+
+    function saveFullPartyHp() {
+      game.partyHpById = game.partyHpById && typeof game.partyHpById === "object"
+        ? game.partyHpById
+        : {};
+      for (const member of party) {
+        if (!member || !member.id || !Number.isFinite(member.maxHp)) {
+          continue;
+        }
+        game.partyHpById[member.id] = member.maxHp;
+      }
+    }
+
     function startTown() {
+      const returningFromBattle = game.state === "won" || game.state === "lost";
+      if (returningFromBattle) {
+        savePartyHp();
+      }
       projectiles.length = 0;
       telegraphs.length = 0;
       areas.length = 0;
@@ -274,6 +317,7 @@
 
     function interactTown(options = {}) {
       if (town.story) {
+        advanceTownStory();
         return;
       }
       if (town.panel) {
@@ -310,6 +354,7 @@
           member.shieldTimer = 0;
           member.shields = [];
         }
+        saveFullPartyHp();
         town.panel = {
           title: "宿屋",
           lines: ["全員のHPとMPを回復した。", "次の依頼に向けて一息つける場所。"],
@@ -442,6 +487,23 @@
       if (quest) {
         town.selectedQuest = quest;
       }
+      const moveLabels = [
+        keyLabel("common.moveUp", "W"),
+        keyLabel("common.moveLeft", "A"),
+        keyLabel("common.moveDown", "S"),
+        keyLabel("common.moveRight", "D"),
+      ].join("/");
+      const skillLabels = [1, 2, 3, 4, 5].map((index) => keyLabel(`battle.skill${index}`, ["Q", "E", "R", "F", "G"][index - 1])).join("/");
+      const itemLabels = [1, 2, 3].map((index) => keyLabel(`battle.item${index}`, ["C", "V", "B"][index - 1])).join("/");
+      const fireLabel = keyLabel("battle.confirm", "左クリック");
+      const cancelLabel = keyLabel("battle.cancelAim", "右クリック");
+      const pageLabel = keyLabel("battle.skillPage", "Space");
+      const ultLabels = {
+        ulpes: keyLabel("battle.ultimate.ulpes", "1"),
+        rihas: keyLabel("battle.ultimate.rihas", "2"),
+        sushia: keyLabel("battle.ultimate.sushia", "3"),
+        finald: keyLabel("battle.ultimate.finald", "4"),
+      };
       town.panel = {
         title: quest ? `出発前の確認: ${quest.name}` : "出発前の確認",
         action: "battleGuide",
@@ -460,20 +522,20 @@
           {
             title: `${getPlayerFirstName()}の技`,
             lines: [
-              "共通: 構え中は左クリックで発動、右クリックでキャンセル。",
+              `共通: 構え中は${fireLabel}で発動、${cancelLabel}でキャンセル。`,
               "援護射撃: 指定地点の狭い範囲へ魔法攻撃。",
               "ヒール: カーソル上の味方を回復。対象がいないと発動しない。",
               "バリア: 指定範囲の味方にシールドを付与。重なったシールドは耐久値が加算される。",
-              "指示スキル: 味方の攻防メーターを動かす。通常スキルと同じ10枠内に自由にセットできる。",
+              "指示スキル: 味方への指示や敵へのフォーカスを行う。通常スキルと同じ10枠内に自由にセットできる。",
             ],
           },
           {
             title: "必殺技",
             lines: [
-              "1 ウルペス: 正義の一撃。敵へ飛び込み、大きな一撃を入れる。",
-              "2 リハス: 俺ァ無敵!! 周囲の敵を挑発し、自分にシールドを張る。",
-              "3 スシア: アイスワールド。広範囲を凍らせ、継続ダメージを与える。",
-              `4 ${getPlayerFirstName()}: フルヒール。4で詠唱開始、3秒後に全味方を最大HP割合で回復する。`,
+              `${ultLabels.ulpes} ウルペス: 正義の一撃。敵へ飛び込み、大きな一撃を入れる。`,
+              `${ultLabels.rihas} リハス: 俺ァ無敵!! 周囲の敵を挑発し、自分にシールドを張る。`,
+              `${ultLabels.sushia} スシア: アイスワールド。広範囲を凍らせ、継続ダメージを与える。`,
+              `${ultLabels.finald} ${getPlayerFirstName()}: フルヒール。詠唱後に全味方を最大HP割合で回復する。`,
             ],
           },
           {
@@ -487,13 +549,12 @@
           {
             title: "操作",
             lines: [
-              "主人公はWASDで戦場を移動しながら、味方を支援する。",
+              `主人公は${moveLabels}で戦場を移動しながら、味方を支援する。`,
               "構え中は主人公中心の射程円が出る。射程外の対象・地点には発動できない。",
-              "ページ内の左5枠は Q/E/R/F/G で左から順に構える。右端の必殺技は4で発動。左クリック: 発動 / 右クリック: 構えキャンセル",
-              "Space: ページ１とページ２を切り替える。通常スキルも指示スキルも自由に配置できる。",
-              "何も構えていない時は、敵を左クリックでターゲット指定。同じ敵をもう一度押すと解除。",
-              "C/V/B: アイテムを構える。左クリックでカーソル上の味方に使用、右クリックでキャンセル。",
-              "1-4: 必殺技 / 勝利条件: 敵全滅",
+              `ページ内の左5枠は${skillLabels}で左から順に構える。右端の必殺技は${ultLabels.finald}で発動。`,
+              `${fireLabel}: 発動 / ${cancelLabel}: 構えキャンセル / ${pageLabel}: ページ切り替え。`,
+              `アイテムは${itemLabels}で構え、${fireLabel}でカーソル上の味方に使用する。`,
+              `${ultLabels.ulpes}/${ultLabels.rihas}/${ultLabels.sushia}/${ultLabels.finald}: 必殺技 / 勝利条件: 敵全滅`,
             ],
           },
         ].filter(Boolean),

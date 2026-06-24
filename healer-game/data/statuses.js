@@ -45,8 +45,8 @@
       label: "燃",
       color: "#ff8b43",
       formula: [{ text: "現在HP * 1%", type: "burnTick" }],
-      description: "燃焼が付与されている間防御力-10%。さらに毎秒(式=値)の魔法ダメージを受ける。",
-      simpleDescription: "防御力が下がり、継続的にダメージを受ける。",
+      description: "燃焼が付与されている間、毎秒(式=値)の魔法ダメージを受ける。",
+      simpleDescription: "継続的に魔法ダメージを受ける。",
     },
   };
 })();

@@ -21,6 +21,7 @@
       STATUS_FULL_NAMES,
       STATUS_DATA,
       ITEM_SLOT_KEYS,
+      getKeybindLabel,
       COMMAND_BIAS_CONFIGS,
       RIHAS_PASSIVE_MAX_STACKS,
       RIHAS_PASSIVE_STACK_DURATION,
@@ -64,6 +65,30 @@
       getEquippedPassive,
     } = context;
     const statusData = STATUS_DATA || window.HEALER_STATUS_DATA || {};
+    const DEFAULT_TOOLTIP_DESCRIPTION_MODE = "simple";
+
+  function getBattleActionLabel(actionId, fallback = "") {
+    if (typeof getKeybindLabel !== "function" || !actionId) {
+      return fallback;
+    }
+    return getKeybindLabel(actionId) || fallback;
+  }
+
+  function getUltimateActionId(unitId) {
+    const ids = {
+      ulpes: "battle.ultimate.ulpes",
+      rihas: "battle.ultimate.rihas",
+      sushia: "battle.ultimate.sushia",
+      finald: "battle.ultimate.finald",
+    };
+    return ids[unitId] || "";
+  }
+
+  function getDefaultItemKeyLabel(index) {
+    const slotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length ? ITEM_SLOT_KEYS : ["c", "v", "b"];
+    const key = slotKeys[index] || "";
+    return String(key).toUpperCase();
+  }
 
   function drawHud() {
     statusUiButtons.length = 0;
@@ -150,21 +175,22 @@
       ctx.stroke();
     }
 
-    const ultKey = ULTIMATE_KEYS[unit.id];
+    const ultKey = getBattleActionLabel(getUltimateActionId(unit.id), ULTIMATE_KEYS[unit.id]);
     if (ultKey) {
       const keyX = ultGaugeX;
       const keyY = gaugeY;
+      ctx.font = "800 10px 'Segoe UI', sans-serif";
+      const keyW = Math.max(16, Math.min(44, ctx.measureText(ultKey).width + 8));
       ctx.fillStyle = unit.ult >= ultimateCost ? "#73dfff" : "rgba(7,10,9,0.88)";
       ctx.strokeStyle = unit.ult >= ultimateCost ? "#ffffff" : "rgba(255,255,255,0.55)";
       ctx.lineWidth = 1;
-      roundRect(keyX - 8, keyY - 8, 16, 16, 4);
+      roundRect(keyX - keyW / 2, keyY - 8, keyW, 16, 4);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = unit.ult >= ultimateCost ? "#111111" : "#f7fff6";
-      ctx.font = "800 11px 'Segoe UI', sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(ultKey, keyX, keyY + 0.5);
+      drawFittedText(ultKey, keyX, keyY + 4, keyW - 4, 800, 10, 6, unit.ult >= ultimateCost ? "#111111" : "#f7fff6", "center");
       ctx.textBaseline = "alphabetic";
     }
 
@@ -720,6 +746,7 @@
       label: options.label || status.label || "?",
       name: options.name || status.name || statusId,
       description: options.description || status.description || "",
+      simpleDescription: options.simpleDescription || status.simpleDescription || "",
       color: options.color || status.color || "#d4e4d5",
       ratio: options.ratio,
       remaining: options.remaining,
@@ -732,7 +759,7 @@
     const icons = [];
     const passive = getEquippedPassive ? getEquippedPassive(unit) : null;
     if (passive && passive.key === "hilment" && unit.id === "finald") {
-      icons.push({ label: "癒", name: passive.name || "ヒルメント", description: passive.description || "", color: "#79ff8d", ratio: 1, permanent: true, unit });
+      icons.push({ label: "癒", name: passive.name || "ヒルメント", description: passive.description || "", simpleDescription: passive.simpleDescription || "", color: "#79ff8d", ratio: 1, permanent: true, unit });
     }
     if (unit.actionLock > ACTION_GAP) {
       const total = Math.max(unit.actionTotal || unit.actionLock, unit.actionLock, 0.1);
@@ -809,11 +836,11 @@
     statusTooltipTargets.push({ x, y, w: size, h: size, tooltip: buildStatusTooltip(icon) });
   }
 
-  function registerSkillTooltip(unit, entry, x, y, size) {
+  function registerSkillTooltip(unit, entry, x, y, w, h = w) {
     if (!Array.isArray(statusTooltipTargets) || !entry) {
       return;
     }
-    statusTooltipTargets.push({ x, y, w: size, h: size, tooltip: buildSkillTooltip(unit, entry) });
+    statusTooltipTargets.push({ x, y, w, h, tooltip: buildSkillTooltip(unit, entry) });
   }
 
   function buildStatusTooltip(icon) {
@@ -841,7 +868,7 @@
     if (relatedStatuses.length) {
       lines.push("");
       for (const status of relatedStatuses) {
-        lines.push(`${status.name}: ${formatDescriptionText(status.description || status.simpleDescription || "", unit, status)}`);
+        lines.push(`${status.name}: ${formatDescriptionText(getTooltipDescription(status), unit, status)}`);
       }
     }
     if (Number.isFinite(skill.cost)) {
@@ -854,13 +881,23 @@
     }
     if (entry.gauge) {
       lines.push(`必殺: ${entry.text}`);
-    } else if (Number.isFinite(entry.remaining)) {
-      lines.push(`残りクールタイム: ${entry.remaining > 0 ? formatRemainingSeconds(entry.remaining) : "OK"}`);
-    }
-    if (Number.isFinite(skill.range)) {
-      lines.push(`射程: ${Math.round(skill.range)}px`);
     }
     return { title: skill.name || entry.key || "スキル", lines };
+  }
+
+  function getSkillPanelTooltipEntry(entry) {
+    if (!entry) {
+      return null;
+    }
+    const tooltipEntry = Object.assign({}, entry);
+    if (!tooltipEntry.skill && skillSystem.getSkill && tooltipEntry.key) {
+      tooltipEntry.skill = skillSystem.getSkill("finald", tooltipEntry.key);
+    }
+    if (tooltipEntry.gauge && !tooltipEntry.text) {
+      const ultimateCost = getUltimateCost(player);
+      tooltipEntry.text = player.ult >= ultimateCost ? "OK" : `${Math.round(player.ult)}/${ultimateCost}%`;
+    }
+    return tooltipEntry;
   }
 
   function pushTooltipText(lines, text) {
@@ -933,7 +970,16 @@
     if (!source) {
       return "";
     }
-    return source.description || source.tooltip || source.helpText || "";
+    const mode = getTooltipDescriptionMode();
+    if (mode === "detail") {
+      return source.description || source.simpleDescription || source.tooltip || source.helpText || "";
+    }
+    return source.simpleDescription || source.description || source.tooltip || source.helpText || "";
+  }
+
+  function getTooltipDescriptionMode() {
+    const mode = game && game.settings && game.settings.tooltipDescriptionMode;
+    return mode === "detail" ? "detail" : DEFAULT_TOOLTIP_DESCRIPTION_MODE;
   }
   function drawStatusTooltip() {
     if (!Array.isArray(statusTooltipTargets) || !input || !input.mouse) {
@@ -1156,7 +1202,6 @@
   }
 
   function drawItemPanel(x, y, w, h) {
-    const slotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length ? ITEM_SLOT_KEYS : ["c", "v", "b"];
     const slots = Array.isArray(game.itemSlots) ? game.itemSlots : [];
     const gap = 7;
     const sidePadding = 8;
@@ -1177,7 +1222,7 @@
       const sx = x + sidePadding + i * (slotW + gap);
       const item = slots[i];
       const selected = Boolean(player.itemAim && player.itemAim.slotIndex === i);
-      drawItemSlot(sx, slotY, slotW, slotH, item, slotKeys[i] || "", selected);
+      drawItemSlot(sx, slotY, slotW, slotH, item, getBattleActionLabel(`battle.item${i + 1}`, getDefaultItemKeyLabel(i)), selected);
       statusUiButtons.push({
         action: "itemSlot",
         slotIndex: i,
@@ -1410,6 +1455,7 @@
         w: itemW,
         h: itemH,
       });
+      registerSkillTooltip(player, getSkillPanelTooltipEntry(skill), sx, itemY, itemW, itemH);
     }
     ctx.textBaseline = "alphabetic";
   }
@@ -1456,9 +1502,8 @@
     ctx.strokeStyle = "rgba(255,255,255,0.42)";
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.fillStyle = "#f7fff6";
-    ctx.font = "900 9px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText("Space", cx, cy - 5);
+    drawFittedText(getBattleActionLabel("battle.skillPage", "Space"), cx, cy - 1, Math.min(52, w * 0.72), 900, 9, 6, "#f7fff6", "center");
+    ctx.textBaseline = "middle";
     ctx.fillStyle = "#102018";
     ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(pageTwo ? "ページ２" : "ページ１", cx, y + h - 16);

@@ -37,6 +37,7 @@
     const COLORS = theme.colors;
     const ULTIMATE_KEYS = theme.ultimateKeys;
     const STATUS_FULL_NAMES = theme.statusFullNames;
+    const KEYBINDS = window.HEALER_KEYBINDS;
     const PLAYER_SKILL_SLOT_KEYS = Array.isArray(config && config.playerSkillSlotKeys)
       ? config.playerSkillSlotKeys
       : ["q", "e", "r", "f", "g"];
@@ -53,6 +54,25 @@
         }
         return method(...args);
       };
+    }
+
+    function getGameSettings() {
+      if (!state.game.settings || typeof state.game.settings !== "object") {
+        state.game.settings = {};
+      }
+      return state.game.settings;
+    }
+
+    function getKeybinds() {
+      const settings = getGameSettings();
+      if (!KEYBINDS) {
+        return {};
+      }
+      return KEYBINDS.getSettingsKeybinds(settings);
+    }
+
+    function getKeybindLabel(actionId) {
+      return KEYBINDS ? KEYBINDS.getKeybindLabel(getGameSettings(), actionId) : "";
     }
 
     function createGeometryContext() {
@@ -141,6 +161,7 @@
         input: state.input,
         game: state.game,
         PLAYER_SKILL_SLOT_KEYS,
+        getKeybindLabel,
         COLORS,
         ACTION_GAP: balance.actionGap,
         ACTION_COOLDOWN_BASE: balance.actionCooldownBase,
@@ -186,7 +207,9 @@
         addShield: callLater("combatSystem", "addShield"),
         startPlayerCast: callLater("battleRuntime", "startPlayerCast"),
         getHoveredPartyMember: callLater("battleRuntime", "getHoveredPartyMember"),
+        getHoveredEnemy: callLater("battleRuntime", "getHoveredEnemy"),
         getPriorityTarget: callLater("battleRuntime", "getPriorityTarget"),
+        setPriorityTarget: callLater("battleRuntime", "setPriorityTarget"),
         cancelPlayerChannel: callLater("battleRuntime", "cancelPlayerChannel"),
         drawAimRangeCircle: callLater("renderer", "drawAimRangeCircle"),
         getBattleBounds: callLater("geometry", "getBattleBounds"),
@@ -198,6 +221,8 @@
         isActiveSkillEquipped: callLater("loadoutSystem", "isActiveSkillEquipped"),
         getEquippedActiveSkillKeys: callLater("loadoutSystem", "getEquippedActiveSkillKeys"),
         getEquippedActiveSkills: callLater("loadoutSystem", "getEquippedActiveSkills"),
+        getEquippedUltimateSkillKey: callLater("loadoutSystem", "getEquippedUltimateSkillKey"),
+        getEquippedUltimateSkill: callLater("loadoutSystem", "getEquippedUltimateSkill"),
       };
     }
 
@@ -219,6 +244,11 @@
         statusUiButtons: state.statusUiButtons,
         statusCardMetas: state.statusCardMetas,
         statusTooltipTargets: state.statusTooltipTargets,
+        CHARACTER_DEFS,
+        SKILL_DATA,
+        PASSIVE_DATA,
+        EQUIPMENT_DATA,
+        LOADOUT_CONFIG,
         player: state.player,
         party: state.party,
         enemies: state.enemies,
@@ -233,6 +263,9 @@
         STATUS_FULL_NAMES,
         STATUS_DATA,
         ITEM_SLOT_KEYS,
+        KEYBINDS,
+        getKeybinds,
+        getKeybindLabel,
         COMMAND_BIAS_CONFIGS: balance.commandBiasConfigs,
         RIHAS_PASSIVE_MAX_STACKS: balance.rihasPassiveMaxStacks,
         RIHAS_PASSIVE_STACK_DURATION: balance.rihasPassiveStackDuration,
@@ -296,6 +329,15 @@
         getNormalElement: callLater("equipmentSystem", "getNormalElement"),
         getElementBoostBonus: callLater("equipmentSystem", "getElementBoostBonus"),
         getElementResistanceBonus: callLater("equipmentSystem", "getElementResistanceBonus"),
+        normalizeEquipment: callLater("equipmentSystem", "normalizeEquipment"),
+        resolveEquipmentItem: callLater("equipmentSystem", "resolveItem"),
+        getEquippedItems: callLater("equipmentSystem", "getEquippedItems"),
+        getEquippedSlotItem: callLater("equipmentSystem", "getEquippedSlotItem"),
+        getActiveSetEffects: callLater("equipmentSystem", "getActiveSetEffects"),
+        canEquipItem: callLater("equipmentSystem", "canEquip"),
+        getActiveSlotLimit: callLater("loadoutSystem", "getActiveSlotLimit"),
+        getDefaultLoadout: callLater("loadoutSystem", "getDefaultLoadout"),
+        normalizeLoadout: callLater("loadoutSystem", "normalizeLoadout"),
         hasPassive: callLater("loadoutSystem", "hasPassive"),
         getEquippedActiveSkills: callLater("loadoutSystem", "getEquippedActiveSkills"),
         getEquippedPassive: callLater("loadoutSystem", "getEquippedPassive"),
@@ -342,18 +384,26 @@
         input: state.input,
         game: state.game,
         town: state.town,
+        party: state.party,
         player: state.player,
         playerProfile: state.playerProfile,
+        CHARACTER_DEFS,
+        SKILL_DATA,
+        PASSIVE_DATA,
+        EQUIPMENT_DATA,
+        LOADOUT_CONFIG,
         resize: systems.screenSystem.resize,
         startGameLoop: systems.gameLoop.start,
         startTown: callLater("townController", "startTown"),
         handleProfileSetupKey: callLater("profileSystem", "handleProfileSetupKey"),
         handleProfileSetupClick: callLater("profileSystem", "handleProfileSetupClick"),
-        advanceTownStory: callLater("townController", "advanceTownStory"),
         interactTown: callLater("townController", "interactTown"),
         closeTownPanel: callLater("townController", "closeTownPanel"),
         PLAYER_SKILL_SLOT_KEYS,
         ITEM_SLOT_KEYS,
+        KEYBINDS,
+        getKeybinds,
+        getKeybindLabel,
         getPanelSkills: callLater("skillSystem", "getPanelSkills"),
         startPlayerAim: callLater("skillSystem", "startPlayerAim"),
         usePlayerCommand: callLater("skillSystem", "usePlayerCommand"),
@@ -364,10 +414,18 @@
         cancelItemAim: callLater("itemSystem", "cancelItemAim"),
         confirmItemAim: callLater("itemSystem", "confirmItemAim"),
         handleStatusUiClick: systems.statusControls.handleStatusUiClick,
-        togglePriorityTargetAt: callLater("battleRuntime", "togglePriorityTargetAt"),
         hasCommandBiasDrag: systems.statusControls.hasCommandBiasDrag,
         clearCommandBiasDrag: systems.statusControls.clearCommandBiasDrag,
         updateCommandBiasDrag: systems.statusControls.updateCommandBiasDrag,
+        normalizeEquipment: callLater("equipmentSystem", "normalizeEquipment"),
+        equipItem: callLater("equipmentSystem", "equipItem"),
+        unequipSlot: callLater("equipmentSystem", "unequipSlot"),
+        canEquipItem: callLater("equipmentSystem", "canEquip"),
+        resolveEquipmentItem: callLater("equipmentSystem", "resolveItem"),
+        getDefaultLoadout: callLater("loadoutSystem", "getDefaultLoadout"),
+        normalizeLoadout: callLater("loadoutSystem", "normalizeLoadout"),
+        setUnitLoadout: callLater("loadoutSystem", "setUnitLoadout"),
+        getActiveSlotLimit: callLater("loadoutSystem", "getActiveSlotLimit"),
       };
     }
 
@@ -397,6 +455,7 @@
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getMeetingStory: callLater("storyData", "getMeetingStory"),
+        getKeybindLabel,
       };
     }
 
@@ -417,6 +476,8 @@
         getSupportOrigin: callLater("battleRuntime", "getSupportOrigin"),
         makePartyMember: callLater("unitFactory", "makePartyMember"),
         makeEnemy: callLater("unitFactory", "makeEnemy"),
+        normalizeEquipment: callLater("equipmentSystem", "normalizeEquipment"),
+        normalizeLoadout: callLater("loadoutSystem", "normalizeLoadout"),
         clampBattlePoint: callLater("geometry", "clampBattlePoint"),
         clampAllUnits: callLater("geometry", "clampAllUnits"),
         addBurst: callLater("battleRuntime", "addBurst"),

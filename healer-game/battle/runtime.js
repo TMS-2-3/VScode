@@ -39,7 +39,15 @@
       healUnit,
     } = context;
 
+    function isSystemMenuPaused() {
+      const menu = game.systemMenu;
+      return Boolean(game.state === "playing" && menu && (menu.open || menu.panel || menu.confirm));
+    }
+
     function update(dt) {
+      if (isSystemMenuPaused()) {
+        return;
+      }
       game.time += dt;
       if (game.messageTimer > 0) {
         game.messageTimer -= dt;
@@ -56,6 +64,7 @@
 
       game.hover = getHoveredPartyMember();
       updateCooldownsAndTimers(dt);
+      updatePriorityTarget(dt);
       updatePlayer(dt);
       updatePartyAi(dt);
       updateEnemyAi(dt);
@@ -132,6 +141,24 @@
       }
     }
 
+    function updatePriorityTarget(dt) {
+      clearInvalidPriorityTarget();
+      if (!game.priorityTarget) {
+        game.priorityTargetTimer = 0;
+        return;
+      }
+      if (!Number.isFinite(game.priorityTargetTimer) || game.priorityTargetTimer <= 0) {
+        return;
+      }
+      game.priorityTargetTimer = Math.max(0, game.priorityTargetTimer - dt);
+      if (game.priorityTargetTimer <= 0) {
+        const target = game.priorityTarget;
+        game.priorityTarget = null;
+        clearPartyAttackIntents();
+        addFloat("フォーカス終了", target.x, target.y - 36, "#f7fff6");
+      }
+    }
+
     function updateBurn(unit, dt) {
       if (!unit || unit.dead) {
         return;
@@ -168,7 +195,6 @@
       unit.burnTick = 0;
       unit.burnTickRate = 1;
       unit.burnDamageHpRatio = 0;
-      unit.burnDefensePenalty = 0;
       unit.burnSource = null;
     }
 
@@ -412,6 +438,19 @@
       return game.priorityTarget || null;
     }
 
+    function setPriorityTarget(target, duration = 0, label = "ターゲット指定") {
+      if (!target || target.dead || !enemies.includes(target)) {
+        return false;
+      }
+      game.priorityTarget = target;
+      game.priorityTargetTimer = Number.isFinite(duration) && duration > 0 ? duration : 0;
+      clearPartyAttackIntents();
+      if (label) {
+        addFloat(label, target.x, target.y - 36, "#ffd56b");
+      }
+      return true;
+    }
+
     function togglePriorityTargetAt(x, y) {
       const enemy = getHoveredEnemy(x, y);
       if (!enemy) {
@@ -419,12 +458,11 @@
       }
       if (getPriorityTarget() === enemy) {
         game.priorityTarget = null;
+        game.priorityTargetTimer = 0;
         clearPartyAttackIntents();
         addFloat("ターゲット解除", enemy.x, enemy.y - 36, "#f7fff6");
       } else {
-        game.priorityTarget = enemy;
-        clearPartyAttackIntents();
-        addFloat("ターゲット指定", enemy.x, enemy.y - 36, "#ffd56b");
+        setPriorityTarget(enemy, 0, "ターゲット指定");
       }
       return true;
     }
@@ -440,6 +478,7 @@
     function clearInvalidPriorityTarget() {
       if (game.priorityTarget && (game.priorityTarget.dead || !enemies.includes(game.priorityTarget))) {
         game.priorityTarget = null;
+        game.priorityTargetTimer = 0;
         clearPartyAttackIntents();
       }
     }
@@ -551,6 +590,7 @@
       getHoveredPartyMember,
       getHoveredEnemy,
       getPriorityTarget,
+      setPriorityTarget,
       togglePriorityTargetAt,
       clearPartyAttackIntents,
       clearInvalidPriorityTarget,

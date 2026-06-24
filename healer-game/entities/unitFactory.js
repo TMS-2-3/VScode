@@ -83,7 +83,6 @@
         burnTick: 0,
         burnTickRate: 1,
         burnDamageHpRatio: 0,
-        burnDefensePenalty: 0,
         burnSource: null,
         dead: false,
         noDamage: 999,

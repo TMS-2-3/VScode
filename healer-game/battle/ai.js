@@ -53,13 +53,7 @@
           continue;
         }
 
-        if (member.id === "ulpes") {
-          thinkUlpes(member, avoidingTelegraph);
-        } else if (member.id === "rihas") {
-          thinkRihas(member, avoidingTelegraph);
-        } else if (member.id === "sushia") {
-          thinkSushia(member, avoidingTelegraph);
-        }
+        thinkPartyUnit(member, avoidingTelegraph);
       }
     }
 
@@ -67,7 +61,7 @@
       if (unit.aiIntent && (!unit.aiIntent.target || unit.aiIntent.target.dead)) {
         unit.aiIntent = null;
       }
-      if (unit.aiIntent && unit.aiIntent.target.team === unit.team && !isForcedHostileTarget(unit, unit.aiIntent.target)) {
+      if (unit.aiIntent && unit.aiIntent.target.team === unit.team && !unit.aiIntent.support && !isForcedHostileTarget(unit, unit.aiIntent.target)) {
         unit.aiIntent = null;
       }
       if (unit.aiIntent && isForcedHostileTarget(unit, unit.forcedTarget) && unit.aiIntent.target !== unit.forcedTarget) {
@@ -310,6 +304,10 @@
       return skillSystem.thinkSushia(unit, avoidingTelegraph);
     }
 
+    function thinkPartyUnit(unit, avoidingTelegraph = false) {
+      return skillSystem.thinkPartyUnit(unit, avoidingTelegraph);
+    }
+
     function thinkEnemy(enemy, target, distance) {
       return skillSystem.thinkEnemy(enemy, target, distance);
     }
@@ -326,6 +324,7 @@
       closestPointOnSegment,
       getLinePerpendicular,
       updateEnemyAi,
+      thinkPartyUnit,
       thinkUlpes,
       thinkRihas,
       thinkSushia,

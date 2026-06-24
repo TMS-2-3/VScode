@@ -62,7 +62,7 @@
           { attack: 7 },
           { attack: 8 },
         ],
-        normalAttackSkillId: "daiti_punch",
+        normalAttackSkillId: "huriharai",
         effect: null,
         description: "リハス用の初期武器",
       },
