@@ -21,6 +21,7 @@
       PASSIVE_DATA,
       LOADOUT_CONFIG,
       EQUIPMENT_DATA,
+      MATERIAL_DATA,
       QUEST_DATA,
       TOWN_DATA,
     } = data;
@@ -40,10 +41,10 @@
     const KEYBINDS = window.HEALER_KEYBINDS;
     const PLAYER_SKILL_SLOT_KEYS = Array.isArray(config && config.playerSkillSlotKeys)
       ? config.playerSkillSlotKeys
-      : ["q", "e", "r", "f", "g"];
+      : ["q", "w", "e", "r", "t"];
     const ITEM_SLOT_KEYS = Array.isArray(config && config.itemSlotKeys)
       ? config.itemSlotKeys
-      : ["c", "v", "b"];
+      : ["c", "v", "b", "n"];
 
     function callLater(systemName, methodName) {
       return (...args) => {
@@ -114,17 +115,30 @@
       };
     }
 
+    function createWalletContext() {
+      return {
+        game: state.game,
+        MATERIAL_DATA,
+      };
+    }
+
     function createLoadoutContext() {
       return {
         SKILL_DATA,
         PASSIVE_DATA,
         LOADOUT_CONFIG,
+        EQUIPMENT_DATA,
+        CHARACTER_DEFS,
+        game: state.game,
+        resolveEquipmentItem: callLater("equipmentSystem", "resolveItem"),
+        getEquipmentUpgradeLevel: callLater("equipmentSystem", "getEquipmentUpgradeLevel"),
       };
     }
 
     function createEquipmentContext() {
       return {
         EQUIPMENT_DATA,
+        game: state.game,
       };
     }
 
@@ -184,8 +198,10 @@
         distanceToSegment: callLater("geometry", "distanceToSegment"),
         getMoodCooldown: callLater("battleStats", "getMoodCooldown"),
         getCommandActionCooldown: callLater("battleStats", "getCommandActionCooldown"),
+        getEquipmentStatBonusSum: callLater("equipmentSystem", "getStatBonusSum"),
         applyMoodCommandBiasAuto: callLater("battleStats", "applyMoodCommandBiasAuto"),
         commitCommandBias: callLater("battleStats", "commitCommandBias"),
+        beginMoodAction: callLater("battleStats", "beginMoodAction"),
         clampCommandBias: callLater("battleStats", "clampCommandBias"),
         getCastTime: callLater("battleStats", "getCastTime"),
         getSushiaCastTime: callLater("battleStats", "getSushiaCastTime"),
@@ -223,6 +239,7 @@
         getEquippedActiveSkills: callLater("loadoutSystem", "getEquippedActiveSkills"),
         getEquippedUltimateSkillKey: callLater("loadoutSystem", "getEquippedUltimateSkillKey"),
         getEquippedUltimateSkill: callLater("loadoutSystem", "getEquippedUltimateSkill"),
+        getSkillLevel: callLater("loadoutSystem", "getSkillLevel"),
       };
     }
 
@@ -248,6 +265,7 @@
         SKILL_DATA,
         PASSIVE_DATA,
         EQUIPMENT_DATA,
+        MATERIAL_DATA,
         LOADOUT_CONFIG,
         player: state.player,
         party: state.party,
@@ -273,6 +291,14 @@
         SUSHIA_PASSIVE_STACK_DURATION: balance.sushiaPassiveStackDuration,
         skillSystem: systems.skillSystem,
         itemSystem: systems.itemSystem,
+        getGold: callLater("walletSystem", "getGold"),
+        formatGold: callLater("walletSystem", "formatGold"),
+        getItemCandidates: callLater("itemSystem", "getItemCandidates"),
+        getCharacterItem: callLater("itemSystem", "getCharacterItem"),
+        setCharacterItem: callLater("itemSystem", "setCharacterItem"),
+        clearCharacterItem: callLater("itemSystem", "clearCharacterItem"),
+        isSkillOwned: callLater("loadoutSystem", "isSkillOwned"),
+        getSkillLevel: callLater("loadoutSystem", "getSkillLevel"),
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getPronounChoices: callLater("profileSystem", "getPronounChoices"),
@@ -311,12 +337,17 @@
         getRihasPassiveIncomingMultiplier: callLater("battleStats", "getRihasPassiveIncomingMultiplier"),
         getPhysicalDamageBoost: callLater("battleStats", "getPhysicalDamageBoost"),
         getMagicDamageBoost: callLater("battleStats", "getMagicDamageBoost"),
+        getDamageBoost: callLater("battleStats", "getDamageBoost"),
+        getDamageResistance: callLater("battleStats", "getDamageResistance"),
         getPhysicalDamageResistance: callLater("battleStats", "getPhysicalDamageResistance"),
         getMagicDamageResistance: callLater("battleStats", "getMagicDamageResistance"),
         getEffectiveAttack: callLater("battleStats", "getEffectiveAttack"),
         getEffectiveMagic: callLater("battleStats", "getEffectiveMagic"),
         getEffectiveDefense: callLater("battleStats", "getEffectiveDefense"),
         getEffectiveMagicDefense: callLater("battleStats", "getEffectiveMagicDefense"),
+        getEffectiveStat: callLater("battleStats", "getEffectiveStat"),
+        getEffectiveMoveSpeed: callLater("battleStats", "getEffectiveMoveSpeed"),
+        getUltimateChargeRate: callLater("battleStats", "getUltimateChargeRate"),
         getEffectiveGuardChance: callLater("battleStats", "getEffectiveGuardChance"),
         getGuardDamageReductionRate: callLater("battleStats", "getGuardDamageReductionRate"),
         getEffectiveCritChance: callLater("battleStats", "getEffectiveCritChance"),
@@ -331,9 +362,15 @@
         getElementResistanceBonus: callLater("equipmentSystem", "getElementResistanceBonus"),
         normalizeEquipment: callLater("equipmentSystem", "normalizeEquipment"),
         resolveEquipmentItem: callLater("equipmentSystem", "resolveItem"),
+        getEquipmentInstancesByItemId: callLater("equipmentSystem", "getEquipmentInstancesByItemId"),
+        getEquipmentItemRef: callLater("equipmentSystem", "getEquipmentItemRef"),
+        getEquipmentBaseItemId: callLater("equipmentSystem", "getEquipmentBaseItemId"),
+        getEquipmentOwnedCount: callLater("equipmentSystem", "getEquipmentOwnedCount"),
+        getEquipmentUpgradeLevel: callLater("equipmentSystem", "getEquipmentUpgradeLevel"),
         getEquippedItems: callLater("equipmentSystem", "getEquippedItems"),
         getEquippedSlotItem: callLater("equipmentSystem", "getEquippedSlotItem"),
         getActiveSetEffects: callLater("equipmentSystem", "getActiveSetEffects"),
+        getEquipmentStatBonusSum: callLater("equipmentSystem", "getStatBonusSum"),
         canEquipItem: callLater("equipmentSystem", "canEquip"),
         getActiveSlotLimit: callLater("loadoutSystem", "getActiveSlotLimit"),
         getDefaultLoadout: callLater("loadoutSystem", "getDefaultLoadout"),
@@ -413,6 +450,15 @@
         useItemSlot: callLater("itemSystem", "useItemSlot"),
         cancelItemAim: callLater("itemSystem", "cancelItemAim"),
         confirmItemAim: callLater("itemSystem", "confirmItemAim"),
+        useInventoryItem: callLater("itemSystem", "useInventoryItem"),
+        usePowerCrystalDFromBattleReward: callLater("itemSystem", "usePowerCrystalDFromBattleReward"),
+        getItemCandidates: callLater("itemSystem", "getItemCandidates"),
+        getCharacterItem: callLater("itemSystem", "getCharacterItem"),
+        setCharacterItem: callLater("itemSystem", "setCharacterItem"),
+        clearCharacterItem: callLater("itemSystem", "clearCharacterItem"),
+        getItemInventoryCount: callLater("itemSystem", "getItemInventoryCount"),
+        isSkillOwned: callLater("loadoutSystem", "isSkillOwned"),
+        getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
         handleStatusUiClick: systems.statusControls.handleStatusUiClick,
         hasCommandBiasDrag: systems.statusControls.hasCommandBiasDrag,
         clearCommandBiasDrag: systems.statusControls.clearCommandBiasDrag,
@@ -422,6 +468,9 @@
         unequipSlot: callLater("equipmentSystem", "unequipSlot"),
         canEquipItem: callLater("equipmentSystem", "canEquip"),
         resolveEquipmentItem: callLater("equipmentSystem", "resolveItem"),
+        getEquipmentItemRef: callLater("equipmentSystem", "getEquipmentItemRef"),
+        getEquipmentBaseItemId: callLater("equipmentSystem", "getEquipmentBaseItemId"),
+        getEquipmentOwnedCount: callLater("equipmentSystem", "getEquipmentOwnedCount"),
         getDefaultLoadout: callLater("loadoutSystem", "getDefaultLoadout"),
         normalizeLoadout: callLater("loadoutSystem", "normalizeLoadout"),
         setUnitLoadout: callLater("loadoutSystem", "setUnitLoadout"),
@@ -443,6 +492,8 @@
         areas: state.areas,
         effects: state.effects,
         TOWN_DATA,
+        EQUIPMENT_DATA,
+        MATERIAL_DATA,
         QUEST_DATA,
         TOWN_WIDTH,
         TOWN_HEIGHT,
@@ -456,6 +507,27 @@
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getMeetingStory: callLater("storyData", "getMeetingStory"),
         getKeybindLabel,
+        getGold: callLater("walletSystem", "getGold"),
+        formatGold: callLater("walletSystem", "formatGold"),
+        canAffordGold: callLater("walletSystem", "canAffordGold"),
+        spendGold: callLater("walletSystem", "spendGold"),
+        addGold: callLater("walletSystem", "addGold"),
+        getItemCandidates: callLater("itemSystem", "getItemCandidates"),
+        getItemDef: callLater("itemSystem", "getItemDef"),
+        getItemOwnedCount: callLater("itemSystem", "getItemOwnedCount"),
+        getItemCapacity: callLater("itemSystem", "getItemCapacity"),
+        addItem: callLater("itemSystem", "addItem"),
+        resolveEquipmentItem: callLater("equipmentSystem", "resolveItem"),
+        createEquipmentInstance: callLater("equipmentSystem", "createEquipmentInstance"),
+        getEquipmentOwnedCount: callLater("equipmentSystem", "getEquipmentOwnedCount"),
+        getEquipmentUpgradeLevel: callLater("equipmentSystem", "getEquipmentUpgradeLevel"),
+        setEquipmentUpgradeLevel: callLater("equipmentSystem", "setEquipmentUpgradeLevel"),
+        resetEquipmentUpgrade: callLater("equipmentSystem", "resetEquipmentUpgrade"),
+        getEquipmentRandomStatUpgradeTarget: callLater("equipmentSystem", "getEquipmentRandomStatUpgradeTarget"),
+        rerollEquipmentRandomStats: callLater("equipmentSystem", "rerollEquipmentRandomStats"),
+        getEquipmentItemRef: callLater("equipmentSystem", "getEquipmentItemRef"),
+        getEquipmentBaseItemId: callLater("equipmentSystem", "getEquipmentBaseItemId"),
+        getEquipmentInstancesByItemId: callLater("equipmentSystem", "getEquipmentInstancesByItemId"),
       };
     }
 
@@ -501,6 +573,7 @@
         MOOD_DISTANCE_BONUS_MAX: balance.moodDistanceBonusMax,
         MOOD_MULTI_HIT_MIN: balance.moodMultiHitMin,
         MOOD_MULTI_HIT_BASE: balance.moodMultiHitBase,
+        MOOD_DAMAGE_ACTION_CAP: balance.moodDamageActionCap,
         DEFAULT_MP_REGEN_RATE: balance.defaultMpRegenRate,
         CRIT_OVERFLOW_DAMAGE_RATE: balance.critOverflowDamageRate,
         ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER: balance.ulpesPassiveCritChanceMultiplier,
@@ -525,6 +598,7 @@
     function createCombatContext() {
       return {
         player: state.player,
+        game: state.game,
         COLORS,
         ACTION_GAP: balance.actionGap,
         SUSHIA_PASSIVE_MAX_STACKS: balance.sushiaPassiveMaxStacks,
@@ -532,7 +606,10 @@
         SUSHIA_PASSIVE_STACK_COOLDOWN: balance.sushiaPassiveStackCooldown,
         MOOD_DAMAGE_DEALT_RATE: balance.moodDamageDealtRate,
         MOOD_DAMAGE_DEALT_MULT: balance.moodDamageDealtMult,
+        MOOD_DAMAGE_HP_RATIO_GAIN: balance.moodDamageHpRatioGain,
+        MOOD_DAMAGE_HIT_CAP: balance.moodDamageHitCap,
         MOOD_DAMAGE_TAKEN_RATE: balance.moodDamageTakenRate,
+        MOOD_DAMAGE_TAKEN_BASE_LOSS: balance.moodDamageTakenBaseLoss,
         MOOD_HEAL_RATE: balance.moodHealRate,
         MOOD_QUICK_HEAL_BONUS: balance.moodQuickHealBonus,
         MOOD_EVENT_MULT: balance.moodEventMult,
@@ -557,9 +634,12 @@
         getRihasPassiveIncomingMultiplier: callLater("battleStats", "getRihasPassiveIncomingMultiplier"),
         getPhysicalDamageBoost: callLater("battleStats", "getPhysicalDamageBoost"),
         getMagicDamageBoost: callLater("battleStats", "getMagicDamageBoost"),
+        getDamageBoost: callLater("battleStats", "getDamageBoost"),
+        getDamageResistance: callLater("battleStats", "getDamageResistance"),
         getPhysicalDamageResistance: callLater("battleStats", "getPhysicalDamageResistance"),
         getMagicDamageResistance: callLater("battleStats", "getMagicDamageResistance"),
         getGuardDamageMultiplier: callLater("battleStats", "getGuardDamageMultiplier"),
+        getUltimateChargeRate: callLater("battleStats", "getUltimateChargeRate"),
         getEffectiveGuardChance: callLater("battleStats", "getEffectiveGuardChance"),
         getEffectiveCritChance: callLater("battleStats", "getEffectiveCritChance"),
         getCritDamageMultiplier: callLater("battleStats", "getCritDamageMultiplier"),
@@ -572,6 +652,7 @@
         getMoodDistanceMultiplier: callLater("battleStats", "getMoodDistanceMultiplier"),
         getHpRatio: callLater("battleStats", "getHpRatio"),
         getMoodReferenceHp: callLater("battleStats", "getMoodReferenceHp"),
+        addMoodActionGain: callLater("battleStats", "addMoodActionGain"),
         addMoodGain: callLater("battleStats", "addMoodGain"),
         addMoodLoss: callLater("battleStats", "addMoodLoss"),
         hasPassive: callLater("loadoutSystem", "hasPassive"),
@@ -585,6 +666,7 @@
         enemies: state.enemies,
         telegraphs: state.telegraphs,
         skillSystem: systems.skillSystem,
+        getItemSystem: () => systems.itemSystem,
         MOOD_BASELINE: balance.moodBaseline,
         COMMAND_BIAS_PREFERRED_RANGES: balance.commandBiasPreferredRanges,
         MOOD_PREFERRED_RANGE_HIGH: balance.moodPreferredRangeHigh,
@@ -599,9 +681,12 @@
         angleDiff: callLater("geometry", "angleDiff"),
         nearestAlive: callLater("geometry", "nearestAlive"),
         clampUnit: callLater("geometry", "clampUnit"),
+        getBattleBounds: callLater("geometry", "getBattleBounds"),
         updateTelegraphDynamic: callLater("battleRuntime", "updateTelegraphDynamic"),
         getTargetablePartyMembers: callLater("battleRuntime", "getTargetablePartyMembers"),
         getPriorityTarget: callLater("battleRuntime", "getPriorityTarget"),
+        getEffectiveMoveSpeed: callLater("battleStats", "getEffectiveMoveSpeed"),
+        getEquippedSlotItem: callLater("equipmentSystem", "getEquippedSlotItem"),
         triggerUltimate: callLater("skillSystem", "triggerUltimate"),
         setActionCooldown: callLater("skillSystem", "setActionCooldown"),
       };
@@ -614,13 +699,26 @@
         TAU,
         game: state.game,
         player: state.player,
+        party: state.party,
+        enemies: state.enemies,
         input: state.input,
         ITEM_SLOT_KEYS,
+        ACTION_GAP: balance.actionGap,
+        battlePx,
+        dist: callLater("geometry", "dist"),
+        normalize: callLater("geometry", "normalize"),
+        clampUnit: callLater("geometry", "clampUnit"),
+        getEffectiveMoveSpeed: callLater("battleStats", "getEffectiveMoveSpeed"),
         healUnit: callLater("combatSystem", "healUnit"),
         addFloat: callLater("battleRuntime", "addFloat"),
+        addBurst: callLater("battleRuntime", "addBurst"),
         getHoveredPartyMember: callLater("battleRuntime", "getHoveredPartyMember"),
         getSupportOrigin: callLater("battleRuntime", "getSupportOrigin"),
         cancelPlayerAim: callLater("skillSystem", "cancelPlayerAim"),
+        setActionCooldown: callLater("skillSystem", "setActionCooldown"),
+        acquireOrUpgradeSkill: callLater("loadoutSystem", "acquireOrUpgradeSkill"),
+        addGold: callLater("walletSystem", "addGold"),
+        formatGold: callLater("walletSystem", "formatGold"),
       };
     }
     function createBattleRuntimeContext() {
@@ -636,12 +734,12 @@
         areas: state.areas,
         effects: state.effects,
         skillSystem: systems.skillSystem,
+        getItemSystem: () => systems.itemSystem,
         ACTION_GAP: balance.actionGap,
         SHIELD_MOOD_GAIN_PER_SEC: balance.shieldMoodGainPerSec,
         battlePx,
         clamp: callLater("geometry", "clamp"),
         distPoint: callLater("geometry", "distPoint"),
-        clampUnit: callLater("geometry", "clampUnit"),
         getBattleBounds: callLater("geometry", "getBattleBounds"),
         updateTown: callLater("townController", "updateTown"),
         updatePartyAi: callLater("battleAi", "updatePartyAi"),
@@ -650,6 +748,7 @@
         spawnRearVanguardWave: callLater("battleSetup", "spawnRearVanguardWave"),
         regenerateHp: callLater("battleStats", "regenerateHp"),
         regenerateMp: callLater("battleStats", "regenerateMp"),
+        getUltimateChargeRate: callLater("battleStats", "getUltimateChargeRate"),
         getMoodNaturalDelta: callLater("battleStats", "getMoodNaturalDelta"),
         applyCommandMoodDelta: callLater("battleStats", "applyCommandMoodDelta"),
         applyMoodHighGainDamping: callLater("battleStats", "applyMoodHighGainDamping"),
@@ -662,6 +761,9 @@
         canFriendlyFireAffect: callLater("combatSystem", "canFriendlyFireAffect"),
         getFriendlyFireEffectDurationMultiplier: callLater("combatSystem", "getFriendlyFireEffectDurationMultiplier"),
         healUnit: callLater("combatSystem", "healUnit"),
+        addGold: callLater("walletSystem", "addGold"),
+        formatGold: callLater("walletSystem", "formatGold"),
+        addItem: callLater("itemSystem", "addItem"),
         hasPassive: callLater("loadoutSystem", "hasPassive"),
       };
     }
@@ -670,6 +772,7 @@
       createGeometryContext,
       createStoryContext,
       createProfileContext,
+      createWalletContext,
       createLoadoutContext,
       createEquipmentContext,
       createUnitFactoryContext,

@@ -43,12 +43,16 @@
       getRihasPassiveIncomingMultiplier,
       getPhysicalDamageBoost,
       getMagicDamageBoost,
+      getDamageBoost,
+      getDamageResistance,
       getPhysicalDamageResistance,
       getMagicDamageResistance,
       getEffectiveAttack,
       getEffectiveMagic,
       getEffectiveDefense,
       getEffectiveMagicDefense,
+      getEffectiveMoveSpeed,
+      getUltimateChargeRate: getBattleUltimateChargeRate,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
       getEffectiveCritChance,
@@ -61,11 +65,14 @@
       getNormalElement,
       getElementBoostBonus,
       getElementResistanceBonus,
+      getEquipmentStatBonusSum,
       hasPassive,
       getEquippedPassive,
+      getSkillLevel,
     } = context;
+    const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
     const statusData = STATUS_DATA || window.HEALER_STATUS_DATA || {};
-    const DEFAULT_TOOLTIP_DESCRIPTION_MODE = "simple";
+    const tooltipText = window.createHealerTooltipText(context);
 
   function getBattleActionLabel(actionId, fallback = "") {
     if (typeof getKeybindLabel !== "function" || !actionId) {
@@ -84,10 +91,27 @@
     return ids[unitId] || "";
   }
 
+  function getItemSlotOwnerUnit(unitId) {
+    if (!unitId) {
+      return null;
+    }
+    if (player && player.id === unitId) {
+      return player;
+    }
+    if (!Array.isArray(party)) {
+      return null;
+    }
+    return party.find((unit) => unit && unit.id === unitId) || null;
+  }
+
   function getDefaultItemKeyLabel(index) {
-    const slotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length ? ITEM_SLOT_KEYS : ["c", "v", "b"];
+    const slotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length ? ITEM_SLOT_KEYS : ["c", "v", "b", "n"];
     const key = slotKeys[index] || "";
     return String(key).toUpperCase();
+  }
+
+  function getDefaultItemOwnerLabel(index) {
+    return ["ウルペス", "リハス", "スシア", "アルジュナ"][index] || "";
   }
 
   function drawHud() {
@@ -390,19 +414,38 @@
       { label: "クールタイム", value: formatSignedPercent(skillSpeed) },
       { label: "行動速度", value: getActionSpeedText(unit) },
       { breakAfter: true },
-      { label: "必殺ゲージチャージ率", value: formatPercent(getUltimateChargeRate(unit)) },
-      { label: "移動速度", value: `${Math.round(unit.speed)}` },
+      { label: "ゲージ上昇率", value: formatPercent(getUltimateChargeRate(unit)) },
+      { label: "移動速度", value: `${Math.round(getUnitMoveSpeed(unit))}` },
     ];
     return stats;
   }
 
   function getActionSpeedText(unit) {
-    if (!unit || unit.id === "finald") {
-      return "-";
+    return formatPercent(getUnitActionSpeedRate(unit));
+  }
+
+  function getUnitActionSpeedRate(unit) {
+    if (!unit) {
+      return 1;
     }
-    const config = getCommandBiasConfig(unit.activeCommandBias || 0);
+    const config = unit.id !== "finald" ? getCommandBiasConfig(unit.activeCommandBias || 0) : null;
     const actionCdMultiplier = config && Number.isFinite(config.actionCd) && config.actionCd > 0 ? config.actionCd : 1;
-    return formatPercent(1 / actionCdMultiplier);
+    return Math.max(0, 1 + getUnitActionSpeedBonus(unit)) / actionCdMultiplier;
+  }
+
+  function getUnitActionSpeedBonus(unit) {
+    let bonus = 0;
+    if (typeof getEquipmentStatBonusSum === "function") {
+      bonus += getEquipmentStatBonusSum(unit, "actionSpeed");
+    }
+    return bonus;
+  }
+
+  function getUnitMoveSpeed(unit) {
+    if (typeof getEffectiveMoveSpeed === "function") {
+      return getEffectiveMoveSpeed(unit);
+    }
+    return unit && Number.isFinite(unit.speed) ? unit.speed : 0;
   }
 
   function getCommandBiasConfig(value) {
@@ -421,7 +464,14 @@
   }
 
   function getUltimateChargeRate(unit) {
-    return unit && Number.isFinite(unit.ultimateChargeRate) ? unit.ultimateChargeRate : 1;
+    if (typeof getBattleUltimateChargeRate === "function") {
+      return getBattleUltimateChargeRate(unit);
+    }
+    let bonus = 0;
+    if (typeof getEquipmentStatBonusSum === "function") {
+      bonus += getEquipmentStatBonusSum(unit, "ultimateChargeRate");
+    }
+    return Math.max(0, (unit && Number.isFinite(unit.ultimateChargeRate) ? unit.ultimateChargeRate : 1) + bonus);
   }
 
   function getUnitElementKeys() {
@@ -457,6 +507,9 @@
     if (hasPassive(unit, "painless")) {
       bonus += multiplierToBonus(getRihasPassiveDamageMultiplier(unit));
     }
+    if (typeof getDamageBoost === "function") {
+      bonus += getDamageBoost(unit);
+    }
     return Math.max(0, 1 + bonus);
   }
 
@@ -464,6 +517,9 @@
     let bonus = multiplierToBonus(getMoodIncomingDamageMultiplier(unit)) + multiplierToBonus(getCommandIncomingDamageMultiplier(unit));
     if (hasPassive(unit, "painless")) {
       bonus += multiplierToBonus(getRihasPassiveIncomingMultiplier(unit));
+    }
+    if (typeof getDamageResistance === "function") {
+      bonus -= getDamageResistance(unit);
     }
     return Math.max(0, 1 + bonus);
   }
@@ -540,9 +596,9 @@
     const entries = skillSystem.getUnitSkillEntries
       ? skillSystem.getUnitSkillEntries(unit)
       : Object.entries(skillSystem.data[unit.id] || {}).map(([key, skill]) => ({ key, skill }));
-    return entries.map(({ key, skill }) => {
+    return entries.map(({ key, skill, level }) => {
       const cooldown = getSkillCooldownDetail(unit, key, skill);
-      return { key, skill, ...cooldown };
+      return { key, skill, level: Number.isFinite(level) ? level : getSkillLevelForDisplay(unit, key), ...cooldown };
     });
   }
 
@@ -585,6 +641,7 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(getSkillIconLabel(entry.skill), x + size / 2, y + size / 2 + 0.5);
+    drawSkillLevelBadge(x + size - 2, y + size - 2, entry.level || 0);
     ctx.restore();
 
     ctx.fillStyle = "#f7fff6";
@@ -596,6 +653,42 @@
 
   function getSkillIconLabel(skill) {
     return Array.from(skill.name || "?")[0] || "?";
+  }
+
+  function getSkillLevelForDisplay(unit, key) {
+    if (typeof getSkillLevel !== "function" || !unit || !key) {
+      return 0;
+    }
+    return getSkillLevel(unit.skillOwner || unit.id, key);
+  }
+
+  function getSkillLevelRoman(level) {
+    const index = Math.max(0, Math.min(SKILL_LEVEL_ROMAN.length - 1, Math.floor(Number(level) || 0)));
+    return SKILL_LEVEL_ROMAN[index] || "";
+  }
+
+  function drawSkillLevelBadge(right, bottom, level) {
+    const label = getSkillLevelRoman(level);
+    if (!label) {
+      return;
+    }
+    ctx.save();
+    ctx.font = "900 8px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const width = Math.max(15, ctx.measureText(label).width + 7);
+    const height = 12;
+    const x = right - width;
+    const y = bottom - height;
+    ctx.fillStyle = "#233a67";
+    ctx.strokeStyle = "#f7fff6";
+    ctx.lineWidth = 1;
+    roundRect(x, y, width, height, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + width / 2, y + height / 2 + 0.4);
+    ctx.restore();
   }
 
   function formatNumber(value) {
@@ -901,65 +994,15 @@
   }
 
   function pushTooltipText(lines, text) {
-    const parts = String(text || "").split(/\r?\n/);
-    for (const part of parts) {
-      lines.push(part);
-    }
+    tooltipText.pushText(lines, text);
   }
 
   function formatDescriptionText(text, unit, source) {
-    let index = 0;
-    return String(text || "").replace(/\(式=値\)/g, () => {
-      const formula = Array.isArray(source && source.formula) ? source.formula[index] : null;
-      index += 1;
-      if (!formula) {
-        return "(式=?)";
-      }
-      return `(${formula.text || "式"}=${formatNumber(getFormulaValue(unit, source, formula))})`;
-    });
-  }
-
-  function getFormulaValue(unit, source, formula) {
-    if (!unit || !formula) {
-      return 0;
-    }
-    if (formula.type === "strepionHeal") {
-      const hpPercent = unit.maxHp > 0 ? clamp(unit.hp / unit.maxHp, 0, 1) * 100 : 100;
-      const missingBelow = Math.max(0, (source.healHpThresholdPercent || 50) - hpPercent);
-      return getEffectiveMagic(unit) * (source.healMagicScale || 0) + unit.maxHp * (((source.healHpBasePercent || 5) + missingBelow) / 100);
-    }
-    if (formula.type === "rihasTauntShield") {
-      return unit.maxHp * (source.shieldHpRatio || 0.05);
-    }
-    if (formula.type === "burnTick") {
-      return Math.max(0, unit.hp * 0.01);
-    }
-    const statValue = formula.stat === "attack" ? getEffectiveAttack(unit) : formula.stat === "magic" ? getEffectiveMagic(unit) : 0;
-    const base = Number.isFinite(source[formula.baseProp]) ? source[formula.baseProp] : 0;
-    const scale = Number.isFinite(source[formula.scaleProp]) ? source[formula.scaleProp] : 0;
-    return base + statValue * scale;
+    return tooltipText.formatDescription(text, unit, source);
   }
 
   function getReferencedStatuses(description, statusIds) {
-    const result = [];
-    const seen = new Set();
-    const addStatus = (status) => {
-      if (!status || seen.has(status.id || status.name)) {
-        return;
-      }
-      seen.add(status.id || status.name);
-      result.push(status);
-    };
-    if (Array.isArray(statusIds)) {
-      for (const id of statusIds) {
-        addStatus(getStatusDef(id));
-      }
-    }
-    const quoted = String(description || "").match(/"([^"\r\n]+)"/g) || [];
-    for (const raw of quoted) {
-      addStatus(getStatusDef(raw.slice(1, -1)));
-    }
-    return result;
+    return tooltipText.getReferencedStatuses(description, statusIds);
   }
 
   function formatRemainingSeconds(value) {
@@ -967,19 +1010,7 @@
   }
 
   function getTooltipDescription(source) {
-    if (!source) {
-      return "";
-    }
-    const mode = getTooltipDescriptionMode();
-    if (mode === "detail") {
-      return source.description || source.simpleDescription || source.tooltip || source.helpText || "";
-    }
-    return source.simpleDescription || source.description || source.tooltip || source.helpText || "";
-  }
-
-  function getTooltipDescriptionMode() {
-    const mode = game && game.settings && game.settings.tooltipDescriptionMode;
-    return mode === "detail" ? "detail" : DEFAULT_TOOLTIP_DESCRIPTION_MODE;
+    return tooltipText.getDescription(source);
   }
   function drawStatusTooltip() {
     if (!Array.isArray(statusTooltipTargets) || !input || !input.mouse) {
@@ -1176,8 +1207,8 @@
     const innerX = x + 16;
     const innerW = w - 32;
     const gap = 12;
-    const itemW = clamp(view.w * 0.18 + 50, 260, 340);
-    const itemSlotW = Math.max(34, (itemW - 30) / 3);
+    const itemW = clamp(view.w * 0.2 + 70, 320, 400);
+    const itemSlotW = Math.max(34, (itemW - 37) / 4);
     const minInfoW = 70;
     let skillW = Math.min(clamp(view.w * 0.68, 560, 760), innerW - itemW - gap * 2 - minInfoW);
     skillW = Math.max(520, skillW);
@@ -1205,10 +1236,10 @@
     const slots = Array.isArray(game.itemSlots) ? game.itemSlots : [];
     const gap = 7;
     const sidePadding = 8;
-    const slotCount = 3;
+    const slotCount = Math.max(4, slots.length);
     const slotW = Math.max(34, (w - sidePadding * 2 - gap * (slotCount - 1)) / slotCount);
     const slotY = y + 8;
-    const slotH = Math.max(34, h - 16);
+    const slotH = Math.max(34, h - 32);
 
     ctx.save();
     ctx.fillStyle = "rgba(6,12,10,0.24)";
@@ -1221,18 +1252,31 @@
     for (let i = 0; i < slotCount; i += 1) {
       const sx = x + sidePadding + i * (slotW + gap);
       const item = slots[i];
-      const selected = Boolean(player.itemAim && player.itemAim.slotIndex === i);
+      const selected = isItemSlotSelected(i, item);
       drawItemSlot(sx, slotY, slotW, slotH, item, getBattleActionLabel(`battle.item${i + 1}`, getDefaultItemKeyLabel(i)), selected);
+      drawFittedText(item && item.ownerName ? item.ownerName : getDefaultItemOwnerLabel(i), sx + slotW / 2, slotY + slotH + 14, slotW, 800, 10, 7, "#d6e1d8", "center");
       statusUiButtons.push({
         action: "itemSlot",
         slotIndex: i,
         x: sx,
-        y,
+        y: slotY,
         w: slotW,
         h: slotH,
       });
     }
     ctx.restore();
+  }
+
+  function isItemSlotSelected(slotIndex, item) {
+    if (player.itemAim && player.itemAim.slotIndex === slotIndex) {
+      return true;
+    }
+    const ownerUnitId = item && item.ownerUnitId;
+    const owner = getItemSlotOwnerUnit(ownerUnitId);
+    return Boolean(owner && (
+      owner.itemCast && owner.itemCast.slotIndex === slotIndex ||
+      owner.itemUseRequest && owner.itemUseRequest.slotIndex === slotIndex
+    ));
   }
 
   function drawItemSlot(x, y, w, h, item, key, selected = false) {
@@ -1405,7 +1449,8 @@
     const itemW = desiredItemW !== null ? Math.min(desiredItemW, availableItemW) : availableItemW;
     const itemY = y + 8;
     const itemH = h - 16;
-    const nameY = itemY + itemH * 0.62;
+    const nameY = itemY + itemH * 0.56;
+    const typeY = itemY + itemH * 0.75;
     drawSkillRoleToggle(x, itemY, toggleW, itemH, page);
     for (let i = 0; i < slots; i += 1) {
       const sx = listX + i * (itemW + gap);
@@ -1445,6 +1490,10 @@
       ctx.strokeStyle = "rgba(247,255,246,0.86)";
       ctx.strokeText(skill.name, sx + itemW / 2, nameY);
       ctx.fillText(skill.name, sx + itemW / 2, nameY);
+      if (skill.skillType) {
+        drawFittedText(skill.skillType, sx + itemW / 2, typeY, itemW - 10, 800, itemW < 92 ? 9 : 10, 7, "#4c6758", "center");
+      }
+      drawSkillLevelBadge(sx + itemW - 5, itemY + itemH - 5, skill.level || 0);
       statusUiButtons.push({
         action: skill.gauge || !skill.command ? "playerSkill" : "playerCommand",
         skillKey: skill.key,
@@ -1642,6 +1691,8 @@
 
     return {
       drawHud,
+      getDetailedStats,
     };
   };
 })();
+

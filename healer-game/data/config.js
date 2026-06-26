@@ -3,7 +3,7 @@
 
   window.HEALER_CONFIG = {
     battleSpatialScale: 0.9,
-    playerSkillSlotKeys: ["q", "e", "r", "f", "g"],
-    itemSlotKeys: ["c", "v", "b"],
+    playerSkillSlotKeys: ["q", "w", "e", "r", "t"],
+    itemSlotKeys: ["c", "v", "b", "n"],
   };
 })();

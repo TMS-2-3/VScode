@@ -4,20 +4,20 @@
   const STORAGE_KEY = "healer-game:keybinds";
 
   const ACTIONS = [
-    { id: "common.moveUp", group: "common", section: "共通", label: "上", defaultBinding: "key:KeyW", logicalKey: "w" },
-    { id: "common.moveDown", group: "common", section: "共通", label: "下", defaultBinding: "key:KeyS", logicalKey: "s" },
-    { id: "common.moveLeft", group: "common", section: "共通", label: "左", defaultBinding: "key:KeyA", logicalKey: "a" },
-    { id: "common.moveRight", group: "common", section: "共通", label: "右", defaultBinding: "key:KeyD", logicalKey: "d" },
+    { id: "common.moveUp", group: "field", section: "フィールド", label: "上", defaultBinding: "key:KeyW", logicalKey: "w" },
+    { id: "common.moveDown", group: "field", section: "フィールド", label: "下", defaultBinding: "key:KeyS", logicalKey: "s" },
+    { id: "common.moveLeft", group: "field", section: "フィールド", label: "左", defaultBinding: "key:KeyA", logicalKey: "a" },
+    { id: "common.moveRight", group: "field", section: "フィールド", label: "右", defaultBinding: "key:KeyD", logicalKey: "d" },
     { id: "common.menuBack", group: "common", section: "共通", label: "メニュー開閉/戻る", defaultBinding: "key:Escape" },
     { id: "field.interact", group: "field", section: "フィールド", label: "インタラクト", defaultBinding: "key:KeyE" },
     { id: "battle.confirm", group: "battle", section: "戦闘", label: "発射ボタン", defaultBinding: "mouse:0" },
     { id: "battle.cancelAim", group: "battle", section: "戦闘", label: "構えキャンセル", defaultBinding: "mouse:2" },
     { id: "battle.skillPage", group: "battle", section: "戦闘", label: "アイテム/スキルページ切替", defaultBinding: "key:Space" },
     { id: "battle.skill1", group: "battle", section: "戦闘", label: "スキル1", defaultBinding: "key:KeyQ" },
-    { id: "battle.skill2", group: "battle", section: "戦闘", label: "スキル2", defaultBinding: "key:KeyE" },
-    { id: "battle.skill3", group: "battle", section: "戦闘", label: "スキル3", defaultBinding: "key:KeyR" },
-    { id: "battle.skill4", group: "battle", section: "戦闘", label: "スキル4", defaultBinding: "key:KeyF" },
-    { id: "battle.skill5", group: "battle", section: "戦闘", label: "スキル5", defaultBinding: "key:KeyG" },
+    { id: "battle.skill2", group: "battle", section: "戦闘", label: "スキル2", defaultBinding: "key:KeyW" },
+    { id: "battle.skill3", group: "battle", section: "戦闘", label: "スキル3", defaultBinding: "key:KeyE" },
+    { id: "battle.skill4", group: "battle", section: "戦闘", label: "スキル4", defaultBinding: "key:KeyR" },
+    { id: "battle.skill5", group: "battle", section: "戦闘", label: "スキル5", defaultBinding: "key:KeyT" },
     { id: "battle.ultimate.ulpes", group: "battle", section: "戦闘", label: "必殺技(ウルペス)", defaultBinding: "key:Digit1" },
     { id: "battle.ultimate.rihas", group: "battle", section: "戦闘", label: "必殺技(リハス)", defaultBinding: "key:Digit2" },
     { id: "battle.ultimate.sushia", group: "battle", section: "戦闘", label: "必殺技(スシア)", defaultBinding: "key:Digit3" },
@@ -25,6 +25,7 @@
     { id: "battle.item1", group: "battle", section: "戦闘", label: "アイテム1", defaultBinding: "key:KeyC" },
     { id: "battle.item2", group: "battle", section: "戦闘", label: "アイテム2", defaultBinding: "key:KeyV" },
     { id: "battle.item3", group: "battle", section: "戦闘", label: "アイテム3", defaultBinding: "key:KeyB" },
+    { id: "battle.item4", group: "battle", section: "戦闘", label: "アイテム4", defaultBinding: "key:KeyN" },
   ];
 
   const ACTION_BY_ID = Object.fromEntries(ACTIONS.map((action) => [action.id, action]));

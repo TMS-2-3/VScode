@@ -36,6 +36,14 @@
       useItemSlot,
       cancelItemAim,
       confirmItemAim,
+      useInventoryItem,
+      usePowerCrystalDFromBattleReward,
+      getCharacterItem,
+      setCharacterItem,
+      clearCharacterItem,
+      getItemInventoryCount,
+      getItemCandidates,
+      getPlayerFirstName,
       handleStatusUiClick,
       hasCommandBiasDrag,
       clearCommandBiasDrag,
@@ -45,10 +53,14 @@
       unequipSlot,
       canEquipItem,
       resolveEquipmentItem,
+      getEquipmentItemRef,
+      getEquipmentBaseItemId,
+      getEquipmentOwnedCount: getEquipmentOwnedCountFromSystem,
       getDefaultLoadout,
       normalizeLoadout,
       setUnitLoadout,
       getActiveSlotLimit,
+      isSkillOwned,
     } = context;
 
     function attach() {
@@ -56,9 +68,14 @@
       resize();
       startTown();
       startGameLoop();
+      canvas.tabIndex = 0;
 
       window.addEventListener("keydown", handleKeyDown);
       window.addEventListener("keyup", handleKeyUp);
+      window.addEventListener("copy", handleClipboardCopy);
+      window.addEventListener("cut", handleClipboardCut);
+      window.addEventListener("paste", handleClipboardPaste);
+      window.addEventListener("compositionend", handleCompositionEnd);
       canvas.addEventListener("mousemove", handleMouseMove);
       canvas.addEventListener("mousedown", handleMouseDown);
       canvas.addEventListener("mouseup", handleMouseUp);
@@ -74,10 +91,10 @@
 
     const playerSkillSlotKeys = Array.isArray(PLAYER_SKILL_SLOT_KEYS) && PLAYER_SKILL_SLOT_KEYS.length
       ? PLAYER_SKILL_SLOT_KEYS.map((key) => String(key).toLowerCase())
-      : ["q", "e", "r", "f", "g"];
+      : ["q", "w", "e", "r", "t"];
     const itemSlotKeys = Array.isArray(ITEM_SLOT_KEYS) && ITEM_SLOT_KEYS.length
       ? ITEM_SLOT_KEYS.map((key) => String(key).toLowerCase())
-      : ["c", "v", "b"];
+      : ["c", "v", "b", "n"];
     const keybindTools = KEYBINDS || window.HEALER_KEYBINDS || null;
     const movementKeys = ["w", "a", "s", "d"];
     const movementActions = [
@@ -87,7 +104,7 @@
       { id: "common.moveRight", logicalKey: "d" },
     ];
     const playerSkillActionIds = ["battle.skill1", "battle.skill2", "battle.skill3", "battle.skill4", "battle.skill5"];
-    const itemActionIds = ["battle.item1", "battle.item2", "battle.item3"];
+    const itemActionIds = itemSlotKeys.map((_, index) => `battle.item${index + 1}`);
     const ultimateActionByUnitId = {
       ulpes: "battle.ultimate.ulpes",
       rihas: "battle.ultimate.rihas",
@@ -96,6 +113,8 @@
     };
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];
     const presetNameMaxLength = 16;
+    let presetTextInput = null;
+    let syncingPresetTextInput = false;
 
     function getSystemMenu() {
       if (!game.systemMenu || typeof game.systemMenu !== "object") {
@@ -120,7 +139,7 @@
       if (!equipmentUnitOrder.includes(equipment.selectedUnitId)) {
         equipment.selectedUnitId = "finald";
       }
-      if (typeof equipment.presetName !== "string" || !equipment.presetName.trim()) {
+      if (typeof equipment.presetName !== "string") {
         equipment.presetName = "プリセット1";
       }
       if (equipment.picker && !Number.isFinite(equipment.picker.scroll)) {
@@ -154,6 +173,9 @@
       }
       if (game.settings.tooltipDescriptionMode !== "detail") {
         game.settings.tooltipDescriptionMode = "simple";
+      }
+      if (typeof game.settings.powerCrystalAutoUse !== "boolean") {
+        game.settings.powerCrystalAutoUse = true;
       }
       if (keybindTools) {
         game.settings.keybinds = keybindTools.normalizeKeybinds(
@@ -330,7 +352,13 @@
     }
 
     function shouldPreventKeyDown(event, key) {
+      if (isPresetNativeInputEvent(event)) {
+        return false;
+      }
       if (isEquipmentPresetNameFocused() || (keybindTools && getSettingsUi().controlsCapture)) {
+        if (isEquipmentPresetNameFocused() && (event.ctrlKey || event.metaKey) && ["c", "x", "v"].includes(key)) {
+          return false;
+        }
         return true;
       }
       if (keybindTools) {
@@ -360,7 +388,7 @@
         return false;
       }
       const ui = getEquipmentUi();
-      return Boolean(ui.preset && ui.preset.nameFocused);
+      return Boolean(ui.preset && (ui.preset.nameFocused || ui.preset.renameFocused));
     }
 
     function getCharacterDef(unitId) {
@@ -405,6 +433,9 @@
     function makeEquipmentUnit(unitId) {
       const live = getLivePartyUnit(unitId);
       if (live) {
+        if (typeof getCharacterItem === "function") {
+          live.item = getCharacterItem(unitId);
+        }
         return live;
       }
       const def = getCharacterDef(unitId);
@@ -429,6 +460,7 @@
         : typeof getDefaultLoadout === "function"
           ? getDefaultLoadout(unit.skillOwner || unit.id)
           : { passive: null, active: [] };
+      unit.item = typeof getCharacterItem === "function" ? getCharacterItem(unitId) : null;
       return unit;
     }
 
@@ -448,6 +480,26 @@
       };
     }
 
+    function copyCharacterItem(item) {
+      return item && item.id ? { id: item.id, count: Number.isFinite(item.count) ? item.count : null } : null;
+    }
+
+    function getEquipmentRefForInput(itemOrRef) {
+      if (typeof getEquipmentItemRef === "function") {
+        return getEquipmentItemRef(itemOrRef);
+      }
+      if (!itemOrRef) {
+        return null;
+      }
+      return typeof itemOrRef === "string" ? itemOrRef : itemOrRef.id || null;
+    }
+
+    function equipmentRefsMatch(a, b) {
+      const refA = getEquipmentRefForInput(a);
+      const refB = getEquipmentRefForInput(b);
+      return Boolean(refA && refB && refA === refB);
+    }
+
     function commitEquipmentUnit(unit) {
       if (!unit || !unit.id) {
         return;
@@ -458,12 +510,60 @@
       if (typeof normalizeLoadout === "function") {
         unit.loadout = normalizeLoadout(unit.skillOwner || unit.id, unit.loadout || {});
       }
+      releaseDuplicateEquipmentRefs(unit);
       getEquipmentStore()[unit.id] = copyEquipment(unit.equipment);
       getLoadoutStore()[unit.id] = copyLoadout(unit.loadout);
+      if (typeof setCharacterItem === "function" && typeof clearCharacterItem === "function") {
+        if (unit.item && unit.item.id) {
+          setCharacterItem(unit.id, unit.item.id, unit.item.count);
+        } else {
+          clearCharacterItem(unit.id);
+        }
+      }
       const live = getLivePartyUnit(unit.id);
       if (live && live !== unit) {
         live.equipment = copyEquipment(unit.equipment);
         live.loadout = copyLoadout(unit.loadout);
+        live.item = typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : null;
+      }
+    }
+
+    function releaseDuplicateEquipmentRefs(unit) {
+      if (!unit || !unit.id || !unit.equipment) {
+        return;
+      }
+      const refs = new Set(Object.values(unit.equipment)
+        .map((ref) => getEquipmentRefForInput(ref))
+        .filter((ref) => ref && !isDefaultEquipmentItem(typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(ref) : { id: ref })));
+      if (!refs.size) {
+        return;
+      }
+      for (const unitId of equipmentUnitOrder) {
+        if (unitId === unit.id) {
+          continue;
+        }
+        const otherUnit = makeEquipmentUnit(unitId);
+        if (!otherUnit || !otherUnit.equipment) {
+          continue;
+        }
+        let changed = false;
+        for (const [slotKey, ref] of Object.entries(otherUnit.equipment)) {
+          if (refs.has(getEquipmentRefForInput(ref))) {
+            otherUnit.equipment[slotKey] = null;
+            changed = true;
+          }
+        }
+        if (!changed) {
+          continue;
+        }
+        if (typeof normalizeEquipment === "function") {
+          otherUnit.equipment = normalizeEquipment(otherUnit.equipment, otherUnit);
+        }
+        getEquipmentStore()[otherUnit.id] = copyEquipment(otherUnit.equipment);
+        const live = getLivePartyUnit(otherUnit.id);
+        if (live && live !== otherUnit) {
+          live.equipment = copyEquipment(otherUnit.equipment);
+        }
       }
     }
 
@@ -487,6 +587,7 @@
       ui.selectedUnitId = "finald";
       ui.picker = null;
       ui.preset = null;
+      hidePresetTextInput();
       ui.confirm = null;
       menu.panelScroll = 0;
       menu.panelScrollMax = 0;
@@ -502,11 +603,14 @@
       if (ui.confirm) {
         ui.confirm = null;
         ui.picker = null;
+        ui.itemQuantityDrag = null;
         return true;
       }
       if (ui.picker || ui.preset) {
         ui.picker = null;
         ui.preset = null;
+        ui.itemQuantityDrag = null;
+        hidePresetTextInput();
         return true;
       }
       return false;
@@ -514,36 +618,421 @@
 
     function clampPresetName(value) {
       const trimmed = Array.from(String(value || "").trim()).slice(0, presetNameMaxLength).join("");
-      return trimmed || "プリセット1";
+      return trimmed;
+    }
+
+    function getActivePresetTextField() {
+      const ui = getEquipmentUi();
+      if (!ui.preset) {
+        return null;
+      }
+      if (ui.preset.nameFocused) {
+        return "name";
+      }
+      if (ui.preset.renameFocused) {
+        return "rename";
+      }
+      return null;
+    }
+
+    function getPresetTextValue(field) {
+      const ui = getEquipmentUi();
+      if (field === "rename") {
+        return ui.preset && typeof ui.preset.renameDraft === "string" ? ui.preset.renameDraft : "";
+      }
+      return typeof ui.presetName === "string" ? ui.presetName : "";
+    }
+
+    function setPresetTextValue(field, value) {
+      const ui = getEquipmentUi();
+      const next = Array.from(String(value || "")).slice(0, presetNameMaxLength).join("");
+      if (field === "rename") {
+        if (ui.preset) {
+          ui.preset.renameDraft = next;
+        }
+      } else {
+        ui.presetName = next;
+      }
+      if (!syncingPresetTextInput && field === getActivePresetTextField()) {
+        syncPresetNativeInputFromState(field);
+      }
+      return next;
+    }
+
+    function getPresetTextKeys(field) {
+      return field === "rename"
+        ? { caret: "renameCaret", anchor: "renameAnchor" }
+        : { caret: "nameCaret", anchor: "nameAnchor" };
+    }
+
+    function clampTextIndex(index, length) {
+      return Math.max(0, Math.min(length, Math.floor(Number(index) || 0)));
+    }
+
+    function normalizePresetTextState(field) {
+      const ui = getEquipmentUi();
+      if (!ui.preset || !field) {
+        return null;
+      }
+      const keys = getPresetTextKeys(field);
+      const length = Array.from(getPresetTextValue(field)).length;
+      if (field === "rename" && ui.preset.renameSelection) {
+        ui.preset[keys.anchor] = 0;
+        ui.preset[keys.caret] = length;
+        ui.preset.renameSelection = false;
+      }
+      if (!Number.isFinite(ui.preset[keys.anchor])) {
+        ui.preset[keys.anchor] = length;
+      }
+      if (!Number.isFinite(ui.preset[keys.caret])) {
+        ui.preset[keys.caret] = ui.preset[keys.anchor];
+      }
+      ui.preset[keys.anchor] = clampTextIndex(ui.preset[keys.anchor], length);
+      ui.preset[keys.caret] = clampTextIndex(ui.preset[keys.caret], length);
+      return {
+        field,
+        value: getPresetTextValue(field),
+        length,
+        anchor: ui.preset[keys.anchor],
+        caret: ui.preset[keys.caret],
+      };
+    }
+
+    function setPresetTextSelection(field, anchor, caret) {
+      const ui = getEquipmentUi();
+      if (!ui.preset || !field) {
+        return;
+      }
+      const keys = getPresetTextKeys(field);
+      const length = Array.from(getPresetTextValue(field)).length;
+      ui.preset[keys.anchor] = clampTextIndex(anchor, length);
+      ui.preset[keys.caret] = clampTextIndex(caret, length);
+      if (!syncingPresetTextInput && field === getActivePresetTextField()) {
+        syncPresetNativeInputFromState(field);
+      }
+    }
+
+    function selectAllPresetText(field = getActivePresetTextField()) {
+      if (!field) {
+        return false;
+      }
+      setPresetTextSelection(field, 0, Array.from(getPresetTextValue(field)).length);
+      return true;
+    }
+
+    function getPresetTextSelectionRange(field = getActivePresetTextField()) {
+      const state = normalizePresetTextState(field);
+      if (!state) {
+        return null;
+      }
+      return {
+        ...state,
+        start: Math.min(state.anchor, state.caret),
+        end: Math.max(state.anchor, state.caret),
+      };
+    }
+
+    function replacePresetTextSelection(text, field = getActivePresetTextField()) {
+      const range = getPresetTextSelectionRange(field);
+      if (!range) {
+        return false;
+      }
+      const chars = Array.from(range.value);
+      const insert = Array.from(String(text || "")).filter((char) => char !== "\r" && char !== "\n");
+      const room = Math.max(0, presetNameMaxLength - (chars.length - (range.end - range.start)));
+      const clipped = insert.slice(0, room);
+      chars.splice(range.start, range.end - range.start, ...clipped);
+      const next = setPresetTextValue(field, chars.join(""));
+      const caret = Math.min(Array.from(next).length, range.start + clipped.length);
+      setPresetTextSelection(field, caret, caret);
+      return true;
+    }
+
+    function deletePresetTextSelection(direction, field = getActivePresetTextField()) {
+      const range = getPresetTextSelectionRange(field);
+      if (!range) {
+        return false;
+      }
+      const chars = Array.from(range.value);
+      if (range.start !== range.end) {
+        chars.splice(range.start, range.end - range.start);
+        setPresetTextValue(field, chars.join(""));
+        setPresetTextSelection(field, range.start, range.start);
+        return true;
+      }
+      if (direction === "backward" && range.caret > 0) {
+        chars.splice(range.caret - 1, 1);
+        setPresetTextValue(field, chars.join(""));
+        setPresetTextSelection(field, range.caret - 1, range.caret - 1);
+        return true;
+      }
+      if (direction === "forward" && range.caret < chars.length) {
+        chars.splice(range.caret, 1);
+        setPresetTextValue(field, chars.join(""));
+        setPresetTextSelection(field, range.caret, range.caret);
+      }
+      return true;
+    }
+
+    function movePresetTextCaret(position, extendSelection = false, field = getActivePresetTextField()) {
+      const range = getPresetTextSelectionRange(field);
+      if (!range) {
+        return false;
+      }
+      const next = clampTextIndex(position, range.length);
+      if (extendSelection) {
+        setPresetTextSelection(field, range.anchor, next);
+      } else {
+        setPresetTextSelection(field, next, next);
+      }
+      return true;
+    }
+
+    function getSelectedPresetText(field = getActivePresetTextField()) {
+      const range = getPresetTextSelectionRange(field);
+      if (!range || range.start === range.end) {
+        return "";
+      }
+      return Array.from(range.value).slice(range.start, range.end).join("");
+    }
+
+    function copyPresetTextSelection(cut = false) {
+      const selected = getSelectedPresetText();
+      if (!selected) {
+        return false;
+      }
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(selected).catch(() => {});
+      }
+      if (cut) {
+        deletePresetTextSelection("forward");
+      }
+      return true;
+    }
+
+    function pastePresetTextFromClipboard() {
+      if (!getActivePresetTextField()) {
+        return false;
+      }
+      if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
+        navigator.clipboard.readText()
+          .then((text) => replacePresetTextSelection(text))
+          .catch(() => {});
+      }
+      return true;
+    }
+
+    function ensurePresetTextInput() {
+      if (presetTextInput || typeof document === "undefined") {
+        return presetTextInput;
+      }
+      presetTextInput = document.createElement("input");
+      presetTextInput.type = "text";
+      presetTextInput.maxLength = presetNameMaxLength * 2;
+      presetTextInput.autocomplete = "off";
+      presetTextInput.autocapitalize = "off";
+      presetTextInput.spellcheck = false;
+      presetTextInput.setAttribute("aria-hidden", "true");
+      Object.assign(presetTextInput.style, {
+        position: "fixed",
+        left: "0px",
+        top: "0px",
+        width: "1px",
+        height: "1px",
+        opacity: "0",
+        border: "0",
+        padding: "0",
+        margin: "0",
+        background: "transparent",
+        color: "transparent",
+        caretColor: "transparent",
+        zIndex: "10000",
+        pointerEvents: "none",
+      });
+      presetTextInput.addEventListener("input", syncPresetStateFromNativeInput);
+      presetTextInput.addEventListener("select", syncPresetSelectionFromNativeInput);
+      presetTextInput.addEventListener("keyup", syncPresetSelectionFromNativeInput);
+      presetTextInput.addEventListener("compositionend", syncPresetStateFromNativeInput);
+      document.body.appendChild(presetTextInput);
+      return presetTextInput;
+    }
+
+    function hidePresetTextInput() {
+      if (!presetTextInput) {
+        return;
+      }
+      presetTextInput.blur();
+      presetTextInput.style.display = "none";
+    }
+
+    function codePointIndexToOffset(text, index) {
+      return Array.from(String(text || "")).slice(0, index).join("").length;
+    }
+
+    function offsetToCodePointIndex(text, offset) {
+      return Array.from(String(text || "").slice(0, Math.max(0, offset || 0))).length;
+    }
+
+    function positionPresetTextInput(target) {
+      const el = ensurePresetTextInput();
+      if (!el) {
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = target && Number.isFinite(target.x) ? target.x : 0;
+      const y = target && Number.isFinite(target.y) ? target.y : 0;
+      const w = target && Number.isFinite(target.w) ? target.w : 1;
+      const h = target && Number.isFinite(target.h) ? target.h : 1;
+      el.style.left = `${rect.left + x}px`;
+      el.style.top = `${rect.top + y}px`;
+      el.style.width = `${Math.max(1, w)}px`;
+      el.style.height = `${Math.max(1, h)}px`;
+      el.style.display = "block";
+    }
+
+    function syncPresetNativeInputFromState(field = getActivePresetTextField(), target = null) {
+      const el = ensurePresetTextInput();
+      if (!el || !field || syncingPresetTextInput) {
+        return;
+      }
+      const state = normalizePresetTextState(field);
+      if (!state) {
+        hidePresetTextInput();
+        return;
+      }
+      syncingPresetTextInput = true;
+      positionPresetTextInput(target || getEquipmentUi().preset && getEquipmentUi().preset.textInputTarget);
+      const value = getPresetTextValue(field);
+      if (el.value !== value) {
+        el.value = value;
+      }
+      const start = codePointIndexToOffset(value, Math.min(state.anchor, state.caret));
+      const end = codePointIndexToOffset(value, Math.max(state.anchor, state.caret));
+      try {
+        el.setSelectionRange(start, end);
+      } catch (_) {
+        // Some IME states temporarily reject selection changes; input sync will recover on the next event.
+      }
+      if (document.activeElement !== el) {
+        el.focus({ preventScroll: true });
+      }
+      syncingPresetTextInput = false;
+    }
+
+    function syncPresetStateFromNativeInput() {
+      if (!presetTextInput || syncingPresetTextInput) {
+        return;
+      }
+      const field = getActivePresetTextField();
+      if (!field) {
+        return;
+      }
+      syncingPresetTextInput = true;
+      const next = setPresetTextValue(field, presetTextInput.value);
+      if (presetTextInput.value !== next) {
+        presetTextInput.value = next;
+      }
+      syncingPresetTextInput = false;
+      syncPresetSelectionFromNativeInput();
+    }
+
+    function syncPresetSelectionFromNativeInput() {
+      if (!presetTextInput || syncingPresetTextInput) {
+        return;
+      }
+      const field = getActivePresetTextField();
+      if (!field) {
+        return;
+      }
+      const value = getPresetTextValue(field);
+      const start = offsetToCodePointIndex(value, presetTextInput.selectionStart || 0);
+      const end = offsetToCodePointIndex(value, presetTextInput.selectionEnd || start);
+      syncingPresetTextInput = true;
+      setPresetTextSelection(field, start, end);
+      syncingPresetTextInput = false;
+    }
+
+    function isPresetNativeInputEvent(event) {
+      return Boolean(presetTextInput && event && event.target === presetTextInput);
     }
 
     function handleEquipmentPresetTextKey(event, key) {
       if (!isEquipmentPresetNameFocused()) {
         return false;
       }
-      const ui = getEquipmentUi();
+      const field = getActivePresetTextField();
+      const range = getPresetTextSelectionRange(field);
+      if (!field || !range) {
+        return false;
+      }
       if (key === "escape") {
         return false;
       }
+      if (isPresetNativeInputEvent(event)) {
+        if (key === "enter") {
+          syncPresetStateFromNativeInput();
+          if (field === "rename") {
+            saveEquipmentPresetNameEdit();
+          } else {
+            saveEquipmentPreset();
+          }
+          return true;
+        }
+        event.__presetAllowDefault = true;
+        return true;
+      }
+      if (event.ctrlKey || event.metaKey) {
+        if (key === "a") {
+          selectAllPresetText(field);
+          return true;
+        }
+        if (["c", "x", "v"].includes(key)) {
+          return false;
+        }
+        return false;
+      }
       if (key === "enter") {
-        saveEquipmentPreset();
+        if (field === "rename") {
+          saveEquipmentPresetNameEdit();
+        } else {
+          saveEquipmentPreset();
+        }
         return true;
       }
       if (key === "backspace") {
-        const chars = Array.from(ui.presetName || "");
-        chars.pop();
-        ui.presetName = chars.join("");
+        deletePresetTextSelection("backward", field);
         return true;
       }
-      if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) {
+      if (key === "delete") {
+        deletePresetTextSelection("forward", field);
+        return true;
+      }
+      if (key === "arrowleft") {
+        const next = !event.shiftKey && range.start !== range.end ? range.start : range.caret - 1;
+        movePresetTextCaret(next, event.shiftKey, field);
+        return true;
+      }
+      if (key === "arrowright") {
+        const next = !event.shiftKey && range.start !== range.end ? range.end : range.caret + 1;
+        movePresetTextCaret(next, event.shiftKey, field);
+        return true;
+      }
+      if (key === "home") {
+        movePresetTextCaret(0, event.shiftKey, field);
+        return true;
+      }
+      if (key === "end") {
+        movePresetTextCaret(range.length, event.shiftKey, field);
+        return true;
+      }
+      if (event.altKey || event.key.length < 1 || event.key === "Dead" || event.key.length > 2) {
         return false;
       }
-      const next = Array.from(`${ui.presetName || ""}${event.key}`).slice(0, presetNameMaxLength).join("");
-      ui.presetName = next;
+      replacePresetTextSelection(event.key, field);
       return true;
     }
 
-    function equipSelectedItem(itemId) {
+    function equipSelectedItem(itemId, options = {}) {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中は装備確認のみです。");
         return;
@@ -554,8 +1043,9 @@
         setEquipmentMessage("この装備は装備できません。");
         return;
       }
+      const itemRef = getEquipmentRefForInput(item);
       const currentItemId = unit.equipment && unit.equipment[item.slot] || null;
-      if (currentItemId === item.id) {
+      if (equipmentRefsMatch(currentItemId, itemRef)) {
         if (isRequiredEquipmentSlot(item.slot)) {
           setEquipmentMessage(item.slot === "weapon" ? "武器は外せません。" : "この枠は外せません。");
           return;
@@ -566,8 +1056,15 @@
         }
         commitEquipmentUnit(unit);
         getEquipmentUi().picker = null;
-        setEquipmentMessage("装備を外しました。");
+          setEquipmentMessage("装備を外しました。");
         return;
+      }
+      if (!options.skipTransferConfirm) {
+        const holder = findOtherEquipmentHolder(unit, item);
+        if (holder) {
+          openEquipmentItemStealConfirm(unit, item, holder);
+          return;
+        }
       }
       if (!equipItem(unit, item)) {
         setEquipmentMessage("この装備は装備できません。");
@@ -599,6 +1096,131 @@
       setEquipmentMessage("装備を外しました。");
     }
 
+    function selectCharacterItemCandidate(itemId) {
+      const ui = getEquipmentUi();
+      if (!ui.picker || ui.picker.kind !== "item") {
+        return;
+      }
+      const unit = getSelectedEquipmentUnit();
+      const candidates = typeof getItemCandidates === "function" ? getItemCandidates() : [];
+      const item = candidates.find((entry) => entry && entry.id === itemId);
+      if (!unit || !item || item.equippable === false) {
+        return;
+      }
+      const current = typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : null;
+      const max = getCharacterItemAssignableMax(unit, item);
+      ui.picker.itemId = item.id;
+      ui.picker.itemQuantity = Math.max(1, Math.min(max, current && current.id === item.id && Number.isFinite(current.count) ? current.count : 1));
+    }
+
+    function adjustCharacterItemQuantity(delta) {
+      const ui = getEquipmentUi();
+      const picker = ui.picker || {};
+      if (picker.kind !== "item" || !picker.itemId) {
+        return;
+      }
+      const unit = getSelectedEquipmentUnit();
+      const item = getItemCandidateById(picker.itemId);
+      const max = getCharacterItemAssignableMax(unit, item);
+      picker.itemQuantity = Math.max(1, Math.min(max, Math.floor(Number(picker.itemQuantity) || 1) + Math.floor(Number(delta) || 0)));
+    }
+
+    function setCharacterItemQuantityFromRatio(ratio) {
+      const ui = getEquipmentUi();
+      const picker = ui.picker || {};
+      if (picker.kind !== "item" || !picker.itemId) {
+        return;
+      }
+      const unit = getSelectedEquipmentUnit();
+      const item = getItemCandidateById(picker.itemId);
+      const max = getCharacterItemAssignableMax(unit, item);
+      const normalized = Math.max(0, Math.min(1, Number(ratio) || 0));
+      picker.itemQuantity = Math.max(1, Math.min(max, Math.round(1 + (max - 1) * normalized)));
+    }
+
+    function startCharacterItemQuantityDrag(target) {
+      const ui = getEquipmentUi();
+      if (!target || !target.w) {
+        ui.itemQuantityDrag = null;
+        return;
+      }
+      ui.itemQuantityDrag = { x: target.x, w: target.w };
+    }
+
+    function updateCharacterItemQuantityDrag() {
+      const ui = getEquipmentUi();
+      const drag = ui.itemQuantityDrag;
+      if (!drag || !drag.w) {
+        return false;
+      }
+      setCharacterItemQuantityFromRatio((input.mouse.x - drag.x) / drag.w);
+      return true;
+    }
+
+    function equipSelectedCharacterItem(itemId, count = null) {
+      if (isEquipmentReadOnly()) {
+        setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      const unit = getSelectedEquipmentUnit();
+      const candidates = typeof getItemCandidates === "function" ? getItemCandidates() : [];
+      const item = candidates.find((entry) => entry && entry.id === itemId);
+      if (!unit || !item || item.equippable === false || typeof setCharacterItem !== "function") {
+        setEquipmentMessage("このアイテムは装備できません。");
+        return;
+      }
+      const current = typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : null;
+      if (current && current.id === item.id) {
+        const desiredCount = Math.max(1, Math.floor(Number(count) || Number(current.count) || 1));
+        if (current.count === desiredCount) {
+          getEquipmentUi().picker = null;
+          setEquipmentMessage("アイテム数は変更ありません。");
+          return;
+        }
+      }
+      const desired = Math.max(1, Math.floor(Number(count) || 1));
+      if (!setCharacterItem(unit.id, item.id, desired)) {
+        setEquipmentMessage("このアイテムは装備できません。");
+        return;
+      }
+      unit.item = typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : item;
+      getEquipmentUi().picker = null;
+      setEquipmentMessage(`${item.name || "アイテム"}を${unit.item && unit.item.count ? unit.item.count : desired}個持たせました。`);
+    }
+
+    function getItemCandidateById(itemId) {
+      const candidates = typeof getItemCandidates === "function" ? getItemCandidates() : [];
+      return candidates.find((entry) => entry && entry.id === itemId) || null;
+    }
+
+    function getCharacterItemAssignableMax(unit, item) {
+      if (!unit || !item) {
+        return 1;
+      }
+      const current = typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : null;
+      const currentCount = current && current.id === item.id && Number.isFinite(current.count) ? current.count : 0;
+      const inventoryCount = typeof getItemInventoryCount === "function"
+        ? getItemInventoryCount(item.id)
+        : Number.isFinite(item.inventoryCount) ? item.inventoryCount : 0;
+      const maxCount = Math.max(1, Math.floor(Number.isFinite(item.battleMaxCount) ? item.battleMaxCount : Number.isFinite(item.maxCount) ? item.maxCount : 1));
+      return Math.max(1, Math.min(maxCount, inventoryCount + currentCount));
+    }
+
+    function clearSelectedCharacterItem() {
+      if (isEquipmentReadOnly()) {
+        setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      const unit = getSelectedEquipmentUnit();
+      if (!unit || typeof clearCharacterItem !== "function") {
+        return;
+      }
+      clearCharacterItem(unit.id);
+      unit.item = null;
+      getEquipmentUi().picker = null;
+      setEquipmentMessage("アイテムを外しました。");
+    }
+
     function getFixedAttackKey(owner) {
       return SKILL_DATA && SKILL_DATA[owner] && SKILL_DATA[owner].attack ? "attack" : null;
     }
@@ -628,7 +1250,7 @@
         return "";
       }
       if (unit.id === "finald") {
-        return "アルジュナ";
+        return typeof getPlayerFirstName === "function" ? getPlayerFirstName() : (unit.name || "アルジュナ");
       }
       const names = {
         ulpes: "ウルペス",
@@ -683,6 +1305,85 @@
       };
     }
 
+    function findOtherEquipmentHolder(unit, item) {
+      if (!unit || !item) {
+        return null;
+      }
+      const itemRef = getEquipmentRefForInput(item);
+      for (const unitId of equipmentUnitOrder) {
+        if (unitId === unit.id) {
+          continue;
+        }
+        const otherUnit = makeEquipmentUnit(unitId);
+        if (!otherUnit || !otherUnit.equipment) {
+          continue;
+        }
+        for (const [slotKey, equippedItemId] of Object.entries(otherUnit.equipment)) {
+          if (equipmentRefsMatch(equippedItemId, itemRef)) {
+            return { unit: otherUnit, slotKey };
+          }
+        }
+      }
+      return null;
+    }
+
+    function hasAvailableEquipmentCopy(unit, item) {
+      if (!item || isDefaultEquipmentItem(item)) {
+        return true;
+      }
+      if (item.instanceId || item.equipmentInstanceId || item.refId) {
+        return !findOtherEquipmentHolder(unit, item);
+      }
+      return getEquipmentOwnedCount(item.id) > getEquipmentUsedCount(item.id, unit && unit.id);
+    }
+
+    function getEquipmentOwnedCount(itemId) {
+      if (typeof getEquipmentOwnedCountFromSystem === "function") {
+        return getEquipmentOwnedCountFromSystem(itemId);
+      }
+      const store = game.equipmentInventoryById && typeof game.equipmentInventoryById === "object"
+        ? game.equipmentInventoryById
+        : {};
+      return Math.max(0, Math.floor(Number.isFinite(store[itemId]) ? store[itemId] : 0));
+    }
+
+    function getEquipmentUsedCount(itemId, exceptUnitId = null) {
+      let count = 0;
+      for (const unitId of equipmentUnitOrder) {
+        if (unitId === exceptUnitId) {
+          continue;
+        }
+        const unit = makeEquipmentUnit(unitId);
+        if (!unit || !unit.equipment) {
+          continue;
+        }
+        for (const equippedItemId of Object.values(unit.equipment)) {
+          const equippedBaseId = typeof getEquipmentBaseItemId === "function" ? getEquipmentBaseItemId(equippedItemId) : equippedItemId;
+          if (equippedBaseId === itemId) {
+            count += 1;
+          }
+        }
+      }
+      return count;
+    }
+
+    function isDefaultEquipmentItem(item) {
+      return Boolean(item && (String(item.id || "").startsWith("default_") || item.material === "製作不可"));
+    }
+
+    function openEquipmentItemStealConfirm(unit, item, holder) {
+      const ui = getEquipmentUi();
+      ui.confirm = {
+        type: "stealEquipmentItem",
+        unitId: unit.id,
+        itemId: getEquipmentRefForInput(item),
+        itemName: item.name || item.id,
+        otherUnitId: holder.unit.id,
+        otherSlotKey: holder.slotKey,
+        otherName: getEquipmentFullName(holder.unit),
+      };
+    }
+
     function closeEquipmentConfirm() {
       const ui = getEquipmentUi();
       ui.confirm = null;
@@ -716,6 +1417,23 @@
       } else {
         ui.picker = null;
       }
+    }
+
+    function confirmEquipmentItemTransfer() {
+      const ui = getEquipmentUi();
+      const confirm = ui.confirm;
+      if (!confirm || confirm.type !== "stealEquipmentItem") {
+        closeEquipmentConfirm();
+        return;
+      }
+      const otherUnit = makeEquipmentUnit(confirm.otherUnitId);
+      if (otherUnit && otherUnit.equipment && confirm.otherSlotKey) {
+        otherUnit.equipment[confirm.otherSlotKey] = null;
+        commitEquipmentUnit(otherUnit);
+      }
+      ui.confirm = null;
+      ui.selectedUnitId = confirm.unitId;
+      equipSelectedItem(confirm.itemId, { skipTransferConfirm: true });
     }
 
     function getConfigurableActiveKeys(owner, active) {
@@ -758,6 +1476,10 @@
       const skill = SKILL_DATA && SKILL_DATA[owner] && SKILL_DATA[owner][skillKey];
       if (!skill || skillKey === "attack" || isUltimateSkill(owner, skillKey)) {
         setEquipmentMessage("このスキルは装備できません。");
+        return;
+      }
+      if (typeof isSkillOwned === "function" && !isSkillOwned(owner, skillKey)) {
+        setEquipmentMessage("このスキルは未所持です。");
         return;
       }
       if (!canEquipSkillWithCurrentWeapon(unit, skill)) {
@@ -889,6 +1611,7 @@
         setEquipmentMessage("戦闘中はプリセット保存できません。");
         return;
       }
+      syncPresetStateFromNativeInput();
       const unit = getSelectedEquipmentUnit();
       if (!unit) {
         return;
@@ -896,8 +1619,17 @@
       commitEquipmentUnit(unit);
       const ui = getEquipmentUi();
       const name = clampPresetName(ui.presetName);
+      if (!name) {
+        ui.presetName = "";
+        setEquipmentMessage("プリセット名を入力してください。");
+        syncPresetNativeInputFromState("name");
+        return;
+      }
       ui.presetName = name;
       const presets = getPresetStore(unit.id);
+      if (ui.preset && ui.preset.renameFocused) {
+        ui.preset = { ...ui.preset, editIndex: null, renameFocused: false, renameDraft: "", renameSelection: false };
+      }
       const editIndex = ui.preset && Number.isFinite(ui.preset.editIndex) ? Math.floor(ui.preset.editIndex) : -1;
       if (editIndex >= 0 && presets[editIndex]) {
         const duplicate = presets.findIndex((preset, index) => index !== editIndex && preset && preset.name === name);
@@ -907,6 +1639,7 @@
         }
         presets[editIndex] = { ...presets[editIndex], name };
         ui.preset = { open: true, nameFocused: false, editIndex: null };
+        hidePresetTextInput();
         setEquipmentMessage(`${name}に名前を変更しました。`);
         return;
       }
@@ -914,6 +1647,7 @@
         name,
         equipment: copyEquipment(unit.equipment),
         loadout: copyLoadout(unit.loadout),
+        item: copyCharacterItem(typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : unit.item),
       };
       const index = presets.findIndex((preset) => preset && preset.name === name);
       if (index >= 0) {
@@ -922,7 +1656,50 @@
         presets.push(snapshot);
       }
       ui.preset = { open: true, nameFocused: false };
+      hidePresetTextInput();
       setEquipmentMessage(`${name}を保存しました。`);
+    }
+
+    function saveEquipmentPresetNameEdit(index = null) {
+      if (isEquipmentReadOnly()) {
+        return;
+      }
+      syncPresetStateFromNativeInput();
+      const unit = getSelectedEquipmentUnit();
+      const ui = getEquipmentUi();
+      const editIndex = Number.isFinite(index)
+        ? Math.floor(index)
+        : ui.preset && Number.isFinite(ui.preset.editIndex)
+          ? Math.floor(ui.preset.editIndex)
+          : -1;
+      const presets = unit ? getPresetStore(unit.id) : [];
+      const preset = presets[editIndex];
+      if (!unit || !preset) {
+        return;
+      }
+      const draftName = ui.preset && typeof ui.preset.renameDraft === "string" ? ui.preset.renameDraft : preset.name;
+      const name = clampPresetName(draftName);
+      if (!name) {
+        setEquipmentMessage("プリセット名を入力してください。");
+        syncPresetNativeInputFromState("rename");
+        return;
+      }
+      const duplicate = presets.findIndex((entry, presetIndex) => presetIndex !== editIndex && entry && entry.name === name);
+      if (duplicate >= 0) {
+        setEquipmentMessage("同じ名前のプリセットがあります。");
+        return;
+      }
+      presets[editIndex] = { ...preset, name };
+      ui.preset = {
+        open: true,
+        nameFocused: false,
+        editIndex: null,
+        renameFocused: false,
+        renameDraft: "",
+        renameSelection: false,
+      };
+      hidePresetTextInput();
+      setEquipmentMessage(`${name}に名前を変更しました。`);
     }
 
     function loadEquipmentPreset(index) {
@@ -938,6 +1715,9 @@
       }
       unit.equipment = copyEquipment(preset.equipment);
       unit.loadout = copyLoadout(preset.loadout);
+      if (Object.prototype.hasOwnProperty.call(preset, "item")) {
+        unit.item = copyCharacterItem(preset.item);
+      }
       commitEquipmentUnit(unit);
       setEquipmentMessage(`${preset.name || "プリセット"}を読み込みました。`);
     }
@@ -955,7 +1735,14 @@
       }
       const ui = getEquipmentUi();
       ui.presetName = clampPresetName(preset.name || `プリセット${editIndex + 1}`);
-      ui.preset = { open: true, nameFocused: true, editIndex };
+      ui.preset = {
+        open: true,
+        nameFocused: false,
+        editIndex,
+        renameFocused: true,
+        renameDraft: ui.presetName,
+        renameSelection: true,
+      };
       setEquipmentMessage("名前を編集できます。");
     }
 
@@ -974,7 +1761,14 @@
       const ui = getEquipmentUi();
       if (ui.preset && Number.isFinite(ui.preset.editIndex)) {
         if (ui.preset.editIndex === deleteIndex) {
-          ui.preset = { open: true, nameFocused: false, editIndex: null };
+          ui.preset = {
+            open: true,
+            nameFocused: false,
+            editIndex: null,
+            renameFocused: false,
+            renameDraft: "",
+            renameSelection: false,
+          };
         } else if (ui.preset.editIndex > deleteIndex) {
           ui.preset.editIndex -= 1;
         }
@@ -1026,12 +1820,17 @@
       menu.open = false;
       menu.panel = null;
       menu.confirm = null;
+      game.inventoryMessage = null;
+      game.inventoryMessageResult = null;
+      game.inventoryPowerCrystalBulk = null;
       menu.panelScroll = 0;
       menu.panelScrollMax = 0;
       menu.equipment.picker = null;
       menu.equipment.preset = null;
       menu.equipment.confirm = null;
+      menu.equipment.itemQuantityDrag = null;
       menu.settings.controlsCapture = null;
+      hidePresetTextInput();
       clearMovementKeys();
     }
 
@@ -1060,12 +1859,16 @@
       menu.panel = null;
       menu.confirm = null;
       menu.open = false;
+      game.inventoryMessage = null;
+      game.inventoryMessageResult = null;
+      game.inventoryPowerCrystalBulk = null;
       menu.panelScroll = 0;
       menu.panelScrollMax = 0;
       menu.equipment.picker = null;
       menu.equipment.preset = null;
       menu.equipment.confirm = null;
       menu.settings.controlsCapture = null;
+      hidePresetTextInput();
       clearMovementKeys();
     }
 
@@ -1076,13 +1879,143 @@
       clearMovementKeys();
     }
 
+    function clearInventoryMessage() {
+      game.inventoryMessage = null;
+      game.inventoryMessageResult = null;
+      clearMovementKeys();
+    }
+
+    function getInventoryPowerCrystalBulkState() {
+      const state = game.inventoryPowerCrystalBulk;
+      return state && typeof state === "object" ? state : null;
+    }
+
+    function isInventoryPowerCrystalBulkPending() {
+      const state = getInventoryPowerCrystalBulkState();
+      return Boolean(state && state.itemId === "d_power_flag" && state.total > 0 && !state.complete);
+    }
+
+    function finishInventoryPowerCrystalBulkUse() {
+      clearInventoryMessage();
+      const state = getInventoryPowerCrystalBulkState();
+      if (state) {
+        state.remaining = 0;
+        state.complete = true;
+      }
+      game.inventoryPowerCrystalBulk = null;
+      return true;
+    }
+
+    function openNextInventoryPowerCrystal() {
+      const state = getInventoryPowerCrystalBulkState();
+      if (!state || state.complete) {
+        return false;
+      }
+      clearInventoryMessage();
+      const remaining = Math.max(0, Math.floor(Number.isFinite(state.remaining) ? state.remaining : 0));
+      if (remaining <= 0) {
+        return finishInventoryPowerCrystalBulkUse();
+      }
+      const result = typeof useInventoryItem === "function"
+        ? useInventoryItem(state.itemId || "d_power_flag")
+        : null;
+      if (result && result.ok) {
+        state.remaining = Math.max(0, remaining - 1);
+        state.opened = Math.max(0, Math.floor(Number.isFinite(state.opened) ? state.opened : 0)) + 1;
+      } else {
+        state.remaining = 0;
+      }
+      clearMovementKeys();
+      return true;
+    }
+
+    function startInventoryPowerCrystalBulkUse() {
+      const rawCount = typeof getItemInventoryCount === "function" ? getItemInventoryCount("d_power_flag") : 0;
+      const total = Math.max(0, Math.floor(Number.isFinite(rawCount) ? rawCount : 0));
+      if (total <= 0) {
+        if (typeof useInventoryItem === "function") {
+          useInventoryItem("d_power_flag");
+        }
+        clearMovementKeys();
+        return true;
+      }
+      game.inventoryPowerCrystalBulk = {
+        itemId: "d_power_flag",
+        total,
+        remaining: total,
+        opened: 0,
+        complete: false,
+      };
+      return openNextInventoryPowerCrystal();
+    }
+
+    function getBattleRewardPowerCrystalAutoState() {
+      const rewards = game.battleRewards && typeof game.battleRewards === "object" ? game.battleRewards : null;
+      const state = rewards && rewards.autoPowerCrystal;
+      return state && typeof state === "object" ? state : null;
+    }
+
+    function isBattleRewardPowerCrystalAutoPending() {
+      const state = getBattleRewardPowerCrystalAutoState();
+      return Boolean(game.state === "won" && state && state.enabled && state.total > 0 && !state.complete);
+    }
+
+    function finishBattleRewardCrystalAutoUse() {
+      const state = getBattleRewardPowerCrystalAutoState();
+      clearInventoryMessage();
+      if (state) {
+        state.remaining = 0;
+        state.complete = true;
+      }
+      return true;
+    }
+
+    function openNextBattleRewardCrystal() {
+      const state = getBattleRewardPowerCrystalAutoState();
+      if (!state || !state.enabled || state.complete) {
+        return false;
+      }
+      clearInventoryMessage();
+      const remaining = Math.max(0, Math.floor(Number.isFinite(state.remaining) ? state.remaining : 0));
+      if (remaining <= 0) {
+        return finishBattleRewardCrystalAutoUse();
+      }
+      const result = typeof usePowerCrystalDFromBattleReward === "function"
+        ? usePowerCrystalDFromBattleReward()
+        : null;
+      if (result && result.ok) {
+        state.remaining = Math.max(0, remaining - 1);
+        state.opened = Math.max(0, Math.floor(Number.isFinite(state.opened) ? state.opened : 0)) + 1;
+      } else {
+        state.remaining = 0;
+      }
+      clearMovementKeys();
+      return true;
+    }
+
     function activateMenuBack() {
+      if (isBattleRewardPowerCrystalAutoPending() && game.inventoryMessage) {
+        const state = getBattleRewardPowerCrystalAutoState();
+        return state && state.remaining > 0
+          ? openNextBattleRewardCrystal()
+          : finishBattleRewardCrystalAutoUse();
+      }
+      if (isInventoryPowerCrystalBulkPending() && game.inventoryMessage) {
+        const state = getInventoryPowerCrystalBulkState();
+        return state && state.remaining > 0
+          ? openNextInventoryPowerCrystal()
+          : finishInventoryPowerCrystalBulkUse();
+      }
       const menu = getSystemMenu();
       if (menu.confirm) {
         closeSystemConfirm();
         return true;
       }
       if (menu.panel) {
+        if (menu.panel.type === "inventory" && game.inventoryMessage) {
+          clearInventoryMessage();
+          return true;
+        }
         if (closeEquipmentSubwindow()) {
           return true;
         }
@@ -1105,7 +2038,9 @@
         return true;
       }
       if (handleEquipmentPresetTextKey(event, key)) {
-        event.preventDefault();
+        if (!event.__presetAllowDefault) {
+          event.preventDefault();
+        }
         return true;
       }
       if (!isActionEvent("common.menuBack", event)) {
@@ -1123,7 +2058,216 @@
       return activateMenuBack();
     }
 
-    function handleSystemMenuClick(button) {
+    function handleClipboardCopy(event) {
+      if (!isEquipmentPresetNameFocused()) {
+        return;
+      }
+      if (isPresetNativeInputEvent(event)) {
+        return;
+      }
+      const selected = getSelectedPresetText();
+      if (!selected) {
+        return;
+      }
+      if (event.clipboardData) {
+        event.clipboardData.setData("text/plain", selected);
+        event.preventDefault();
+      } else {
+        copyPresetTextSelection(false);
+      }
+    }
+
+    function handleClipboardCut(event) {
+      if (!isEquipmentPresetNameFocused()) {
+        return;
+      }
+      if (isPresetNativeInputEvent(event)) {
+        setTimeout(syncPresetStateFromNativeInput, 0);
+        return;
+      }
+      const selected = getSelectedPresetText();
+      if (!selected) {
+        return;
+      }
+      if (event.clipboardData) {
+        event.clipboardData.setData("text/plain", selected);
+        event.preventDefault();
+      }
+      deletePresetTextSelection("forward");
+    }
+
+    function handleClipboardPaste(event) {
+      if (!isEquipmentPresetNameFocused()) {
+        return;
+      }
+      if (isPresetNativeInputEvent(event)) {
+        setTimeout(syncPresetStateFromNativeInput, 0);
+        return;
+      }
+      const text = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+      if (text) {
+        replacePresetTextSelection(text);
+        event.preventDefault();
+      } else {
+        pastePresetTextFromClipboard();
+      }
+    }
+
+    function handleCompositionEnd(event) {
+      if (!isEquipmentPresetNameFocused() || !event || !event.data) {
+        return;
+      }
+      if (isPresetNativeInputEvent(event)) {
+        setTimeout(syncPresetStateFromNativeInput, 0);
+        return;
+      }
+      replacePresetTextSelection(event.data);
+    }
+
+    function getPresetTextIndexFromTarget(target, x) {
+      const stops = Array.isArray(target && target.charStops) ? target.charStops : [0];
+      const textX = Number.isFinite(target && target.textX) ? target.textX : target.x;
+      const relX = Math.max(0, x - textX);
+      for (let i = 0; i < stops.length - 1; i += 1) {
+        const midpoint = (stops[i] + stops[i + 1]) / 2;
+        if (relX < midpoint) {
+          return i;
+        }
+      }
+      return Math.max(0, stops.length - 1);
+    }
+
+    function focusPresetTextTarget(target, options = {}) {
+      if (!target || !target.field) {
+        return false;
+      }
+      const ui = getEquipmentUi();
+      if (target.field === "name") {
+        ui.preset = {
+          ...(ui.preset || {}),
+          open: true,
+          nameFocused: true,
+          editIndex: null,
+          renameFocused: false,
+          renameDraft: "",
+          renameSelection: false,
+        };
+      } else if (target.field === "rename") {
+        ui.preset = {
+          ...(ui.preset || {}),
+          open: true,
+          nameFocused: false,
+          editIndex: Number.isFinite(target.index) ? Math.floor(target.index) : ui.preset && ui.preset.editIndex,
+          renameFocused: true,
+          renameSelection: false,
+        };
+      }
+      if (ui.preset) {
+        ui.preset.textInputTarget = target;
+      }
+      const state = normalizePresetTextState(target.field);
+      if (!state) {
+        return false;
+      }
+      const caret = getPresetTextIndexFromTarget(target, input.mouse.x);
+      const anchor = options.extend ? state.anchor : caret;
+      setPresetTextSelection(target.field, anchor, caret);
+      ui.preset.textDrag = options.drag ? {
+        field: target.field,
+        target,
+        anchor,
+      } : null;
+      syncPresetNativeInputFromState(target.field, target);
+      return true;
+    }
+
+    function updatePresetTextDrag() {
+      const ui = getEquipmentUi();
+      const drag = ui.preset && ui.preset.textDrag;
+      if (!drag || !drag.field || !drag.target) {
+        return false;
+      }
+      const caret = getPresetTextIndexFromTarget(drag.target, input.mouse.x);
+      setPresetTextSelection(drag.field, drag.anchor, caret);
+      return true;
+    }
+
+    function clampScrollbarValue(value, max) {
+      return Math.max(0, Math.min(max, Number.isFinite(value) ? value : 0));
+    }
+
+    function startScrollbarDrag(target) {
+      const state = target && target.scrollState;
+      const valueKey = target && target.valueKey ? target.valueKey : "scroll";
+      const maxKey = target && target.maxKey ? target.maxKey : "scrollMax";
+      const track = target && target.track;
+      const knob = target && target.knob;
+      const max = Math.max(0, state && Number.isFinite(state[maxKey]) ? state[maxKey] : 0);
+      if (!state || !track || !knob || max <= 0) {
+        input.scrollbarDrag = null;
+        return false;
+      }
+      const pointerInKnob = input.mouse.y >= knob.y && input.mouse.y <= knob.y + knob.h;
+      input.scrollbarDrag = {
+        scrollState: state,
+        valueKey,
+        maxKey,
+        trackY: track.y,
+        trackH: track.h,
+        knobH: knob.h,
+        grabOffset: pointerInKnob ? input.mouse.y - knob.y : knob.h / 2,
+      };
+      updateActiveScrollbarDrag();
+      clearMovementKeys();
+      return true;
+    }
+
+    function updateActiveScrollbarDrag() {
+      const drag = input.scrollbarDrag;
+      if (!drag || !drag.scrollState) {
+        return false;
+      }
+      const max = Math.max(0, Number.isFinite(drag.scrollState[drag.maxKey]) ? drag.scrollState[drag.maxKey] : 0);
+      if (max <= 0) {
+        input.scrollbarDrag = null;
+        return false;
+      }
+      const travel = Math.max(1, drag.trackH - drag.knobH);
+      const ratio = (input.mouse.y - drag.trackY - drag.grabOffset) / travel;
+      drag.scrollState[drag.valueKey] = clampScrollbarValue(ratio * max, max);
+      return true;
+    }
+
+    function clearScrollbarDrag() {
+      input.scrollbarDrag = null;
+    }
+
+    function getHoveredTownPanelTarget() {
+      const targets = town.panel && Array.isArray(town.panel.clickTargets) ? town.panel.clickTargets : [];
+      for (let i = targets.length - 1; i >= 0; i -= 1) {
+        const target = targets[i];
+        if (
+          input.mouse.x >= target.x &&
+          input.mouse.x <= target.x + target.w &&
+          input.mouse.y >= target.y &&
+          input.mouse.y <= target.y + target.h
+        ) {
+          return target;
+        }
+      }
+      return null;
+    }
+
+    function handleTownPanelScrollbarClick() {
+      const target = getHoveredTownPanelTarget();
+      const action = target && target.action;
+      if (!action || action.kind !== "startScrollbarDrag") {
+        return false;
+      }
+      return startScrollbarDrag(action);
+    }
+
+    function handleSystemMenuClick(button, event = null) {
       if (button !== 0) {
         return false;
       }
@@ -1135,7 +2279,11 @@
         input.mouse.y <= entry.y + entry.h
       );
       if (target) {
-        if (target.action === "toggleSystemMenu") {
+        if (target.action === "focusEquipmentPresetText") {
+          focusPresetTextTarget(target, { extend: Boolean(event && event.shiftKey), drag: true });
+        } else if (target.action === "startScrollbarDrag") {
+          startScrollbarDrag(target);
+        } else if (target.action === "toggleSystemMenu") {
           toggleSystemMenu();
         } else if (target.action === "openSystemPanel") {
           if (target.panelType === "equipment") {
@@ -1150,6 +2298,23 @@
             menu.panelScrollMax = 0;
             clearMovementKeys();
           }
+        } else if (target.action === "useInventoryItem") {
+          if (typeof useInventoryItem === "function") {
+            useInventoryItem(target.itemId);
+          }
+          clearMovementKeys();
+        } else if (target.action === "useAllInventoryPowerCrystals") {
+          startInventoryPowerCrystalBulkUse();
+        } else if (target.action === "openNextInventoryPowerCrystal") {
+          openNextInventoryPowerCrystal();
+        } else if (target.action === "finishInventoryPowerCrystalBulkUse") {
+          finishInventoryPowerCrystalBulkUse();
+        } else if (target.action === "openNextBattleRewardCrystal") {
+          openNextBattleRewardCrystal();
+        } else if (target.action === "finishBattleRewardCrystalAutoUse") {
+          finishBattleRewardCrystalAutoUse();
+        } else if (target.action === "clearInventoryMessage") {
+          clearInventoryMessage();
         } else if (target.action === "openSystemConfirm") {
           menu.open = false;
           menu.panel = null;
@@ -1167,6 +2332,7 @@
             ui.selectedUnitId = target.unitId;
             ui.picker = null;
             ui.preset = null;
+            hidePresetTextInput();
             ui.confirm = null;
             setEquipmentMessage("");
           }
@@ -1180,12 +2346,28 @@
             scrollMax: 0,
           };
           ui.preset = null;
+          hidePresetTextInput();
           ui.confirm = null;
         } else if (target.action === "closeEquipmentPicker") {
           getEquipmentUi().picker = null;
           getEquipmentUi().confirm = null;
+          getEquipmentUi().itemQuantityDrag = null;
         } else if (target.action === "equipEquipmentItem") {
           equipSelectedItem(target.itemId);
+        } else if (target.action === "selectCharacterItemCandidate") {
+          selectCharacterItemCandidate(target.itemId);
+        } else if (target.action === "adjustCharacterItemQuantity") {
+          adjustCharacterItemQuantity(target.delta);
+        } else if (target.action === "setCharacterItemQuantityRatio") {
+          const ratio = Number.isFinite(target.ratio)
+            ? target.ratio
+            : target.w ? (input.mouse.x - target.x) / target.w : 0;
+          setCharacterItemQuantityFromRatio(ratio);
+          startCharacterItemQuantityDrag(target);
+        } else if (target.action === "equipCharacterItem") {
+          equipSelectedCharacterItem(target.itemId, target.count);
+        } else if (target.action === "clearCharacterItem") {
+          clearSelectedCharacterItem();
         } else if (target.action === "unequipEquipmentSlot") {
           unequipSelectedSlot(target.slotKey);
         } else if (target.action === "equipActiveSkill") {
@@ -1198,24 +2380,38 @@
           equipSelectedUltimate(target.ultimateKey);
         } else if (target.action === "openEquipmentPreset") {
           const ui = getEquipmentUi();
-          ui.preset = { open: true, nameFocused: false };
+          ui.preset = { open: true, nameFocused: false, editIndex: null, renameFocused: false, renameDraft: "", renameSelection: false };
           ui.picker = null;
           ui.confirm = null;
         } else if (target.action === "closeEquipmentPreset") {
           getEquipmentUi().preset = null;
+          hidePresetTextInput();
         } else if (target.action === "focusEquipmentPresetName") {
           const ui = getEquipmentUi();
-          ui.preset = { open: true, nameFocused: true };
+          ui.preset = { open: true, nameFocused: true, editIndex: null, renameFocused: false, renameDraft: "", renameSelection: false };
+          syncPresetNativeInputFromState("name");
         } else if (target.action === "saveEquipmentPreset") {
           saveEquipmentPreset();
+        } else if (target.action === "saveEquipmentPresetNameEdit") {
+          saveEquipmentPresetNameEdit(target.index);
         } else if (target.action === "loadEquipmentPreset") {
           loadEquipmentPreset(target.index);
         } else if (target.action === "editEquipmentPresetName") {
+          const presetNameBeforeEdit = getEquipmentUi().presetName;
           editEquipmentPresetName(target.index);
+          getEquipmentUi().presetName = presetNameBeforeEdit;
+          if (target.focusTarget) {
+            focusPresetTextTarget(target.focusTarget, { extend: false, drag: false });
+            selectAllPresetText("rename");
+          } else {
+            syncPresetNativeInputFromState("rename");
+          }
         } else if (target.action === "deleteEquipmentPreset") {
           deleteEquipmentPreset(target.index);
         } else if (target.action === "confirmEquipmentSkillTransfer") {
           confirmEquipmentSkillTransfer();
+        } else if (target.action === "confirmEquipmentItemTransfer") {
+          confirmEquipmentItemTransfer();
         } else if (target.action === "closeEquipmentConfirm") {
           closeEquipmentConfirm();
         } else if (target.action === "closeEquipmentSubwindow") {
@@ -1223,6 +2419,10 @@
         } else if (target.action === "toggleDetailedDescriptions") {
           const settings = getGameSettings();
           settings.tooltipDescriptionMode = settings.tooltipDescriptionMode === "detail" ? "simple" : "detail";
+          clearMovementKeys();
+        } else if (target.action === "togglePowerCrystalAutoUse") {
+          const settings = getGameSettings();
+          settings.powerCrystalAutoUse = settings.powerCrystalAutoUse === false;
           clearMovementKeys();
         } else if (target.action === "selectSettingsTab") {
           selectSettingsTab(target.tab);
@@ -1261,13 +2461,15 @@
       if (handleSystemMenuKey(event, key)) {
         return;
       }
+      if (handleTownPanelKey(event, key)) {
+        return;
+      }
       if (isSystemMenuOpen()) {
         return;
       }
       const movementAction = getMovementActionFromEvent(event);
-      if ((game.state === "playing" || game.state === "town") && movementAction) {
+      if (game.state === "town" && movementAction) {
         setLogicalMovementKey(movementAction.logicalKey, true);
-        if (game.state === "playing") return;
       }
 
       if (game.state === "town") {
@@ -1292,7 +2494,7 @@
       }
 
       if (game.state !== "playing") {
-        if (key === "r") {
+        if (key === "r" && !isBattleRewardPowerCrystalAutoPending()) {
           startTown();
         }
         return;
@@ -1324,14 +2526,58 @@
       }
     }
 
+    function handleTownPanelKey(event, key) {
+      if (game.state !== "town" || !town.panel || town.panel.action !== "itemShop") {
+        return false;
+      }
+      const itemId = town.panel.buyQuantityFocusItemId;
+      if (!itemId) {
+        return false;
+      }
+      if (!town.panel.buyQuantities || typeof town.panel.buyQuantities !== "object") {
+        town.panel.buyQuantities = {};
+      }
+      const current = Math.max(1, Math.floor(Number(town.panel.buyQuantities[itemId]) || 1));
+      if (/^[0-9]$/.test(key)) {
+        const base = town.panel.buyQuantityFreshFocus ? "" : String(current);
+        const next = Math.max(1, Math.min(99, Math.floor(Number(`${base}${key}`) || 0)));
+        town.panel.buyQuantities[itemId] = next;
+        town.panel.buyQuantityFreshFocus = false;
+        event.preventDefault();
+        return true;
+      }
+      if (key === "backspace" || key === "delete") {
+        const text = town.panel.buyQuantityFreshFocus ? "" : String(current);
+        const nextText = text.slice(0, -1);
+        town.panel.buyQuantities[itemId] = Math.max(1, Math.floor(Number(nextText) || 1));
+        town.panel.buyQuantityFreshFocus = false;
+        event.preventDefault();
+        return true;
+      }
+      if (key === "enter") {
+        interactTown();
+        event.preventDefault();
+        return true;
+      }
+      if (key === "escape") {
+        town.panel.buyQuantityFocusItemId = null;
+        town.panel.buyQuantityFreshFocus = false;
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    }
+
     function handleKeyUp(event) {
       const movementAction = getMovementActionFromEvent(event);
       if (!movementAction) {
         return;
       }
-      setLogicalMovementKey(movementAction.logicalKey, false);
-      if (game.state === "playing" || game.state === "town") {
+      if (game.state === "town") {
+        setLogicalMovementKey(movementAction.logicalKey, false);
         event.preventDefault();
+      } else if (game.state === "playing") {
+        setLogicalMovementKey(movementAction.logicalKey, false);
       }
     }
 
@@ -1360,6 +2606,16 @@
 
     function handleMouseMove(event) {
       setMouseFromEvent(event);
+      if (updateActiveScrollbarDrag()) {
+        event.preventDefault();
+        return;
+      }
+      if (updatePresetTextDrag()) {
+        return;
+      }
+      if (updateCharacterItemQuantityDrag()) {
+        return;
+      }
       if (hasCommandBiasDrag()) {
         updateCommandBiasDrag(input.mouse.x);
       }
@@ -1368,13 +2624,16 @@
     function handleMouseDown(event) {
       event.preventDefault();
       setMouseFromEvent(event);
+      if (canvas && typeof canvas.focus === "function") {
+        canvas.focus({ preventScroll: true });
+      }
       if (handleControlCaptureMouse(event)) {
         return;
       }
       if (handleSystemMenuMouse(event)) {
         return;
       }
-      if (handleSystemMenuClick(event.button)) {
+      if (handleSystemMenuClick(event.button, event)) {
         return;
       }
       if (isSystemMenuOpen()) {
@@ -1389,6 +2648,9 @@
           if (isActionEvent("field.interact", event)) {
             interactTown();
           }
+          return;
+        }
+        if (town.panel && event.button === 0 && handleTownPanelScrollbarClick()) {
           return;
         }
         if (town.panel && town.panel.action === "battleGuide" && isActionEvent("field.interact", event)) {
@@ -1437,6 +2699,12 @@
 
     function handleMouseUp(event) {
       if (event.button === 0) {
+        const ui = getEquipmentUi();
+        if (ui.preset) {
+          ui.preset.textDrag = null;
+        }
+        ui.itemQuantityDrag = null;
+        clearScrollbarDrag();
         clearCommandBiasDrag();
       }
       if (event.button === 2) {
@@ -1446,6 +2714,18 @@
 
     function handleWheel(event) {
       setMouseFromEvent(event);
+      if (game.state === "town" && town.panel) {
+        if (town.panel.upgradeResult) {
+          if (scrollNumericState(town.panel, "resultScroll", "resultScrollMax", event.deltaY)) {
+            event.preventDefault();
+          }
+          return;
+        }
+        if (scrollNumericState(town.panel, "scroll", "scrollMax", event.deltaY)) {
+          event.preventDefault();
+        }
+        return;
+      }
       const menu = getSystemMenu();
       const settings = menu.settings;
       if (!menu.panel) {
@@ -1489,6 +2769,7 @@
 
     function handleMouseLeave() {
       input.mouse.right = false;
+      clearScrollbarDrag();
       clearCommandBiasDrag();
     }
 

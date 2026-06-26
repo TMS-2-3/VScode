@@ -14,12 +14,12 @@
       areas,
       effects,
       skillSystem,
+      getItemSystem,
       ACTION_GAP,
       SHIELD_MOOD_GAIN_PER_SEC,
       battlePx,
       clamp,
       distPoint,
-      clampUnit,
       getBattleBounds,
       updateTown,
       updatePartyAi,
@@ -28,6 +28,7 @@
       spawnRearVanguardWave,
       regenerateHp,
       regenerateMp,
+      getUltimateChargeRate,
       getMoodNaturalDelta,
       applyCommandMoodDelta,
       applyMoodHighGainDamping,
@@ -37,6 +38,8 @@
       dealDamage,
       canFriendlyFireAffect,
       healUnit,
+      addGold,
+      addItem,
     } = context;
 
     function isSystemMenuPaused() {
@@ -64,6 +67,10 @@
 
       game.hover = getHoveredPartyMember();
       updateCooldownsAndTimers(dt);
+      const itemSystem = getItemSystem ? getItemSystem() : null;
+      if (itemSystem && itemSystem.updateItemUsage) {
+        itemSystem.updateItemUsage(dt);
+      }
       updatePriorityTarget(dt);
       updatePlayer(dt);
       updatePartyAi(dt);
@@ -73,6 +80,7 @@
       updateAreas(dt);
       separateUnits(dt);
       clearInvalidPriorityTarget();
+      collectDefeatedEnemyDrops();
       checkBattleState(dt);
     }
 
@@ -130,7 +138,8 @@
         regenerateMp(unit, dt);
 
         if (unit.team === "party") {
-          unit.ult = clamp(unit.ult + dt * 0.6, 0, skillSystem.getUltimateCost ? skillSystem.getUltimateCost(unit) : 100);
+          const chargeRate = typeof getUltimateChargeRate === "function" ? getUltimateChargeRate(unit) : 1;
+          unit.ult = clamp(unit.ult + dt * 0.6 * chargeRate, 0, skillSystem.getUltimateCost ? skillSystem.getUltimateCost(unit) : 100);
         }
 
         if (unit.team === "party" && unit.id !== "finald") {
@@ -153,6 +162,7 @@
       game.priorityTargetTimer = Math.max(0, game.priorityTargetTimer - dt);
       if (game.priorityTargetTimer <= 0) {
         const target = game.priorityTarget;
+        clearFocusDamageTakenBonus(target);
         game.priorityTarget = null;
         clearPartyAttackIntents();
         addFloat("フォーカス終了", target.x, target.y - 36, "#f7fff6");
@@ -221,9 +231,11 @@
         return;
       }
 
-      updatePlayerMovement(dt);
-
       if (player.cast) {
+        if (isPlayerCastTargetLost(player.cast)) {
+          interruptPlayerCastForTargetLoss();
+          return;
+        }
         player.cast.time -= dt;
         if (player.cast.time <= 0) {
           finishPlayerCast();
@@ -232,22 +244,18 @@
       skillSystem.updatePlayerChannel(dt);
     }
 
-    function updatePlayerMovement(dt) {
-      if (!isFieldUnit(player) || player.frozen > 0 || player.cast) {
-        return;
-      }
-      const keys = input.keys || {};
-      const dx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
-      const dy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
-      const len = Math.hypot(dx, dy);
-      if (len <= 0) {
-        return;
-      }
-      player.x += (dx / len) * player.speed * dt;
-      player.y += (dy / len) * player.speed * dt;
-      clampUnit(player);
+    function isPlayerCastTargetLost(cast) {
+      return Boolean(cast && ["heal", "shield", "fire"].includes(cast.type) && cast.target && cast.target.dead);
     }
 
+    function interruptPlayerCastForTargetLoss() {
+      const cast = player.cast;
+      player.cast = null;
+      applyPlayerCastCooldown(cast);
+      player.actionLock = Math.max(player.actionLock, ACTION_GAP);
+      const origin = getSupportOrigin(cast && cast.target);
+      addFloat("詠唱中断", origin.x + 28, origin.y - 32, "#ffffff");
+    }
 
     function startPlayerCast(type, data, castTime) {
       if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
@@ -313,7 +321,13 @@
             } else {
               dealDamage(shot.owner, unit, shot.damage, { magic: shot.magic });
             }
-            if (!shot.pierce) {
+            if (Number.isFinite(shot.pierceCount)) {
+              if (shot.pierceCount <= 0) {
+                projectiles.splice(i, 1);
+                break;
+              }
+              shot.pierceCount -= 1;
+            } else if (!shot.pierce) {
               projectiles.splice(i, 1);
               break;
             }
@@ -395,10 +409,183 @@
           return;
         }
         game.stageClearTimer += dt;
+        grantBattleRewards();
         game.state = "won";
         game.message = "依頼達成";
         game.messageTimer = 999;
       }
+    }
+
+    function ensureBattleRewards() {
+      if (!game.battleRewards || typeof game.battleRewards !== "object") {
+        game.battleRewards = { pending: [], granted: [], claimed: false };
+      }
+      if (!Array.isArray(game.battleRewards.pending)) {
+        game.battleRewards.pending = [];
+      }
+      if (!Array.isArray(game.battleRewards.granted)) {
+        game.battleRewards.granted = [];
+      }
+      if (game.battleRewards.autoPowerCrystal && typeof game.battleRewards.autoPowerCrystal !== "object") {
+        game.battleRewards.autoPowerCrystal = null;
+      }
+      game.battleRewards.claimed = Boolean(game.battleRewards.claimed);
+      return game.battleRewards;
+    }
+
+    function collectDefeatedEnemyDrops() {
+      for (const enemy of enemies) {
+        if (!enemy || enemy.team !== "enemy" || !enemy.dead || enemy.lootCollected) {
+          continue;
+        }
+        enemy.lootCollected = true;
+        collectEnemyDrops(enemy);
+      }
+    }
+
+    function collectEnemyDrops(enemy) {
+      const drops = Array.isArray(enemy.drops) ? enemy.drops : [];
+      for (const drop of drops) {
+        if (!drop || !rollDrop(drop)) {
+          continue;
+        }
+        addBattleReward(normalizeDropReward(drop));
+      }
+    }
+
+    function rollDrop(drop) {
+      const chance = normalizeDropChance(drop.chance);
+      return chance >= 1 || Math.random() < chance;
+    }
+
+    function normalizeDropChance(value) {
+      if (!Number.isFinite(value)) {
+        return 1;
+      }
+      const chance = value > 1 ? value / 100 : value;
+      return clamp(chance, 0, 1);
+    }
+
+    function normalizeDropReward(drop) {
+      const amount = Math.max(0, Math.floor(Number.isFinite(drop.amount) ? drop.amount : drop.count || 1));
+      if (amount <= 0) {
+        return null;
+      }
+      if (drop.type === "currency" || drop.key === "gold" || drop.currency === "gold") {
+        return {
+          type: "currency",
+          key: drop.key || drop.currency || "gold",
+          name: drop.name || "お金",
+          amount,
+        };
+      }
+      if (drop.type === "material") {
+        return {
+          type: "material",
+          key: drop.key || drop.id || drop.name || "material",
+          name: drop.name || drop.id || drop.key || "素材",
+          count: amount,
+        };
+      }
+      return {
+        type: "item",
+        key: drop.key || drop.id || drop.name || "item",
+        name: drop.name || drop.id || drop.key || "アイテム",
+        count: amount,
+      };
+    }
+
+    function addBattleReward(reward) {
+      if (!reward) {
+        return;
+      }
+      const rewards = ensureBattleRewards();
+      const key = getBattleRewardMergeKey(reward);
+      const existing = rewards.pending.find((entry) => getBattleRewardMergeKey(entry) === key);
+      if (existing) {
+        if (reward.type === "currency") {
+          existing.amount = (existing.amount || 0) + (reward.amount || 0);
+        } else {
+          existing.count = (existing.count || 0) + (reward.count || 0);
+        }
+        return;
+      }
+      rewards.pending.push({ ...reward });
+    }
+
+    function getBattleRewardMergeKey(reward) {
+      return `${reward && reward.type || "item"}:${reward && reward.key || reward && reward.name || ""}`;
+    }
+
+    function setupBattleRewardPowerCrystalAutoUse(rewards) {
+      const total = getBattleRewardItemCount(rewards && rewards.granted, "d_power_flag");
+      const enabled = isPowerCrystalAutoUseEnabled();
+      rewards.autoPowerCrystal = {
+        itemId: "d_power_flag",
+        enabled,
+        total,
+        remaining: enabled ? total : 0,
+        opened: 0,
+        complete: !enabled || total <= 0,
+      };
+    }
+
+    function getBattleRewardItemCount(entries, itemId) {
+      if (!Array.isArray(entries)) {
+        return 0;
+      }
+      return entries.reduce((sum, entry) => {
+        if (!entry || entry.type !== "item" || entry.key !== itemId) {
+          return sum;
+        }
+        return sum + Math.max(0, Math.floor(entry.count || entry.amount || 0));
+      }, 0);
+    }
+
+    function isPowerCrystalAutoUseEnabled() {
+      if (!game.settings || typeof game.settings !== "object") {
+        game.settings = {};
+      }
+      if (typeof game.settings.powerCrystalAutoUse !== "boolean") {
+        game.settings.powerCrystalAutoUse = true;
+      }
+      return game.settings.powerCrystalAutoUse !== false;
+    }
+
+    function grantBattleRewards() {
+      const rewards = ensureBattleRewards();
+      if (rewards.claimed) {
+        return;
+      }
+      rewards.granted = rewards.pending.map((entry) => ({ ...entry }));
+      rewards.claimed = true;
+      setupBattleRewardPowerCrystalAutoUse(rewards);
+      const gold = rewards.granted
+        .filter((entry) => entry && entry.type === "currency" && entry.key === "gold")
+        .reduce((sum, entry) => sum + Math.max(0, entry.amount || 0), 0);
+      if (gold > 0 && typeof addGold === "function") {
+        addGold(gold);
+      }
+      for (const entry of rewards.granted) {
+        if (entry && entry.type === "material") {
+          addMaterialReward(entry.key, entry.count);
+        } else if (entry && entry.type === "item" && typeof addItem === "function") {
+          addItem(entry.key, entry.count);
+        }
+      }
+    }
+
+    function addMaterialReward(key, count) {
+      const materialKey = String(key || "");
+      const amount = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
+      if (!materialKey || amount <= 0) {
+        return;
+      }
+      if (!game.materialsById || typeof game.materialsById !== "object") {
+        game.materialsById = {};
+      }
+      const before = Number.isFinite(game.materialsById[materialKey]) ? game.materialsById[materialKey] : 0;
+      game.materialsById[materialKey] = before + amount;
     }
 
     function getHoveredPartyMember() {
@@ -442,8 +629,12 @@
       if (!target || target.dead || !enemies.includes(target)) {
         return false;
       }
+      if (game.priorityTarget && game.priorityTarget !== target) {
+        clearFocusDamageTakenBonus(game.priorityTarget);
+      }
       game.priorityTarget = target;
       game.priorityTargetTimer = Number.isFinite(duration) && duration > 0 ? duration : 0;
+      clearFocusDamageTakenBonus(target);
       clearPartyAttackIntents();
       if (label) {
         addFloat(label, target.x, target.y - 36, "#ffd56b");
@@ -457,6 +648,7 @@
         return false;
       }
       if (getPriorityTarget() === enemy) {
+        clearFocusDamageTakenBonus(enemy);
         game.priorityTarget = null;
         game.priorityTargetTimer = 0;
         clearPartyAttackIntents();
@@ -465,6 +657,12 @@
         setPriorityTarget(enemy, 0, "ターゲット指定");
       }
       return true;
+    }
+
+    function clearFocusDamageTakenBonus(target) {
+      if (target) {
+        target.focusDamageTakenBonus = 0;
+      }
     }
 
     function clearPartyAttackIntents() {
@@ -477,6 +675,7 @@
 
     function clearInvalidPriorityTarget() {
       if (game.priorityTarget && (game.priorityTarget.dead || !enemies.includes(game.priorityTarget))) {
+        clearFocusDamageTakenBonus(game.priorityTarget);
         game.priorityTarget = null;
         game.priorityTargetTimer = 0;
         clearPartyAttackIntents();
@@ -551,6 +750,12 @@
     }
 
     function cancelPlayerCast() {
+      const itemSystem = getItemSystem ? getItemSystem() : null;
+      if (itemSystem && itemSystem.cancelItemUse && itemSystem.cancelItemUse(player)) {
+        const origin = getSupportOrigin();
+        addFloat("詠唱中断", origin.x + 28, origin.y - 32, "#ffffff");
+        return;
+      }
       const cast = player.cast;
       player.cast = null;
       applyPlayerCastCooldown(cast);

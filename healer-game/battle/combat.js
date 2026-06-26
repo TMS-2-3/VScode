@@ -4,14 +4,16 @@
   window.createHealerCombatSystem = function createHealerCombatSystem(context) {
     const {
       player,
+      game,
       COLORS,
       ACTION_GAP,
       SUSHIA_PASSIVE_MAX_STACKS,
       SUSHIA_PASSIVE_STACK_DURATION,
       SUSHIA_PASSIVE_STACK_COOLDOWN,
-      MOOD_DAMAGE_DEALT_RATE,
-      MOOD_DAMAGE_DEALT_MULT,
+      MOOD_DAMAGE_HP_RATIO_GAIN,
+      MOOD_DAMAGE_HIT_CAP,
       MOOD_DAMAGE_TAKEN_RATE,
+      MOOD_DAMAGE_TAKEN_BASE_LOSS,
       MOOD_HEAL_RATE,
       MOOD_QUICK_HEAL_BONUS,
       MOOD_EVENT_MULT,
@@ -36,9 +38,12 @@
       getRihasPassiveIncomingMultiplier,
       getPhysicalDamageBoost,
       getMagicDamageBoost,
+      getDamageBoost,
+      getDamageResistance,
       getPhysicalDamageResistance,
       getMagicDamageResistance,
       getGuardDamageMultiplier,
+      getUltimateChargeRate,
       getEffectiveGuardChance,
       getEffectiveCritChance,
       getCritDamageMultiplier,
@@ -51,6 +56,7 @@
       getMoodDistanceMultiplier,
       getHpRatio,
       getMoodReferenceHp,
+      addMoodActionGain,
       addMoodGain,
       addMoodLoss,
       hasPassive,
@@ -131,6 +137,7 @@
 
       const damageFloatColor = getDamageFloatColor(source, target);
       let shielded = 0;
+      const hpBeforeDamage = Math.max(0, Number.isFinite(target.hp) ? target.hp : 0);
       if (finalAmount > 0 && syncShieldTotal(target) > 0) {
         const stacks = getShieldStacks(target).sort((a, b) => a.timer - b.timer);
         let remainingShieldDamage = finalAmount;
@@ -169,8 +176,10 @@
         });
       }
 
+      let immediateHpDamage = 0;
       if (finalAmount > 0) {
         target.hp = Math.max(0, target.hp - finalAmount);
+        immediateHpDamage = hpBeforeDamage - target.hp;
         target.hurt = 0.22;
         target.noDamage = 0;
         addFloat(
@@ -197,28 +206,39 @@
           source.stackCooldown = SUSHIA_PASSIVE_STACK_COOLDOWN;
         }
         if (source.mood !== null && target.team === "enemy") {
+          const hpDamageForMood = Math.min(hpBeforeDamage, Math.max(0, rewardDamage));
+          const damageRatio = getHpRatio(hpDamageForMood, target);
           const distanceMult = getMoodDistanceMultiplier(source, target);
-          const damageRatio = getHpRatio(rewardDamage, target);
-          const referenceDamage = damageRatio * getMoodReferenceHp(target);
-          addMoodGain(source, referenceDamage * MOOD_DAMAGE_DEALT_RATE * MOOD_DAMAGE_DEALT_MULT * MOOD_EVENT_MULT * distanceMult);
+          const ratioGain = Math.max(0, Number.isFinite(MOOD_DAMAGE_HP_RATIO_GAIN) ? MOOD_DAMAGE_HP_RATIO_GAIN : 12);
+          const hitCap = Math.max(0, Number.isFinite(MOOD_DAMAGE_HIT_CAP) ? MOOD_DAMAGE_HIT_CAP : 2);
+          const moodGain = Math.min(hitCap, damageRatio * ratioGain * distanceMult);
+          addMoodActionGain(source, moodGain);
         }
       }
 
       if (target.team === "party" && target.id !== "finald") {
-        const damageRatio = getHpRatio(rewardDamage, target);
-        const referenceDamage = damageRatio * getMoodReferenceHp(target);
-        addMoodLoss(target, referenceDamage * MOOD_DAMAGE_TAKEN_RATE * MOOD_EVENT_MULT);
+        applyDamageMoodLoss(target, immediateHpDamage);
       }
 
       if (target.hp <= 0) {
         if (wasTargetAlive && target.team === "enemy" && source && source.team === "party" && source.mood !== null) {
-          addMoodGain(source, MOOD_KILL_BONUS);
+          addMoodActionGain(source, MOOD_KILL_BONUS);
         }
         target.dead = true;
         target.hp = 0;
         addBurst(target.x, target.y, target.radius * 2.2, "rgba(255,255,255,0.2)");
       }
       return rewardDamage + shielded;
+    }
+
+    function applyDamageMoodLoss(target, hpDamage) {
+      if (!target || target.team !== "party" || target.id === "finald" || hpDamage <= 0) {
+        return 0;
+      }
+      const damageRatio = getHpRatio(hpDamage, target);
+      const referenceDamage = damageRatio * getMoodReferenceHp(target);
+      const baseLoss = Number.isFinite(MOOD_DAMAGE_TAKEN_BASE_LOSS) ? MOOD_DAMAGE_TAKEN_BASE_LOSS : 0;
+      return addMoodLoss(target, referenceDamage * MOOD_DAMAGE_TAKEN_RATE * MOOD_EVENT_MULT + baseLoss);
     }
 
     function awardOffensiveUltimate(source, target, options = {}) {
@@ -240,7 +260,8 @@
         return 0;
       }
       const before = Number.isFinite(source.ult) ? source.ult : 0;
-      source.ult = clamp(before + ULTIMATE_GAIN_PER_AFFECTED_UNIT, 0, getUltimateCap(source));
+      const chargeRate = typeof getUltimateChargeRate === "function" ? getUltimateChargeRate(source) : 1;
+      source.ult = clamp(before + ULTIMATE_GAIN_PER_AFFECTED_UNIT * chargeRate, 0, getUltimateCap(source));
       return source.ult - before;
     }
 
@@ -257,7 +278,8 @@
       if (!source || options.noCrit === true || options.crit === false) {
         return false;
       }
-      return Math.random() < getEffectiveCritChance(source);
+      const bonus = Number.isFinite(options.critChanceBonus) ? options.critChanceBonus : 0;
+      return Math.random() < clamp(getEffectiveCritChance(source) + bonus, 0, 1);
     }
 
     function applyDamageModifierSum(source, target, amount, options = {}) {
@@ -270,11 +292,14 @@
       if (source && hasPassive(source, "painless")) {
         bonus += multiplierToBonus(getRihasPassiveDamageMultiplier(source));
       }
+      bonus += getCommonDamageBoost(source);
       if (target.team === "party" && target.id !== "finald" && target.mood !== null) {
         bonus += multiplierToBonus(getMoodIncomingDamageMultiplier(target));
         bonus += multiplierToBonus(getCommandIncomingDamageMultiplier(target));
       }
+      bonus -= getCommonDamageResistance(target);
       bonus -= getDamageTypeResistance(target, options);
+      bonus += getFocusIncomingDamageBonus(target);
       if (source && source.team === "enemy" && hasPassive(target, "painless") && source.forcedTarget === target && source.tauntTimer > 0) {
         bonus += multiplierToBonus(0.6);
       }
@@ -284,12 +309,27 @@
       return amount * Math.max(0, 1 + bonus);
     }
 
+    function getFocusIncomingDamageBonus(target) {
+      if (!target || !game || game.priorityTarget !== target || !Number.isFinite(game.priorityTargetTimer) || game.priorityTargetTimer <= 0) {
+        return 0;
+      }
+      return Math.max(0, getSafeNumber(target.focusDamageTakenBonus, 0));
+    }
+
     function getDamageTypeBoost(unit, options = {}) {
       if (!unit) {
         return 0;
       }
       const getter = options.magic ? getMagicDamageBoost : getPhysicalDamageBoost;
       return typeof getter === "function" ? getSafeNumber(getter(unit), 0) : 0;
+    }
+
+    function getCommonDamageBoost(unit) {
+      return typeof getDamageBoost === "function" ? getSafeNumber(getDamageBoost(unit), 0) : 0;
+    }
+
+    function getCommonDamageResistance(unit) {
+      return typeof getDamageResistance === "function" ? getSafeNumber(getDamageResistance(unit), 0) : 0;
     }
 
     function getDamageTypeResistance(unit, options = {}) {
@@ -471,6 +511,7 @@
       if (hasPassive(unit, "painless") && actualDamage > 0) {
         addRihasPassiveStack(unit);
       }
+      applyDamageMoodLoss(unit, actualDamage);
       unit.hurt = 0.18;
       addFloat(`${Math.round(damage)}`, unit.x, unit.y - 24, color);
       if (unit.hp <= 0) {
@@ -514,3 +555,4 @@
     };
   };
 })();
+

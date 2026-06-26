@@ -23,9 +23,12 @@
       SKILL_DATA,
       PASSIVE_DATA,
       EQUIPMENT_DATA,
+      MATERIAL_DATA,
       LOADOUT_CONFIG,
       skillSystem,
       itemSystem,
+      getGold,
+      formatGold,
       getBattleBounds,
       updateTelegraphDynamic,
       battlePx,
@@ -37,6 +40,7 @@
       getEffectiveMagic,
       getEffectiveDefense,
       getEffectiveMagicDefense,
+      getEffectiveStat,
       getEffectiveGuardChance,
       getGuardDamageReductionRate,
       getEffectiveCritChance,
@@ -45,6 +49,11 @@
       getMpRegenRate,
       normalizeEquipment,
       resolveEquipmentItem,
+      getEquipmentInstancesByItemId,
+      getEquipmentItemRef,
+      getEquipmentBaseItemId,
+      getEquipmentOwnedCount,
+      getEquipmentUpgradeLevel,
       getEquippedItems,
       getEquippedSlotItem,
       getActiveSetEffects,
@@ -52,6 +61,9 @@
       getActiveSlotLimit,
       getDefaultLoadout,
       normalizeLoadout,
+      isSkillOwned,
+      getSkillLevel,
+      getPlayerFirstName,
       getPlayerFullName,
       KEYBINDS,
       getKeybinds,
@@ -66,6 +78,7 @@
     }
     const townRenderer = window.createHealerTownRenderer(context);
     const statusRenderer = window.createHealerStatusRenderer(context);
+    const tooltipText = window.createHealerTooltipText(context);
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];
     const equipmentSlotLayout = {
       left: ["head", "body", "legs"],
@@ -74,6 +87,7 @@
     };
     const keybindTools = KEYBINDS || window.HEALER_KEYBINDS || null;
     const equipmentTooltipTargets = [];
+    const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
 
   function draw() {
     ctx.clearRect(0, 0, view.w, view.h);
@@ -98,8 +112,8 @@
     drawFloatingArjuna();
     drawEffects();
     statusRenderer.drawHud();
-    drawResultOverlay();
     drawSystemMenu();
+    drawResultOverlay();
   }
 
   function drawFloor() {
@@ -912,6 +926,7 @@
     if (game.state === "playing" || game.state === "town") {
       return;
     }
+    const won = game.state === "won";
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.55)";
     ctx.fillRect(0, 0, view.w, view.h);
@@ -919,10 +934,154 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "800 40px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText(game.state === "won" ? "依頼達成" : "依頼失敗", view.w / 2, view.h / 2 - 24);
-    ctx.font = "18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText("R で町へ戻る", view.w / 2, view.h / 2 + 28);
+    const titleY = won ? Math.max(76, view.h * 0.25) : view.h / 2 - 24;
+    ctx.fillText(won ? "依頼達成" : "依頼失敗", view.w / 2, titleY);
+    const autoCrystalPending = won && isBattleRewardPowerCrystalAutoPending();
+    let guideY = won ? drawBattleRewardSummary(view.w / 2, titleY + 56) + 36 : view.h / 2 + 28;
+    if (!autoCrystalPending) {
+      ctx.font = "18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      guideY = Math.min(view.h - 42, Math.max(guideY, titleY + 54));
+      ctx.fillText("R で町へ戻る", view.w / 2, guideY);
+    }
+    if (won && game.inventoryMessage && isBattleRewardPowerCrystalAutoPending()) {
+      drawInventoryMessage(game.inventoryMessage, getResultMessageContentRect());
+    }
     ctx.restore();
+    drawTopRightGoldBadge(getSystemMenuButtonRect());
+  }
+
+  function drawBattleRewardSummary(centerX, y) {
+    const rows = getBattleRewardRows();
+    const maxRows = Math.min(5, Math.max(1, rows.length));
+    const rowH = 30;
+    const w = Math.min(460, view.w - 44);
+    const showCrystalNext = canShowBattleRewardPowerCrystalNextButton();
+    const h = 70 + maxRows * rowH + (rows.length > maxRows ? 22 : 0) + (showCrystalNext ? 50 : 0);
+    const x = centerX - w / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(247,255,246,0.96)";
+    ctx.strokeStyle = "rgba(255,213,107,0.42)";
+    ctx.lineWidth = 1.2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = "900 17px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("今回の戦闘で獲得したアイテム", x + 22, y + 18);
+
+    if (!rows.length) {
+      ctx.fillStyle = "#63706a";
+      ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("なし", x + 22, y + 52);
+    } else {
+      for (let i = 0; i < maxRows; i += 1) {
+        drawBattleRewardRow(rows[i], x + 22, y + 52 + i * rowH, w - 44, rowH);
+      }
+      if (rows.length > maxRows) {
+        ctx.fillStyle = "#63706a";
+        ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+        ctx.fillText(`ほか ${rows.length - maxRows} 件`, x + 22, y + 54 + maxRows * rowH);
+      }
+    }
+    if (showCrystalNext) {
+      ctx.fillStyle = "#63706a";
+      ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("力の結晶を開封します", centerX, y + h - 47);
+      drawSystemSmallButton(centerX - 54, y + h - 34, 108, 28, "次へ", "openNextBattleRewardCrystal");
+    }
+    ctx.restore();
+    return y + h;
+  }
+
+  function drawBattleRewardRow(row, x, y, w, h) {
+    if (!row) {
+      return;
+    }
+    const iconSize = 22;
+    ctx.save();
+    ctx.fillStyle = row.color || "#6aa878";
+    roundRect(x, y + 3, iconSize, iconSize, 6);
+    ctx.fill();
+    drawFittedSystemText(row.icon || "?", x + iconSize / 2, y + iconSize / 2 + 3, iconSize - 6, 900, 11, 8, "#f7fff6", "center", "middle");
+    drawFittedSystemText(row.title, x + 34, y + h / 2, w - 150, 900, 14, 10, "#102018", "left", "middle");
+    drawFittedSystemText(row.amount, x + w - 112, y + h / 2, 112, 900, 14, 10, "#9c7123", "right", "middle");
+    ctx.restore();
+  }
+
+  function getBattleRewardPowerCrystalAutoState() {
+    const rewards = game.battleRewards && typeof game.battleRewards === "object" ? game.battleRewards : null;
+    const state = rewards && rewards.autoPowerCrystal;
+    return state && typeof state === "object" ? state : null;
+  }
+
+  function isBattleRewardPowerCrystalAutoPending() {
+    const state = getBattleRewardPowerCrystalAutoState();
+    return Boolean(game.state === "won" && state && state.enabled && state.total > 0 && !state.complete);
+  }
+
+  function canShowBattleRewardPowerCrystalNextButton() {
+    const state = getBattleRewardPowerCrystalAutoState();
+    return Boolean(isBattleRewardPowerCrystalAutoPending() && state.remaining > 0 && !game.inventoryMessage);
+  }
+
+  function getInventoryPowerCrystalBulkState() {
+    const state = game.inventoryPowerCrystalBulk;
+    return state && typeof state === "object" ? state : null;
+  }
+
+  function isInventoryPowerCrystalBulkPending() {
+    const state = getInventoryPowerCrystalBulkState();
+    return Boolean(state && state.itemId === "d_power_flag" && state.total > 0 && !state.complete);
+  }
+
+  function getResultMessageContentRect() {
+    const w = Math.min(880, view.w - 48);
+    const h = Math.min(520, view.h - 96);
+    return { x: (view.w - w) / 2, y: (view.h - h) / 2, w, h };
+  }
+
+  function getBattleRewardRows() {
+    const rewards = game.battleRewards && typeof game.battleRewards === "object" ? game.battleRewards : null;
+    const entries = rewards && Array.isArray(rewards.granted) && rewards.granted.length
+      ? rewards.granted
+      : rewards && Array.isArray(rewards.pending)
+        ? rewards.pending
+        : [];
+    return entries.map(formatBattleRewardEntry).filter(Boolean);
+  }
+
+  function formatBattleRewardEntry(entry) {
+    if (!entry) {
+      return null;
+    }
+    if (entry.type === "currency" && entry.key === "gold") {
+      const amount = Math.max(0, Math.floor(entry.amount || 0));
+      return {
+        icon: "G",
+        color: "#d6a83a",
+        title: entry.name || "お金",
+        amount: typeof formatGold === "function" ? formatGold(amount) : `${amount}G`,
+      };
+    }
+    if (entry.type === "material") {
+      const count = Math.max(0, Math.floor(entry.count || entry.amount || 0));
+      return {
+        icon: "素",
+        color: "#8a9b68",
+        title: entry.name || entry.key || "素材",
+        amount: `x${count}`,
+      };
+    }
+    const count = Math.max(0, Math.floor(entry.count || entry.amount || 0));
+    return {
+      icon: String(entry.name || entry.key || "?").slice(0, 1),
+      color: "#6aa878",
+      title: entry.name || entry.key || "アイテム",
+      amount: `x${count}`,
+    };
   }
 
   function getSystemMenu() {
@@ -948,7 +1107,7 @@
     if (!equipmentUnitOrder.includes(equipment.selectedUnitId)) {
       equipment.selectedUnitId = "finald";
     }
-    if (typeof equipment.presetName !== "string" || !equipment.presetName.trim()) {
+    if (typeof equipment.presetName !== "string") {
       equipment.presetName = "プリセット1";
     }
     if (equipment.picker && !Number.isFinite(equipment.picker.scroll)) {
@@ -983,6 +1142,9 @@
     if (game.settings.tooltipDescriptionMode !== "detail") {
       game.settings.tooltipDescriptionMode = "simple";
     }
+    if (typeof game.settings.powerCrystalAutoUse !== "boolean") {
+      game.settings.powerCrystalAutoUse = true;
+    }
     if (keybindTools) {
       game.settings.keybinds = keybindTools.normalizeKeybinds(
         game.settings.keybinds || keybindTools.loadSavedKeybinds()
@@ -993,6 +1155,10 @@
 
   function isDetailedDescriptionEnabled() {
     return getGameSettings().tooltipDescriptionMode === "detail";
+  }
+
+  function isPowerCrystalAutoUseEnabled() {
+    return getGameSettings().powerCrystalAutoUse !== false;
   }
 
   function getSettingsUi() {
@@ -1046,40 +1212,111 @@
   function drawSystemMenu() {
     const menu = getSystemMenu();
     menu.targets.length = 0;
+    const menuButton = getSystemMenuButtonRect();
     if (game.state !== "town" && game.state !== "playing") {
+      if (game.state !== "playing") {
+        drawTopRightGoldBadge(menuButton);
+      }
       return;
     }
     if (game.state === "town" && townRendererHasBlockingPanel()) {
       menu.open = false;
       menu.panel = null;
       menu.confirm = null;
+      drawTopRightGoldBadge(menuButton);
       return;
     }
     if (game.state === "playing" && menu.open && !menu.panel && !menu.confirm) {
       drawSystemMenuBackdrop(0.52, "停止中");
     }
     if (menu.panel) {
+      const panelType = menu.panel.type;
       drawSystemFullPanel(menu.panel);
+      if (game.state !== "playing" && panelType !== "inventory") {
+        drawTopRightGoldBadge(menuButton);
+      }
       return;
     }
     if (menu.confirm) {
       drawSystemConfirm(menu.confirm);
+      if (game.state !== "playing") {
+        drawTopRightGoldBadge(menuButton);
+      }
       return;
     }
     const showButton = canShowSystemMenuButton() || menu.open;
     if (!showButton) {
+      if (game.state !== "playing") {
+        drawTopRightGoldBadge(menuButton);
+      }
       return;
     }
-    const button = getSystemMenuButtonRect();
-    drawSystemMenuButton(button, menu.open);
+    drawSystemMenuButton(menuButton, menu.open);
+    if (game.state !== "playing") {
+      drawTopRightGoldBadge(menuButton);
+    }
     if (menu.open) {
-      drawSystemMenuDropdown(button);
+      drawSystemMenuDropdown(menuButton);
     }
   }
 
   function getSystemMenuButtonRect() {
     const size = 38;
     return { x: view.w - size - 16, y: 16, w: size, h: size };
+  }
+
+  function drawTopRightGoldBadge(anchorRect) {
+    const text = getGoldText();
+    const size = getGoldBadgeSize(text);
+    const x = Math.max(12, anchorRect.x - size.w - 8);
+    const y = anchorRect.y + Math.max(0, (anchorRect.h - size.h) / 2);
+    drawGoldBadge(x, y, { text, ...size, mode: "dark" });
+  }
+
+  function drawInventoryGoldBadge(panelX, panelY, panelW) {
+    const text = getGoldText();
+    const size = getGoldBadgeSize(text);
+    const closeX = panelX + panelW - 48;
+    const x = Math.max(panelX + 220, closeX - size.w - 12);
+    drawGoldBadge(x, panelY + 20, { text, ...size, mode: "light" });
+  }
+
+  function getGoldBadgeSize(text) {
+    ctx.save();
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const w = Math.max(82, Math.ceil(ctx.measureText(String(text || "")).width) + 48);
+    ctx.restore();
+    return { w, h: 30 };
+  }
+
+  function drawGoldBadge(x, y, options = {}) {
+    const text = options.text || getGoldText();
+    const w = Number.isFinite(options.w) ? options.w : getGoldBadgeSize(text).w;
+    const h = Number.isFinite(options.h) ? options.h : 30;
+    const light = options.mode === "light";
+    ctx.save();
+    ctx.fillStyle = light ? "rgba(255,248,224,0.96)" : "rgba(10,16,13,0.76)";
+    ctx.strokeStyle = light ? "rgba(180,129,32,0.42)" : "rgba(255,213,107,0.5)";
+    ctx.lineWidth = 1.2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    const coinX = x + 17;
+    const coinY = y + h / 2;
+    ctx.fillStyle = "#d6a83a";
+    ctx.strokeStyle = "rgba(88,56,12,0.42)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(coinX, coinY, 9, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff5c8";
+    ctx.font = "900 10px 'Segoe UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("G", coinX, coinY + 0.5);
+    drawFittedSystemText(text, x + 33, y + h / 2, w - 42, 900, 14, 10, light ? "#102018" : "#fff8d7", "left", "middle");
+    ctx.restore();
   }
 
   function drawSystemMenuButton(rect, active) {
@@ -1233,7 +1470,11 @@
       }
     }
     ctx.restore();
-    drawSettingsScrollbar(content, menu.panelScroll, menu.panelScrollMax);
+    drawSettingsScrollbar(content, menu.panelScroll, menu.panelScrollMax, {
+      scrollState: menu,
+      valueKey: "panelScroll",
+      maxKey: "panelScrollMax",
+    });
     ctx.restore();
   }
 
@@ -1263,6 +1504,7 @@
     ctx.textBaseline = "top";
     ctx.fillText(panel.title || "持ち物確認", x + 28, y + 26);
     drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
+    drawInventoryGoldBadge(x, y, w);
 
     ctx.save();
     ctx.beginPath();
@@ -1277,45 +1519,552 @@
       cursorY += row.h;
     }
     ctx.restore();
-    drawSettingsScrollbar(content, menu.panelScroll, menu.panelScrollMax);
+    drawSettingsScrollbar(content, menu.panelScroll, menu.panelScrollMax, {
+      scrollState: menu,
+      valueKey: "panelScroll",
+      maxKey: "panelScrollMax",
+    });
+    if (game.inventoryMessage) {
+      drawInventoryMessage(game.inventoryMessage, content);
+    }
     ctx.restore();
   }
 
   function getInventoryRows() {
     const rows = [];
-    rows.push({ type: "section", title: "アイテム", h: 30 });
-    const itemSlots = Array.isArray(game.itemSlots) ? game.itemSlots.filter((item) => item && item.count > 0) : [];
-    if (!itemSlots.length) {
+    rows.push({ type: "section", title: "アイテム", h: 34 });
+    const itemRows = getInventoryItemRows();
+    if (!itemRows.length) {
       rows.push({ type: "empty", text: "所持アイテムなし", h: 34 });
     } else {
-      for (const item of itemSlots) {
-        rows.push({
-          type: "item",
-          icon: item.shortName || "道",
-          title: item.name || item.id || "アイテム",
-          detail: `所持数: ${item.count}${Number.isFinite(item.maxCount) ? `/${item.maxCount}` : ""}`,
-          h: 46,
-        });
-      }
+      rows.push(...itemRows);
+    }
+
+    rows.push({ type: "section", title: "素材", h: 34 });
+    const materialRows = getInventoryMaterialRows();
+    if (!materialRows.length) {
+      rows.push({ type: "empty", text: "所持素材なし", h: 34 });
+    } else {
+      rows.push(...materialRows);
     }
 
     rows.push({ type: "section", title: "装備", h: 34 });
-    const equipmentItems = EQUIPMENT_DATA && EQUIPMENT_DATA.items ? Object.values(EQUIPMENT_DATA.items) : [];
-    if (!equipmentItems.length) {
+    const equipmentRows = getInventoryEquipmentRows();
+    if (!equipmentRows.length) {
       rows.push({ type: "empty", text: "所持装備なし", h: 34 });
     } else {
-      for (const item of equipmentItems) {
+      rows.push(...equipmentRows);
+    }
+
+    rows.push({ type: "section", title: "スキル", h: 34 });
+    const skillRows = getInventorySkillRows();
+    if (!skillRows.length) {
+      rows.push({ type: "empty", text: "所持スキルなし", h: 34 });
+    } else {
+      rows.push(...skillRows);
+    }
+    return rows;
+  }
+
+  function getInventoryMaterialRows() {
+    const materialDefs = MATERIAL_DATA && MATERIAL_DATA.materials ? MATERIAL_DATA.materials : {};
+    const counts = game.materialsById && typeof game.materialsById === "object" ? game.materialsById : {};
+    return Object.entries(counts)
+      .filter(([, count]) => Number.isFinite(count) && count > 0)
+      .map(([key, count]) => {
+        const material = materialDefs[key] || {};
+        return {
+          type: "material",
+          icon: "素",
+          color: "#8a9b68",
+          title: material.name || key,
+          detail: `所持数: ${Math.floor(count)}`,
+          h: 46,
+        };
+      });
+  }
+
+  function getInventoryEquipmentRows() {
+    const equipmentItems = EQUIPMENT_DATA && EQUIPMENT_DATA.items ? Object.values(EQUIPMENT_DATA.items) : [];
+    const rows = [];
+    for (const item of equipmentItems) {
+      if (!item || isDefaultEquipmentForInventory(item)) {
+        continue;
+      }
+      const instances = typeof getEquipmentInstancesByItemId === "function"
+        ? getEquipmentInstancesByItemId(item.id)
+        : getFallbackEquipmentInventoryItems(item);
+      for (const instanceItem of instances) {
+        if (!instanceItem) {
+          continue;
+        }
         rows.push({
           type: "equipment",
-          icon: getEquipmentIconLabel(item),
-          color: getEquipmentIconColor(item.slot),
-          title: item.name || item.id || "装備",
-          detail: [item.rank, getEquipmentSlotName(item.slot), item.weaponType].filter(Boolean).join(" / "),
+          icon: getEquipmentIconLabel(instanceItem),
+          color: getEquipmentIconColor(instanceItem.slot),
+          title: getInventoryEquipmentTitle(instanceItem),
+          detail: getInventoryEquipmentDetail(instanceItem),
           h: 46,
         });
       }
     }
     return rows;
+  }
+
+  function getFallbackEquipmentInventoryItems(item) {
+    const store = game.equipmentInventoryById && typeof game.equipmentInventoryById === "object"
+      ? game.equipmentInventoryById
+      : {};
+    const count = Math.max(0, Math.floor(Number.isFinite(store[item.id]) ? store[item.id] : 0));
+    return Array.from({ length: count }, (_, index) => ({
+      ...item,
+      copyIndex: index + 1,
+      copyCount: count,
+      upgradeLevel: typeof getEquipmentUpgradeLevel === "function" ? getEquipmentUpgradeLevel(item.id) : 0,
+    }));
+  }
+
+  function isDefaultEquipmentForInventory(item) {
+    return Boolean(item && (String(item.id || "").startsWith("default_") || item.material === "製作不可"));
+  }
+
+  function getInventoryEquipmentTitle(item) {
+    const name = item && (item.name || item.id) || "装備";
+    if (Number.isFinite(item && item.copyIndex) && Number.isFinite(item && item.copyCount) && item.copyCount > 1) {
+      return `${name} #${item.copyIndex}`;
+    }
+    return name;
+  }
+
+  function getInventoryEquipmentDetail(item) {
+    const parts = [item.rank, getEquipmentSlotName(item.slot), item.weaponType].filter(Boolean);
+    const level = Number.isFinite(item && item.upgradeLevel) ? Math.floor(item.upgradeLevel) : 0;
+    if (level > 0) {
+      parts.push(`+${level}`);
+    }
+    const statSummary = getEquipmentItemStatSummary(item);
+    const equippedText = getEquipmentEquippedText(item);
+    if (equippedText) {
+      parts.push(equippedText);
+    }
+    if (statSummary) {
+      parts.push(statSummary);
+    }
+    return parts.join(" / ");
+  }
+
+  function getInventorySkillRows() {
+    return [
+      ...getInventoryPassiveSkillRows(),
+      ...getInventoryActiveSkillRows(),
+    ];
+  }
+
+  function getInventoryPassiveSkillRows() {
+    const rows = [];
+    const seen = new Set();
+    const ownerOrder = getInventorySkillOwnerOrder();
+    for (const owner of ownerOrder) {
+      const passives = PASSIVE_DATA && PASSIVE_DATA[owner] ? PASSIVE_DATA[owner] : {};
+      for (const [key, passive] of Object.entries(passives)) {
+        if (!passive) {
+          continue;
+        }
+        const identity = `passive:${passive.sourceOwner || owner}:${passive.sourceKey || key}`;
+        if (seen.has(identity)) {
+          continue;
+        }
+        seen.add(identity);
+        rows.push({
+          type: "skill",
+          icon: "P",
+          color: "#5b7c5f",
+          title: passive.name || key,
+          detail: getInventoryPassiveSkillDetail(owner, key, passive),
+          level: 0,
+          h: 46,
+        });
+      }
+    }
+    return rows;
+  }
+
+  function getInventoryActiveSkillRows() {
+    const rows = [];
+    const seen = new Set();
+    const ownerOrder = getInventorySkillOwnerOrder();
+    for (const owner of ownerOrder) {
+      const skills = SKILL_DATA && SKILL_DATA[owner] ? SKILL_DATA[owner] : {};
+      for (const [key, skill] of Object.entries(skills)) {
+        if (!skill || skill.category === "通常攻撃" || !isOwnedSkillForDisplay(owner, key)) {
+          continue;
+        }
+        const identity = getSkillIdentity(owner, key, skill);
+        if (seen.has(identity)) {
+          continue;
+        }
+        seen.add(identity);
+        const sourceOwner = skill.sourceOwner || owner;
+        const sourceKey = skill.sourceKey || key;
+        const displaySkill = SKILL_DATA && SKILL_DATA[sourceOwner] && SKILL_DATA[sourceOwner][sourceKey]
+          ? SKILL_DATA[sourceOwner][sourceKey]
+          : skill;
+        const level = getSkillLevelForDisplay(sourceOwner, sourceKey);
+        rows.push({
+          type: "skill",
+          icon: getSkillIconLabel(displaySkill),
+          color: getSkillIconColor(displaySkill),
+          title: displaySkill.name || sourceKey,
+          detail: getInventoryActiveSkillDetail(sourceOwner, sourceKey, displaySkill, level),
+          level,
+          h: 46,
+        });
+      }
+    }
+    return rows;
+  }
+
+  function getInventorySkillOwnerOrder() {
+    const preferred = ["finald", "ulpes", "rihas", "sushia"];
+    const owners = new Set(preferred);
+    for (const owner of Object.keys(SKILL_DATA || {})) {
+      if (owner !== "enemy") {
+        owners.add(owner);
+      }
+    }
+    for (const owner of Object.keys(PASSIVE_DATA || {})) {
+      if (owner !== "enemy") {
+        owners.add(owner);
+      }
+    }
+    return Array.from(owners);
+  }
+
+  function getInventoryPassiveSkillDetail(owner, key, passive) {
+    const parts = ["パッシブ"];
+    const ownerName = getInventorySkillOwnerName(owner);
+    if (ownerName) {
+      parts.push(ownerName);
+    }
+    if (passive && passive.rank) {
+      parts.unshift(passive.rank);
+    }
+    const equippedText = getPassiveSkillEquippedText(owner, key, passive);
+    if (equippedText) {
+      parts.push(equippedText);
+    }
+    return parts.join(" / ");
+  }
+
+  function getInventoryActiveSkillDetail(owner, key, skill, level) {
+    const parts = [skill.rank, skill.category].filter(Boolean);
+    const normalizedLevel = Math.max(0, Math.floor(Number(level) || 0));
+    if (normalizedLevel > 0) {
+      parts.push(`Lv.${getSkillLevelRoman(normalizedLevel)}`);
+    }
+    const equippedText = getSkillEquippedText(owner, key, skill);
+    if (equippedText) {
+      parts.push(equippedText);
+    }
+    const condition = getSkillConditionLabel(skill);
+    if (condition) {
+      parts.push(`条件: ${condition}`);
+    }
+    return parts.join(" / ");
+  }
+
+  function getInventorySkillOwnerName(owner) {
+    if (owner === "finald") {
+      return typeof getPlayerFirstName === "function" ? getPlayerFirstName() : "アルジュナ";
+    }
+    const def = CHARACTER_DEFS && CHARACTER_DEFS[owner];
+    return def && (def.shortName || def.name) || "";
+  }
+
+  function getEquipmentEquippedText(item) {
+    return formatEquippedOwnerText(getEquipmentEquippedOwnerNames(item));
+  }
+
+  function getSkillEquippedText(owner, key, skill) {
+    return formatEquippedOwnerText(getSkillEquippedOwnerNames(owner, key, skill));
+  }
+
+  function getPassiveSkillEquippedText(owner, key, passive) {
+    return formatEquippedOwnerText(getPassiveSkillEquippedOwnerNames(owner, key, passive));
+  }
+
+  function formatEquippedOwnerText(names) {
+    return Array.isArray(names) && names.length ? `${names.join("、")}装備中` : "";
+  }
+
+  function getEquipmentEquippedOwnerNames(item) {
+    const itemRef = getEquipmentRefForDisplay(item);
+    if (!itemRef) {
+      return [];
+    }
+    const names = [];
+    for (const unitId of equipmentUnitOrder) {
+      const unit = getEquipmentDisplayUnit(unitId);
+      if (!unit || !unit.equipment) {
+        continue;
+      }
+      const equipped = Object.values(unit.equipment).some((ref) => getEquipmentRefForDisplay(ref) === itemRef);
+      if (equipped) {
+        names.push(getEquipmentShortName(unit));
+      }
+    }
+    return names;
+  }
+
+  function getSkillEquippedOwnerNames(owner, key, skill) {
+    if (!skill) {
+      return [];
+    }
+    const identity = getSkillIdentity(owner, key, skill);
+    const names = [];
+    for (const unitId of equipmentUnitOrder) {
+      const unit = getEquipmentDisplayUnit(unitId);
+      if (!unit) {
+        continue;
+      }
+      const unitOwner = unit.skillOwner || unit.id;
+      const loadout = getEquipmentLoadout(unit);
+      let equipped = false;
+      if (skill.category === "必殺技") {
+        const ultimateKey = loadout.ultimate;
+        const ultimate = ultimateKey && SKILL_DATA && SKILL_DATA[unitOwner] && SKILL_DATA[unitOwner][ultimateKey];
+        equipped = Boolean(ultimate && getSkillIdentity(unitOwner, ultimateKey, ultimate) === identity);
+      } else {
+        for (const activeKey of Array.isArray(loadout.active) ? loadout.active : []) {
+          const activeSkill = activeKey && SKILL_DATA && SKILL_DATA[unitOwner] && SKILL_DATA[unitOwner][activeKey];
+          if (activeSkill && getSkillIdentity(unitOwner, activeKey, activeSkill) === identity) {
+            equipped = true;
+            break;
+          }
+        }
+      }
+      if (equipped) {
+        names.push(getEquipmentShortName(unit));
+      }
+    }
+    return names;
+  }
+
+  function getPassiveSkillEquippedOwnerNames(owner, key, passive) {
+    if (!passive) {
+      return [];
+    }
+    const identity = `passive:${passive.sourceOwner || owner}:${passive.sourceKey || key}`;
+    const names = [];
+    for (const unitId of equipmentUnitOrder) {
+      const unit = getEquipmentDisplayUnit(unitId);
+      if (!unit) {
+        continue;
+      }
+      const unitOwner = unit.skillOwner || unit.id;
+      const loadout = getEquipmentLoadout(unit);
+      const passiveKey = loadout.passive;
+      const equippedPassive = passiveKey && PASSIVE_DATA && PASSIVE_DATA[unitOwner] && PASSIVE_DATA[unitOwner][passiveKey];
+      const equippedIdentity = equippedPassive ? `passive:${equippedPassive.sourceOwner || unitOwner}:${equippedPassive.sourceKey || passiveKey}` : "";
+      if (equippedIdentity === identity) {
+        names.push(getEquipmentShortName(unit));
+      }
+    }
+    return names;
+  }
+
+  function getInventoryItemRows() {
+    const candidates = itemSystem && typeof itemSystem.getItemCandidates === "function"
+      ? itemSystem.getItemCandidates()
+      : [];
+    return candidates
+      .map((item) => {
+        const inventory = itemSystem && typeof itemSystem.getItemInventoryCount === "function"
+          ? itemSystem.getItemInventoryCount(item.id)
+          : Number.isFinite(item.inventoryCount) ? item.inventoryCount : 0;
+        const equipped = itemSystem && typeof itemSystem.getItemEquippedCount === "function"
+          ? itemSystem.getItemEquippedCount(item.id)
+          : Number.isFinite(item.equippedCount) ? item.equippedCount : 0;
+        const usable = itemSystem && typeof itemSystem.canUseInventoryItem === "function"
+          ? itemSystem.canUseInventoryItem(item.id)
+          : false;
+        return { item, inventory, equipped, usable };
+      })
+      .filter((entry) => entry.item && (entry.inventory > 0 || entry.equipped > 0))
+      .map((entry) => ({
+        type: "item",
+        icon: entry.item.shortName || "道",
+        title: entry.item.name || entry.item.id || "アイテム",
+        detail: `持ち物: ${entry.inventory} / 装備中: ${entry.equipped}`,
+        itemId: entry.item.id,
+        usable: entry.usable,
+        openAll: entry.item.id === "d_power_flag" && entry.inventory > 0,
+        h: 46,
+      }));
+  }
+
+  function getGoldText() {
+    if (typeof formatGold === "function") {
+      return formatGold();
+    }
+    const value = typeof getGold === "function"
+      ? getGold()
+      : Number.isFinite(game.gold)
+        ? game.gold
+        : 0;
+    return `${Math.max(0, Math.floor(value))}G`;
+  }
+
+  function drawInventoryMessage(message, content) {
+    const lines = [
+      ...normalizeInventoryMessageLines(message),
+      ...buildInventoryResultSkillLines(game.inventoryMessageResult),
+    ];
+    if (!lines.length) {
+      return;
+    }
+    const lineH = 18;
+    const panelW = Math.min(content.w - 28, 760);
+    const wrappedLines = wrapInventoryMessageLines(lines, panelW - 40);
+    const baseH = 164;
+    const panelH = Math.min(content.h - 16, Math.max(210, baseH + Math.max(0, wrappedLines.length - 3) * lineH));
+    const x = content.x + (content.w - panelW) / 2;
+    const y = Math.max(content.y + 8, Math.min(content.y + content.h - panelH - 8, content.y + (content.h - panelH) / 2));
+    ctx.save();
+    ctx.fillStyle = "rgba(247,255,246,0.98)";
+    ctx.strokeStyle = "rgba(47,109,76,0.42)";
+    ctx.lineWidth = 1.4;
+    roundRect(x, y, panelW, panelH, 8);
+    ctx.fill();
+    ctx.stroke();
+    addSystemMenuTarget({ action: "absorbSystemClick", x, y, w: panelW, h: panelH });
+    ctx.fillStyle = "#2f6d4c";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("使用結果", x + 20, y + 16);
+    const battleRewardCrystalMessage = isBattleRewardPowerCrystalAutoPending();
+    const inventoryCrystalMessage = isInventoryPowerCrystalBulkPending();
+    const sequentialCrystalMessage = battleRewardCrystalMessage || inventoryCrystalMessage;
+    if (!sequentialCrystalMessage) {
+      drawSystemCloseButton(x + panelW - 42, y + 10, "clearInventoryMessage");
+    }
+    const textY = y + 43;
+    const textMaxH = Math.max(18, panelH - 88);
+    const maxLines = Math.max(1, Math.floor(textMaxH / lineH));
+    const visibleLines = wrappedLines.slice(0, maxLines);
+    if (wrappedLines.length > visibleLines.length) {
+      visibleLines[visibleLines.length - 1] = "...";
+    }
+    for (let i = 0; i < visibleLines.length; i += 1) {
+      const line = visibleLines[i];
+      if (!line) {
+        continue;
+      }
+      drawFittedSystemText(line, x + 20, textY + i * lineH, panelW - 40, 800, i === 0 ? 13 : 12, 8, i === 0 ? "#102018" : "#52665b", "left", "top");
+    }
+    const crystalState = battleRewardCrystalMessage
+      ? getBattleRewardPowerCrystalAutoState()
+      : inventoryCrystalMessage
+        ? getInventoryPowerCrystalBulkState()
+        : null;
+    const hasNextCrystal = crystalState && crystalState.remaining > 0;
+    const nextCrystalAction = battleRewardCrystalMessage ? "openNextBattleRewardCrystal" : "openNextInventoryPowerCrystal";
+    const finishCrystalAction = battleRewardCrystalMessage ? "finishBattleRewardCrystalAutoUse" : "finishInventoryPowerCrystalBulkUse";
+    drawSystemSmallButton(
+      x + panelW / 2 - 48,
+      y + panelH - 38,
+      96,
+      28,
+      hasNextCrystal ? "次" : "閉じる",
+      sequentialCrystalMessage
+        ? hasNextCrystal ? nextCrystalAction : finishCrystalAction
+        : "clearInventoryMessage"
+    );
+    ctx.restore();
+  }
+
+  function normalizeInventoryMessageLines(message) {
+    const sourceLines = Array.isArray(message) ? message : [message];
+    return sourceLines
+      .filter((line) => line !== null && line !== undefined)
+      .flatMap((line) => String(line).split(/\r?\n/))
+      .filter(Boolean);
+  }
+
+  function buildInventoryResultSkillLines(result) {
+    if (!result || !["acquired", "upgraded"].includes(result.type)) {
+      return [];
+    }
+    const skill = getInventoryResultSkill(result);
+    if (!skill) {
+      return [];
+    }
+    const unit = getInventoryResultSkillUnit(result, skill);
+    const lines = ["", "スキル説明"];
+    const meta = [skill.rank, skill.category, skill.skillType].filter(Boolean).join(" / ");
+    if (meta) {
+      lines.push(meta);
+    }
+    const description = formatEquipmentDescriptionText(getSystemTooltipDescription(skill), unit, skill);
+    if (description) {
+      lines.push(...String(description).split(/\r?\n/).filter(Boolean));
+    }
+    appendEquipmentRelatedStatuses(lines, description, skill.statusIds, unit);
+    return lines;
+  }
+
+  function getInventoryResultSkill(result) {
+    const owner = result && result.owner;
+    const key = result && result.key;
+    if (owner && key && SKILL_DATA && SKILL_DATA[owner] && SKILL_DATA[owner][key]) {
+      return SKILL_DATA[owner][key];
+    }
+    const skillId = result && result.skillId;
+    if (!skillId || !SKILL_DATA) {
+      return null;
+    }
+    for (const skills of Object.values(SKILL_DATA)) {
+      for (const skill of Object.values(skills || {})) {
+        if (skill && (skill.id === skillId || skill.key === key)) {
+          return skill;
+        }
+      }
+    }
+    return null;
+  }
+
+  function getInventoryResultSkillUnit(result, skill) {
+    const owner = result && result.owner || skill && (skill.owner || skill.sourceOwner);
+    return owner ? getEquipmentDisplayUnit(owner) : player;
+  }
+
+  function wrapInventoryMessageLines(rawLines, maxWidth) {
+    const wrapped = [];
+    ctx.save();
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    for (const raw of rawLines) {
+      const text = String(raw || "");
+      if (!text) {
+        wrapped.push("");
+        continue;
+      }
+      let line = "";
+      for (const char of Array.from(text)) {
+        const next = line + char;
+        if (line && ctx.measureText(next).width > maxWidth) {
+          wrapped.push(line);
+          line = char;
+        } else {
+          line = next;
+        }
+      }
+      if (line) {
+        wrapped.push(line);
+      }
+    }
+    ctx.restore();
+    return wrapped;
   }
 
   function drawInventoryRow(rect, row) {
@@ -1348,8 +2097,20 @@
     roundRect(iconX, iconY, iconSize, iconSize, 7);
     ctx.fill();
     drawFittedSystemText(row.icon || "?", iconX + iconSize / 2, iconY + iconSize / 2, iconSize - 8, 900, 13, 8, "#f7fff6", "center", "middle");
-    drawFittedSystemText(row.title, rect.x + 46, rect.y + 14, rect.w - 58, 900, 14, 10, "#102018", "left", "middle");
-    drawFittedSystemText(row.detail, rect.x + 46, rect.y + 32, rect.w - 58, 700, 11, 8, "#63706a", "left", "middle");
+    const actionW = row.type === "item" && row.usable ? row.openAll ? 176 : 76 : row.type === "skill" && row.level > 0 ? 32 : 0;
+    drawFittedSystemText(row.title, rect.x + 46, rect.y + 14, rect.w - 58 - actionW, 900, 14, 10, "#102018", "left", "middle");
+    drawFittedSystemText(row.detail, rect.x + 46, rect.y + 32, rect.w - 58 - actionW, 700, 11, 8, "#63706a", "left", "middle");
+    if (row.type === "item" && row.usable) {
+      if (row.openAll) {
+        drawSystemSmallButton(rect.x + rect.w - 168, rect.y + 9, 58, 28, "使う", "useInventoryItem", { itemId: row.itemId });
+        drawSystemSmallButton(rect.x + rect.w - 104, rect.y + 9, 92, 28, "全て開ける", "useAllInventoryPowerCrystals", { itemId: row.itemId });
+      } else {
+        drawSystemSmallButton(rect.x + rect.w - 70, rect.y + 9, 58, 28, "使う", "useInventoryItem", { itemId: row.itemId });
+      }
+    }
+    if (row.type === "skill" && row.level > 0) {
+      drawSkillLevelBadge(rect.x + rect.w - 8, rect.y + rect.h - 8, row.level);
+    }
     ctx.restore();
   }
 
@@ -1416,6 +2177,7 @@
     const rowH = 58;
     const rows = [
       { type: "toggleDetailedDescriptions", label: "詳細説明文の適用" },
+      { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用" },
     ];
     const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
     const listContentH = rows.length * rowH;
@@ -1440,7 +2202,11 @@
       drawSettingsGameRow(row, rows[i]);
     }
     ctx.restore();
-    drawSettingsScrollbar(listRect, ui.gameScroll, ui.gameScrollMax);
+    drawSettingsScrollbar(listRect, ui.gameScroll, ui.gameScrollMax, {
+      scrollState: ui,
+      valueKey: "gameScroll",
+      maxKey: "gameScrollMax",
+    });
   }
 
   function drawSettingsGameRow(row, entry) {
@@ -1455,7 +2221,9 @@
     ctx.textBaseline = "middle";
     ctx.fillText(entry.label, row.x, row.y + row.h / 2);
     if (entry.type === "toggleDetailedDescriptions") {
-      drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isDetailedDescriptionEnabled());
+      drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isDetailedDescriptionEnabled(), "toggleDetailedDescriptions");
+    } else if (entry.type === "togglePowerCrystalAutoUse") {
+      drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isPowerCrystalAutoUseEnabled(), "togglePowerCrystalAutoUse");
     }
   }
 
@@ -1533,7 +2301,11 @@
       }
     }
     ctx.restore();
-    drawSettingsScrollbar(listRect, ui.controlsScroll, ui.controlsScrollMax);
+    drawSettingsScrollbar(listRect, ui.controlsScroll, ui.controlsScrollMax, {
+      scrollState: ui,
+      valueKey: "controlsScroll",
+      maxKey: "controlsScrollMax",
+    });
     if (hoverConflict) {
       drawControlConflictTooltip(hoverConflict.x, hoverConflict.y, hoverConflict.lines);
     }
@@ -1590,7 +2362,7 @@
     }
   }
 
-  function drawSettingsScrollbar(rect, scroll, maxScroll) {
+  function drawSettingsScrollbar(rect, scroll, maxScroll, dragOptions = null) {
     if (maxScroll <= 0) {
       return;
     }
@@ -1598,6 +2370,7 @@
     const track = { x: rect.x + rect.w - trackW, y: rect.y + 4, w: trackW, h: rect.h - 8 };
     const knobH = Math.max(34, track.h * (rect.h / (rect.h + maxScroll)));
     const knobY = track.y + (track.h - knobH) * (scroll / maxScroll);
+    const knob = { x: track.x, y: knobY, w: track.w, h: knobH };
     ctx.save();
     ctx.fillStyle = "rgba(16,32,24,0.1)";
     roundRect(track.x, track.y, track.w, track.h, 3);
@@ -1606,6 +2379,20 @@
     roundRect(track.x, knobY, track.w, knobH, 3);
     ctx.fill();
     ctx.restore();
+    if (dragOptions && dragOptions.scrollState) {
+      addSystemMenuTarget({
+        action: "startScrollbarDrag",
+        x: track.x - 8,
+        y: track.y,
+        w: track.w + 16,
+        h: track.h,
+        scrollState: dragOptions.scrollState,
+        valueKey: dragOptions.valueKey || "scroll",
+        maxKey: dragOptions.maxKey || "scrollMax",
+        track,
+        knob,
+      });
+    }
   }
 
   function rectIntersects(a, b) {
@@ -1675,7 +2462,7 @@
     return input.mouse.x >= rect.x && input.mouse.x <= rect.x + rect.w && input.mouse.y >= rect.y && input.mouse.y <= rect.y + rect.h;
   }
 
-  function drawSettingsToggle(x, y, w, h, enabled) {
+  function drawSettingsToggle(x, y, w, h, enabled, action = "toggleDetailedDescriptions") {
     ctx.save();
     ctx.fillStyle = enabled ? "#246b4a" : "rgba(16,32,24,0.12)";
     ctx.strokeStyle = enabled ? "#1c573c" : "rgba(16,32,24,0.28)";
@@ -1694,7 +2481,7 @@
     ctx.textBaseline = "middle";
     ctx.fillText(enabled ? "ON" : "OFF", enabled ? x + 25 : x + w - 25, y + h / 2);
     ctx.restore();
-    addSystemMenuTarget({ action: "toggleDetailedDescriptions", x, y, w, h });
+    addSystemMenuTarget({ action, x, y, w, h });
   }
 
   function drawEquipmentPanel(panel) {
@@ -1781,6 +2568,9 @@
   function getEquipmentDisplayUnit(unitId) {
     const live = getLiveEquipmentUnit(unitId);
     if (live) {
+      if (itemSystem && typeof itemSystem.getCharacterItem === "function") {
+        live.item = itemSystem.getCharacterItem(unitId);
+      }
       return live;
     }
     const def = getEquipmentCharacterDef(unitId);
@@ -1805,7 +2595,25 @@
       : typeof getDefaultLoadout === "function"
         ? getDefaultLoadout(unit.skillOwner || unit.id)
         : { passive: null, active: [] };
+    unit.item = itemSystem && typeof itemSystem.getCharacterItem === "function"
+      ? itemSystem.getCharacterItem(unitId)
+      : null;
+    unit.hp = getStoredEquipmentResource(unit, "partyHpById", "hp", "maxHp");
+    unit.mp = getStoredEquipmentResource(unit, "partyMpById", "mp", "maxMp");
     return unit;
+  }
+
+  function getStoredEquipmentResource(unit, storeKey, currentKey, maxKey) {
+    if (!unit || !unit.id) {
+      return 0;
+    }
+    const max = getEquipmentResourceMax(unit, maxKey);
+    const store = game && game[storeKey] && typeof game[storeKey] === "object" ? game[storeKey] : null;
+    const saved = store ? store[unit.id] : undefined;
+    const value = Number.isFinite(saved)
+      ? saved
+      : Number.isFinite(unit[currentKey]) ? unit[currentKey] : max;
+    return Math.max(0, Math.min(max, value));
   }
 
   function getLiveEquipmentUnit(unitId) {
@@ -1905,6 +2713,13 @@
       w: slotW,
       h: slotH,
     };
+    const itemRect = {
+      x: weaponRect.x,
+      y: Math.max(rect.y + 12, weaponRect.y - slotH - gapY),
+      w: slotW,
+      h: slotH,
+    };
+    drawEquipmentCharacterItemSlot(itemRect, unit, readOnly);
     drawEquipmentSlot(weaponRect, unit, equipmentSlotLayout.weapon, readOnly);
     const skillAreaH = unit && unit.id === "finald"
       ? Math.min(166, Math.max(150, rect.h * 0.34))
@@ -2020,6 +2835,34 @@
     });
   }
 
+  function drawEquipmentCharacterItemSlot(rect, unit, readOnly) {
+    const item = getEquipmentCharacterItem(unit);
+    ctx.save();
+    ctx.fillStyle = item ? "#ffffff" : "rgba(255,255,255,0.58)";
+    ctx.strokeStyle = readOnly ? "rgba(16,32,24,0.16)" : "rgba(16,32,24,0.28)";
+    ctx.lineWidth = 1.1;
+    roundRect(rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#728077";
+    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("アイテム", rect.x + 10, rect.y + 7);
+    const label = item ? `${item.name || item.id}${Number.isFinite(item.count) ? ` x${item.count}` : ""}` : "未所持";
+    drawFittedSystemText(label, rect.x + 10, rect.y + 31, rect.w - 20, 800, 13, 9, item ? "#102018" : "#8a948f", "left");
+    ctx.restore();
+    registerEquipmentTooltip(rect, buildCharacterItemTooltip(item));
+    addSystemMenuTarget({
+      action: "openEquipmentPicker",
+      kind: "item",
+      x: rect.x,
+      y: rect.y,
+      w: rect.w,
+      h: rect.h,
+    });
+  }
+
   function getEquipmentSlotDef(slotKey) {
     const slots = EQUIPMENT_DATA && Array.isArray(EQUIPMENT_DATA.slots) ? EQUIPMENT_DATA.slots : [];
     return slots.find((slot) => slot.key === slotKey) || null;
@@ -2035,7 +2878,7 @@
     const showThirdRow = unit && unit.id === "finald";
     const maxConfigurableSlots = showThirdRow ? 9 : 4;
     const configurableLimit = Math.min(maxConfigurableSlots, Math.max(0, limit - (SKILL_DATA && SKILL_DATA[owner] && SKILL_DATA[owner].attack ? 1 : 0)));
-    const normalSkill = SKILL_DATA && SKILL_DATA[owner] ? SKILL_DATA[owner].attack || null : null;
+    const normalSkill = getUnitNormalAttackSkill(unit);
     const ultimateEntry = getEquipmentUltimateSkillEntry(unit);
     const ultimateSkill = ultimateEntry.skill;
     const cols = 5;
@@ -2045,7 +2888,7 @@
       hidden: Math.floor(index / cols) === 0,
     }));
     entries[1] = { badge: "P", label: passive ? passive.name : "未装備", kind: "passiveSkill", locked: false, tooltip: buildPassiveCandidateTooltip(passive, unit) };
-    entries[3] = { badge: "必", label: ultimateSkill ? ultimateSkill.name : "必殺技", kind: "ultimateSkill", locked: false, tooltip: buildSkillCandidateTooltip(ultimateSkill, unit) };
+    entries[3] = { badge: "必", label: ultimateSkill ? ultimateSkill.name : "必殺技", kind: "ultimateSkill", locked: false, unavailable: Boolean(ultimateSkill && !canEquipSkillWithCurrentWeapon(unit, ultimateSkill)), level: ultimateEntry.key ? getSkillLevelForDisplay(owner, ultimateEntry.key) : 0, tooltip: buildSkillCandidateTooltip(ultimateSkill, unit) };
     entries[5] = { badge: "N", label: normalSkill ? normalSkill.name : "通常攻撃", locked: true, tooltip: buildSkillCandidateTooltip(normalSkill, unit) };
     for (let i = 0; i < configurableLimit; i += 1) {
       const key = configurableActive[i] || null;
@@ -2057,6 +2900,8 @@
         kind: "activeSkill",
         slotIndex: i,
         locked: false,
+        unavailable: Boolean(skill && !canEquipSkillWithCurrentWeapon(unit, skill)),
+        level: key ? getSkillLevelForDisplay(owner, key) : 0,
         tooltip: buildSkillCandidateTooltip(skill, unit),
       };
     }
@@ -2096,7 +2941,7 @@
         drawEquipmentEmptySkillCell(slotRect);
         continue;
       }
-      drawEquipmentSkillSlot(slotRect, entry.badge, entry.label, readOnly, entry.locked);
+      drawEquipmentSkillSlot(slotRect, entry.badge, entry.label, readOnly, entry.locked, entry.level || 0, entry.unavailable);
       registerEquipmentTooltip(slotRect, entry.tooltip);
       if (!entry.locked) {
         addSystemMenuTarget({
@@ -2124,7 +2969,7 @@
     ctx.restore();
   }
 
-  function drawEquipmentSkillSlot(rect, badge, label, readOnly, locked = false) {
+  function drawEquipmentSkillSlot(rect, badge, label, readOnly, locked = false, level = 0, unavailable = false) {
     ctx.save();
     ctx.fillStyle = label === "空き" || label === "未装備" ? "rgba(255,255,255,0.58)" : "#ffffff";
     ctx.strokeStyle = locked ? "rgba(16,32,24,0.18)" : readOnly ? "rgba(16,32,24,0.15)" : "rgba(16,32,24,0.28)";
@@ -2138,6 +2983,10 @@
     ctx.textBaseline = "top";
     ctx.fillText(badge, rect.x + 7, rect.y + 5);
     drawFittedSystemText(label, rect.x + 7, rect.y + rect.h - 12, rect.w - 14, 800, 11, 8, label === "空き" || label === "未装備" ? "#8a948f" : locked ? "#516058" : "#102018", "left");
+    drawSkillLevelBadge(rect.x + rect.w - 4, rect.y + rect.h - 4, level);
+    if (unavailable) {
+      drawUnavailableMark(rect);
+    }
     ctx.restore();
   }
 
@@ -2162,32 +3011,96 @@
     ctx.fillStyle = "#63706a";
     ctx.fillText(getEquipmentRoleLabel(unit), rect.x + 18, rect.y + 45);
 
-    const rowY = rect.y + 76;
-    const colGap = 10;
-    const colW = (rect.w - 36 - colGap) / 2;
-    for (let i = 0; i < rows.length; i += 1) {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = rect.x + 18 + col * (colW + colGap);
-      const y = rowY + row * 34;
-      drawEquipmentStatCell(rows[i], x, y, colW);
-    }
-
-    const setY = Math.min(rect.y + rect.h - 118, rowY + Math.ceil(rows.length / 2) * 34 + 12);
-    ctx.fillStyle = "#102018";
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText("発動中のセット効果", rect.x + 18, setY);
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillStyle = "#63706a";
-    if (!setEffects.length) {
-      ctx.fillText("なし", rect.x + 18, setY + 27);
-    } else {
-      const lines = setEffects.slice(0, 4).map((entry) => getSetEffectLabel(entry));
-      for (let i = 0; i < lines.length; i += 1) {
-        drawFittedSystemText(lines[i], rect.x + 18, setY + 27 + i * 22, rect.w - 36, 800, 12, 9, "#102018", "left");
+    const resourcesY = rect.y + 70;
+    const resourcesUsedH = drawEquipmentResourceBars(unit, rect.x + 18, resourcesY, rect.w - 36);
+    const rowY = resourcesY + resourcesUsedH + 14;
+    const statUsedH = drawEquipmentStatGrid(rows, rect.x + 18, rowY, rect.w - 36, 0);
+    const setY = rowY + statUsedH + 12;
+    const setLineY = setY + 27;
+    const availableSetLines = Math.max(0, Math.floor((rect.y + rect.h - setLineY - 8) / 22));
+    if (availableSetLines > 0) {
+      ctx.fillStyle = "#102018";
+      ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("発動中のセット効果", rect.x + 18, setY);
+      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillStyle = "#63706a";
+      if (!setEffects.length) {
+        ctx.fillText("なし", rect.x + 18, setLineY);
+      } else {
+        const lines = getEquipmentSetEffectLines(setEffects).slice(0, availableSetLines);
+        for (let i = 0; i < lines.length; i += 1) {
+          drawFittedSystemText(lines[i].text, rect.x + 18, setLineY + i * 22, rect.w - 36, lines[i].header ? 900 : 700, lines[i].header ? 13 : 12, 9, lines[i].header ? "#102018" : "#63706a", "left");
+        }
       }
     }
     ctx.restore();
+  }
+
+  function drawEquipmentResourceBars(unit, x, y, w) {
+    const entries = [
+      { label: "HP", currentKey: "hp", maxKey: "maxHp", back: "#dbe9dd", fill: COLORS.hp || "#72df82" },
+      { label: "MP", currentKey: "mp", maxKey: "maxMp", back: "#dbe4f4", fill: COLORS.mp || "#73a7ff" },
+    ];
+    const rowH = 24;
+    const barH = 8;
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      const rowY = y + i * rowH;
+      const max = getEquipmentResourceMax(unit, entry.maxKey);
+      const current = getEquipmentResourceCurrent(unit, entry.currentKey, max);
+      const ratio = max > 0 ? current / max : 0;
+      ctx.fillStyle = "#63706a";
+      ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(entry.label, x, rowY);
+      drawFittedSystemText(`現在 ${formatSystemNumber(current)} / 最大 ${formatSystemNumber(max)}`, x + w, rowY - 1, w - 28, 800, 12, 8, "#102018", "right");
+      drawBar(x, rowY + 14, w, barH, ratio, entry.back, entry.fill);
+    }
+    return rowH * entries.length;
+  }
+
+  function getEquipmentResourceMax(unit, statKey) {
+    const fallback = unit && Number.isFinite(unit[statKey]) ? unit[statKey] : 0;
+    const value = typeof getEffectiveStat === "function" ? getEffectiveStat(unit, statKey) : fallback;
+    const minimum = statKey === "maxHp" ? 1 : 0;
+    return Math.max(minimum, Number.isFinite(value) ? value : fallback);
+  }
+
+  function getEquipmentResourceCurrent(unit, currentKey, max) {
+    const current = unit && Number.isFinite(unit[currentKey]) ? unit[currentKey] : max;
+    return Math.max(0, Math.min(max, current));
+  }
+
+  function drawEquipmentStatGrid(rows, x, y, w, h) {
+    const columns = 4;
+    const colGap = 7;
+    const rowH = 30;
+    const colW = Math.max(32, (w - colGap * (columns - 1)) / columns);
+    let cellIndex = 0;
+    let extraY = 0;
+    let bottom = y;
+    for (const stat of rows) {
+      if (stat && stat.breakAfter) {
+        cellIndex = Math.ceil(cellIndex / columns) * columns;
+        extraY += 4;
+        continue;
+      }
+      if (!stat) {
+        continue;
+      }
+      const col = cellIndex % columns;
+      const row = Math.floor(cellIndex / columns);
+      const sx = x + col * (colW + colGap);
+      const sy = y + row * rowH + extraY;
+      if (h > 0 && sy > y + h - 24) {
+        break;
+      }
+      drawEquipmentStatCell(stat, sx, sy, colW);
+      bottom = Math.max(bottom, sy + rowH);
+      cellIndex += 1;
+    }
+    return Math.max(0, bottom - y);
   }
 
   function drawEquipmentStatCell(stat, x, y, w) {
@@ -2195,8 +3108,8 @@
     ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(stat.label, x, y);
-    drawFittedSystemText(stat.value, x, y + 15, w, 900, 14, 9, "#102018", "left");
+    drawFittedSystemText(stat.label, x, y, w, 700, 11, 8, "#7b8880", "left");
+    drawFittedSystemText(stat.value, x, y + 14, w, 900, 13, 8, "#102018", "left");
   }
 
   function drawEquipmentPicker(layout, unit, readOnly) {
@@ -2227,6 +3140,8 @@
 
     if (picker.kind === "equipment") {
       drawEquipmentItemPicker(rect, unit, picker.slotKey, readOnly);
+    } else if (picker.kind === "item") {
+      drawCharacterItemPicker(rect, unit, readOnly);
     } else if (picker.kind === "passiveSkill") {
       drawPassiveSkillPicker(rect, unit, readOnly);
     } else if (picker.kind === "ultimateSkill") {
@@ -2237,10 +3152,10 @@
     ctx.restore();
   }
 
-  function drawEquipmentItemPicker(rect, unit, slotKey, readOnly) {
-    const slot = getEquipmentSlotDef(slotKey);
-    const current = typeof getEquippedSlotItem === "function" ? getEquippedSlotItem(unit, slotKey) : null;
-    const candidates = getEquipmentItemCandidates(unit, slotKey);
+    function drawEquipmentItemPicker(rect, unit, slotKey, readOnly) {
+      const slot = getEquipmentSlotDef(slotKey);
+      const current = typeof getEquippedSlotItem === "function" ? getEquippedSlotItem(unit, slotKey) : null;
+      const candidates = getEquipmentItemCandidates(unit, slotKey);
     const equippedItemIds = getEquippedItemIds(unit);
     ctx.fillStyle = "#102018";
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -2260,15 +3175,143 @@
       getIcon: (item) => ({
         label: getEquipmentIconLabel(item),
         color: getEquipmentIconColor(item && item.slot),
-        selected: current && item && current.id === item.id,
+        selected: current && item && getEquipmentRefForDisplay(current) === getEquipmentRefForDisplay(item),
         equipped: getEquipmentItemEquipState(unit, item),
         title: item.name || item.id,
-        subtitle: item.rank || "",
+        subtitle: getEquipmentIconSubtitle(item),
+        level: Number.isFinite(item && item.upgradeLevel) ? item.upgradeLevel : 0,
         tooltip: buildEquipmentItemTooltip(item, slot),
         action: "equipEquipmentItem",
+        extra: { itemId: getEquipmentRefForDisplay(item) },
+      }),
+    });
+  }
+
+  function drawCharacterItemPicker(rect, unit, readOnly) {
+    const current = getEquipmentCharacterItem(unit);
+    const picker = getSystemMenu().equipment.picker || {};
+    const candidates = getCharacterItemCandidates(unit, current);
+    const selectedItem = getSelectedCharacterItemCandidate(candidates, picker, current);
+    const quantityInfo = selectedItem ? getCharacterItemQuantityInfo(unit, selectedItem, current, picker) : null;
+    ctx.fillStyle = "#102018";
+    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("アイテム枠", rect.x + 18, rect.y + 18);
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#63706a";
+    ctx.fillText(current ? `現在: ${current.name}${Number.isFinite(current.count) ? ` x${current.count}` : ""}` : "現在: 未所持", rect.x + 18, rect.y + 45);
+    if (current && !readOnly) {
+      drawSystemSmallButton(rect.x + rect.w - 150, rect.y + 44, 92, 28, "外す", "clearCharacterItem");
+    }
+    let gridY = rect.y + 78;
+    if (selectedItem && quantityInfo) {
+      drawCharacterItemQuantityControl(rect.x + 18, rect.y + 72, rect.w - 36, selectedItem, quantityInfo, readOnly);
+      gridY = rect.y + 132;
+    }
+    drawCandidateIconGrid(candidates, rect.x + 18, gridY, rect.w - 36, rect.y + rect.h - gridY - 14, {
+      emptyText: "アイテム候補なし",
+      readOnly,
+      scrollState: getSystemMenu().equipment.picker,
+      getIcon: (item) => ({
+        label: getCharacterItemIconLabel(item),
+        color: "#6aa878",
+        selected: selectedItem && item && selectedItem.id === item.id,
+        title: item.name || item.id,
+        subtitle: `持 ${getItemInventoryCountForDisplay(item)}`,
+        tooltip: buildCharacterItemTooltip(item),
+        action: "selectCharacterItemCandidate",
         extra: { itemId: item.id },
       }),
     });
+  }
+
+  function getCharacterItemCandidates(unit, current) {
+    const candidates = itemSystem && typeof itemSystem.getItemCandidates === "function"
+      ? itemSystem.getItemCandidates()
+      : [];
+    return candidates.filter((item) => {
+      if (!item) {
+        return false;
+      }
+      if (item.equippable === false) {
+        return false;
+      }
+      const inventory = getItemInventoryCountForDisplay(item);
+      return inventory > 0 || (current && current.id === item.id);
+    });
+  }
+
+  function getSelectedCharacterItemCandidate(candidates, picker, current) {
+    if (picker && picker.itemId) {
+      const found = candidates.find((item) => item && item.id === picker.itemId);
+      if (found) {
+        return found;
+      }
+    }
+    if (current) {
+      const found = candidates.find((item) => item && item.id === current.id);
+      if (found) {
+        return found;
+      }
+    }
+    return candidates[0] || null;
+  }
+
+  function getCharacterItemQuantityInfo(unit, item, current, picker) {
+    const inventory = getItemInventoryCountForDisplay(item);
+    const currentCount = current && current.id === item.id && Number.isFinite(current.count) ? current.count : 0;
+    const maxCount = Math.max(1, Math.floor(Number.isFinite(item.battleMaxCount) ? item.battleMaxCount : Number.isFinite(item.maxCount) ? item.maxCount : 1));
+    const max = Math.max(1, Math.min(maxCount, inventory + currentCount));
+    const raw = Number.isFinite(picker && picker.itemQuantity)
+      ? picker.itemQuantity
+      : currentCount || Math.min(1, max);
+    const value = Math.max(1, Math.min(max, Math.floor(raw || 1)));
+    if (picker) {
+      picker.itemId = item.id;
+      picker.itemQuantity = value;
+    }
+    return { value, max, inventory, currentCount };
+  }
+
+  function drawCharacterItemQuantityControl(x, y, w, item, info, readOnly) {
+    ctx.save();
+    ctx.fillStyle = "rgba(16,32,24,0.055)";
+    ctx.strokeStyle = "rgba(16,32,24,0.16)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, 48, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(`${item.name || item.id}  ${info.value}/${info.max}`, x + 12, y + 18);
+    ctx.fillStyle = "#63706a";
+    ctx.font = "700 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(`持ち物 ${info.inventory} / 現在 ${info.currentCount}`, x + 12, y + 36);
+    const buttonY = y + 8;
+    const confirmW = 78;
+    drawSystemSmallButton(x + w - confirmW - 8, buttonY, confirmW, 30, "持たせる", readOnly ? "noop" : "equipCharacterItem", { itemId: item.id, count: info.value });
+    drawSystemSmallButton(x + w - confirmW - 50, buttonY, 30, 30, "+", readOnly || info.value >= info.max ? "noop" : "adjustCharacterItemQuantity", { delta: 1 });
+    drawSystemSmallButton(x + w - confirmW - 88, buttonY, 30, 30, "-", readOnly || info.value <= 1 ? "noop" : "adjustCharacterItemQuantity", { delta: -1 });
+    const track = { x: x + Math.min(180, w * 0.34), y: y + 27, w: Math.max(90, w - confirmW - 290), h: 8 };
+    ctx.fillStyle = "rgba(16,32,24,0.18)";
+    roundRect(track.x, track.y, track.w, track.h, 5);
+    ctx.fill();
+    const ratio = info.max <= 1 ? 1 : (info.value - 1) / (info.max - 1);
+    ctx.fillStyle = "#6aa878";
+    roundRect(track.x, track.y, Math.max(8, track.w * ratio), track.h, 5);
+    ctx.fill();
+    const thumbX = track.x + track.w * ratio;
+    ctx.fillStyle = "#102018";
+    ctx.beginPath();
+    ctx.arc(thumbX, track.y + track.h / 2, 7, 0, TAU);
+    ctx.fill();
+    if (!readOnly && info.max > 1) {
+      addSystemMenuTarget({ action: "setCharacterItemQuantityRatio", x: track.x, y: track.y - 10, w: track.w, h: 28 });
+    }
+    ctx.restore();
   }
 
   function drawActiveSkillPicker(rect, unit, slotIndex, readOnly) {
@@ -2278,7 +3321,7 @@
     const currentKey = configurableActive[slotIndex] || null;
     const current = currentKey && SKILL_DATA && SKILL_DATA[owner] ? SKILL_DATA[owner][currentKey] : null;
     const candidates = Object.entries(SKILL_DATA && SKILL_DATA[owner] || {})
-      .filter(([key]) => key !== "attack" && !isUltimateSkill(owner, key))
+      .filter(([key]) => key !== "attack" && !isUltimateSkill(owner, key) && isOwnedSkillForDisplay(owner, key))
       .map(([key, skill]) => ({ key, skill }));
     ctx.fillStyle = "#102018";
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -2303,6 +3346,7 @@
         disabled: !canEquipSkillWithCurrentWeapon(unit, entry.skill),
         title: entry.skill.name || entry.key,
         subtitle: entry.skill.category || "",
+        level: getSkillLevelForDisplay(owner, entry.key),
         tooltip: buildSkillCandidateTooltip(entry.skill, unit),
         action: "equipActiveSkill",
         extra: { slotIndex, skillKey: entry.key },
@@ -2366,6 +3410,7 @@
         disabled: !canEquipSkillWithCurrentWeapon(unit, entry.skill),
         title: entry.skill.name || entry.key,
         subtitle: "必殺技",
+        level: getSkillLevelForDisplay(owner, entry.key),
         tooltip: buildSkillCandidateTooltip(entry.skill, unit),
         action: "equipUltimateSkill",
         extra: { ultimateKey: entry.key },
@@ -2429,7 +3474,11 @@
       });
     }
     ctx.restore();
-    drawSettingsScrollbar(clipRect, scroll, scrollMax);
+    drawSettingsScrollbar(clipRect, scroll, scrollMax, scrollState ? {
+      scrollState,
+      valueKey: "scroll",
+      maxKey: "scrollMax",
+    } : null);
   }
 
   function drawCandidateIcon(rect, icon) {
@@ -2452,9 +3501,39 @@
     if (icon.equipped) {
       drawEquippedBadge(rect.x + rect.w - 16, rect.y + 4, icon.equipped);
     }
+    drawSkillLevelBadge(rect.x + rect.w - 4, rect.y + rect.h - 4, icon.level || 0);
     if (icon.disabled) {
       drawUnavailableMark(rect);
     }
+    ctx.restore();
+  }
+
+  function getSkillLevelRoman(level) {
+    const index = Math.max(0, Math.min(SKILL_LEVEL_ROMAN.length - 1, Math.floor(Number(level) || 0)));
+    return SKILL_LEVEL_ROMAN[index] || "";
+  }
+
+  function drawSkillLevelBadge(right, bottom, level) {
+    const label = getSkillLevelRoman(level);
+    if (!label) {
+      return;
+    }
+    ctx.save();
+    ctx.font = "900 9px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const width = Math.max(17, ctx.measureText(label).width + 8);
+    const height = 13;
+    const x = right - width;
+    const y = bottom - height;
+    ctx.fillStyle = "#233a67";
+    ctx.strokeStyle = "#f7fff6";
+    ctx.lineWidth = 1;
+    roundRect(x, y, width, height, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + width / 2, y + height / 2 + 0.4);
     ctx.restore();
   }
 
@@ -2493,8 +3572,9 @@
     const ids = new Set();
     const items = typeof getEquippedItems === "function" ? getEquippedItems(unit) : [];
     for (const item of items) {
-      if (item && item.id) {
-        ids.add(item.id);
+      const ref = getEquipmentRefForDisplay(item);
+      if (ref) {
+        ids.add(ref);
       }
     }
     return ids;
@@ -2571,6 +3651,9 @@
     const lines = [];
     const slotName = slot && slot.name ? slot.name : item.slot;
     lines.push(`${item.rank || ""}${slotName ? ` / ${slotName}` : ""}`.trim());
+    if (Number.isFinite(item.copyIndex) && Number.isFinite(item.copyCount) && item.copyCount > 1) {
+      lines.push(`個体: #${item.copyIndex}/${item.copyCount}`);
+    }
     const summary = getEquipmentItemSummary(item);
     if (summary) {
       lines.push(summary);
@@ -2578,8 +3661,60 @@
     if (item.weaponType) {
       lines.push(`武器種: ${item.weaponType}`);
     }
+    if (Number.isFinite(item.upgradeLevel) && item.upgradeLevel > 0) {
+      lines.push(`強化: +${item.upgradeLevel}`);
+    }
     if (item.normalAttackSkillId) {
       lines.push(`通常攻撃: ${item.normalAttackSkillId}`);
+    }
+    if (item.description) {
+      lines.push(item.description);
+    }
+    return { title: item.name || item.id, lines };
+  }
+
+  function getEquipmentCharacterItem(unit) {
+    if (!unit) {
+      return null;
+    }
+    if (itemSystem && typeof itemSystem.getCharacterItem === "function") {
+      return itemSystem.getCharacterItem(unit.id);
+    }
+    return unit.item || null;
+  }
+
+  function getCharacterItemIconLabel(item) {
+    if (!item) {
+      return "?";
+    }
+    return item.shortName || String(item.name || item.id || "?").slice(0, 1);
+  }
+
+  function getItemInventoryCountForDisplay(item) {
+    if (!item) {
+      return 0;
+    }
+    if (itemSystem && typeof itemSystem.getItemInventoryCount === "function") {
+      return itemSystem.getItemInventoryCount(item.id);
+    }
+    return Math.max(0, Math.floor(Number.isFinite(item.inventoryCount) ? item.inventoryCount : 0));
+  }
+
+  function buildCharacterItemTooltip(item) {
+    if (!item) {
+      return null;
+    }
+    const lines = ["アイテム"];
+    if (itemSystem && typeof itemSystem.getItemInventoryCount === "function") {
+      lines.push(`持ち物: ${itemSystem.getItemInventoryCount(item.id)}`);
+    }
+    if (itemSystem && typeof itemSystem.getItemEquippedCount === "function") {
+      lines.push(`装備中: ${itemSystem.getItemEquippedCount(item.id)}`);
+    }
+    if (Number.isFinite(item.count)) {
+      lines.push(`所持数: ${item.count}${Number.isFinite(item.maxCount) ? `/${item.maxCount}` : ""}`);
+    } else if (Number.isFinite(item.maxCount)) {
+      lines.push(`最大所持数: ${item.maxCount}`);
     }
     if (item.description) {
       lines.push(item.description);
@@ -2595,9 +3730,15 @@
     if (skill.category || skill.rank) {
       lines.push(`${skill.rank || ""}${skill.category ? ` / ${skill.category}` : ""}`.trim());
     }
-    const condition = getSkillConditionLabel(skill);
+    const condition = skill.category === "通常攻撃" ? "" : getSkillConditionLabel(skill);
     if (condition) {
       lines.push(`条件: ${condition}`);
+    }
+    const owner = unit && (unit.skillOwner || unit.id) || skill.owner;
+    const skillKey = skill.key || skill.sourceKey || skill.id;
+    const level = owner && skillKey ? getSkillLevelForDisplay(owner, skillKey) : 0;
+    if (level > 0) {
+      lines.push(`強化Lv.${level}`);
     }
     const costs = [];
     if (Number.isFinite(skill.cd)) {
@@ -2616,6 +3757,7 @@
     if (description) {
       lines.push(...String(description).split(/\r?\n/));
     }
+    appendEquipmentRelatedStatuses(lines, description, skill.statusIds, unit);
     return { title: skill.name || skill.key, lines };
   }
 
@@ -2628,55 +3770,20 @@
     if (description) {
       lines.push(...String(description).split(/\r?\n/));
     }
+    appendEquipmentRelatedStatuses(lines, description, passive.statusIds, unit);
     return { title: passive.name || passive.key, lines };
   }
 
   function getSystemTooltipDescription(source) {
-    if (!source) {
-      return "";
-    }
-    if (isDetailedDescriptionEnabled()) {
-      return source.description || source.simpleDescription || source.tooltip || source.helpText || "";
-    }
-    return source.simpleDescription || source.description || source.tooltip || source.helpText || "";
+    return tooltipText.getDescription(source);
+  }
+
+  function appendEquipmentRelatedStatuses(lines, description, statusIds, unit) {
+    tooltipText.appendRelatedStatuses(lines, description, statusIds, unit);
   }
 
   function formatEquipmentDescriptionText(text, unit, source) {
-    let index = 0;
-    return String(text || "").replace(/\(式=値\)/g, () => {
-      const formula = Array.isArray(source && source.formula) ? source.formula[index] : null;
-      index += 1;
-      if (!formula) {
-        return "(式=?)";
-      }
-      return `(${formula.text || "式"}=${formatSystemNumber(getEquipmentFormulaValue(unit, source, formula))})`;
-    });
-  }
-
-  function getEquipmentFormulaValue(unit, source, formula) {
-    if (!unit || !formula) {
-      return 0;
-    }
-    if (formula.type === "strepionHeal") {
-      const hpPercent = unit.maxHp > 0 ? clamp(unit.hp / unit.maxHp, 0, 1) * 100 : 100;
-      const missingBelow = Math.max(0, (source.healHpThresholdPercent || 50) - hpPercent);
-      return callStat(getEffectiveMagic, unit, unit.magic) * (source.healMagicScale || 0)
-        + unit.maxHp * (((source.healHpBasePercent || 5) + missingBelow) / 100);
-    }
-    if (formula.type === "rihasTauntShield") {
-      return unit.maxHp * (source.shieldHpRatio || 0.05);
-    }
-    if (formula.type === "burnTick") {
-      return Math.max(0, unit.hp * 0.01);
-    }
-    const statValue = formula.stat === "attack"
-      ? callStat(getEffectiveAttack, unit, unit.attack)
-      : formula.stat === "magic"
-        ? callStat(getEffectiveMagic, unit, unit.magic)
-        : 0;
-    const base = Number.isFinite(source[formula.baseProp]) ? source[formula.baseProp] : 0;
-    const scale = Number.isFinite(source[formula.scaleProp]) ? source[formula.scaleProp] : 0;
-    return base + statValue * scale;
+    return tooltipText.formatDescription(text, unit, source);
   }
 
   function registerEquipmentTooltip(rect, tooltip) {
@@ -2760,7 +3867,8 @@
       }
     }
     ctx.restore();
-    return wrapped.slice(0, 8);
+    const maxLines = Math.max(8, Math.floor((view.h - 72) / 18));
+    return wrapped.slice(0, maxLines);
   }
 
   function drawEquipmentPresetWindow(layout, unit, readOnly) {
@@ -2791,15 +3899,12 @@
     ctx.fillText("プリセット", rect.x + 18, rect.y + 18);
 
     const nameRect = { x: rect.x + 18, y: rect.y + 56, w: rect.w - 134, h: 34 };
-    ctx.fillStyle = ui.preset && ui.preset.nameFocused ? "#fffdf0" : "rgba(16,32,24,0.055)";
-    ctx.strokeStyle = ui.preset && ui.preset.nameFocused ? "#d8a73f" : "rgba(16,32,24,0.18)";
-    roundRect(nameRect.x, nameRect.y, nameRect.w, nameRect.h, 6);
-    ctx.fill();
-    ctx.stroke();
-    drawFittedSystemText(ui.presetName || "プリセット1", nameRect.x + 10, nameRect.y + 17, nameRect.w - 20, 800, 13, 9, "#102018", "left", "middle");
-    addSystemMenuTarget({ action: "focusEquipmentPresetName", x: nameRect.x, y: nameRect.y, w: nameRect.w, h: nameRect.h });
-    const editingPresetName = ui.preset && Number.isFinite(ui.preset.editIndex);
-    drawSystemSmallButton(rect.x + rect.w - 108, rect.y + 58, 88, 30, readOnly ? "確認" : editingPresetName ? "名前変更" : "保存", readOnly ? "noop" : "saveEquipmentPreset", {});
+    drawPresetNameField(typeof ui.presetName === "string" ? ui.presetName : "プリセット1", nameRect.x + 10, nameRect.y + 5, nameRect.w - 20, nameRect.h - 10, ui.preset && ui.preset.nameFocused, {
+      field: readOnly ? null : "name",
+      targetRect: nameRect,
+      drawBackground: true,
+    });
+    drawSystemSmallButton(rect.x + rect.w - 108, rect.y + 58, 88, 30, readOnly ? "確認" : "保存", readOnly ? "noop" : "saveEquipmentPreset", {});
 
     ctx.fillStyle = "#63706a";
     ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -2821,15 +3926,123 @@
         const loadX = deleteX - 66;
         const editX = loadX - 30;
         const nameMaxW = readOnly ? rowW - 24 : Math.max(80, editX - (rowX + 12) - 8);
-        drawFittedSystemText(presets[i].name || `プリセット${i + 1}`, rowX + 12, rowY + 16, nameMaxW, 800, 13, 9, "#102018", "left", "middle");
+        const rowEditing = ui.preset && ui.preset.editIndex === i;
+        const nameText = rowEditing ? ui.preset.renameDraft : presets[i].name || `プリセット${i + 1}`;
+        const presetTextTarget = {
+          field: "rename",
+          index: i,
+          x: rowX + 6,
+          y: rowY + 4,
+          w: nameMaxW + 12,
+          h: 24,
+          textX: rowX + 12,
+          textW: nameMaxW,
+          charStops: getPresetTextStops(nameText),
+        };
+        drawPresetNameField(nameText, rowX + 12, rowY + 4, nameMaxW, 24, rowEditing, {
+          field: rowEditing ? "rename" : null,
+          index: i,
+          targetRect: presetTextTarget,
+          drawBackground: rowEditing,
+        });
         if (!readOnly) {
-          drawPresetIconButton(editX, rowY + 4, 24, "edit", "editEquipmentPresetName", { index: i });
+          drawPresetIconButton(editX, rowY + 4, 24, rowEditing ? "save" : "edit", rowEditing ? "saveEquipmentPresetNameEdit" : "editEquipmentPresetName", { index: i, focusTarget: presetTextTarget });
           drawSystemSmallButton(loadX, rowY + 4, 58, 24, "読込", "loadEquipmentPreset", { index: i });
           drawPresetIconButton(deleteX, rowY + 4, 24, "delete", "deleteEquipmentPreset", { index: i });
         }
       }
     }
     ctx.restore();
+  }
+
+  function drawPresetNameField(text, x, y, w, h, focused, options = {}) {
+    const value = String(text || "");
+    ctx.save();
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const targetRect = options.targetRect || { x: x - 6, y, w: w + 12, h };
+    if (options.drawBackground) {
+      ctx.fillStyle = focused ? "#fffdf0" : "rgba(16,32,24,0.055)";
+      ctx.strokeStyle = focused ? "#d8a73f" : "rgba(16,32,24,0.18)";
+      ctx.lineWidth = 1.4;
+      roundRect(targetRect.x, targetRect.y, targetRect.w, targetRect.h, 6);
+      ctx.fill();
+      ctx.stroke();
+    }
+    const stops = getPresetTextStops(value);
+    const state = getPresetNameDrawState(options.field, value);
+    roundRect(x, y, w, h, 4);
+    ctx.save();
+    ctx.clip();
+    if (focused && state) {
+      const start = Math.min(state.anchor, state.caret);
+      const end = Math.max(state.anchor, state.caret);
+      if (start !== end) {
+        const sx = x + Math.min(w, stops[start] || 0);
+        const ex = x + Math.min(w, stops[end] || 0);
+        ctx.fillStyle = "rgba(216,167,63,0.24)";
+        roundRect(sx, y + 3, Math.max(2, ex - sx), h - 6, 4);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = "#102018";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(value, x, y + h / 2);
+    if (focused && state) {
+      const caretX = x + Math.min(w - 1, stops[state.caret] || 0);
+      ctx.strokeStyle = "#a17116";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(caretX, y + 5);
+      ctx.lineTo(caretX, y + h - 5);
+      ctx.stroke();
+    }
+    ctx.restore();
+    if (options.field) {
+      addSystemMenuTarget({
+        action: "focusEquipmentPresetText",
+        field: options.field,
+        index: Number.isFinite(options.index) ? options.index : null,
+        x: targetRect.x,
+        y: targetRect.y,
+        w: targetRect.w,
+        h: targetRect.h,
+        textX: x,
+        textW: w,
+        charStops: stops,
+      });
+    }
+    ctx.restore();
+  }
+
+  function getPresetTextStops(value) {
+    const stops = [0];
+    let width = 0;
+    for (const char of Array.from(value)) {
+      width += ctx.measureText(char).width;
+      stops.push(width);
+    }
+    return stops;
+  }
+
+  function getPresetNameDrawState(field, value) {
+    const ui = getSystemMenu().equipment;
+    if (!ui.preset || !field) {
+      return null;
+    }
+    const length = Array.from(value || "").length;
+    const caretKey = field === "rename" ? "renameCaret" : "nameCaret";
+    const anchorKey = field === "rename" ? "renameAnchor" : "nameAnchor";
+    let anchor = Number.isFinite(ui.preset[anchorKey]) ? ui.preset[anchorKey] : length;
+    let caret = Number.isFinite(ui.preset[caretKey]) ? ui.preset[caretKey] : anchor;
+    if (field === "rename" && ui.preset.renameSelection) {
+      anchor = 0;
+      caret = length;
+    }
+    return {
+      anchor: Math.max(0, Math.min(length, anchor)),
+      caret: Math.max(0, Math.min(length, caret)),
+    };
   }
 
   function drawPresetIconButton(x, y, size, kind, action, extra = {}) {
@@ -2840,7 +4053,7 @@
     roundRect(x, y, size, size, 6);
     ctx.fill();
     ctx.stroke();
-    ctx.strokeStyle = kind === "delete" ? "#8d3f36" : "#102018";
+    ctx.strokeStyle = kind === "delete" ? "#8d3f36" : kind === "save" ? "#247242" : "#102018";
     ctx.fillStyle = ctx.strokeStyle;
     ctx.lineWidth = 1.8;
     ctx.lineCap = "round";
@@ -2860,6 +4073,12 @@
       ctx.lineTo(x + 8, y + size - 10);
       ctx.closePath();
       ctx.fill();
+    } else if (kind === "save") {
+      ctx.beginPath();
+      ctx.moveTo(x + 6, y + size * 0.54);
+      ctx.lineTo(x + size * 0.43, y + size - 7);
+      ctx.lineTo(x + size - 6, y + 7);
+      ctx.stroke();
     } else if (kind === "delete") {
       ctx.beginPath();
       ctx.moveTo(x + 7, y + 8);
@@ -2901,14 +4120,16 @@
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText("装備中スキルの移動", rect.x + 22, rect.y + 20);
+    const isEquipmentTransfer = confirm && confirm.type === "stealEquipmentItem";
+    ctx.fillText(isEquipmentTransfer ? "装備中装備の移動" : "装備中スキルの移動", rect.x + 22, rect.y + 20);
     ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#37463e";
     const name = confirm && confirm.otherName ? confirm.otherName : "他キャラ";
-    ctx.fillText(`${name}の装備スロットから外します。`, rect.x + 22, rect.y + 68);
+    const itemLabel = isEquipmentTransfer && confirm.itemName ? `「${confirm.itemName}」を` : "";
+    ctx.fillText(`${name}の装備スロットから${itemLabel}外します。`, rect.x + 22, rect.y + 68);
     ctx.fillText("よろしいですか？", rect.x + 22, rect.y + 94);
     drawSystemDialogButton(rect.x + rect.w - 208, rect.y + rect.h - 52, 84, 32, "いいえ", "closeEquipmentConfirm", true);
-    drawSystemDialogButton(rect.x + rect.w - 112, rect.y + rect.h - 52, 84, 32, "はい", "confirmEquipmentSkillTransfer", false);
+    drawSystemDialogButton(rect.x + rect.w - 112, rect.y + rect.h - 52, 84, 32, "はい", isEquipmentTransfer ? "confirmEquipmentItemTransfer" : "confirmEquipmentSkillTransfer", false);
     ctx.restore();
   }
 
@@ -2949,14 +4170,63 @@
 
   function getEquipmentItemCandidates(unit, slotKey) {
     const items = EQUIPMENT_DATA && EQUIPMENT_DATA.items ? Object.values(EQUIPMENT_DATA.items) : [];
-    return items.filter((item) =>
-      item &&
-      item.slot === slotKey &&
-      (typeof canEquipItem !== "function" || canEquipItem(unit, item))
-    );
+    const candidates = [];
+    for (const item of items) {
+      if (!item || item.slot !== slotKey) {
+        continue;
+      }
+      const instances = typeof getEquipmentInstancesByItemId === "function"
+        ? getEquipmentInstancesByItemId(item.id)
+        : [];
+      if (instances.length) {
+        for (const instanceItem of instances) {
+          if (!instanceItem || (typeof canEquipItem === "function" && !canEquipItem(unit, instanceItem))) {
+            continue;
+          }
+          candidates.push(instanceItem);
+        }
+        continue;
+      }
+      const resolved = typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(item.id) || item : item;
+      if (typeof canEquipItem !== "function" || canEquipItem(unit, resolved)) {
+        candidates.push(resolved);
+      }
+    }
+    return candidates;
   }
 
-  function getEquipmentItemSummary(item) {
+  function getEquipmentRefForDisplay(itemOrRef) {
+    if (typeof getEquipmentItemRef === "function") {
+      return getEquipmentItemRef(itemOrRef);
+    }
+    if (!itemOrRef) {
+      return null;
+    }
+    return typeof itemOrRef === "string" ? itemOrRef : itemOrRef.id || null;
+  }
+
+  function getEquipmentBaseIdForDisplay(itemOrRef) {
+    if (typeof getEquipmentBaseItemId === "function") {
+      return getEquipmentBaseItemId(itemOrRef);
+    }
+    if (!itemOrRef) {
+      return null;
+    }
+    return typeof itemOrRef === "string" ? itemOrRef : itemOrRef.id || null;
+  }
+
+  function getEquipmentIconSubtitle(item) {
+    if (!item) {
+      return "";
+    }
+    const copy = Number.isFinite(item.copyIndex) && Number.isFinite(item.copyCount) && item.copyCount > 1
+      ? `#${item.copyIndex} `
+      : "";
+    const rank = item.rank || "";
+    return `${copy}${rank}`.trim();
+  }
+
+  function getEquipmentItemStatSummary(item) {
     if (!item) {
       return "";
     }
@@ -2965,9 +4235,17 @@
       stats.push(`${getStatLabel(key)}+${formatSystemNumber(value)}`);
     }
     for (const [key, value] of Object.entries(item.statBonuses || {})) {
-      stats.push(`${getStatLabel(key)}+${formatSystemPercent(value, true)}`);
+      stats.push(`${getStatLabel(key)}${formatSystemPercent(value, true)}`);
     }
-    return stats.length ? stats.join(" / ") : (item.description || item.rank || "");
+    return stats.join(" / ");
+  }
+
+  function getEquipmentItemSummary(item) {
+    const statSummary = getEquipmentItemStatSummary(item);
+    if (statSummary) {
+      return statSummary;
+    }
+    return item ? (item.description || item.rank || "") : "";
   }
 
   function getEquipmentLoadout(unit) {
@@ -2984,6 +4262,43 @@
     return unit && unit.equipment && unit.equipment.weapon && typeof resolveEquipmentItem === "function"
       ? resolveEquipmentItem(unit.equipment.weapon)
       : null;
+  }
+
+  function getUnitNormalAttackSkill(unit) {
+    const owner = unit && (unit.skillOwner || unit.id);
+    const weapon = getUnitWeaponItem(unit);
+    const normalAttackSkillId = weapon && weapon.normalAttackSkillId;
+    if (normalAttackSkillId) {
+      const found = findNormalAttackSkillById(normalAttackSkillId);
+      if (found) {
+        return found.owner === owner && found.key === "attack"
+          ? found.skill
+          : { ...found.skill, key: "attack", owner, sourceOwner: found.owner, sourceKey: found.key };
+      }
+    }
+    return owner && SKILL_DATA && SKILL_DATA[owner] ? SKILL_DATA[owner].attack || null : null;
+  }
+
+  function findNormalAttackSkillById(skillId) {
+    for (const [owner, skills] of Object.entries(SKILL_DATA || {})) {
+      for (const [key, skill] of Object.entries(skills || {})) {
+        if (!skill || skill.category !== "通常攻撃") {
+          continue;
+        }
+        if (skill.id === skillId || key === skillId) {
+          return { owner, key, skill };
+        }
+      }
+    }
+    return null;
+  }
+
+  function isOwnedSkillForDisplay(owner, key) {
+    return typeof isSkillOwned === "function" ? isSkillOwned(owner, key) : true;
+  }
+
+  function getSkillLevelForDisplay(owner, key) {
+    return typeof getSkillLevel === "function" ? getSkillLevel(owner, key) : 0;
   }
 
   function canEquipSkillWithCurrentWeapon(unit, skill) {
@@ -3087,11 +4402,12 @@
     if (!unit || !item) {
       return null;
     }
-    if (unit.equipment && Object.values(unit.equipment).includes(item.id)) {
+    const itemRef = getEquipmentRefForDisplay(item);
+    if (unit.equipment && Object.values(unit.equipment).some((ref) => getEquipmentRefForDisplay(ref) === itemRef)) {
       return "current";
     }
     for (const otherUnit of getEquipmentComparisonUnits(unit.id)) {
-      if (otherUnit.equipment && Object.values(otherUnit.equipment).includes(item.id)) {
+      if (otherUnit.equipment && Object.values(otherUnit.equipment).some((ref) => getEquipmentRefForDisplay(ref) === itemRef)) {
         return "other";
       }
     }
@@ -3149,7 +4465,7 @@
       return "";
     }
     if (unit.id === "finald") {
-      return "アルジュナ";
+      return typeof getPlayerFirstName === "function" ? getPlayerFirstName() : (unit.name || "アルジュナ");
     }
     return unit.name || unit.id;
   }
@@ -3165,6 +4481,9 @@
   }
 
   function getEquipmentStatRows(unit) {
+    if (statusRenderer && typeof statusRenderer.getDetailedStats === "function") {
+      return statusRenderer.getDetailedStats(unit);
+    }
     return [
       { label: "HP", value: formatSystemNumber(unit.maxHp) },
       { label: "MP", value: formatSystemNumber(unit.maxMp) },
@@ -3181,14 +4500,77 @@
     ];
   }
 
-  function getSetEffectLabel(entry) {
-    if (!entry) {
+  function getEquipmentSetEffectLines(setEffects) {
+    const grouped = new Map();
+    for (const entry of setEffects || []) {
+      if (!entry || !entry.seriesKey) {
+        continue;
+      }
+      if (!grouped.has(entry.seriesKey)) {
+        const series = EQUIPMENT_DATA && EQUIPMENT_DATA.series ? EQUIPMENT_DATA.series[entry.seriesKey] : null;
+        const maxThreshold = Number.isFinite(entry.maxThreshold) && entry.maxThreshold > 0
+          ? entry.maxThreshold
+          : getSetEffectMaxThreshold(series);
+        grouped.set(entry.seriesKey, {
+          series,
+          count: Number.isFinite(entry.count) ? entry.count : 0,
+          maxThreshold,
+          entries: [],
+        });
+      }
+      grouped.get(entry.seriesKey).entries.push(entry);
+    }
+
+    const lines = [];
+    for (const [seriesKey, group] of grouped.entries()) {
+      const name = group.series && group.series.name ? group.series.name : seriesKey;
+      const max = Math.max(1, group.maxThreshold || 1);
+      const count = Math.min(max, Math.max(0, Math.floor(group.count || 0)));
+      lines.push({ text: `${name}(${count}/${max})`, header: true });
+      group.entries
+        .sort((a, b) => (a.threshold || 0) - (b.threshold || 0))
+        .forEach((entry) => {
+          const description = getSetEffectDescription(entry);
+          if (description) {
+            lines.push({ text: description, header: false });
+          }
+        });
+    }
+    return lines;
+  }
+
+  function getSetEffectMaxThreshold(series) {
+    const thresholds = EQUIPMENT_DATA && Array.isArray(EQUIPMENT_DATA.setThresholds) ? EQUIPMENT_DATA.setThresholds : [];
+    return thresholds.reduce((max, threshold) => (
+      series && series.setEffects && series.setEffects[threshold]
+        ? Math.max(max, threshold)
+        : max
+    ), 0);
+  }
+
+  function getSetEffectDescription(entry) {
+    const effect = entry && entry.effect;
+    if (!effect) {
       return "";
     }
-    const series = EQUIPMENT_DATA && EQUIPMENT_DATA.series ? EQUIPMENT_DATA.series[entry.seriesKey] : null;
-    const name = series && series.name ? series.name : entry.seriesKey;
-    const effectName = entry.effect && entry.effect.name ? `: ${entry.effect.name}` : "";
-    return `${name} ${entry.threshold}セット${effectName}`;
+    if (effect.simpleDescription) {
+      return effect.simpleDescription;
+    }
+    if (effect.description) {
+      return effect.description;
+    }
+    return getSetEffectStatsText(effect);
+  }
+
+  function getSetEffectStatsText(effect) {
+    const stats = [];
+    for (const [key, value] of Object.entries(effect.flatStatBonuses || {})) {
+      stats.push(`${getStatLabel(key)}+${formatSystemNumber(value)}`);
+    }
+    for (const [key, value] of Object.entries(effect.statBonuses || {})) {
+      stats.push(`${getStatLabel(key)}${formatSystemPercent(value, true)}`);
+    }
+    return stats.join(" / ");
   }
 
   function callStat(fn, unit, fallback) {
@@ -3204,6 +4586,22 @@
       defense: "防御",
       magicDefense: "魔防",
       guardChance: "ガード",
+      guardDamageReduction: "ガード軽減",
+      critChance: "会心",
+      critDamage: "会心ダメ",
+      damageBoost: "与ダメ",
+      damageResistance: "被ダメ",
+      physicalDamageBoost: "物理与ダメ",
+      physicalDamageResistance: "物理被ダメ",
+      magicDamageBoost: "魔法与ダメ",
+      magicDamageResistance: "魔法被ダメ",
+      hpRegenRate: "HP再生",
+      mpRegenRate: "MP再生",
+      castSpeed: "詠唱速度",
+      cooldownReduction: "クールタイム",
+      actionSpeed: "行動速度",
+      ultimateChargeRate: "ゲージ上昇",
+      moveSpeed: "移動速度",
     };
     return labels[key] || key;
   }
@@ -3382,4 +4780,3 @@
     };
   };
 })();
-

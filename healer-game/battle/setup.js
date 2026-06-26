@@ -38,6 +38,15 @@
       return Math.max(0, Math.min(unit.maxHp, hp));
     }
 
+    function getCarriedMp(unit) {
+      const maxMp = Math.max(0, Number.isFinite(unit.maxMp) ? unit.maxMp : 0);
+      const savedMp = game.partyMpById && game.partyMpById[unit.id];
+      if (!Number.isFinite(savedMp)) {
+        return maxMp;
+      }
+      return Math.max(0, Math.min(maxMp, savedMp));
+    }
+
     function applyStoredPartyConfig(unit) {
       if (!unit || !unit.id) {
         return;
@@ -54,6 +63,7 @@
 
     function applyCarriedHp(unit) {
       unit.hp = getCarriedHp(unit);
+      unit.mp = getCarriedMp(unit);
       unit.dead = unit.hp <= 0;
     }
 
@@ -71,6 +81,8 @@
       game.priorityTargetTimer = 0;
       game.skillPage = "page1";
       game.currentQuest = quest;
+      game.battleRewards = { pending: [], granted: [], claimed: false };
+      game.innRestUsedUntilBattle = false;
       game.message = quest ? `依頼: ${quest.name}` : "依頼: 魔物を全滅させる";
       game.messageTimer = 4;
 
@@ -80,16 +92,19 @@
 
       const playerStart = clampBattlePoint(bounds.left + bounds.width * 0.26, cy, player.radius);
       const playerHp = getCarriedHp(player);
+      const playerMp = getCarriedMp(player);
 
       Object.assign(player, {
         x: playerStart.x,
         y: playerStart.y,
         hp: playerHp,
-        mp: player.maxMp,
+        mp: playerMp,
         shield: 0,
         shieldTimer: 0,
         shields: [],
         ult: 0,
+        moodActionId: 0,
+        moodActionGain: 0,
         dead: playerHp <= 0,
         cds: {},
         channel: null,
@@ -107,6 +122,8 @@
         cast: null,
         aim: null,
         itemAim: null,
+        itemUseRequest: null,
+        itemCast: null,
         selfHealFloat: 0,
         delayedDamageQueue: [],
         field: true,

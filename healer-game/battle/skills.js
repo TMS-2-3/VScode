@@ -20,7 +20,7 @@
     const COMMAND_SKILL_KEYS = ["take_aim", "commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"];
     const PLAYER_SKILL_SLOT_KEYS = Array.isArray(ctx.PLAYER_SKILL_SLOT_KEYS) && ctx.PLAYER_SKILL_SLOT_KEYS.length
       ? ctx.PLAYER_SKILL_SLOT_KEYS
-      : ["q", "e", "r", "f", "g"];
+      : ["q", "w", "e", "r", "t"];
     const PLAYER_SKILL_PANEL_SLOTS = 6;
     const PLAYER_ULTIMATE_SLOT_INDEX = PLAYER_SKILL_PANEL_SLOTS - 1;
     const PLAYER_ULTIMATE_INPUT_LABEL = "4";
@@ -42,7 +42,7 @@
       if (ctx.getEquippedActiveSkillKeys) {
         return ctx.getEquippedActiveSkillKeys(player);
       }
-      return ["attack", "heal", "shield", "take_aim", "commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"];
+      return ["attack", "heal", "shield", "commandDefend", "commandAttack", "commandDefendAll", "commandAttackAll"];
     }
 
     function getPlayerSkillCooldown(player, key) {
@@ -53,6 +53,7 @@
       const entries = new Array(PLAYER_SKILL_PANEL_SLOTS).fill(null);
       pageEntries.slice(0, PLAYER_ULTIMATE_SLOT_INDEX).forEach((entry, index) => {
         entry.input = getSlotInputLabel(index);
+        entry.level = Number.isFinite(entry.level) ? entry.level : getSkillUpgradeLevel(player, entry.key, entry.skill);
         entries[index] = entry;
       });
       const ultimateEntry = getUnitUltimateEntry(player);
@@ -61,9 +62,11 @@
         key: ultimateEntry.key || "ult",
         input: getSlotInputLabel(PLAYER_ULTIMATE_SLOT_INDEX),
         name: ult.name,
+        skillType: ult.skillType || "",
         cd: player.ult < getUltimateCost(player) ? getUltimateCost(player) - player.ult : 0,
         max: getUltimateCost(player),
         skill: ult,
+        level: getSkillUpgradeLevel(player, ultimateEntry.key || "ult", ult),
         gauge: true,
       };
       return entries;
@@ -71,6 +74,126 @@
 
     function getSkillOwner(unit) {
       return unit && (unit.skillOwner || unit.id) || "";
+    }
+
+    const SKILL_BASE_MULTIPLIERS = [1, 1.2, 1.4, 1.6, 1.8, 2];
+    const BOMB_FALLOFF_MULTIPLIERS = [1, 0.87, 0.75, 0.62, 0.5, 0.37];
+    const RIHAS_ULT_DURATION_BONUSES = [0, 0.5, 1, 1.5, 2, 3];
+
+    function getSkillSourceOwner(skill, fallbackOwner = "") {
+      return skill && (skill.sourceOwner || skill.owner) || fallbackOwner;
+    }
+
+    function getSkillSourceKey(skill, fallbackKey = "") {
+      return skill && (skill.sourceKey || skill.key) || fallbackKey;
+    }
+
+    function isSkillSource(skill, owner, key) {
+      return getSkillSourceOwner(skill) === owner && getSkillSourceKey(skill) === key;
+    }
+
+    function getSkillUpgradeLevel(unitOrOwner, key, skill = null) {
+      if (typeof ctx.getSkillLevel !== "function") {
+        return 0;
+      }
+      const owner = typeof unitOrOwner === "string" ? unitOrOwner : getSkillOwner(unitOrOwner);
+      const skillKey = key || getSkillSourceKey(skill);
+      if (!owner || !skillKey) {
+        return 0;
+      }
+      try {
+        return ctx.clamp(Math.floor(ctx.getSkillLevel(owner, skillKey) || 0), 0, 5);
+      } catch (_error) {
+        return 0;
+      }
+    }
+
+    function getSkillUpgradeIndexedValue(unit, key, skill, values) {
+      const level = getSkillUpgradeLevel(unit, key || getSkillSourceKey(skill), skill);
+      return values[Math.max(0, Math.min(values.length - 1, level))] || 0;
+    }
+
+    function getUpgradedBaseValue(unit, key, skill, prop) {
+      const value = Number.isFinite(skill && skill[prop]) ? skill[prop] : 0;
+      if (prop === "damageBase") {
+        if (isSkillSource(skill, "finald", "attack") || isSkillSource(skill, "rihas", "attack")) {
+          return value * getSkillUpgradeIndexedValue(unit, key, skill, SKILL_BASE_MULTIPLIERS);
+        }
+        if (isSkillSource(skill, "ulpes", "attack")) {
+          return value + getSkillUpgradeLevel(unit, key || "attack", skill) * 3;
+        }
+      }
+      if ((isSkillSource(skill, "finald", "heal") && prop === "healBase") || (isSkillSource(skill, "finald", "shield") && prop === "shieldBase")) {
+        return value * getSkillUpgradeIndexedValue(unit, key, skill, SKILL_BASE_MULTIPLIERS);
+      }
+      return value;
+    }
+
+    function getSkillBurnDuration(unit, skill) {
+      const base = Number.isFinite(skill && skill.burnDuration) ? skill.burnDuration : 0;
+      if (!isSkillSource(skill, "sushia", "fire")) {
+        return base;
+      }
+      return base + getSkillUpgradeLevel(unit, getSkillSourceKey(skill, "fire"), skill);
+    }
+
+    function getDistanceFalloffMax(unit, skill, fallback = 0) {
+      const base = Number.isFinite(skill && skill.distanceFalloffMax) ? skill.distanceFalloffMax : fallback;
+      if (!isSkillSource(skill, "sushia", "bomb")) {
+        return base;
+      }
+      return base * getSkillUpgradeIndexedValue(unit, getSkillSourceKey(skill, "bomb"), skill, BOMB_FALLOFF_MULTIPLIERS);
+    }
+
+    function getProjectilePierceCount(unit, key, skill) {
+      if (isSkillSource(skill, "sushia", "attack")) {
+        return getSkillUpgradeLevel(unit, key || "attack", skill);
+      }
+      return Number.isFinite(skill && skill.pierceCount) ? Math.max(0, Math.floor(skill.pierceCount)) : 0;
+    }
+
+    function getCdRefundPerHit(unit, key, skill) {
+      const base = Number.isFinite(skill && skill.cdRefundPerHit) ? skill.cdRefundPerHit : 0;
+      if (!isSkillSource(skill, "ulpes", "heroSlash")) {
+        return base;
+      }
+      return base + getSkillUpgradeLevel(unit, key || "heroSlash", skill) * 0.3;
+    }
+
+    function getCommandIgnoreChance(source, key, skill) {
+      return Math.max(0, 0.75 - getSkillUpgradeLevel(source, key, skill) * 0.1);
+    }
+
+    function getFocusDamageTakenBonus(source, key, skill) {
+      if (!isSkillSource(skill, "finald", "take_aim")) {
+        return 0;
+      }
+      const perLevel = Number.isFinite(skill.focusDamageTakenBonusPerLevel) ? skill.focusDamageTakenBonusPerLevel : 0.02;
+      return getSkillUpgradeLevel(source, key, skill) * perLevel;
+    }
+
+    function getSkillCastTime(unit, key, skill, baseTime, castFn = getCastTime) {
+      let value = Number.isFinite(baseTime) ? baseTime : 0;
+      if (isSkillSource(skill, "finald", "ult")) {
+        value = Math.max(0, value - getSkillUpgradeLevel(unit, key || "ult", skill) * 0.5);
+      }
+      return castFn(value, unit);
+    }
+
+    function getSkillCostMaxMpRatio(unit, skill) {
+      const base = Number.isFinite(skill && skill.costMaxMpRatio) ? skill.costMaxMpRatio : 0;
+      if (!isSkillSource(skill, "finald", "ult")) {
+        return base;
+      }
+      return Math.max(0, base - getSkillUpgradeLevel(unit, "ult", skill) * 0.02);
+    }
+
+    function getRihasUltDuration(unit, skill) {
+      return (Number.isFinite(skill && skill.duration) ? skill.duration : 0) + getSkillUpgradeIndexedValue(unit, "ult", skill, RIHAS_ULT_DURATION_BONUSES);
+    }
+
+    function getUltimateCritChanceBonus(unit, skill) {
+      return isSkillSource(skill, "ulpes", "ult") ? getSkillUpgradeLevel(unit, "ult", skill) * 0.1 : 0;
     }
 
     function isSkillEquipped(unit, key) {
@@ -96,7 +219,18 @@
       if (key === "ult") {
         return getUnitUltimateEntry(unit).skill;
       }
+      if (key === "attack") {
+        return getUnitNormalAttackSkill(unit) || get(getSkillOwner(unit), key);
+      }
       return get(getSkillOwner(unit), key);
+    }
+
+    function getUnitNormalAttackSkill(unit) {
+      if (!unit || typeof ctx.getEquippedActiveSkills !== "function") {
+        return null;
+      }
+      const entry = ctx.getEquippedActiveSkills(unit).find((candidate) => candidate && candidate.key === "attack" && candidate.skill);
+      return entry ? entry.skill : null;
     }
 
     function getAttackStat(unit) {
@@ -114,7 +248,7 @@
     function getSkillCost(unit, skill) {
       if (!skill) return 0;
       if (Number.isFinite(skill.costMaxMpRatio)) {
-        return Math.ceil((unit && unit.maxMp || 0) * skill.costMaxMpRatio);
+        return Math.ceil((unit && unit.maxMp || 0) * getSkillCostMaxMpRatio(unit, skill));
       }
       return Number.isFinite(skill.cost) ? skill.cost : 0;
     }
@@ -392,12 +526,13 @@
 
     function getActionCooldown(unit) {
       const base = ctx.ACTION_COOLDOWN_BASE || 7;
-      if (unit.team === "party" && unit.id !== "finald") return ctx.getCommandActionCooldown(unit, base);
-      if (unit.team === "enemy") return base;
-      return base;
+      const cooldown = unit.team === "party" && unit.id !== "finald" ? ctx.getCommandActionCooldown(unit, base) : base;
+      const actionSpeed = ctx.getEquipmentStatBonusSum ? ctx.getEquipmentStatBonusSum(unit, "actionSpeed") : 0;
+      return cooldown / Math.max(0.1, 1 + actionSpeed);
     }
 
     function commitActionStart(unit) {
+      if (ctx.beginMoodAction) ctx.beginMoodAction(unit);
       if (ctx.applyMoodCommandBiasAuto) ctx.applyMoodCommandBiasAuto(unit);
       if (ctx.commitCommandBias) ctx.commitCommandBias(unit);
     }
@@ -536,7 +671,7 @@
     }
 
     function getFireDamage(unit, skill) {
-      return skill.damageBase + getMagicStat(unit) * skill.magicScale;
+      return getSkillDamage(unit, skill);
     }
 
     function thinkPartyUnit(unit, avoidingTelegraph = false) {
@@ -593,12 +728,15 @@
     }
 
     function getSkillDamage(unit, skill, baseProp = "damageBase", attackProp = "attackScale", magicProp = "magicScale") {
-      let damage = Number.isFinite(skill[baseProp]) ? skill[baseProp] : 0;
+      let damage = getUpgradedBaseValue(unit, getSkillSourceKey(skill), skill, baseProp);
       if (Number.isFinite(skill[attackProp])) {
         damage += getAttackStat(unit) * skill[attackProp];
       }
       if (Number.isFinite(skill[magicProp])) {
         damage += getMagicStat(unit) * skill[magicProp];
+      }
+      if (isSkillSource(skill, "rihas", "lan_wave") && baseProp === "shockDamageBase") {
+        damage += getAttackStat(unit) * getSkillUpgradeLevel(unit, getSkillSourceKey(skill, "lan_wave"), skill) * 0.08;
       }
       return damage;
     }
@@ -613,7 +751,7 @@
 
     function dealPartySkillDamage(unit, target, skill, damage, options = {}) {
       const damaged = ctx.dealDamage(unit, target, damage, getSkillDamageOptions(skill, options)) > 0;
-      const burnDuration = getOffensiveEffectDuration(unit, target, skill.burnDuration);
+      const burnDuration = getOffensiveEffectDuration(unit, target, getSkillBurnDuration(unit, skill));
       if (burnDuration > 0) {
         applyBurn(unit, target, Object.assign({}, skill, { burnDuration }));
         if (!damaged && ctx.awardOffensiveUltimate) ctx.awardOffensiveUltimate(unit, target);
@@ -693,7 +831,7 @@
           ctx.applyMultiHitMoodBonus(unit, hits);
           if (Number.isFinite(skill.cdRefundPerHit)) {
             const minCd = Number.isFinite(skill.minCdAfterHit) ? skill.minCdAfterHit : 0;
-            trackSkillCooldown(unit, key, key, Math.max(minCd, (unit.cds[key] || 0) - hits * skill.cdRefundPerHit));
+            trackSkillCooldown(unit, key, key, Math.max(minCd, (unit.cds[key] || 0) - hits * getCdRefundPerHit(unit, key, skill)));
           }
           ctx.addBurst(unit.x, unit.y, skill.burstRadius || skill.radius, "rgba(244,197,79,0.22)");
         },
@@ -790,6 +928,7 @@
           speakSkill(unit, key);
           const count = Math.max(1, Math.floor(skill.projectileCount));
           const damage = getSkillDamage(unit, skill);
+          const pierceCount = getProjectilePierceCount(unit, key, skill);
           for (let i = 0; i < count; i += 1) {
             const spread = (i - Math.floor(count / 2)) * (Number.isFinite(skill.spread) ? skill.spread : 0);
             const angle = ctx.angleTo(unit, target) + spread;
@@ -804,7 +943,8 @@
               magic: isMagicDamageSkill(skill),
               life: Number.isFinite(skill.life) ? skill.life : 1.2,
               hit: new Set(),
-              pierce: Boolean(skill.pierce),
+              pierce: Boolean(skill.pierce) || pierceCount > 0,
+              pierceCount: pierceCount > 0 ? pierceCount : undefined,
               affectsAllies: skill.affectsAllies !== false,
               healAllies: Boolean(skill.healAllies),
               heal: Number.isFinite(skill.heal) ? skill.heal : undefined,
@@ -837,7 +977,7 @@
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
             if (d <= skill.radius + unitHit.radius) {
               const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
-              const falloff = (Number.isFinite(skill.distanceFalloffMax) ? skill.distanceFalloffMax : 0) * distanceRatio;
+              const falloff = getDistanceFalloffMax(unit, skill, 0) * distanceRatio;
               const damage = getSkillDamage(unit, skill) * Math.max(0, 1 - falloff);
               dealPartySkillDamage(unit, unitHit, skill, damage);
               hits += unitHit.team === "enemy" ? 1 : 0;
@@ -883,7 +1023,7 @@
       for (let i = 0; i < skill.repeat; i += 1) {
         setTimeout(() => {
           if (!unit.dead && !target.dead && canOffensiveAffect(unit, target) && ctx.dist(unit, target) <= skill.hitRange) {
-            ctx.dealDamage(unit, target, skill.damageBase + getAttackStat(unit) * skill.attackScale, { crit: true });
+            ctx.dealDamage(unit, target, getSkillDamage(unit, skill), { crit: true });
             ctx.slashEffect(unit, target);
           }
         }, i * skill.repeatDelayMs);
@@ -912,12 +1052,12 @@
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             if (ctx.inFan(unitHit, unit.x, unit.y, skill.radius, unit.aimAngle, ctx.deg(skill.arcDeg))) {
-              ctx.dealDamage(unit, unitHit, skill.damageBase + getAttackStat(unit) * skill.attackScale, { crit: true });
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill), { crit: true });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
           ctx.applyMultiHitMoodBonus(unit, hits);
-          trackSkillCooldown(unit, "heroSlash", "heroSlash", Math.max(skill.minCdAfterHit, unit.cds.heroSlash - hits * skill.cdRefundPerHit));
+          trackSkillCooldown(unit, "heroSlash", "heroSlash", Math.max(skill.minCdAfterHit, unit.cds.heroSlash - hits * getCdRefundPerHit(unit, "heroSlash", skill)));
           ctx.addBurst(unit.x, unit.y, skill.burstRadius, "rgba(244,197,79,0.22)");
         },
       });
@@ -940,7 +1080,7 @@
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             if (ctx.distPoint(unitHit.x, unitHit.y, unit.x, unit.y) <= skill.radius + unitHit.radius) {
-              ctx.dealDamage(unit, unitHit, skill.damageBase + getAttackStat(unit) * skill.attackScale);
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill));
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -978,10 +1118,10 @@
             if (!canOffensiveAffect(unit, unitHit)) continue;
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
             if (d <= skill.radius + unitHit.radius) {
-              ctx.dealDamage(unit, unitHit, skill.damageBase + getAttackStat(unit) * skill.attackScale);
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill));
               hits += unitHit.team === "enemy" ? 1 : 0;
             } else if (d <= skill.shockRadius + unitHit.radius) {
-              ctx.dealDamage(unit, unitHit, skill.shockDamageBase + getMagicStat(unit) * skill.shockMagicScale, { magic: true });
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill, "shockDamageBase", "shockAttackScale", "shockMagicScale"), { magic: true });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1005,10 +1145,11 @@
           finishPartyAction(unit);
           if (unit.dead || unit.frozen > 0) return;
           speakSkill(unit, "attack");
+          const pierceCount = getProjectilePierceCount(unit, "attack", skill);
           for (let i = 0; i < skill.projectileCount; i += 1) {
             const spread = (i - Math.floor(skill.projectileCount / 2)) * skill.spread;
             const angle = ctx.angleTo(unit, target) + spread;
-            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: skill.damageBase + getMagicStat(unit) * skill.magicScale, magic: true, life: skill.life, hit: new Set(), pierce: false, affectsAllies: true, color: skill.color });
+            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), magic: true, life: skill.life, hit: new Set(), pierce: pierceCount > 0, pierceCount: pierceCount > 0 ? pierceCount : undefined, affectsAllies: true, color: skill.color });
           }
         },
       });
@@ -1035,8 +1176,8 @@
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
             if (d <= skill.radius + unitHit.radius) {
               const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
-              const falloff = (Number.isFinite(skill.distanceFalloffMax) ? skill.distanceFalloffMax : 0.8) * distanceRatio;
-              const damage = (skill.damageBase + getMagicStat(unit) * skill.magicScale) * Math.max(0, 1 - falloff);
+              const falloff = getDistanceFalloffMax(unit, skill, 0.8) * distanceRatio;
+              const damage = getSkillDamage(unit, skill) * Math.max(0, 1 - falloff);
               ctx.dealDamage(unit, unitHit, damage, { magic: true });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
@@ -1063,7 +1204,7 @@
           if (unit.dead || unit.frozen > 0 || !target || target.dead || !canOffensiveAffect(unit, target)) return;
           speakSkill(unit, "fire");
           const damaged = ctx.dealDamage(unit, target, getFireDamage(unit, skill), { magic: true }) > 0;
-          const burnDuration = getOffensiveEffectDuration(unit, target, skill.burnDuration);
+          const burnDuration = getOffensiveEffectDuration(unit, target, getSkillBurnDuration(unit, skill));
           if (burnDuration > 0) {
             applyBurn(unit, target, Object.assign({}, skill, { burnDuration }));
             if (!damaged && ctx.awardOffensiveUltimate) ctx.awardOffensiveUltimate(unit, target);
@@ -1094,7 +1235,7 @@
           finishPartyAction(unit, [{ key, value: ctx.getMoodCooldown(unit, skill.cd) }]);
           if (unit.dead || unit.frozen > 0 || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) return;
           speakSkill(unit, key);
-          ctx.healUnit(unit, target, skill.healBase + getMagicStat(unit) * skill.magicScale, { noMood: target === unit });
+          ctx.healUnit(unit, target, getUpgradedBaseValue(unit, key, skill, "healBase") + getMagicStat(unit) * skill.magicScale, { noMood: target === unit });
           ctx.effects.push({ type: "beam", x: unit.x, y: unit.y, x2: target.x, y2: target.y, color: skill.beamColor, time: 0.24, age: 0 });
         },
       };
@@ -1121,7 +1262,7 @@
           finishPartyAction(unit, [{ key, value: ctx.getMoodCooldown(unit, skill.cd) }]);
           if (unit.dead || unit.frozen > 0 || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) return;
           speakSkill(unit, key);
-          const addedShield = ctx.addShield(target, skill.shieldBase + getMagicStat(unit) * skill.magicScale, skill.duration);
+          const addedShield = ctx.addShield(target, getUpgradedBaseValue(unit, key, skill, "shieldBase") + getMagicStat(unit) * skill.magicScale, skill.duration);
           if (addedShield > 0 && ctx.awardSupportUltimate) ctx.awardSupportUltimate(unit, target);
           const moodGain = Number.isFinite(skill.moodGain) ? skill.moodGain : 0;
           if (target !== unit && ctx.addMoodGain && moodGain > 0) ctx.addMoodGain(target, moodGain * ctx.MOOD_EVENT_MULT);
@@ -1136,6 +1277,10 @@
     function startPlayerAim(type) {
       const player = ctx.player;
       if (player.dead || player.channel || player.cast || player.frozen > 0) return false;
+      if (hasPlayerMoveIntent()) {
+        showPlayerMoveIntentBusy();
+        return false;
+      }
       if (!isSkillEquipped(player, type)) {
         const origin = ctx.getSupportOrigin();
         ctx.addFloat("未セット", origin.x + 26, origin.y - 28, "#ffffff");
@@ -1177,6 +1322,70 @@
       ctx.addFloat("射程外", x, y - 18, "#ffffff");
     }
 
+    function hasPlayerMoveIntent() {
+      const intent = ctx.player && ctx.player.aiIntent;
+      return Boolean(intent && intent.manual);
+    }
+
+    function showPlayerMoveIntentBusy() {
+      const origin = ctx.getSupportOrigin();
+      ctx.addFloat("移動中", origin.x + 26, origin.y - 28, "#ffffff");
+    }
+
+    function ensurePlayerSkillRange(key, target, skill, extra = 0, options = {}) {
+      if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+        return "blocked";
+      }
+      const range = getPlayerSkillRange(skill);
+      if (!Number.isFinite(range) || isPointInPlayerRange(target.x, target.y, range, extra)) {
+        return "inRange";
+      }
+      if (options.fromMoveIntent) {
+        showPlayerRangeError(target.x, target.y);
+        return "blocked";
+      }
+      ctx.player.aiIntent = {
+        manual: true,
+        key,
+        target,
+        range: range + Math.max(0, Number.isFinite(extra) ? extra : 0),
+        support: Boolean(options.support),
+      };
+      ctx.player.aim = null;
+      showPlayerMoveIntentBusy();
+      return "queued";
+    }
+
+    function stopIfPlayerSkillQueued(rangeState) {
+      return rangeState === "queued";
+    }
+
+    function executePlayerMoveIntent(unit) {
+      const player = ctx.player;
+      if (!player || unit !== player) {
+        return false;
+      }
+      const intent = player.aiIntent;
+      if (!intent || !intent.manual) {
+        return false;
+      }
+      const target = intent.target;
+      player.aiIntent = null;
+      if (!target || target.dead) {
+        const origin = ctx.getSupportOrigin();
+        ctx.addFloat("対象なし", origin.x + 26, origin.y - 28, "#ffffff");
+        return false;
+      }
+      const options = { fromMoveIntent: true };
+      if (intent.key === "attack") return firePlayerShot(target, options);
+      if (intent.key === "heal") return castHeal(target, options);
+      if (intent.key === "shield") return castShield(target, options);
+      if (intent.key === "fire") return castPlayerFire(target, options);
+      if (intent.key === "bomb") return castPlayerBomb(target, options);
+      if (isCommandSkill(intent.key)) return usePlayerCommand(intent.key, target, options);
+      return false;
+    }
+
     function confirmPlayerAim() {
       const player = ctx.player;
       if (!player.aim || player.dead || player.channel || player.cast || player.frozen > 0) return false;
@@ -1190,13 +1399,15 @@
       return false;
     }
 
-    function firePlayerShot() {
+    function firePlayerShot(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = need("finald", "attack");
       if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
-      const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
+      const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
-      if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill))) { showPlayerRangeError(target.x, target.y); return false; }
+      const rangeState = ensurePlayerSkillRange("attack", target, skill, 0, options);
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
       if ((player.cds.attack || 0) > 0) { ctx.addFloat("再詠唱中", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (!ctx.startPlayerCast("attack", { target }, getCastTime(skill.cast, player))) return false;
@@ -1211,7 +1422,7 @@
       const origin = ctx.getSupportOrigin(target);
       speakSkill(player, "attack");
       let hits = 0;
-      const damage = skill.damageBase + getMagicStat(player) * skill.magicScale;
+      const damage = getSkillDamage(player, skill);
       for (const unit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
         if (unit.dead || unit === player) {
           continue;
@@ -1226,13 +1437,15 @@
       ctx.addTelegraph({ type: "circle", x: target.x, y: target.y, radius: skill.radius, team: "support", time: 0.16, resolve: () => {} });
       ctx.addBurst(target.x, target.y, skill.burstRadius, hits > 0 ? "rgba(158,247,255,0.28)" : "rgba(158,247,255,0.14)");
     }
-    function castHeal() {
+    function castHeal(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = need("finald", "heal");
       if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
-      const target = ctx.game.hover;
+      const target = lockedTarget || ctx.game.hover;
       if (!target || target.dead || target.team !== "party") { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
-      if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius)) { showPlayerRangeError(target.x, target.y); return false; }
+      const rangeState = ensurePlayerSkillRange("heal", target, skill, target.radius, { ...options, support: true });
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
       if ((player.cds.heal || 0) > 0) { ctx.addFloat("再詠唱中", target.x, target.y - 28, "#ffffff"); return false; }
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", target.x, target.y - 28, "#ffffff"); return false; }
       if (!ctx.startPlayerCast("heal", { target }, getCastTime(skill.cast, player))) return false;
@@ -1249,19 +1462,21 @@
         return;
       }
       speakSkill(player, "heal");
-      ctx.healUnit(player, target, skill.healBase + getMagicStat(player) * skill.magicScale, { noMood: target === player });
+      ctx.healUnit(player, target, getUpgradedBaseValue(player, "heal", skill, "healBase") + getMagicStat(player) * skill.magicScale, { noMood: target === player });
       const origin = ctx.getSupportOrigin(target);
       ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: target.x, y2: target.y, color: skill.beamColor, time: 0.24, age: 0 });
     }
 
-    function castShield() {
+    function castShield(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = need("finald", "shield");
       if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
-      const target = ctx.game.hover;
+      const target = lockedTarget || ctx.game.hover;
       const origin = target || ctx.getSupportOrigin();
       if (!target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
-      if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius)) { showPlayerRangeError(target.x, target.y); return false; }
+      const rangeState = ensurePlayerSkillRange("shield", target, skill, target.radius, { ...options, support: true });
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
       if ((player.cds.shield || 0) > 0) { ctx.addFloat("再詠唱中", target.x, target.y - 28, "#ffffff"); return false; }
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (!ctx.startPlayerCast("shield", { target }, getCastTime(skill.cast, player))) return false;
@@ -1278,20 +1493,22 @@
         return;
       }
       speakSkill(player, "shield");
-      const addedShield = ctx.addShield(target, skill.shieldBase + getMagicStat(player) * skill.magicScale, skill.duration);
+      const addedShield = ctx.addShield(target, getUpgradedBaseValue(player, "shield", skill, "shieldBase") + getMagicStat(player) * skill.magicScale, skill.duration);
       if (addedShield > 0 && ctx.awardSupportUltimate) ctx.awardSupportUltimate(player, target);
       if (target !== player) ctx.addMoodGain(target, skill.moodGain * ctx.MOOD_EVENT_MULT);
       ctx.addTelegraph({ type: "circle", x: target.x, y: target.y, radius: target.radius + 18, team: "support", time: 0.18, resolve: () => {} });
       ctx.addBurst(target.x, target.y, target.radius + 18, "rgba(143,233,255,0.25)");
     }
 
-    function castPlayerFire() {
+    function castPlayerFire(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = get("finald", "fire");
       if (!skill || player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
-      const target = getHoveredEnemy();
+      const target = lockedTarget || getHoveredEnemy();
       if (!target) { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
-      if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius)) { showPlayerRangeError(target.x, target.y); return false; }
+      const rangeState = ensurePlayerSkillRange("fire", target, skill, target.radius, options);
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
       if ((player.cds.fire || 0) > 0) { ctx.addFloat("再詠唱中", target.x, target.y - 28, "#ffffff"); return false; }
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", target.x, target.y - 28, "#ffffff"); return false; }
       if (!ctx.startPlayerCast("fire", { target }, getCastTime(skill.cast, player))) return false;
@@ -1309,7 +1526,7 @@
       }
       speakSkill(player, "fire");
       const damaged = ctx.dealDamage(player, target, getFireDamage(player, skill), { magic: true }) > 0;
-      const burnDuration = getOffensiveEffectDuration(player, target, skill.burnDuration);
+      const burnDuration = getOffensiveEffectDuration(player, target, getSkillBurnDuration(player, skill));
       if (burnDuration > 0) {
         applyBurn(player, target, Object.assign({}, skill, { burnDuration }));
         if (!damaged && ctx.awardOffensiveUltimate) ctx.awardOffensiveUltimate(player, target);
@@ -1319,13 +1536,15 @@
       ctx.addBurst(target.x, target.y, skill.burstRadius, "rgba(255,139,67,0.24)");
     }
 
-    function castPlayerBomb() {
+    function castPlayerBomb(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = get("finald", "bomb");
       if (!skill || player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
-      const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
+      const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
-      if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill))) { showPlayerRangeError(target.x, target.y); return false; }
+      const rangeState = ensurePlayerSkillRange("bomb", target, skill, 0, options);
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
       if ((player.cds.bomb || 0) > 0) { ctx.addFloat("再詠唱中", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (!ctx.startPlayerCast("bomb", { target }, getCastTime(skill.cast, player))) return false;
@@ -1347,8 +1566,8 @@
         const d = ctx.distPoint(unitHit.x, unitHit.y, target.x, target.y);
         if (d <= skill.radius + unitHit.radius) {
           const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
-          const falloff = (Number.isFinite(skill.distanceFalloffMax) ? skill.distanceFalloffMax : 0.8) * distanceRatio;
-          const damage = (skill.damageBase + getMagicStat(player) * skill.magicScale) * Math.max(0, 1 - falloff);
+          const falloff = getDistanceFalloffMax(player, skill, 0.8) * distanceRatio;
+          const damage = getSkillDamage(player, skill) * Math.max(0, 1 - falloff);
           ctx.dealDamage(player, unitHit, damage, { magic: true });
           hits += unitHit.team === "enemy" ? 1 : 0;
         }
@@ -1361,10 +1580,14 @@
       return COMMAND_SKILL_KEYS.includes(key);
     }
 
-    function usePlayerCommand(key) {
+    function usePlayerCommand(key, lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = get("finald", key);
       if (!skill || !isCommandSkill(key)) {
+        return false;
+      }
+      if (!options.fromMoveIntent && hasPlayerMoveIntent()) {
+        showPlayerMoveIntentBusy();
         return false;
       }
       if (!isSkillEquipped(player, key)) {
@@ -1386,15 +1609,14 @@
       }
 
       if (skill.target === "enemy") {
-        const target = ctx.getHoveredEnemy ? ctx.getHoveredEnemy() : null;
+        const target = lockedTarget || (ctx.getHoveredEnemy ? ctx.getHoveredEnemy() : null);
         if (!target || target.dead || target.team !== "enemy") {
           ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff");
           return false;
         }
-        if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius)) {
-          showPlayerRangeError(target.x, target.y);
-          return false;
-        }
+        const rangeState = ensurePlayerSkillRange(key, target, skill, target.radius, options);
+        if (stopIfPlayerSkillQueued(rangeState)) return true;
+        if (rangeState !== "inRange") return false;
         if (ctx.setPriorityTarget) {
           if (!ctx.setPriorityTarget(target, skill.duration, skill.name)) {
             ctx.addFloat("対象なし", target.x, target.y - 28, "#ffffff");
@@ -1404,6 +1626,7 @@
           ctx.game.priorityTarget = target;
           ctx.game.priorityTargetTimer = Number.isFinite(skill.duration) && skill.duration > 0 ? skill.duration : 0;
         }
+        target.focusDamageTakenBonus = getFocusDamageTakenBonus(player, key, skill);
         paySkillCost(player, skill);
         player.cds[key] = skill.cd;
         player.aim = null;
@@ -1414,16 +1637,15 @@
       }
 
       if (skill.target === "ally") {
-        const target = ctx.game.hover;
+        const target = lockedTarget || ctx.game.hover;
         if (!isCommandTarget(target)) {
           ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff");
           return false;
         }
-        if (!isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius)) {
-          showPlayerRangeError(target.x, target.y);
-          return false;
-        }
-        const changed = applyCommandBiasChange(target, skill.commandDelta);
+        const rangeState = ensurePlayerSkillRange(key, target, skill, target.radius, { ...options, support: true });
+        if (stopIfPlayerSkillQueued(rangeState)) return true;
+        if (rangeState !== "inRange") return false;
+        const changed = applyCommandBiasChange(target, skill.commandDelta, player, key, skill);
         if (changed && ctx.awardSupportUltimate) ctx.awardSupportUltimate(player, target);
         paySkillCost(player, skill);
         player.cds[key] = skill.cd;
@@ -1439,7 +1661,7 @@
         const radius = getPlayerSkillRadius(skill);
         for (const member of ctx.getFieldPartyMembers()) {
           if (isCommandTarget(member) && isPointInPlayerRange(member.x, member.y, radius, member.radius)) {
-            const changed = applyCommandBiasChange(member, skill.commandDelta);
+            const changed = applyCommandBiasChange(member, skill.commandDelta, player, key, skill);
             if (changed && ctx.awardSupportUltimate) ctx.awardSupportUltimate(player, member);
             ctx.addFloat(changed ? skill.name : "無視", member.x, member.y - 34, changed ? getCommandFloatColor(skill.commandDelta) : "#f7fff6");
             targets += 1;
@@ -1464,23 +1686,24 @@
       return unit && !unit.dead && unit.team === "party" && unit.id !== "finald" && ctx.isFieldUnit(unit);
     }
 
-    function applyCommandBiasChange(unit, delta) {
-      if (shouldIgnoreCommandBiasChange(unit, delta)) {
+    function applyCommandBiasChange(unit, delta, source, key, skill) {
+      if (shouldIgnoreCommandBiasChange(unit, delta, source, key, skill)) {
         return false;
       }
       unit.commandBias = ctx.clampCommandBias((unit.commandBias || 0) + delta);
       return true;
     }
 
-    function shouldIgnoreCommandBiasChange(unit, delta) {
+    function shouldIgnoreCommandBiasChange(unit, delta, source, key, skill) {
       if (!unit || unit.mood === null) {
         return false;
       }
+      const ignoreChance = getCommandIgnoreChance(source, key, skill);
       if (delta > 0 && unit.mood <= 30) {
-        return Math.random() < 0.75;
+        return Math.random() < ignoreChance;
       }
       if (delta < 0 && unit.mood >= 70) {
-        return Math.random() < 0.75;
+        return Math.random() < ignoreChance;
       }
       return false;
     }
@@ -1548,7 +1771,7 @@
             if (d <= skill.hitRadius + unitHit.radius) {
               const rawDamage = skill.damageBase + getAttackStat(unit) * skill.attackScale;
               const multiplier = unitHit.team === "enemy" ? getAutoUltimateEnemyDamageMultiplier(unitHit, automatic) : 1;
-              ctx.dealDamage(unit, unitHit, rawDamage * multiplier, { noUltGain: true });
+              ctx.dealDamage(unit, unitHit, rawDamage * multiplier, { noUltGain: true, critChanceBonus: getUltimateCritChanceBonus(unit, skill) });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1570,13 +1793,13 @@
         .sort((a, b) => ctx.dist(unit, a) - ctx.dist(unit, b))
         .slice(0, skill.targetLimit || 8);
       for (const target of targets) {
-        const duration = getOffensiveEffectDuration(unit, target, skill.duration, automatic);
+        const duration = getOffensiveEffectDuration(unit, target, getRihasUltDuration(unit, skill), automatic);
         if (duration <= 0) continue;
         target.forcedTarget = unit;
         target.tauntTimer = duration;
         if (target.team === "enemy") taunted += 1;
       }
-      ctx.addShield(unit, unit.maxHp * (skill.shieldHpRatio || 0.05) * taunted, skill.duration);
+      ctx.addShield(unit, unit.maxHp * (skill.shieldHpRatio || 0.05) * taunted, getRihasUltDuration(unit, skill));
       ctx.addBurst(unit.x, unit.y, skill.radius + skill.burstExtraRadius, "rgba(227,122,63,0.18)");
       finishPartyAction(unit);
     }
@@ -1607,7 +1830,7 @@
                 if (d <= radius + unitHit.radius) {
                   const scale = 1 - ctx.clamp(d / Math.max(1, radius), 0, 1) * (1 - (Number.isFinite(skill.falloffMin) ? skill.falloffMin : 0.5));
                   if (!frozen.has(unitHit)) {
-                    const freezeTime = getOffensiveEffectDuration(unit, unitHit, getSushiaIceFreezeTime(skill, unitHit, automatic) * scale, automatic);
+                    const freezeTime = getOffensiveEffectDuration(unit, unitHit, getSushiaIceFreezeTime(skill, unitHit, automatic, unit) * scale, automatic);
                     if (freezeTime > unitHit.frozen) {
                       unitHit.frozen = freezeTime;
                       unitHit.frozenMax = freezeTime;
@@ -1629,20 +1852,22 @@
       });
     }
 
-    function getSushiaIceFreezeTime(skill, target, automatic) {
-      if (target.team === "party") {
-        return automatic ? skill.autoFreezeAlly : skill.freezeAlly;
-      }
-      return skill.freezeEnemy;
+    function getSushiaIceFreezeTime(skill, target, automatic, unit) {
+      const base = target.team === "party" ? (automatic ? skill.autoFreezeAlly : skill.freezeAlly) : skill.freezeEnemy;
+      return base + getSkillUpgradeLevel(unit, "ult", skill);
     }
 
     function ultFinald() {
       const player = ctx.player;
       const skill = getUnitUltimateEntry(player).skill || need("finald", "ult");
+      if (hasPlayerMoveIntent()) {
+        showPlayerMoveIntentBusy();
+        return;
+      }
       if (player.channel || player.cast || player.actionLock > 0) return;
       const origin = ctx.getSupportOrigin();
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return; }
-      if (!ctx.startPlayerCast("ult", {}, getCastTime(skill.cast, player))) return;
+      if (!ctx.startPlayerCast("ult", {}, getSkillCastTime(player, "ult", skill, skill.cast))) return;
       paySkillCost(player, skill);
       speakSkill(player, "ult");
     }
@@ -1850,7 +2075,7 @@
       const pageKeys = getEquippedFinaldSkillKeys(player).slice(pageStart, pageStart + PLAYER_ULTIMATE_SLOT_INDEX);
       const entries = pageKeys
         .map((key) => {
-          const skill = get("finald", key);
+          const skill = getUnitSkill(player, key);
           if (!skill) {
             return null;
           }
@@ -1858,12 +2083,14 @@
           return {
             key,
             name: skill.name,
+            skillType: skill.skillType || "",
             cd: getPlayerSkillCooldown(player, key),
             max: skill.cd || 0.1,
             skill,
             targeted: command && (skill.target === "ally" || skill.target === "enemy"),
             command,
             commandDelta: command ? skill.commandDelta : 0,
+            level: getSkillUpgradeLevel(player, key, skill),
           };
         })
         .filter(Boolean);
@@ -1878,8 +2105,8 @@
         : Object.entries(DATA[owner] || {}).filter(([key]) => !isUltimateKey(owner, key)).map(([key, skill]) => ({ key, skill }));
       const ultimateEntry = getUnitUltimateEntry(unit);
       return [
-        ...activeEntries,
-        ...(ultimateEntry.skill ? [ultimateEntry] : []),
+        ...activeEntries.map((entry) => ({ ...entry, level: getSkillUpgradeLevel(unit, entry.key, entry.skill) })),
+        ...(ultimateEntry.skill ? [{ ...ultimateEntry, level: getSkillUpgradeLevel(unit, ultimateEntry.key || "ult", ultimateEntry.skill) }] : []),
       ];
     }
 
@@ -1916,6 +2143,7 @@
       startPlayerAim,
       cancelPlayerAim,
       confirmPlayerAim,
+      executePlayerMoveIntent,
       usePlayerCommand,
       firePlayerShot,
       completePlayerShot,

@@ -24,7 +24,7 @@
       color: "#57c7c9",
       radius: px(15),
       ...BASE_PARTY_STATS,
-      speed: px(230),
+      speed: px(125),
       guardChance: 0,
       equipment: { weapon: "default_a" },
       field: true,

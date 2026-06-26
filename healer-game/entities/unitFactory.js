@@ -40,6 +40,7 @@
         moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || options.maxHp || 100,
         maxMp: options.maxMp || 0,
         mp: options.maxMp || 0,
+        hpRegenRate: Number.isFinite(options.hpRegenRate) ? options.hpRegenRate : 0,
         mpRegenRate: Number.isFinite(options.mpRegenRate) ? options.mpRegenRate : DEFAULT_MP_REGEN_RATE,
         speed: options.speed || battlePx(100),
         attack: options.attack || 10,
@@ -54,11 +55,14 @@
         critDamage: Number.isFinite(options.critDamage) ? options.critDamage : BASE_CRIT_DAMAGE_RATE,
         castSpeed: Number.isFinite(options.castSpeed) ? options.castSpeed : 0,
         guardChance: options.guardChance || 0,
+        guardDamageReduction: Number.isFinite(options.guardDamageReduction) ? options.guardDamageReduction : 0,
         commandBias: 0,
         activeCommandBias: 0,
         commandBiasActionCount: 0,
         preferredRange: options.preferredRange || 90,
         mood: options.team === "party" && options.id !== "finald" ? MOOD_INITIAL : null,
+        moodActionId: 0,
+        moodActionGain: 0,
         ult: 0,
         shield: 0,
         shieldTimer: 0,
@@ -89,6 +93,8 @@
         channel: null,
         cast: null,
         aim: null,
+        itemUseRequest: null,
+        itemCast: null,
         selfHealFloat: 0,
         delayedDamageQueue: [],
         rihasPassiveStacks: 0,
@@ -103,9 +109,19 @@
         field: options.field !== false,
         targetable: options.targetable !== false,
         collidable: options.collidable !== false,
+        drops: cloneDrops(options.drops),
       };
       unit.equipment = normalizeEquipment(options.equipment || {}, unit);
       return unit;
+    }
+
+    function cloneDrops(drops) {
+      if (!Array.isArray(drops)) {
+        return [];
+      }
+      return drops
+        .filter(Boolean)
+        .map((drop) => ({ ...drop }));
     }
 
     function makePartyMember(id) {
@@ -132,15 +148,24 @@
         color: stats.color,
         radius: stats.radius,
         maxHp: stats.hp,
-        maxMp: 0,
+        maxMp: Number.isFinite(stats.mp) ? stats.mp : 0,
         speed: stats.speed,
         attack: stats.attack,
+        magic: Number.isFinite(stats.magic) ? stats.magic : 0,
         defense: stats.defense,
         magicDefense: stats.magicDefense,
-        magic: 0,
+        critChance: stats.critChance,
+        critDamage: stats.critDamage,
+        castSpeed: stats.castSpeed,
+        guardChance: stats.guardChance,
+        guardDamageReduction: stats.guardDamageReduction,
+        hpRegenRate: stats.hpRegenRate,
+        mpRegenRate: stats.mpRegenRate,
+        preferredRange: stats.preferredRange,
         element: stats.element,
         elementBoosts: stats.elementBoosts,
         elementResistances: stats.elementResistances,
+        drops: stats.drops,
       });
       enemy.x = x;
       enemy.y = y;

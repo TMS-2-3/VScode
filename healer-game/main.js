@@ -26,6 +26,7 @@
     createContextFactory: window.createHealerContextFactory,
     createLoadoutSystem: window.createHealerLoadoutSystem,
     createEquipmentSystem: window.createHealerEquipmentSystem,
+    createWalletSystem: window.createHealerWalletSystem,
     createStoryData: window.createHealerStoryData,
   };
 
@@ -93,6 +94,7 @@
   systems.profileSystem = modules.createProfileSystem(contexts.createProfileContext());
   systems.loadoutSystem = modules.createLoadoutSystem(contexts.createLoadoutContext());
   systems.equipmentSystem = modules.createEquipmentSystem(contexts.createEquipmentContext());
+  systems.walletSystem = modules.createWalletSystem(contexts.createWalletContext());
   systems.unitFactory = modules.createUnitFactory(contexts.createUnitFactoryContext());
 
   state.player = systems.unitFactory.makeUnit({
@@ -143,15 +145,30 @@
         priorityTargetTimer: 0,
         skillPage: "page1",
         itemSlots: null,
+        gold: 0,
+        innRestUsedUntilBattle: false,
+        materialsById: {},
+        battleRewards: null,
         currentQuest: null,
         stageClearTimer: 0,
         reinforcementsSpawned: false,
         partyHpById: {},
+        partyMpById: {},
         partyEquipmentById: {},
         partyLoadoutById: {},
+        partyItemById: {},
+        itemInventoryById: {},
+        skillProgressById: {},
+        equipmentInventoryById: {},
+        equipmentInstancesById: {},
+        nextEquipmentInstanceSeq: 1,
+        equipmentUpgradeById: {},
+        equipmentRandomStatsById: {},
+        equipmentRandomSeedsById: {},
         equipmentPresetsById: {},
         settings: {
           tooltipDescriptionMode: "simple",
+          powerCrystalAutoUse: true,
           keybinds: window.HEALER_KEYBINDS
             ? window.HEALER_KEYBINDS.normalizeKeybinds(window.HEALER_KEYBINDS.loadSavedKeybinds())
             : null,

@@ -15,23 +15,27 @@
     } = context;
 
     const PROFILE_NAME_MAX_LENGTH = 8;
+    const PROFILE_PRONOUN_MAX_LENGTH = 8;
     const DEFAULT_FIRST_NAME = "アルジュナ";
     const DEFAULT_LAST_NAME = "フィナルド";
+    const DEFAULT_PRONOUN = "私";
     const profileNameInputs = {
       first: null,
       last: null,
+      pronoun: null,
     };
 
     function createProfileNameInput() {
       profileNameInputs.first = createNameInput("firstName", DEFAULT_FIRST_NAME, "主人公の名前");
       profileNameInputs.last = createNameInput("lastName", DEFAULT_LAST_NAME, "主人公の姓");
+      profileNameInputs.pronoun = createNameInput("pronoun", DEFAULT_PRONOUN, "一人称", confirmProfilePronoun);
       return profileNameInputs;
     }
 
-    function createNameInput(profileKey, fallback, label) {
+    function createNameInput(profileKey, fallback, label, confirmHandler = confirmProfileName) {
       const inputEl = document.createElement("input");
       inputEl.type = "text";
-      inputEl.maxLength = PROFILE_NAME_MAX_LENGTH;
+      inputEl.maxLength = profileKey === "pronoun" ? PROFILE_PRONOUN_MAX_LENGTH : PROFILE_NAME_MAX_LENGTH;
       inputEl.value = playerProfile[profileKey] || fallback;
       inputEl.className = "profile-name-input";
       inputEl.placeholder = fallback;
@@ -39,7 +43,9 @@
       inputEl.setAttribute("aria-label", label);
       document.body.appendChild(inputEl);
       inputEl.addEventListener("input", () => {
-        playerProfile[profileKey] = clampProfileName(inputEl.value);
+        playerProfile[profileKey] = profileKey === "pronoun"
+          ? clampProfilePronoun(inputEl.value)
+          : clampProfileName(inputEl.value);
         if (inputEl.value !== playerProfile[profileKey]) {
           inputEl.value = playerProfile[profileKey];
         }
@@ -48,7 +54,7 @@
         event.stopPropagation();
         if (event.key === "Enter") {
           event.preventDefault();
-          confirmProfileName();
+          confirmHandler();
         }
       });
       return inputEl;
@@ -70,6 +76,10 @@
       return Array.from((value || "").trim()).slice(0, PROFILE_NAME_MAX_LENGTH).join("");
     }
 
+    function clampProfilePronoun(value) {
+      return Array.from((value || "").trim()).slice(0, PROFILE_PRONOUN_MAX_LENGTH).join("");
+    }
+
     function handleProfileSetupKey(key) {
       if (playerProfile.step === "gender") {
         if (key === "1") selectProfileGender("男の子");
@@ -79,10 +89,8 @@
           confirmProfileName();
         }
       } else if (playerProfile.step === "pronoun") {
-        const index = Number(key) - 1;
-        const choices = getPronounChoices();
-        if (choices[index]) {
-          selectProfilePronoun(choices[index]);
+        if (["e", "space", "enter"].includes(key)) {
+          confirmProfilePronoun();
         }
       }
     }
@@ -119,8 +127,39 @@
     }
 
     function selectProfilePronoun(pronoun) {
-      playerProfile.pronoun = pronoun;
+      playerProfile.pronoun = clampProfilePronoun(pronoun) || DEFAULT_PRONOUN;
+      if (profileNameInputs.pronoun) {
+        profileNameInputs.pronoun.value = playerProfile.pronoun;
+      }
       completeProfileSetup();
+    }
+
+    function confirmProfilePronoun() {
+      selectProfilePronoun(profileNameInputs.pronoun ? profileNameInputs.pronoun.value : playerProfile.pronoun);
+    }
+
+    function selectProfileAppearance(gender) {
+      selectProfileGender(gender);
+    }
+
+    function getAppearanceChoices() {
+      return [
+        { key: "男の子", label: "見た目A", color: COLORS.player },
+        { key: "女の子", label: "見た目B", color: "#ff93c8" },
+      ];
+    }
+
+    function getAppearanceColor(gender) {
+      const choice = getAppearanceChoices().find((entry) => entry.key === gender);
+      return choice ? choice.color : COLORS.player;
+    }
+
+    function getDefaultPronoun() {
+      return DEFAULT_PRONOUN;
+    }
+
+    function confirmProfilePronounFromInput() {
+      confirmProfilePronoun();
     }
 
     function completeProfileSetup() {
@@ -147,21 +186,32 @@
     }
 
     function updateProfileNameInput() {
-      if (!profileNameInputs.first || !profileNameInputs.last) {
+      if (!profileNameInputs.first || !profileNameInputs.last || !profileNameInputs.pronoun) {
         return;
       }
-      const visible = game.state === "town" && !playerProfile.done && playerProfile.step === "name";
-      profileNameInputs.first.hidden = !visible;
-      profileNameInputs.last.hidden = !visible;
-      if (!visible) {
+      const nameVisible = game.state === "town" && !playerProfile.done && playerProfile.step === "name";
+      const pronounVisible = game.state === "town" && !playerProfile.done && playerProfile.step === "pronoun";
+      profileNameInputs.first.hidden = !nameVisible;
+      profileNameInputs.last.hidden = !nameVisible;
+      profileNameInputs.pronoun.hidden = !pronounVisible;
+      if (!nameVisible && !pronounVisible) {
         return;
       }
-      const rects = getProfileNameInputRects();
-      positionNameInput(profileNameInputs.first, rects.first);
-      positionNameInput(profileNameInputs.last, rects.last);
-      if (!isProfileNameInputFocused()) {
-        profileNameInputs.first.focus();
-        profileNameInputs.first.select();
+      if (nameVisible) {
+        const rects = getProfileNameInputRects();
+        positionNameInput(profileNameInputs.first, rects.first);
+        positionNameInput(profileNameInputs.last, rects.last);
+        if (!isProfileNameInputFocused()) {
+          profileNameInputs.first.focus();
+          profileNameInputs.first.select();
+        }
+        return;
+      }
+      const rect = getProfilePronounInputRect();
+      positionNameInput(profileNameInputs.pronoun, rect);
+      if (document.activeElement !== profileNameInputs.pronoun) {
+        profileNameInputs.pronoun.focus();
+        profileNameInputs.pronoun.select();
       }
     }
 
@@ -189,6 +239,12 @@
       };
     }
 
+    function getProfilePronounInputRect() {
+      const w = Math.min(220, Math.max(140, view.w - 96));
+      const y = Math.max(148, view.h * 0.5 - 12);
+      return { x: view.w / 2 - w / 2, y, w, h: 46 };
+    }
+
     function getProfileNameInputRect() {
       return getProfileNameInputRects().first;
     }
@@ -203,16 +259,24 @@
       getPlayerLastName,
       getPlayerFullName,
       clampProfileName,
+      clampProfilePronoun,
       handleProfileSetupKey,
       handleProfileSetupClick,
       selectProfileGender,
+      selectProfileAppearance,
       confirmProfileName,
       selectProfilePronoun,
+      confirmProfilePronoun,
+      confirmProfilePronounFromInput,
       completeProfileSetup,
       beginOpeningStory,
       getPronounChoices,
+      getAppearanceChoices,
+      getAppearanceColor,
+      getDefaultPronoun,
       updateProfileNameInput,
       getProfileNameInputRects,
+      getProfilePronounInputRect,
       getProfileNameInputRect,
       getProfileNameInput,
     };

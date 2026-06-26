@@ -8,6 +8,7 @@
       enemies,
       telegraphs,
       skillSystem,
+      getItemSystem,
       MOOD_BASELINE,
       COMMAND_BIAS_PREFERRED_RANGES,
       MOOD_PREFERRED_RANGE_HIGH,
@@ -22,21 +23,34 @@
       angleDiff,
       nearestAlive,
       clampUnit,
+      getBattleBounds,
       updateTelegraphDynamic,
       getTargetablePartyMembers,
       getPriorityTarget,
+      getEffectiveMoveSpeed,
+      getEquippedSlotItem,
       triggerUltimate,
     } = context;
 
     function updatePartyAi(dt) {
       for (const member of party) {
-        if (member === player || member.dead || member.frozen > 0) {
+        if (member.dead || member.frozen > 0) {
           continue;
         }
 
         member.aiTick -= dt;
+        const itemSystem = getItemSystem ? getItemSystem() : null;
+        if (itemSystem && itemSystem.isItemUseControlling && itemSystem.isItemUseControlling(member)) {
+          if (!(member === player && member.aiIntent && member.aiIntent.manual)) {
+            member.aiIntent = null;
+          }
+          continue;
+        }
         const avoidingTelegraph = member.actionLock <= 0 && updatePartyMovement(member, dt);
         if (member.aiIntent) {
+          continue;
+        }
+        if (member === player) {
           continue;
         }
         if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
@@ -76,44 +90,180 @@
       const d = dist(unit, target);
       const avoidDir = getTelegraphAvoidance(unit);
       const moodSpeed = 1 + Math.max(0, unit.mood - MOOD_BASELINE) * 0.003;
+      const speed = getUnitMoveSpeed(unit);
       if (avoidDir) {
-        unit.x += avoidDir.x * unit.speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt;
-        unit.y += avoidDir.y * unit.speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt;
-        clampUnit(unit);
+        moveUnitWithWallSlide(unit, avoidDir, speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt);
         return true;
       }
 
       if (unit.aiIntent) {
         if (d <= unit.aiIntent.range) {
-          skillSystem.executePartyIntent(unit);
+          if (unit.aiIntent.manual && unit === player && skillSystem.executePlayerMoveIntent) {
+            skillSystem.executePlayerMoveIntent(unit);
+          } else {
+            skillSystem.executePartyIntent(unit);
+          }
           return false;
         }
         const dir = normalize(target.x - unit.x, target.y - unit.y);
-        unit.x += dir.x * unit.speed * moodSpeed * dt;
-        unit.y += dir.y * unit.speed * moodSpeed * dt;
-        clampUnit(unit);
+        moveUnitWithWallSlide(unit, dir, speed * moodSpeed * dt);
         return false;
       }
 
       const desired = getPartyPreferredRange(unit);
-      let dir = { x: 0, y: 0 };
-      if (d > desired + battlePx(18)) {
-        dir = normalize(target.x - unit.x, target.y - unit.y);
-      } else if (d < desired - battlePx(12)) {
-        dir = normalize(unit.x - target.x, unit.y - target.y);
+      const dir = getPreferredRangeMoveDir(unit, target, d, desired);
+
+      moveUnitWithWallSlide(unit, dir, speed * moodSpeed * dt);
+      return false;
+    }
+
+    function getPreferredRangeMoveDir(unit, target, targetDistance, desired) {
+      const close = getCloseEnemyPressureDir(unit, desired);
+      if (close.count >= 2) {
+        return close.dir && close.dir.len > 0.25 ? close.dir : { x: 0, y: 0, len: 0 };
+      }
+      if (close.count === 1 && close.dir && close.dir.len > 0.05) {
+        return close.dir;
+      }
+      if (targetDistance > desired + battlePx(28)) {
+        return normalize(target.x - unit.x, target.y - unit.y);
+      }
+      if (targetDistance < desired - battlePx(28)) {
+        return normalize(unit.x - target.x, unit.y - target.y);
+      }
+      return { x: 0, y: 0, len: 0 };
+    }
+
+    function getCloseEnemyPressureDir(unit, desired) {
+      const threshold = Math.max(unit.radius + battlePx(34), desired - battlePx(18));
+      let x = 0;
+      let y = 0;
+      let count = 0;
+      for (const enemy of enemies) {
+        if (!enemy || enemy.dead) {
+          continue;
+        }
+        const distance = dist(unit, enemy);
+        if (distance >= threshold) {
+          continue;
+        }
+        const dir = normalize(unit.x - enemy.x, unit.y - enemy.y);
+        if (dir.len <= 0) {
+          continue;
+        }
+        const weight = clamp((threshold - distance) / Math.max(1, threshold), 0, 1);
+        x += dir.x * weight;
+        y += dir.y * weight;
+        count += 1;
+      }
+      const dir = normalize(x, y);
+      return { dir, count };
+    }
+
+    function moveUnitWithWallSlide(unit, dir, distance) {
+      if (!unit || !dir || !Number.isFinite(distance) || distance <= 0) {
+        return false;
+      }
+      const moveDir = dir.len === 0 ? dir : normalize(dir.x, dir.y);
+      if (!moveDir || moveDir.len <= 0) {
+        return false;
       }
 
-      unit.x += dir.x * unit.speed * moodSpeed * dt;
-      unit.y += dir.y * unit.speed * moodSpeed * dt;
-      clampUnit(unit);
-      return false;
+      let dx = moveDir.x * distance;
+      let dy = moveDir.y * distance;
+      const bounds = typeof getBattleBounds === "function" ? getBattleBounds() : null;
+      if (!bounds) {
+        unit.x += dx;
+        unit.y += dy;
+        clampUnit(unit);
+        return true;
+      }
+
+      const radius = Number.isFinite(unit.radius) ? unit.radius : 0;
+      const minX = bounds.left + radius;
+      const maxX = bounds.right - radius;
+      const minY = bounds.top + radius;
+      const maxY = bounds.bottom - radius;
+      const edge = battlePx(2);
+      const blockedX = (unit.x <= minX + edge && dx < 0) || (unit.x >= maxX - edge && dx > 0);
+      const blockedY = (unit.y <= minY + edge && dy < 0) || (unit.y >= maxY - edge && dy > 0);
+
+      if (blockedX) {
+        dx = 0;
+      }
+      if (blockedY) {
+        dy = 0;
+      }
+
+      const slideDistance = distance * 0.55;
+      if (blockedX && Math.abs(dy) < 0.01 && minY < maxY) {
+        dy = getWallSlideSign(unit, "y", minX, maxX, minY, maxY) * slideDistance;
+      }
+      if (blockedY && Math.abs(dx) < 0.01 && minX < maxX) {
+        dx = getWallSlideSign(unit, "x", minX, maxX, minY, maxY) * slideDistance;
+      }
+
+      const nextX = clamp(unit.x + dx, minX, maxX);
+      const nextY = clamp(unit.y + dy, minY, maxY);
+      const moved = Math.abs(nextX - unit.x) > 0.01 || Math.abs(nextY - unit.y) > 0.01;
+      unit.x = nextX;
+      unit.y = nextY;
+      return moved;
+    }
+
+    function getWallSlideSign(unit, axis, minX, maxX, minY, maxY) {
+      const key = axis === "x" ? "aiWallSlideX" : "aiWallSlideY";
+      let sign = Number.isFinite(unit[key]) && unit[key] !== 0 ? Math.sign(unit[key]) : 0;
+      if (!sign) {
+        sign = axis === "x"
+          ? (unit.x < (minX + maxX) * 0.5 ? 1 : -1)
+          : (unit.y < (minY + maxY) * 0.5 ? 1 : -1);
+      }
+      const edge = battlePx(2);
+      if (axis === "x") {
+        if (unit.x <= minX + edge && sign < 0) sign = 1;
+        if (unit.x >= maxX - edge && sign > 0) sign = -1;
+      } else {
+        if (unit.y <= minY + edge && sign < 0) sign = 1;
+        if (unit.y >= maxY - edge && sign > 0) sign = -1;
+      }
+      unit[key] = sign;
+      return sign;
+    }
+
+    function getUnitMoveSpeed(unit) {
+      return typeof getEffectiveMoveSpeed === "function" ? getEffectiveMoveSpeed(unit) : unit.speed;
     }
 
     function getPartyMovementTarget(unit) {
       if (isForcedHostileTarget(unit, unit && unit.forcedTarget)) {
+        unit.aiMoveTarget = unit.forcedTarget;
         return unit.forcedTarget;
       }
-      return getPriorityTarget() || nearestAlive(unit, enemies);
+      const priorityTarget = getPriorityTarget();
+      if (priorityTarget) {
+        unit.aiMoveTarget = priorityTarget;
+        return priorityTarget;
+      }
+      const nearest = nearestAlive(unit, enemies);
+      if (!nearest) {
+        unit.aiMoveTarget = null;
+        return null;
+      }
+      const current = unit.aiMoveTarget && !unit.aiMoveTarget.dead && enemies.includes(unit.aiMoveTarget)
+        ? unit.aiMoveTarget
+        : null;
+      if (!current) {
+        unit.aiMoveTarget = nearest;
+        return nearest;
+      }
+      const currentDistance = dist(unit, current);
+      const nearestDistance = dist(unit, nearest);
+      if (nearest !== current && nearestDistance + battlePx(48) < currentDistance) {
+        unit.aiMoveTarget = nearest;
+        return nearest;
+      }
+      return current;
     }
 
     function isForcedHostileTarget(source, target) {
@@ -141,7 +291,15 @@
     }
 
     function getPreferredRangeRole(unit) {
-      return unit && (unit.role === "mage" || unit.role === "caster") ? "back" : "front";
+      const weapon = typeof getEquippedSlotItem === "function" ? getEquippedSlotItem(unit, "weapon") : null;
+      const weaponType = weapon && weapon.weaponType;
+      if (["杖", "魔導書", "魔楽器"].includes(weaponType)) {
+        return "back";
+      }
+      if (["片手剣", "両手剣", "拳具", "棒具"].includes(weaponType)) {
+        return "front";
+      }
+      return unit && (unit.role === "mage" || unit.role === "caster" || unit.role === "support") ? "back" : "front";
     }
 
     function clampCommandBias(value) {
@@ -166,7 +324,7 @@
     }
 
     function getTelegraphAvoidance(unit) {
-      if (!unit || unit.mood === null || unit.actionLock > 0 || unit.cast || unit.channel) {
+      if (!unit || unit.actionLock > 0 || unit.cast || unit.channel) {
         return null;
       }
 
@@ -276,13 +434,10 @@
         const preferred = getEnemyPreferredRange(enemy);
         const dir = normalize(target.x - enemy.x, target.y - enemy.y);
         if (enemy.actionLock <= 0 && d > preferred + battlePx(10)) {
-          enemy.x += dir.x * enemy.speed * dt;
-          enemy.y += dir.y * enemy.speed * dt;
+          moveUnitWithWallSlide(enemy, dir, enemy.speed * dt);
         } else if (enemy.actionLock <= 0 && d < preferred - battlePx(20) && getPreferredRangeRole(enemy) === "back") {
-          enemy.x -= dir.x * enemy.speed * 0.65 * dt;
-          enemy.y -= dir.y * enemy.speed * 0.65 * dt;
+          moveUnitWithWallSlide(enemy, { x: -dir.x, y: -dir.y }, enemy.speed * 0.65 * dt);
         }
-        clampUnit(enemy);
 
         if (enemy.actionLock > 0 || (enemy.cds.attack || 0) > 0) {
           continue;

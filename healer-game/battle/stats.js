@@ -17,6 +17,7 @@
       MOOD_DISTANCE_BONUS_MAX,
       MOOD_MULTI_HIT_MIN,
       MOOD_MULTI_HIT_BASE,
+      MOOD_DAMAGE_ACTION_CAP,
       DEFAULT_MP_REGEN_RATE,
       CRIT_OVERFLOW_DAMAGE_RATE,
       ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER,
@@ -219,6 +220,14 @@
       return amount > 0 ? amount * config.moodGain : amount * config.moodLoss;
     }
 
+    function beginMoodAction(unit) {
+      if (!unit || unit.mood === null) {
+        return;
+      }
+      unit.moodActionGain = 0;
+      unit.moodActionId = Math.max(0, Math.floor(Number.isFinite(unit.moodActionId) ? unit.moodActionId : 0)) + 1;
+    }
+
     function addMoodGain(unit, amount) {
       if (!unit || unit.mood === null || amount <= 0) {
         return 0;
@@ -227,6 +236,29 @@
       const before = unit.mood;
       unit.mood = clamp(unit.mood + adjusted, 0, 100);
       return unit.mood - before;
+    }
+
+    function addMoodActionGain(unit, amount) {
+      if (!unit || unit.mood === null || amount <= 0) {
+        return 0;
+      }
+      const cap = Math.max(0, Number.isFinite(MOOD_DAMAGE_ACTION_CAP) ? MOOD_DAMAGE_ACTION_CAP : 6);
+      if (cap <= 0) {
+        return 0;
+      }
+      const current = Math.max(0, Number.isFinite(unit.moodActionGain) ? unit.moodActionGain : 0);
+      const room = Math.max(0, cap - current);
+      if (room <= 0) {
+        return 0;
+      }
+      const before = unit.mood;
+      const gained = addMoodGain(unit, amount);
+      const applied = Math.min(gained, room);
+      if (gained > applied) {
+        unit.mood = clamp(before + applied, 0, 100);
+      }
+      unit.moodActionGain = current + applied;
+      return applied;
     }
 
     function addMoodLoss(unit, amount) {
@@ -250,7 +282,7 @@
         return;
       }
       const bonus = MOOD_MULTI_HIT_BASE + enemyHits;
-      addMoodGain(unit, bonus);
+      addMoodActionGain(unit, bonus);
     }
 
     function getMoodOutgoingDamageMultiplier(unit) {
@@ -273,8 +305,8 @@
       return unit ? getEffectiveStat(unit, "guardChance") * getCommandBiasConfig(unit, "active").guard : 0;
     }
 
-    function getMoodCooldownMultiplier() {
-      return 1;
+    function getMoodCooldownMultiplier(unit) {
+      return Math.max(0.1, 1 - clamp(getEquipmentBonus(unit, "cooldownReduction"), -1, 0.9));
     }
 
     function getMoodCooldown(unit, baseTime) {
@@ -341,7 +373,8 @@
     function getGuardDamageReductionRate(unit) {
       const baseReduction = 1 - GUARD_DAMAGE_MULTIPLIER;
       const overflow = Math.max(0, getMoodGuardChance(unit) - 1);
-      return clamp(baseReduction + overflow * GUARD_OVERFLOW_REDUCTION_RATE, 0, GUARD_MAX_DAMAGE_REDUCTION);
+      const bonus = getBaseStat(unit, "guardDamageReduction", 0) + getEquipmentBonus(unit, "guardDamageReduction");
+      return clamp(baseReduction + bonus + overflow * GUARD_OVERFLOW_REDUCTION_RATE, 0, GUARD_MAX_DAMAGE_REDUCTION);
     }
 
     function getGuardDamageMultiplier(unit) {
@@ -364,6 +397,20 @@
       return getEffectiveStat(unit, "magicDefense");
     }
 
+    function getEffectiveMoveSpeed(unit) {
+      const base = getBaseStat(unit, "speed", 0);
+      const bonus = getMoveSpeedBonus(unit);
+      return Math.max(0, base + base * bonus);
+    }
+
+    function getMoveSpeedBonus(unit) {
+      return getEquipmentBonus(unit, "moveSpeed") + getStatusStatBonus(unit, "moveSpeed");
+    }
+
+    function getUltimateChargeRate(unit) {
+      return Math.max(0, getBaseStat(unit, "ultimateChargeRate", 1) + getEquipmentBonus(unit, "ultimateChargeRate"));
+    }
+
     function getEffectiveStat(unit, statKey) {
       return getEffectiveStatValue(unit, statKey, 0);
     }
@@ -371,7 +418,29 @@
     function getEffectiveStatValue(unit, statKey, fallback = 0) {
       const base = getBaseStat(unit, statKey, fallback) + getEquipmentFlatBonus(unit, statKey);
       const percentBonus = getEquipmentBonus(unit, statKey) + getStatusStatBonus(unit, statKey);
-      return applyStatMinimum(statKey, base + base * percentBonus);
+      return applyStatMinimum(statKey, isAdditiveBonusStat(statKey) ? base + percentBonus : base + base * percentBonus);
+    }
+
+    function isAdditiveBonusStat(statKey) {
+      return [
+        "critChance",
+        "critDamage",
+        "guardChance",
+        "guardDamageReduction",
+        "damageBoost",
+        "damageResistance",
+        "physicalDamageBoost",
+        "physicalDamageResistance",
+        "magicDamageBoost",
+        "magicDamageResistance",
+        "hpRegenRate",
+        "mpRegenRate",
+        "castSpeed",
+        "cooldownReduction",
+        "actionSpeed",
+        "ultimateChargeRate",
+        "moveSpeed",
+      ].includes(statKey);
     }
 
     function getBaseStat(unit, statKey, fallback = 0) {
@@ -424,6 +493,14 @@
 
     function getMagicDamageBoost(unit) {
       return getInternalBonus(unit, "magicDamageBoost");
+    }
+
+    function getDamageBoost(unit) {
+      return getInternalBonus(unit, "damageBoost");
+    }
+
+    function getDamageResistance(unit) {
+      return getInternalBonus(unit, "damageResistance");
     }
 
     function getPhysicalDamageResistance(unit) {
@@ -526,7 +603,9 @@
       getHpRatio,
       getMoodReferenceHp,
       applyCommandMoodDelta,
+      beginMoodAction,
       addMoodGain,
+      addMoodActionGain,
       addMoodLoss,
       getMoodDistanceMultiplier,
       applyMultiHitMoodBonus,
@@ -550,9 +629,13 @@
       getEffectiveAttack,
       getEffectiveMagic,
       getEffectiveMagicDefense,
+      getEffectiveMoveSpeed,
+      getUltimateChargeRate,
       getEffectiveStat,
       getPhysicalDamageBoost,
       getMagicDamageBoost,
+      getDamageBoost,
+      getDamageResistance,
       getPhysicalDamageResistance,
       getMagicDamageResistance,
       addRihasPassiveStack,

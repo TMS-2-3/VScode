@@ -11,6 +11,89 @@
     setThresholds: [2, 5],
     series: {},
   };
+  const craftCost = { gold: 100, materials: { kari_dorop: 3 } };
+  const upgradeCosts = [
+    { gold: 30, materials: { kari_dorop: 1 } },
+    { gold: 30, materials: { kari_dorop: 2 } },
+    { gold: 30, materials: { kari_dorop: 3 } },
+    { gold: 30, materials: { kari_dorop: 4 } },
+    { gold: 30, materials: { kari_dorop: 5 } },
+  ];
+  const upgradeMultipliers = [1, 1.1, 1.2, 1.3, 1.4, 1.5];
+
+  function cloneCost(cost) {
+    return {
+      gold: cost.gold || 0,
+      materials: { ...(cost.materials || {}) },
+    };
+  }
+
+  function cloneCraftCost() {
+    return cloneCost(craftCost);
+  }
+
+  function makeUpgrade(mode) {
+    return {
+      mode,
+      maxLevel: 5,
+      costs: upgradeCosts.map(cloneCost),
+      multipliers: upgradeMultipliers.slice(),
+    };
+  }
+
+  function makeWeapon(id, name, weaponType, allowedUnitIds, statKey, normalAttackSkillId) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "weapon",
+      weaponType,
+      series: "kari_set",
+      material: "仮素材",
+      allowedUnitIds,
+      craft: cloneCraftCost(),
+      flatStatBonuses: { [statKey]: 20 },
+      randomFlatStatVariance: 0.1,
+      upgrade: makeUpgrade("flatStatMultiplier"),
+      normalAttackSkillId,
+      effect: null,
+      simpleDescription: "仮素材で作れる仮武器。",
+      description: "仮素材で作れる仮武器。強化すると主ステータスが伸びる。",
+    };
+  }
+
+  function makeArmor(id, name, slot) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot,
+      series: "kari_set",
+      material: "仮素材",
+      craft: cloneCraftCost(),
+      randomStatProfile: { type: "armor", rank: "D" },
+      upgrade: makeUpgrade("randomStatMultiplier"),
+      effect: null,
+      simpleDescription: "仮素材で作れる仮防具。",
+      description: "仮素材で作れる仮防具。製作時にランダムステータスが付き、強化するとランダムステータスが伸びる。",
+    };
+  }
+
+  function makeAccessory(id, name) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "accessory",
+      series: "kari_set",
+      material: "仮素材",
+      craft: cloneCraftCost(),
+      randomStatProfile: { type: "accessory", rank: "D" },
+      effect: null,
+      simpleDescription: "仮素材で作れる仮アクセサリ。",
+      description: "仮素材で作れる仮アクセサリ。製作時にアクセサリ用のランダムステータスが付く。",
+    };
+  }
 
   window.HEALER_EQUIPMENT_DATA = {
     defaultElement: elementData.defaultElement,
@@ -34,16 +117,10 @@
         weaponType: "片手剣",
         material: "製作不可",
         allowedUnitIds: ["ulpes"],
-        flatStatBonuses: { attack: 3 },
-        upgradeFlatStatBonuses: [
-          { attack: 3 },
-          { attack: 4 },
-          { attack: 5 },
-          { attack: 6 },
-          { attack: 7 },
-        ],
+        flatStatBonuses: { attack: 10 },
         normalAttackSkillId: "speed_slash",
         effect: null,
+        simpleDescription: "ウルペス用の初期武器",
         description: "ウルペス用の初期武器",
       },
       default_r: {
@@ -54,16 +131,10 @@
         weaponType: "拳具",
         material: "製作不可",
         allowedUnitIds: ["rihas"],
-        flatStatBonuses: { attack: 4 },
-        upgradeFlatStatBonuses: [
-          { attack: 4 },
-          { attack: 5 },
-          { attack: 6 },
-          { attack: 7 },
-          { attack: 8 },
-        ],
+        flatStatBonuses: { attack: 10 },
         normalAttackSkillId: "huriharai",
         effect: null,
+        simpleDescription: "リハス用の初期武器",
         description: "リハス用の初期武器",
       },
       default_s: {
@@ -74,16 +145,10 @@
         weaponType: "杖",
         material: "製作不可",
         allowedUnitIds: ["sushia"],
-        flatStatBonuses: { magic: 3 },
-        upgradeFlatStatBonuses: [
-          { magic: 3 },
-          { magic: 4 },
-          { magic: 5 },
-          { magic: 6 },
-          { magic: 7 },
-        ],
+        flatStatBonuses: { magic: 10 },
         normalAttackSkillId: "masic_shot",
         effect: null,
+        simpleDescription: "スシア用の初期武器",
         description: "スシア用の初期武器",
       },
       default_a: {
@@ -94,18 +159,25 @@
         weaponType: "魔導書",
         material: "製作不可",
         allowedUnitIds: ["finald"],
-        flatStatBonuses: { magic: 1 },
-        upgradeFlatStatBonuses: [
-          { magic: 1 },
-          { magic: 2 },
-          { magic: 3 },
-          { magic: 4 },
-          { magic: 5 },
-        ],
+        flatStatBonuses: { magic: 10 },
         normalAttackSkillId: "shock",
         effect: null,
+        simpleDescription: "アルジュナ用の初期武器",
         description: "アルジュナ用の初期武器",
       },
+      kari_ken: makeWeapon("kari_ken", "仮の片手剣", "片手剣", ["ulpes"], "attack", "speed_slash"),
+      kari_ryouken: makeWeapon("kari_ryouken", "仮の両手剣", "両手剣", ["ulpes"], "attack", "huriharai"),
+      kari_kengu: makeWeapon("kari_kengu", "仮の拳具", "拳具", ["rihas"], "attack", "huriharai"),
+      kari_bougu: makeWeapon("kari_bougu", "仮の棒具", "棒具", ["rihas", "sushia"], "attack", "huriharai"),
+      kari_tue: makeWeapon("kari_tue", "仮の杖", "杖", ["sushia"], "magic", "masic_shot"),
+      kari_book: makeWeapon("kari_book", "仮の魔導書", "魔導書", ["finald", "sushia"], "magic", "shock"),
+      kari_hue: makeWeapon("kari_hue", "仮の魔楽器", "魔楽器", ["finald"], "magic", "shock"),
+      kari_atama: makeArmor("kari_atama", "仮ヘルメット", "head"),
+      kari_huku: makeArmor("kari_huku", "仮服", "body"),
+      kari_zubon: makeArmor("kari_zubon", "仮レギンス", "legs"),
+      kari_kutu: makeArmor("kari_kutu", "仮ブーツ", "feet"),
+      kari_te: makeArmor("kari_te", "仮グローブ", "hands"),
+      kari_akuse: makeAccessory("kari_akuse", "仮ネックレス"),
     },
     series: seriesData.series,
   };
