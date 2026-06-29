@@ -496,16 +496,14 @@
       const multipliers = Array.isArray(source.upgrade.multipliers) ? source.upgrade.multipliers : upgradeMultipliers;
       if (source.upgrade.mode === "flatStatMultiplier") {
         applyFlatStatUpgradeBonuses(effective, source, instance, clampedLevel, multipliers);
-      } else if (source.upgrade.mode === "randomStatMultiplier" && source.randomStatProfile) {
+      } else if (source.upgrade.mode === "randomStatMultiplier") {
         applyRandomStatUpgradeBonuses(effective, source, instance, clampedLevel, multipliers);
       }
     }
 
     function applyRandomStatUpgradeBonuses(effective, source, instance, clampedLevel, multipliers) {
-      const generated = getGeneratedRandomStats(source, instance);
-      const baseBonuses = generated.statBonuses || {};
-      const targets = Array.from(new Set(generated.upgradeTargets || Object.keys(baseBonuses)))
-        .filter((key) => Number.isFinite(baseBonuses[key]));
+      const baseBonuses = getRandomStatUpgradeBaseBonuses(source, instance);
+      const targets = getRandomStatUpgradeTargets(source, instance);
       if (!targets.length) {
         return;
       }
@@ -537,6 +535,9 @@
       const previousMultiplier = getRandomStatUpgradeMultiplier(multipliers, previousStep);
       const nextMultiplier = getRandomStatUpgradeMultiplier(multipliers, nextStep);
       const roundedDelta = roundPercentStatValue(baseValue * nextMultiplier - baseValue * previousMultiplier);
+      if (baseValue < 0) {
+        return roundedDelta <= -0.01 ? roundedDelta : -0.01;
+      }
       return roundedDelta >= 0.01 ? roundedDelta : 0.01;
     }
 
@@ -546,11 +547,23 @@
       return Number.isFinite(values[index]) ? values[index] : 1;
     }
 
+    function getRandomStatUpgradeBaseBonuses(source, instance = null) {
+      const generated = source && source.randomStatProfile ? getGeneratedRandomStats(source, instance) : null;
+      const baseBonuses = generated ? generated.statBonuses || {} : source && source.statBonuses || {};
+      const normalized = {};
+      for (const [key, value] of Object.entries(baseBonuses)) {
+        if (Number.isFinite(value) && value !== 0) {
+          normalized[key] = roundPercentStatValue(value);
+        }
+      }
+      return normalized;
+    }
+
     function getRandomStatUpgradeTargets(source, instance = null) {
-      const generated = getGeneratedRandomStats(source, instance);
-      const baseBonuses = generated.statBonuses || {};
-      return Array.from(new Set(generated.upgradeTargets || Object.keys(baseBonuses)))
-        .filter((key) => Number.isFinite(baseBonuses[key]));
+      const generated = source && source.randomStatProfile ? getGeneratedRandomStats(source, instance) : null;
+      const baseBonuses = getRandomStatUpgradeBaseBonuses(source, instance);
+      return Array.from(new Set(generated && generated.upgradeTargets || Object.keys(baseBonuses)))
+        .filter((key) => Number.isFinite(baseBonuses[key]) && baseBonuses[key] !== 0);
     }
 
     function applyFlatStatUpgradeBonuses(effective, source, instance, clampedLevel, multipliers) {
@@ -623,7 +636,7 @@
 
     function ensureRandomStatUpgradeTargets(item, instance, targetLevel) {
       const level = clampUpgradeLevel(targetLevel);
-      if (!level || !item || !item.upgrade || item.upgrade.mode !== "randomStatMultiplier" || !item.randomStatProfile) {
+      if (!level || !item || !item.upgrade || item.upgrade.mode !== "randomStatMultiplier") {
         return [];
       }
       const targets = getRandomStatUpgradeTargets(item, instance);
@@ -975,7 +988,7 @@
       const ref = getEquipmentItemRef(itemId);
       const instance = getEquipmentInstanceRaw(ref);
       const item = instance ? getBaseItem(instance.itemId) : resolveStaticItem(ref);
-      if (!item || !item.upgrade || item.upgrade.mode !== "randomStatMultiplier" || !item.randomStatProfile) {
+      if (!item || !item.upgrade || item.upgrade.mode !== "randomStatMultiplier") {
         return null;
       }
       const targets = getRandomStatUpgradeTargets(item, instance);

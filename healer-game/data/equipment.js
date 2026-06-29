@@ -62,7 +62,7 @@
     };
   }
 
-  function makeArmor(id, name, slot) {
+  function makeArmor(id, name, slot, statBonuses) {
     return {
       id,
       name,
@@ -71,15 +71,15 @@
       series: "kari_set",
       material: "仮素材",
       craft: cloneCraftCost(),
-      randomStatProfile: { type: "armor", rank: "D" },
+      statBonuses: { ...(statBonuses || {}) },
       upgrade: makeUpgrade("randomStatMultiplier"),
       effect: null,
       simpleDescription: "仮素材で作れる仮防具。",
-      description: "仮素材で作れる仮防具。製作時にランダムステータスが付き、強化するとランダムステータスが伸びる。",
+      description: "仮素材で作れる仮防具。製作時の追加ステータスは固定で、強化すると追加ステータスの中からランダムに伸びる。",
     };
   }
 
-  function makeAccessory(id, name) {
+  function makeAccessory(id, name, statBonuses) {
     return {
       id,
       name,
@@ -88,10 +88,10 @@
       series: "kari_set",
       material: "仮素材",
       craft: cloneCraftCost(),
-      randomStatProfile: { type: "accessory", rank: "D" },
+      statBonuses: { ...(statBonuses || {}) },
       effect: null,
       simpleDescription: "仮素材で作れる仮アクセサリ。",
-      description: "仮素材で作れる仮アクセサリ。製作時にアクセサリ用のランダムステータスが付く。",
+      description: "仮素材で作れる仮アクセサリ。製作時の追加ステータスは固定。",
     };
   }
 
@@ -172,12 +172,12 @@
       kari_tue: makeWeapon("kari_tue", "仮の杖", "杖", ["sushia"], "magic", "masic_shot"),
       kari_book: makeWeapon("kari_book", "仮の魔導書", "魔導書", ["finald", "sushia"], "magic", "shock"),
       kari_hue: makeWeapon("kari_hue", "仮の魔楽器", "魔楽器", ["finald"], "magic", "shock"),
-      kari_atama: makeArmor("kari_atama", "仮ヘルメット", "head"),
-      kari_huku: makeArmor("kari_huku", "仮服", "body"),
-      kari_zubon: makeArmor("kari_zubon", "仮レギンス", "legs"),
-      kari_kutu: makeArmor("kari_kutu", "仮ブーツ", "feet"),
-      kari_te: makeArmor("kari_te", "仮グローブ", "hands"),
-      kari_akuse: makeAccessory("kari_akuse", "仮ネックレス"),
+      kari_atama: makeArmor("kari_atama", "仮ヘルメット", "head", { maxHp: 0.05 }),
+      kari_huku: makeArmor("kari_huku", "仮服", "body", { defense: 0.03 }),
+      kari_zubon: makeArmor("kari_zubon", "仮レギンス", "legs", { magicDefense: 0.03 }),
+      kari_kutu: makeArmor("kari_kutu", "仮ブーツ", "feet", { attack: 0.03 }),
+      kari_te: makeArmor("kari_te", "仮グローブ", "hands", { magic: 0.03 }),
+      kari_akuse: makeAccessory("kari_akuse", "仮ネックレス", { damageResistance: 0.1 }),
     },
     series: seriesData.series,
   };

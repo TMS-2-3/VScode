@@ -46,7 +46,6 @@
       setEquipmentUpgradeLevel: setEquipmentUpgradeLevelFromSystem,
       resetEquipmentUpgrade: resetEquipmentUpgradeFromSystem,
       getEquipmentRandomStatUpgradeTarget,
-      rerollEquipmentRandomStats: rerollEquipmentRandomStatsFromSystem,
       getEquipmentItemRef,
       getEquipmentBaseItemId,
     } = context;
@@ -509,8 +508,6 @@
         upgradeEquipment(action.equipmentRef || action.itemId);
       } else if (action.kind === "resetEquipmentUpgrade") {
         showEquipmentResetConfirmation("upgrade", action.equipmentRef || action.itemId);
-      } else if (action.kind === "resetEquipmentStats") {
-        showEquipmentResetConfirmation("stats", action.equipmentRef || action.itemId);
       } else if (action.kind === "confirmEquipmentReset") {
         confirmEquipmentReset();
       } else if (action.kind === "cancelEquipmentReset") {
@@ -685,9 +682,7 @@
       if (!town.panel || town.panel.action !== "equipmentShop") {
         return;
       }
-      town.panel.tab = tab === "statReset" && town.panel.shopKind === "armor"
-        ? "statReset"
-        : tab === "reset" ? "reset" : tab === "upgrade" ? "upgrade" : "craft";
+      town.panel.tab = tab === "reset" ? "reset" : tab === "upgrade" ? "upgrade" : "craft";
       town.panel.scroll = 0;
       town.panel.scrollMax = 0;
       town.panel.message = "";
@@ -854,22 +849,15 @@
       }
       const equipmentRef = typeof getEquipmentItemRef === "function" ? getEquipmentItemRef(item) : itemRef;
       const currentLevel = getEquipmentUpgradeLevel(equipmentRef);
-      const resetCost = type === "stats" ? getEquipmentResetCost(item) : null;
-      if (type === "stats" && !resetCost) {
-        setTownPanelMessage("リセットコストが未設定です。");
-        return;
-      }
       const name = item.name || item.id || "装備";
       town.panel.confirmation = {
-        type,
+        type: "upgrade",
         equipmentRef,
-        cost: resetCost,
-        title: type === "stats" ? "ステータスリセット確認" : "強化リセット確認",
-        message: type === "stats"
-          ? `${name}の基礎ステータス割り振りを再抽選します。${currentLevel > 0 ? `強化Lvは+${currentLevel}から+0に戻ります。` : "強化Lvは+0のままです。"}`
-          : `${name}の強化Lvを+${currentLevel}から+0に戻します。`,
+        cost: null,
+        title: "強化リセット確認",
+        message: `${name}の強化Lvを+${currentLevel}から+0に戻します。`,
         note: "この操作は実行後に元へ戻せません。",
-        confirmLabel: type === "stats" ? "再抽選する" : "リセットする",
+        confirmLabel: "リセットする",
         cancelLabel: "やめる",
       };
     }
@@ -879,69 +867,15 @@
       if (!confirmation) {
         return;
       }
-      const { type, equipmentRef } = confirmation;
+      const { equipmentRef } = confirmation;
       clearEquipmentResetConfirmation();
-      if (type === "stats") {
-        resetEquipmentStats(equipmentRef);
-      } else {
-        resetEquipmentUpgrade(equipmentRef);
-      }
+      resetEquipmentUpgrade(equipmentRef);
     }
 
     function clearEquipmentResetConfirmation() {
       if (town.panel) {
         town.panel.confirmation = null;
       }
-    }
-
-    function resetEquipmentStats(itemRef) {
-      const resolved = typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(itemRef) : null;
-      const itemId = typeof getEquipmentBaseItemId === "function" ? getEquipmentBaseItemId(itemRef) : itemRef;
-      const item = resolved || getEquipmentItem(itemId);
-      if (!item) {
-        setTownPanelMessage("装備データが見つかりません。");
-        return;
-      }
-      if (!item.randomStatProfile) {
-        setTownPanelMessage("この装備にはランダムステータスがありません。");
-        return;
-      }
-      if (!isEquipmentOwned(itemRef)) {
-        setTownPanelMessage("この装備はまだ所持していません。");
-        return;
-      }
-      const equipmentRef = typeof getEquipmentItemRef === "function" ? getEquipmentItemRef(item) : itemRef;
-      const currentLevel = getEquipmentUpgradeLevel(equipmentRef);
-      const resetCost = getEquipmentResetCost(item);
-      if (!payRecipeCost(resetCost)) {
-        setTownPanelMessage("素材か所持金が足りません。");
-        return;
-      }
-      const beforeItem = typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(equipmentRef) : item;
-      if (typeof resetEquipmentUpgradeFromSystem === "function") {
-        resetEquipmentUpgradeFromSystem(equipmentRef);
-      } else {
-        setEquipmentUpgradeLevel(equipmentRef, 0);
-      }
-      if (typeof rerollEquipmentRandomStatsFromSystem === "function") {
-        rerollEquipmentRandomStatsFromSystem(equipmentRef);
-      } else {
-        rerollEquipmentRandomStats(equipmentRef);
-      }
-      const afterItem = typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(equipmentRef) : item;
-      setEquipmentUpgradeResult(buildEquipmentChangeResult({
-        title: "ステータスリセット結果",
-        subtitle: currentLevel > 0 ? `+${currentLevel} -> +0 / ステータス再抽選` : "ステータス再抽選",
-        baseItem: item,
-        beforeItem,
-        afterItem,
-        beforeLevel: currentLevel,
-        afterLevel: 0,
-        beforeLabel: "リセット前",
-        afterLabel: "リセット後",
-        note: "強化Lvは+0に戻り、基礎ステータスを再抽選しました。",
-      }));
-      setTownPanelMessage(`${item.name || item.id}のステータスをリセットしました。`);
     }
 
     function setEquipmentUpgradeResult(result) {
@@ -1058,24 +992,6 @@
         return recipe.costs[Math.max(0, Math.floor(currentLevel))] || null;
       }
       return recipe;
-    }
-
-    function getEquipmentResetCost(item) {
-      const craftRecipe = getCraftRecipe(item);
-      if (!craftRecipe) {
-        return null;
-      }
-      const materials = {};
-      for (const [key, count] of Object.entries(getRecipeMaterials(craftRecipe))) {
-        const amount = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
-        if (key && amount > 0) {
-          materials[key] = 1;
-        }
-      }
-      return {
-        gold: Math.ceil(getRecipeGoldCost(craftRecipe) / 2),
-        materials,
-      };
     }
 
     function payRecipeCost(recipe) {
@@ -1198,21 +1114,6 @@
       const ref = typeof getEquipmentItemRef === "function" ? getEquipmentItemRef(itemId) : itemId;
       const isInstance = ref && game.equipmentInstancesById && game.equipmentInstancesById[ref];
       return Boolean(item && (isInstance || String(item.id || "").startsWith("default_") || item.material === "製作不可" || getEquipmentOwnedCount(baseId) > 0));
-    }
-
-    function rerollEquipmentRandomStats(itemId) {
-      if (typeof context.rerollEquipmentRandomStats === "function") {
-        context.rerollEquipmentRandomStats(itemId);
-        return;
-      }
-      if (!game.equipmentRandomStatsById || typeof game.equipmentRandomStatsById !== "object") {
-        game.equipmentRandomStatsById = {};
-      }
-      if (!game.equipmentRandomSeedsById || typeof game.equipmentRandomSeedsById !== "object") {
-        game.equipmentRandomSeedsById = {};
-      }
-      game.equipmentRandomSeedsById[itemId] = Math.floor(Math.random() * 1000000000);
-      delete game.equipmentRandomStatsById[itemId];
     }
 
     function getEquipmentUpgradeLevel(itemId) {

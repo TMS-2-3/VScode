@@ -4235,7 +4235,7 @@
       stats.push(`${getStatLabel(key)}+${formatSystemNumber(value)}`);
     }
     for (const [key, value] of Object.entries(item.statBonuses || {})) {
-      stats.push(`${getStatLabel(key)}${formatSystemPercent(value, true)}`);
+      stats.push(`${getStatLabel(key)}${formatEquipmentStatPercent(key, value, true)}`);
     }
     return stats.join(" / ");
   }
@@ -4568,7 +4568,7 @@
       stats.push(`${getStatLabel(key)}+${formatSystemNumber(value)}`);
     }
     for (const [key, value] of Object.entries(effect.statBonuses || {})) {
-      stats.push(`${getStatLabel(key)}${formatSystemPercent(value, true)}`);
+      stats.push(`${getStatLabel(key)}${formatEquipmentStatPercent(key, value, true)}`);
     }
     return stats.join(" / ");
   }
@@ -4613,6 +4613,16 @@
   function formatSystemDecimal(value) {
     const numeric = Number.isFinite(value) ? value : 0;
     return Number.isInteger(numeric) ? `${numeric}` : `${Math.round(numeric * 10) / 10}`;
+  }
+
+  function formatEquipmentStatPercent(key, value, signed = false) {
+    const numeric = Number.isFinite(value) ? value : 0;
+    const displayValue = isReductionStatKey(key) ? -numeric : numeric;
+    return formatSystemPercent(displayValue, signed);
+  }
+
+  function isReductionStatKey(key) {
+    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance"].includes(key);
   }
 
   function formatSystemPercent(value, signed = false) {

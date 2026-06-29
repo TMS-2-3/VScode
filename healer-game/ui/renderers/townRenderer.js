@@ -551,9 +551,7 @@
     const x = (view.w - w) / 2;
     const y = (view.h - h) / 2;
     const shopKind = town.panel.shopKind === "weapon" ? "weapon" : "armor";
-    const tab = shopKind === "armor" && town.panel.tab === "statReset"
-      ? "statReset"
-      : town.panel.tab === "reset" ? "reset" : town.panel.tab === "upgrade" ? "upgrade" : "craft";
+    const tab = town.panel.tab === "reset" ? "reset" : town.panel.tab === "upgrade" ? "upgrade" : "craft";
     const rows = getEquipmentShopRows(shopKind, tab);
     drawPanel(x, y, w, h);
 
@@ -570,9 +568,6 @@
     drawTextButton(x + 26, y + 66, 112, 34, craftLabel, { kind: "selectEquipmentShopTab", tab: "craft" }, tab === "craft");
     drawTextButton(x + 148, y + 66, 112, 34, "強化", { kind: "selectEquipmentShopTab", tab: "upgrade" }, tab === "upgrade");
     drawTextButton(x + 270, y + 66, 138, 34, "強化リセット", { kind: "selectEquipmentShopTab", tab: "reset" }, tab === "reset");
-    if (shopKind === "armor") {
-      drawTextButton(x + 418, y + 66, 156, 34, "ステータスリセット", { kind: "selectEquipmentShopTab", tab: "statReset" }, tab === "statReset");
-    }
 
     if (!rows.length) {
       town.panel.scroll = 0;
@@ -580,16 +575,13 @@
       ctx.fillStyle = "#dce9dc";
       ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       const label = shopKind === "weapon" ? "武器" : "防具・アクセサリ";
-      const action = tab === "craft" ? craftLabel : tab === "statReset" ? "ステータスリセット" : tab === "reset" ? "強化リセット" : "強化";
+      const action = tab === "craft" ? craftLabel : tab === "reset" ? "強化リセット" : "強化";
       if (tab === "upgrade") {
         ctx.fillText(`強化できる所持${label}はありません。`, x + 26, y + 138);
         ctx.fillText(`${shopKind === "weapon" ? "生成" : "製作"}した装備がある場合、同じ装備でも個体ごとにここへ表示されます。`, x + 26, y + 166);
       } else if (tab === "reset") {
         ctx.fillText(`強化リセットできる所持${label}はありません。`, x + 26, y + 138);
         ctx.fillText(`強化済みの${label}がある場合、同じ装備でも個体ごとにここへ表示されます。`, x + 26, y + 166);
-      } else if (tab === "statReset") {
-        ctx.fillText(`ステータスリセットできる所持${label}はありません。`, x + 26, y + 138);
-        ctx.fillText("ランダムステータスを持つ防具・アクセサリが個体ごとにここへ表示されます。", x + 26, y + 166);
       } else {
         ctx.fillText(`${label}の${action}データはまだありません。`, x + 26, y + 138);
         ctx.fillText("装備データにレシピを追加すると、ここに候補が表示されます。", x + 26, y + 166);
@@ -637,17 +629,15 @@
     const baseId = getEquipmentBaseIdForTown(item);
     const itemRef = getEquipmentRefForTown(item);
     const owned = getEquipmentOwnedCount(baseId);
-    const currentLevel = getEquipmentUpgradeLevel(tab === "upgrade" || tab === "reset" || tab === "statReset" ? itemRef : baseId);
+    const currentLevel = getEquipmentUpgradeLevel(tab === "upgrade" || tab === "reset" ? itemRef : baseId);
     const upgradeRecipe = getUpgradeRecipe(item);
-    const baseRecipe = tab === "statReset" ? getEquipmentResetCost(item) : tab === "upgrade" || tab === "reset" ? upgradeRecipe : getCraftRecipe(item);
+    const baseRecipe = tab === "upgrade" || tab === "reset" ? upgradeRecipe : getCraftRecipe(item);
     const maxLevel = Number.isFinite(upgradeRecipe && upgradeRecipe.maxLevel) ? upgradeRecipe.maxLevel : 5;
     const recipe = tab === "upgrade" ? getUpgradeCostForLevel(upgradeRecipe, currentLevel) : baseRecipe;
     const isMax = tab === "upgrade" && currentLevel >= maxLevel;
-    const needsOwned = (tab === "upgrade" || tab === "reset" || tab === "statReset") && !isEquipmentOwned(item);
-    const enabled = tab === "statReset"
-      ? !needsOwned && Boolean(recipe) && Boolean(item && item.randomStatProfile)
-      : tab === "reset"
-        ? !needsOwned && currentLevel > 0
+    const needsOwned = (tab === "upgrade" || tab === "reset") && !isEquipmentOwned(item);
+    const enabled = tab === "reset"
+      ? !needsOwned && currentLevel > 0
       : Boolean(recipe) && !isMax && !needsOwned;
     const textW = Math.max(220, w - 152);
     ctx.save();
@@ -668,10 +658,8 @@
     const cost = tab === "reset" ? "無料" : recipe ? formatRecipeCost(recipe) : "コスト未設定";
     ctx.fillText(`${item.rank || "-"} / ${slot}${item.weaponType ? ` / ${item.weaponType}` : ""}`, x + 18, y + 49);
     ctx.fillStyle = enabled ? "#ffd86b" : "rgba(220,233,220,0.55)";
-    const stateText = tab === "statReset"
-      ? needsOwned ? "未所持" : currentLevel > 0 ? `+${currentLevel} -> +0 / 再抽選` : "再抽選"
-      : tab === "reset"
-        ? needsOwned ? "未所持" : currentLevel <= 0 ? "+0 / リセット済み" : `+${currentLevel} -> +0`
+    const stateText = tab === "reset"
+      ? needsOwned ? "未所持" : currentLevel <= 0 ? "+0 / リセット済み" : `+${currentLevel} -> +0`
       : tab === "upgrade"
         ? needsOwned ? "未所持" : isMax ? `+${currentLevel} / 最大` : `+${currentLevel} -> +${currentLevel + 1}`
         : `所持 ${owned}`;
@@ -688,9 +676,9 @@
       ctx.fillText(statLines[i], x + 18, y + 93 + i * 16);
     }
     ctx.restore();
-    const buttonLabel = tab === "statReset" ? "再抽選" : tab === "reset" ? "リセット" : tab === "upgrade" ? "強化" : item && item.slot === "weapon" ? "生成" : "製作";
+    const buttonLabel = tab === "reset" ? "リセット" : tab === "upgrade" ? "強化" : item && item.slot === "weapon" ? "生成" : "製作";
     drawTextButton(x + w - 112, y + Math.max(14, (h - 36) / 2), 90, 36, buttonLabel, {
-      kind: tab === "statReset" ? "resetEquipmentStats" : tab === "reset" ? "resetEquipmentUpgrade" : tab === "upgrade" ? "upgradeEquipment" : "craftEquipment",
+      kind: tab === "reset" ? "resetEquipmentUpgrade" : tab === "upgrade" ? "upgradeEquipment" : "craftEquipment",
       itemId: baseId,
       equipmentRef: itemRef,
     }, true, !enabled);
@@ -808,14 +796,14 @@
           ctx.fillStyle = entry.after >= 0 ? "#f7fff6" : "#ffb4a8";
           ctx.font = "900 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
           ctx.textAlign = "right";
-          ctx.fillText(formatUpgradeResultValue(entry.after, entry.kind), tableX + tableW - 12, rowY + 1);
+          ctx.fillText(formatUpgradeResultValue(entry.after, entry.kind, entry.key), tableX + tableW - 12, rowY + 1);
           continue;
         }
 
         ctx.textAlign = "center";
         ctx.fillStyle = "#dce9dc";
         ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-        ctx.fillText(formatUpgradeResultValue(entry.before, entry.kind), beforeX + valueW / 2, rowY + 1);
+        ctx.fillText(formatUpgradeResultValue(entry.before, entry.kind, entry.key), beforeX + valueW / 2, rowY + 1);
 
         ctx.fillStyle = "#ffd86b";
         ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -823,7 +811,7 @@
 
         ctx.fillStyle = entry.highlight ? "#ff8a80" : "#f7fff6";
         ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-        ctx.fillText(formatUpgradeResultValue(entry.after, entry.kind), afterX + valueW / 2, rowY + 1);
+        ctx.fillText(formatUpgradeResultValue(entry.after, entry.kind, entry.key), afterX + valueW / 2, rowY + 1);
 
         ctx.fillStyle = entry.delta >= 0 ? "#8ff0a4" : "#ffb4a8";
         ctx.font = "900 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -889,10 +877,10 @@
     ctx.restore();
   }
 
-  function formatUpgradeResultValue(value, kind) {
+  function formatUpgradeResultValue(value, kind, key = "") {
     const amount = Number.isFinite(value) ? value : 0;
     if (kind === "percent") {
-      return `${Math.round(amount * 100)}%`;
+      return formatTownStatPercent(key, amount, false);
     }
     return Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 10) / 10);
   }
@@ -946,15 +934,7 @@
       if (shopKind !== "weapon" && item.slot === "weapon") {
         continue;
       }
-      if (tab === "statReset") {
-        if (!item.randomStatProfile) {
-          continue;
-        }
-        const instances = typeof getEquipmentInstancesByItemId === "function"
-          ? getEquipmentInstancesByItemId(item.id)
-          : [];
-        rows.push(...instances);
-      } else if (tab === "upgrade" || tab === "reset") {
+      if (tab === "upgrade" || tab === "reset") {
         if (!getUpgradeRecipe(item)) {
           continue;
         }
@@ -991,14 +971,14 @@
 
   function getEquipmentShopItemName(item, tab) {
     const name = item && (item.name || item.id) || "装備";
-    if (!["upgrade", "reset", "statReset"].includes(tab) || !Number.isFinite(item && item.copyIndex) || !Number.isFinite(item && item.copyCount) || item.copyCount <= 1) {
+    if (!["upgrade", "reset"].includes(tab) || !Number.isFinite(item && item.copyIndex) || !Number.isFinite(item && item.copyCount) || item.copyCount <= 1) {
       return name;
     }
     return `${name} #${item.copyIndex}`;
   }
 
   function getEquipmentShopRowHeight(tab) {
-    return tab === "upgrade" || tab === "reset" || tab === "statReset" ? 122 : 106;
+    return tab === "upgrade" || tab === "reset" ? 122 : 106;
   }
 
   function getEquipmentEquippedTextForTown(item) {
@@ -1083,7 +1063,7 @@
     }
     for (const [key, value] of Object.entries(item.statBonuses || {})) {
       if (Number.isFinite(value) && value !== 0) {
-        stats.push(`${getTownStatLabel(key)}${formatSignedTownPercent(value)}`);
+        stats.push(`${getTownStatLabel(key)}${formatTownStatPercent(key, value, true)}`);
       }
     }
     return stats.join(" / ");
@@ -1102,24 +1082,6 @@
       return recipe.costs[Math.max(0, Math.floor(currentLevel))] || null;
     }
     return recipe;
-  }
-
-  function getEquipmentResetCost(item) {
-    const craftRecipe = getCraftRecipe(item);
-    if (!craftRecipe) {
-      return null;
-    }
-    const materials = {};
-    for (const [key, count] of Object.entries(getRecipeMaterials(craftRecipe))) {
-      const amount = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
-      if (key && amount > 0) {
-        materials[key] = 1;
-      }
-    }
-    return {
-      gold: Math.ceil(getRecipeGoldCost(craftRecipe) / 2),
-      materials,
-    };
   }
 
   function getRecipeGoldCost(recipe) {
@@ -1228,6 +1190,17 @@
   function formatSignedTownNumber(value) {
     const numeric = Math.round(Number.isFinite(value) ? value : 0);
     return `${numeric >= 0 ? "+" : ""}${numeric}`;
+  }
+
+  function formatTownStatPercent(key, value, signed = true) {
+    const raw = Number.isFinite(value) ? value : 0;
+    const displayValue = isReductionStatKey(key) ? -raw : raw;
+    const percent = Math.round(displayValue * 100);
+    return `${signed && percent >= 0 ? "+" : ""}${percent}%`;
+  }
+
+  function isReductionStatKey(key) {
+    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance"].includes(key);
   }
 
   function formatSignedTownPercent(value) {
