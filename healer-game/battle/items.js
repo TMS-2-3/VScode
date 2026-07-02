@@ -23,6 +23,7 @@
       getHoveredPartyMember,
       getSupportOrigin,
       cancelPlayerAim,
+      isPlayerControlLocked,
       setActionCooldown,
       acquireOrUpgradeSkill,
       addGold,
@@ -425,6 +426,10 @@
       return requestItemUse(index);
     }
 
+    function isActionDisabled(unit) {
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+    }
+
     function requestItemUse(index) {
       const slotIndex = Math.floor(Number(index));
       const item = getUsableItem(slotIndex);
@@ -432,7 +437,7 @@
         return false;
       }
       const user = getItemUser(item);
-      if (!user || user.dead || user.frozen > 0) {
+      if (!user || user.dead || isActionDisabled(user)) {
         showSupportFloat("使用不可", "#f7fff6");
         return false;
       }
@@ -441,6 +446,10 @@
       }
       player.itemAim = null;
       if (user.id === "finald") {
+        if (isPlayerControlLocked && isPlayerControlLocked()) {
+          showSupportFloat("挑発中", "#ffd0d0");
+          return false;
+        }
         return requestArjunaItemUse(user, item, slotIndex);
       }
       user.itemUseRequest = {
@@ -534,7 +543,7 @@
       if (item.cd > 0) {
         return;
       }
-      if (unit.frozen > 0 || unit.channel || unit.cast || unit.actionLock > 0) {
+      if (isActionDisabled(unit) || unit.channel || unit.cast || unit.actionLock > 0) {
         return;
       }
       if (unit.id !== "finald" && (unit.cds.attack || 0) > 0) {
@@ -553,7 +562,7 @@
       if (!cast) {
         return;
       }
-      if (unit.dead || unit.frozen > 0) {
+      if (unit.dead || isActionDisabled(unit)) {
         finishItemUse(unit, cast, false);
         return;
       }
@@ -607,7 +616,7 @@
       }
       unit.actionLock = Math.max(unit.actionLock || 0, ACTION_GAP || 0);
       unit.actionTotal = Math.max(unit.actionTotal || 0, unit.actionLock);
-      if (!success || unit.dead || unit.frozen > 0) {
+      if (!success || unit.dead || isActionDisabled(unit)) {
         addFloat("中断", unit.x, unit.y - 30, "#ffffff");
         return false;
       }

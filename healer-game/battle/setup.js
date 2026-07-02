@@ -12,6 +12,7 @@
       areas,
       effects,
       expandedStatusUnitIds,
+      STATUS_DATA,
       COLORS,
       battlePx,
       getBattleBounds,
@@ -27,6 +28,7 @@
     } = context;
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
+    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "Injury"];
 
     function getCarriedHp(unit) {
       const savedHp = game.partyHpById && game.partyHpById[unit.id];
@@ -67,6 +69,105 @@
       unit.dead = unit.hp <= 0;
     }
 
+    function applyCarriedStatuses(unit) {
+      resetUnitCarryoverStatusFields(unit);
+      if (!unit || !unit.id || !game.partyStatusById || typeof game.partyStatusById !== "object") {
+        return;
+      }
+      const statuses = game.partyStatusById[unit.id];
+      if (!statuses || typeof statuses !== "object") {
+        return;
+      }
+      const rihasPassive = statuses.buff_itaminasi;
+      if (isStatusCarryover("buff_itaminasi") && rihasPassive && rihasPassive.timer > 0 && rihasPassive.stacks > 0) {
+        unit.rihasPassiveStacks = Math.max(0, Math.floor(rihasPassive.stacks || 0));
+        unit.rihasPassiveTimer = Math.max(0, rihasPassive.timer || 0);
+        unit.rihasPassiveStackCooldown = Math.max(0, rihasPassive.cooldown || 0);
+      }
+      const warmup = statuses.buff_warmup;
+      if (isStatusCarryover("buff_warmup") && warmup && warmup.timer > 0 && warmup.stacks > 0) {
+        unit.castStacks = Math.max(0, Math.floor(warmup.stacks || 0));
+        unit.stackTimer = Math.max(0, warmup.timer || 0);
+        unit.stackCooldown = Math.max(0, warmup.cooldown || 0);
+      }
+      const taunt = statuses.debuff_taunt;
+      if (isStatusCarryover("debuff_taunt") && taunt && taunt.timer > 0 && taunt.forcedTargetId) {
+        const forcedTarget = findBattleUnitById(taunt.forcedTargetId);
+        if (forcedTarget && forcedTarget !== unit && !forcedTarget.dead) {
+          unit.forcedTarget = forcedTarget;
+          unit.tauntTimer = Math.max(0, taunt.timer || 0);
+        }
+      }
+      const freeze = statuses.debuff_freeze;
+      if (isStatusCarryover("debuff_freeze") && freeze && freeze.timer > 0) {
+        unit.frozen = Math.max(0, freeze.timer || 0);
+        unit.frozenMax = Math.max(unit.frozen, freeze.max || 0);
+      }
+      const burn = statuses.debuff_burn;
+      if (isStatusCarryover("debuff_burn") && burn && burn.timer > 0) {
+        unit.burnTimer = Math.max(0, burn.timer || 0);
+        unit.burnMax = Math.max(unit.burnTimer, burn.max || 0);
+        unit.burnTick = Math.max(0, burn.tick || 0);
+        unit.burnTickRate = Math.max(0.1, burn.tickRate || 1);
+        unit.burnDamageHpRatio = Math.max(0, burn.damageHpRatio || 0.01);
+        unit.burnSource = null;
+      }
+      const sleep = statuses.debuff_sleep;
+      if (isStatusCarryover("debuff_sleep") && sleep && sleep.timer > 0) {
+        unit.sleepTimer = Math.max(0, sleep.timer || 0);
+        unit.sleepMax = Math.max(unit.sleepTimer, sleep.max || 0);
+      }
+      const injury = statuses.Injury;
+      if (isStatusCarryover("Injury") && injury && injury.timer > 0) {
+        unit.injuryTimer = Math.max(0, injury.timer || 0);
+        unit.injuryMax = Math.max(unit.injuryTimer, injury.max || 0);
+      }
+    }
+
+    function resetUnitCarryoverStatusFields(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.rihasPassiveStacks = 0;
+      unit.rihasPassiveTimer = 0;
+      unit.rihasPassiveStackCooldown = 0;
+      unit.castStacks = 0;
+      unit.stackTimer = 0;
+      unit.stackCooldown = 0;
+      unit.forcedTarget = null;
+      unit.tauntTimer = 0;
+      unit.frozen = 0;
+      unit.frozenMax = 0;
+      unit.burnTimer = 0;
+      unit.burnMax = 0;
+      unit.burnTick = 0;
+      unit.burnTickRate = 1;
+      unit.burnDamageHpRatio = 0;
+      unit.burnSource = null;
+      unit.sleepTimer = 0;
+      unit.sleepMax = 0;
+      unit.injuryTimer = 0;
+      unit.injuryMax = 0;
+      unit.shadowDashTimer = 0;
+      unit.shadowDashMax = 0;
+    }
+
+    function findBattleUnitById(unitId) {
+      if (!unitId) {
+        return null;
+      }
+      return [player, ...party, ...enemies].find((unit) => unit && unit.id === unitId) || null;
+    }
+
+    function isStatusCarryover(statusId) {
+      if (!CARRYOVER_STATUS_IDS.includes(statusId)) {
+        return false;
+      }
+      const status = STATUS_DATA && STATUS_DATA[statusId];
+      const values = status ? [status.carryover, status.inherit, status.battleCarryover, status["引き継ぎ"]] : [];
+      return values.some((value) => value === true || value === "あり" || value === "有" || value === "true" || value === "yes");
+    }
+
     function resetGame(quest = null) {
       projectiles.length = 0;
       telegraphs.length = 0;
@@ -79,6 +180,7 @@
       game.reinforcementsSpawned = false;
       game.priorityTarget = null;
       game.priorityTargetTimer = 0;
+      game.priorityTargetIgnoredUnitIds = {};
       game.skillPage = "page1";
       game.currentQuest = quest;
       game.battleRewards = { pending: [], granted: [], claimed: false };
@@ -161,6 +263,10 @@
         makeEnemy("小術師B", startX + battlePx(220), startY + enemySpread * 0.53, "caster"),
         makeEnemy("大魔物", startX + battlePx(150), startY + battlePx(4), "elite"),
       );
+
+      for (const member of party) {
+        applyCarriedStatuses(member);
+      }
 
       clampAllUnits();
     }

@@ -32,6 +32,7 @@
       usePlayerCommand,
       cancelPlayerAim,
       confirmPlayerAim,
+      isPlayerControlLocked,
       triggerUltimate,
       useItemSlot,
       cancelItemAim,
@@ -2500,6 +2501,11 @@
         return;
       }
 
+      if (isLockedBattleControlEvent(event)) {
+        event.preventDefault();
+        return;
+      }
+
       if (isActionEvent("battle.skillPage", event)) {
         game.skillPage = game.skillPage === "page2" ? "page1" : "page2";
         cancelPlayerAim();
@@ -2582,6 +2588,11 @@
     }
 
     function usePlayerSkillSlot(slotIndex) {
+      if (isPlayerControlLocked && isPlayerControlLocked()) {
+        cancelPlayerAim();
+        cancelItemAim();
+        return;
+      }
       const pageIndex = game.skillPage === "page2" ? 1 : 0;
       const skills = getPanelSkills(player, pageIndex);
       const skill = skills[slotIndex];
@@ -2674,6 +2685,13 @@
           return;
         }
       }
+      if (isPlayerControlLocked && isPlayerControlLocked()) {
+        if (isActionEvent("battle.confirm", event) || isActionEvent("battle.cancelAim", event)) {
+          cancelPlayerAim();
+          cancelItemAim();
+          return;
+        }
+      }
       if (isActionEvent("battle.confirm", event)) {
         if (player.itemAim) {
           confirmItemAim();
@@ -2695,6 +2713,23 @@
       } else if (event.button === 2) {
         input.mouse.right = true;
       }
+    }
+
+    function isLockedBattleControlEvent(event) {
+      if (!isPlayerControlLocked || !isPlayerControlLocked()) {
+        return false;
+      }
+      const locked = isActionEvent("battle.skillPage", event)
+        || isActionEvent("battle.confirm", event)
+        || isActionEvent("battle.cancelAim", event)
+        || itemActionIds.some((actionId) => isActionEvent(actionId, event))
+        || playerSkillActionIds.some((actionId) => isActionEvent(actionId, event))
+        || Object.values(ultimateActionByUnitId).some((actionId) => isActionEvent(actionId, event));
+      if (locked) {
+        cancelPlayerAim();
+        cancelItemAim();
+      }
+      return locked;
     }
 
     function handleMouseUp(event) {

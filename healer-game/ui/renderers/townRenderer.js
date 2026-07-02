@@ -50,6 +50,69 @@
     return getActionLabel("common.menuBack", "Esc");
   }
 
+  const TOWN_CHARACTER_SPRITE_PATHS = {
+    sushia: "sushia_img",
+    ulpes: "ulpes_img",
+    rihas: "rihas_img",
+  };
+  const ARJUNA_TOWN_SPRITE_PATHS = {
+    male: "arjuna_man_img",
+    female: "arjuna_woman_img",
+  };
+  const TOWN_WALK_DIRECTIONS = ["down", "left", "right", "up"];
+  const TOWN_WALK_FRAMES = [1, 2, 3];
+  const townWalkImages = createTownWalkImages();
+  const profileAppearanceImages = createProfileAppearanceImages();
+
+  function createTownWalkImages() {
+    const images = {};
+    if (typeof Image !== "function") {
+      return images;
+    }
+    const spritePaths = {
+      ...TOWN_CHARACTER_SPRITE_PATHS,
+      arjunaMale: ARJUNA_TOWN_SPRITE_PATHS.male,
+      arjunaFemale: ARJUNA_TOWN_SPRITE_PATHS.female,
+    };
+    for (const [unitId, spritePath] of Object.entries(spritePaths)) {
+      images[unitId] = {};
+      for (const direction of TOWN_WALK_DIRECTIONS) {
+        images[unitId][direction] = {};
+        for (const frame of TOWN_WALK_FRAMES) {
+          const image = new Image();
+          image.src = `img/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
+          images[unitId][direction][frame] = image;
+        }
+      }
+    }
+    return images;
+  }
+
+  function createProfileAppearanceImages() {
+    const images = {};
+    if (typeof Image !== "function") {
+      return images;
+    }
+    for (const [key, spritePath] of Object.entries(ARJUNA_TOWN_SPRITE_PATHS)) {
+      const image = new Image();
+      image.src = `img/${spritePath}/default/front.png`;
+      images[key] = image;
+    }
+    return images;
+  }
+
+  function getTownWalkImage(unitId, facing, frame) {
+    const imageKey = unitId === "finald"
+      ? playerProfile.gender === "女の子" ? "arjunaFemale" : "arjunaMale"
+      : unitId;
+    const direction = TOWN_WALK_DIRECTIONS.includes(facing) ? facing : "down";
+    const normalizedFrame = TOWN_WALK_FRAMES.includes(frame) ? frame : 1;
+    return townWalkImages[imageKey] && townWalkImages[imageKey][direction] && townWalkImages[imageKey][direction][normalizedFrame] || null;
+  }
+
+  function isTownImageReady(image) {
+    return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+  }
   function drawTown() {
     ctx.fillStyle = "#3f6a48";
     ctx.fillRect(0, 0, view.w, view.h);
@@ -249,14 +312,23 @@
     if (!playerProfile.done) {
       return;
     }
-    const actors = [{ x: town.player.x, y: town.player.y, color: town.player.color || COLORS.player, label: town.player.label || "主" }];
+    const actors = [{
+      id: "finald",
+      x: town.player.x,
+      y: town.player.y,
+      color: town.player.color || COLORS.player,
+      label: town.player.label || "主",
+      facing: town.player.facing || "down",
+      walkFrame: town.player.walkFrame || 1,
+      spriteHeight: town.player.spriteHeight || 72,
+    }];
     if (!town.meetingDone) {
       const guild = getTownBuilding("guild");
       const baseX = guild ? guild.door.x : 800;
       const baseY = guild ? guild.door.y - 18 : 790;
-      drawTownNpc(baseX - 74, baseY + 8, COLORS.ulpes, "ウ");
-      drawTownNpc(baseX - 8, baseY + 34, COLORS.rihas, "リ");
-      drawTownNpc(baseX + 66, baseY + 10, COLORS.sushia, "ス");
+      drawTownActor({ id: "ulpes", x: baseX - 74, y: baseY + 8, color: COLORS.ulpes, label: "ウ", facing: "down", walkFrame: 1 });
+      drawTownActor({ id: "rihas", x: baseX - 8, y: baseY + 34, color: COLORS.rihas, label: "リ", facing: "down", walkFrame: 1 });
+      drawTownActor({ id: "sushia", x: baseX + 66, y: baseY + 10, color: COLORS.sushia, label: "ス", facing: "down", walkFrame: 1 });
       drawArgumentMark(baseX - 48, baseY - 22);
       drawArgumentMark(baseX + 6, baseY + 4);
       drawArgumentMark(baseX + 66, baseY - 18);
@@ -267,10 +339,40 @@
     }
     actors.sort((a, b) => a.y - b.y);
     for (const actor of actors) {
-      drawTownNpc(actor.x, actor.y, actor.color, actor.label);
+      drawTownActor(actor);
     }
   }
 
+  function drawTownActor(actor) {
+    if (!actor) {
+      return;
+    }
+    if (drawTownCharacterSprite(actor)) {
+      return;
+    }
+    drawTownNpc(actor.x, actor.y, actor.color, actor.label);
+  }
+
+  function drawTownCharacterSprite(actor) {
+    const image = getTownWalkImage(actor.id, actor.facing, actor.walkFrame);
+    if (!isTownImageReady(image)) {
+      return false;
+    }
+    const height = actor.spriteHeight || 64;
+    const width = height * image.naturalWidth / image.naturalHeight;
+    const footY = actor.y + 24;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.24)";
+    ctx.beginPath();
+    ctx.ellipse(actor.x, footY - 2, 18, 8, 0, 0, TAU);
+    ctx.fill();
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, actor.x - width / 2, footY - height, width, height);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+    ctx.restore();
+    return true;
+  }
   function drawTownNpc(x, y, color, label) {
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.22)";
@@ -1544,20 +1646,30 @@
       ctx.stroke();
 
       const cx = x + buttonW / 2;
-      const cy = y + 42;
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 24, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = choice.color;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 17, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = "rgba(17,23,20,0.42)";
-      ctx.beginPath();
-      ctx.arc(cx - 6, cy - 4, 2.5, 0, TAU);
-      ctx.arc(cx + 6, cy - 4, 2.5, 0, TAU);
-      ctx.fill();
+      const cy = y + 50;
+      const image = profileAppearanceImages[choice.gender === "女の子" ? "female" : "male"];
+      if (isTownImageReady(image)) {
+        const imageH = 72;
+        const imageW = imageH * image.naturalWidth / image.naturalHeight;
+        const previousSmoothing = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(image, cx - imageW / 2, cy - imageH / 2, imageW, imageH);
+        ctx.imageSmoothingEnabled = previousSmoothing;
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.18)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 24, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = choice.color;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 17, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "rgba(17,23,20,0.42)";
+        ctx.beginPath();
+        ctx.arc(cx - 6, cy - 4, 2.5, 0, TAU);
+        ctx.arc(cx + 6, cy - 4, 2.5, 0, TAU);
+        ctx.fill();
+      }
 
       ctx.fillStyle = "#f7fff6";
       ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";

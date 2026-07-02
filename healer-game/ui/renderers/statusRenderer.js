@@ -22,6 +22,7 @@
       STATUS_DATA,
       ITEM_SLOT_KEYS,
       getKeybindLabel,
+      getPlayerFirstName,
       COMMAND_BIAS_CONFIGS,
       RIHAS_PASSIVE_MAX_STACKS,
       RIHAS_PASSIVE_STACK_DURATION,
@@ -866,6 +867,14 @@
       const burnMax = Math.max(0.1, unit.burnMax || unit.burnTimer);
       icons.push(makeStatusIcon(unit, "debuff_burn", { ratio: unit.burnTimer / burnMax, remaining: unit.burnTimer }));
     }
+    if ((unit.sleepTimer || 0) > 0) {
+      const sleepMax = Math.max(0.1, unit.sleepMax || unit.sleepTimer);
+      icons.push(makeStatusIcon(unit, "debuff_sleep", { ratio: unit.sleepTimer / sleepMax, remaining: unit.sleepTimer }));
+    }
+    if ((unit.injuryTimer || 0) > 0) {
+      const injuryMax = Math.max(0.1, unit.injuryMax || unit.injuryTimer);
+      icons.push(makeStatusIcon(unit, "Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
+    }
     if (hasPassive(unit, "warmup") && (unit.castStacks || 0) > 0) {
       icons.push(makeStatusIcon(unit, "buff_warmup", { ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer }));
     }
@@ -1200,38 +1209,189 @@
     const h = Math.min(idealH, Math.max(92, topReserve - 12));
     const x = margin;
     const y = 6;
-    const w = view.w - margin * 2;
+    const menuReserveW = clamp(view.w * 0.07, 64, 92);
+    const w = view.w - margin * 2 - menuReserveW;
     drawPanel(x, y, w, h);
 
-    const aliveEnemies = enemies.filter((enemy) => !enemy.dead).length;
     const innerX = x + 16;
     const innerW = w - 32;
     const gap = 12;
-    const itemW = clamp(view.w * 0.2 + 70, 320, 400);
-    const itemSlotW = Math.max(34, (itemW - 37) / 4);
-    const minInfoW = 70;
-    let skillW = Math.min(clamp(view.w * 0.68, 560, 760), innerW - itemW - gap * 2 - minInfoW);
-    skillW = Math.max(520, skillW);
-    if (skillW + itemW + gap > innerW) {
-      skillW = Math.min(innerW, skillW);
+    let itemW = clamp(innerW * 0.25, 280, 430);
+    let ultimateW = clamp(innerW * 0.24, 260, 420);
+    let skillW = innerW - itemW - ultimateW - gap * 2;
+    if (skillW < 420) {
+      const deficit = 420 - skillW;
+      const itemReduce = Math.min(Math.max(0, itemW - 240), deficit * 0.55);
+      itemW -= itemReduce;
+      const ultimateReduce = Math.min(Math.max(0, ultimateW - 220), deficit - itemReduce);
+      ultimateW -= ultimateReduce;
+      skillW = innerW - itemW - ultimateW - gap * 2;
     }
+    if (skillW < 260) {
+      skillW = 260;
+      ultimateW = Math.max(190, innerW - skillW - itemW - gap * 2);
+    }
+    if (ultimateW < 190) {
+      ultimateW = 190;
+      itemW = Math.max(180, innerW - skillW - ultimateW - gap * 2);
+    }
+
+    const contentY = y + 10;
+    const contentH = h - 20;
+    const page = game.skillPage === "page2" ? "page2" : "page1";
     const skillX = innerX;
-    if (skillW > 300) {
-      const page = game.skillPage === "page2" ? "page2" : "page1";
-      drawSkillPanel(skillX, y + 10, skillW, h - 20, page, itemSlotW);
-    }
-    const itemX = skillX + skillW + gap;
-    const canDrawItems = itemX + itemW <= x + w - 16;
-    if (canDrawItems) {
-      drawItemPanel(itemX, y + 10, itemW, h - 20);
-    }
-    const infoX = canDrawItems ? itemX + itemW + gap : skillX + skillW + gap;
-    const infoW = x + w - 16 - infoX;
-    if (infoW > 150) {
-      drawQuestInfoPanel(infoX, y + 16, infoW, h - 32, aliveEnemies);
-    }
+    const ultimateX = skillX + skillW + gap;
+    const itemX = ultimateX + ultimateW + gap;
+    drawSkillPanel(skillX, contentY, skillW, contentH, page);
+    drawUltimatePanel(ultimateX, contentY, ultimateW, contentH);
+    drawItemPanel(itemX, contentY, itemW, contentH);
   }
 
+  function getBattleHudUnits() {
+    const unitIds = ["ulpes", "rihas", "sushia", "finald"];
+    return unitIds
+      .map((unitId) => unitId === "finald" ? player : party.find((unit) => unit && unit.id === unitId))
+      .filter(Boolean);
+  }
+
+  function drawBattleTimePill(x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = "rgba(6,12,10,0.36)";
+    ctx.strokeStyle = "rgba(247,255,246,0.16)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 7);
+    ctx.fill();
+    ctx.stroke();
+    const centerY = y + h / 2 + 0.5;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#aebdb4";
+    ctx.font = "900 11px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+    ctx.fillText("時間", x + 8, centerY);
+    const timeText = formatBattleTime(game.time);
+    let timeSize = 13;
+    do {
+      ctx.font = `900 ${timeSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      if (ctx.measureText(timeText).width <= w - 44 || timeSize <= 9) {
+        break;
+      }
+      timeSize -= 1;
+    } while (timeSize > 9);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#f7fff6";
+    ctx.fillText(timeText, x + w - 8, centerY);
+    ctx.restore();
+  }
+
+  function drawUltimatePanel(x, y, w, h) {
+    const units = getBattleHudUnits();
+    const slotCount = Math.max(4, units.length);
+    const gap = 7;
+    const sidePadding = 8;
+    const slotW = Math.max(36, (w - sidePadding * 2 - gap * (slotCount - 1)) / slotCount);
+    const slotY = y + 8;
+    const slotH = Math.max(34, h - 32);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(6,12,10,0.24)";
+    ctx.strokeStyle = "rgba(247,255,246,0.13)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    for (let i = 0; i < slotCount; i += 1) {
+      const sx = x + sidePadding + i * (slotW + gap);
+      const unit = units[i];
+      drawUltimateSlot(unit, sx, slotY, slotW, slotH);
+      drawFittedText(getUltimateOwnerShortName(unit), sx + slotW / 2, slotY + slotH + 14, slotW, 800, 10, 7, "#d6e1d8", "center");
+    }
+    ctx.restore();
+  }
+
+  function getUltimateOwnerShortName(unit) {
+    if (!unit) {
+      return "";
+    }
+    if (unit.id === "finald" && typeof getPlayerFirstName === "function") {
+      return getPlayerFirstName();
+    }
+    return unit.name || unit.label || getStatusDisplayName(unit) || "";
+  }
+  function getUnitUltimatePanelEntry(unit) {
+    if (!unit) {
+      return { key: "ult", skill: null, level: 0 };
+    }
+    const entries = skillSystem && typeof skillSystem.getUnitSkillEntries === "function"
+      ? skillSystem.getUnitSkillEntries(unit)
+      : [];
+    const entry = entries.find((candidate) => candidate && candidate.skill && (candidate.key === "ult" || candidate.skill.category === "必殺技"));
+    if (entry) {
+      return {
+        key: entry.key || "ult",
+        skill: entry.skill,
+        level: Number.isFinite(entry.level) ? entry.level : getSkillLevelForDisplay(unit, entry.key || "ult"),
+      };
+    }
+    const owner = unit.skillOwner || unit.id;
+    const skill = skillSystem && typeof skillSystem.getSkill === "function" ? skillSystem.getSkill(owner, "ult") : null;
+    return { key: "ult", skill, level: getSkillLevelForDisplay(unit, "ult") };
+  }
+
+  function drawUltimateSlot(unit, x, y, w, h) {
+    const entry = getUnitUltimatePanelEntry(unit);
+    const skill = entry.skill;
+    const ultimateCost = unit ? getUltimateCost(unit) : 100;
+    const ratio = unit && ultimateCost > 0 ? clamp(unit.ult / ultimateCost, 0, 1) : 0;
+    const ready = Boolean(unit && ratio >= 1);
+    const disabled = !unit || unit.dead || unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || (unit.id !== "finald" && unit.mood !== null && unit.mood <= 50);
+    const key = unit ? getBattleActionLabel(getUltimateActionId(unit.id), ULTIMATE_KEYS[unit.id]) : "";
+
+    ctx.fillStyle = ready && !disabled ? "#eaffff" : "rgba(247,255,246,0.62)";
+    ctx.strokeStyle = ready && !disabled ? "rgba(115,223,255,0.92)" : disabled ? "rgba(255,107,107,0.62)" : "rgba(115,223,255,0.52)";
+    ctx.lineWidth = ready && !disabled ? 2 : 1.4;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    drawSkillCooldownShadow(x, y, w, h, 1 - ratio);
+    drawSkillInputBadge(String(key).toUpperCase(), x + 7, y + 7, w - 14);
+
+    const iconR = Math.min(w * 0.21, h * 0.17, 15);
+    ctx.fillStyle = ready && !disabled ? "#73dfff" : "rgba(115,223,255,0.58)";
+    ctx.strokeStyle = "rgba(9,14,13,0.5)";
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h * 0.34, iconR, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.font = `900 ${Math.max(11, Math.min(14, iconR * 0.9))}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(skill ? getSkillIconLabel(skill) : "必", x + w / 2, y + h * 0.34 + 0.5);
+
+    drawFittedText(skill ? skill.name : "必殺技", x + w / 2, y + h * 0.6, w - 10, 900, 11, 8, "#102018", "center");
+    drawFittedText(skill && skill.skillType ? skill.skillType : "必殺技", x + w / 2, y + h * 0.78, w - 10, 800, 10, 7, "#4c6758", "center");
+    drawSkillLevelBadge(x + w - 5, y + h - 5, entry.level || 0);
+
+    if (unit) {
+      statusUiButtons.push({
+        action: "unitUltimate",
+        unitId: unit.id,
+        x,
+        y,
+        w,
+        h,
+      });
+      registerSkillTooltip(unit, {
+        key: entry.key || "ult",
+        skill,
+        level: entry.level || 0,
+        gauge: true,
+        text: ready ? "OK" : "準備中",
+      }, x, y, w, h);
+    }
+  }
   function drawItemPanel(x, y, w, h) {
     const slots = Array.isArray(game.itemSlots) ? game.itemSlots : [];
     const gap = 7;
@@ -1439,7 +1599,7 @@
 
     const pageTwo = page === "page2";
     const skills = skillSystem.getPanelSkills(player, pageTwo ? 1 : 0);
-    const slots = 6;
+    const slots = 5;
     const gap = 8;
     const toggleW = clamp(w * 0.14, 72, 92);
     const listOffset = 10;
@@ -1449,9 +1609,13 @@
     const itemW = desiredItemW !== null ? Math.min(desiredItemW, availableItemW) : availableItemW;
     const itemY = y + 8;
     const itemH = h - 16;
+    const timeH = clamp(h * 0.2, 22, 30);
+    const timeGap = 6;
+    const toggleH = itemH;
     const nameY = itemY + itemH * 0.56;
     const typeY = itemY + itemH * 0.75;
-    drawSkillRoleToggle(x, itemY, toggleW, itemH, page);
+    drawSkillRoleToggle(x, itemY, toggleW, toggleH, page);
+    drawBattleTimePill(x - 8, y + h + timeGap + 6, toggleW, timeH);
     for (let i = 0; i < slots; i += 1) {
       const sx = listX + i * (itemW + gap);
       const skill = skills[i];
@@ -1468,18 +1632,14 @@
         continue;
       }
       ctx.fillStyle = "#f7fff6";
-      ctx.strokeStyle = skill.gauge
-        ? "rgba(115,223,255,0.86)"
-        : skill.command
+      ctx.strokeStyle = skill.command
         ? (skill.commandDelta < 0 ? "rgba(86,140,255,0.78)" : "rgba(255,185,67,0.78)")
         : "rgba(8,14,12,0.64)";
       ctx.lineWidth = skill.command ? 1.8 : 1.5;
       roundRect(sx, itemY, itemW, itemH, 8);
       ctx.fill();
       ctx.stroke();
-      const shadowRatio = skill.gauge
-        ? 1 - clamp(player.ult / getUltimateCost(player), 0, 1)
-        : clamp(skill.cd / Math.max(0.1, skill.max), 0, 1);
+      const shadowRatio = clamp(skill.cd / Math.max(0.1, skill.max), 0, 1);
       drawSkillCooldownShadow(sx, itemY, itemW, itemH, shadowRatio);
       drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);
       ctx.fillStyle = "#102018";
@@ -1495,9 +1655,9 @@
       }
       drawSkillLevelBadge(sx + itemW - 5, itemY + itemH - 5, skill.level || 0);
       statusUiButtons.push({
-        action: skill.gauge || !skill.command ? "playerSkill" : "playerCommand",
+        action: !skill.command ? "playerSkill" : "playerCommand",
         skillKey: skill.key,
-        ultimate: Boolean(skill.gauge),
+        ultimate: false,
         targeted: skill.targeted,
         x: sx,
         y: itemY,
@@ -1508,7 +1668,6 @@
     }
     ctx.textBaseline = "alphabetic";
   }
-
   function drawSkillRoleToggle(x, y, w, h, page) {
     const pageTwo = page === "page2";
     ctx.save();
@@ -1539,7 +1698,7 @@
     const cy = y + (h - 6) / 2;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `900 ${Math.max(68, Math.min(96, h * 1.22))}px 'Segoe UI Symbol', 'Segoe UI', sans-serif`;
+    ctx.font = `900 ${Math.max(32, Math.min(70, h * 0.92))}px 'Segoe UI Symbol', 'Segoe UI', sans-serif`;
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(255,255,255,0.54)";
     ctx.strokeText("↻", cx, cy - 1);

@@ -32,13 +32,25 @@
       triggerUltimate,
     } = context;
 
+    function isActionDisabled(unit) {
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+    }
+
     function updatePartyAi(dt) {
       for (const member of party) {
-        if (member.dead || member.frozen > 0) {
+        if (member.dead || isActionDisabled(member)) {
           continue;
         }
 
         member.aiTick -= dt;
+        const playerTaunted = member === player && isForcedHostileTarget(member, member.forcedTarget);
+        if (playerTaunted) {
+          member.aim = null;
+          member.itemAim = null;
+          if (member.aiIntent && member.aiIntent.manual) {
+            member.aiIntent = null;
+          }
+        }
         const itemSystem = getItemSystem ? getItemSystem() : null;
         if (itemSystem && itemSystem.isItemUseControlling && itemSystem.isItemUseControlling(member)) {
           if (!(member === player && member.aiIntent && member.aiIntent.manual)) {
@@ -50,7 +62,7 @@
         if (member.aiIntent) {
           continue;
         }
-        if (member === player) {
+        if (member === player && !playerTaunted) {
           continue;
         }
         if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
@@ -240,7 +252,7 @@
         unit.aiMoveTarget = unit.forcedTarget;
         return unit.forcedTarget;
       }
-      const priorityTarget = getPriorityTarget();
+      const priorityTarget = getPriorityTarget(unit);
       if (priorityTarget) {
         unit.aiMoveTarget = priorityTarget;
         return priorityTarget;
@@ -276,6 +288,9 @@
     }
 
     function getEnemyPreferredRange(enemy) {
+      if (enemy && Number.isFinite(enemy.preferredRange)) {
+        return enemy.preferredRange;
+      }
       return getPreferredRangeForBias(enemy, 0);
     }
 
@@ -419,13 +434,11 @@
 
     function updateEnemyAi(dt) {
       for (const enemy of enemies) {
-        if (enemy.dead || enemy.frozen > 0) {
+        if (enemy.dead || isActionDisabled(enemy)) {
           continue;
         }
 
-        const target = enemy.forcedTarget && !enemy.forcedTarget.dead
-          ? enemy.forcedTarget
-          : nearestAlive(enemy, getTargetablePartyMembers());
+        const target = getEnemyTarget(enemy);
         if (!target) {
           continue;
         }
@@ -433,10 +446,11 @@
         const d = dist(enemy, target);
         const preferred = getEnemyPreferredRange(enemy);
         const dir = normalize(target.x - enemy.x, target.y - enemy.y);
+        const speed = typeof getEffectiveMoveSpeed === "function" ? getEffectiveMoveSpeed(enemy) : enemy.speed;
         if (enemy.actionLock <= 0 && d > preferred + battlePx(10)) {
-          moveUnitWithWallSlide(enemy, dir, enemy.speed * dt);
+          moveUnitWithWallSlide(enemy, dir, speed * dt);
         } else if (enemy.actionLock <= 0 && d < preferred - battlePx(20) && getPreferredRangeRole(enemy) === "back") {
-          moveUnitWithWallSlide(enemy, { x: -dir.x, y: -dir.y }, enemy.speed * 0.65 * dt);
+          moveUnitWithWallSlide(enemy, { x: -dir.x, y: -dir.y }, speed * 0.65 * dt);
         }
 
         if (enemy.actionLock > 0 || (enemy.cds.attack || 0) > 0) {
@@ -465,6 +479,41 @@
 
     function thinkEnemy(enemy, target, distance) {
       return skillSystem.thinkEnemy(enemy, target, distance);
+    }
+
+    function getEnemyTarget(enemy) {
+      if (!enemy || enemy.dead) {
+        return null;
+      }
+      if (enemy.forcedTarget && !enemy.forcedTarget.dead) {
+        return enemy.forcedTarget;
+      }
+      const targets = getTargetablePartyMembers();
+      if (enemy.role === "corner_rabbit") {
+        return getLowestHpTarget(targets);
+      }
+      if (enemy.role === "shadow_wolf") {
+        return getShadowWolfPackTarget(enemy, targets);
+      }
+      return nearestAlive(enemy, targets);
+    }
+
+    function getLowestHpTarget(targets) {
+      return (targets || [])
+        .filter((unit) => unit && !unit.dead)
+        .sort((a, b) => (a.hp || 0) - (b.hp || 0))[0] || null;
+    }
+
+    function getShadowWolfPackTarget(enemy, targets) {
+      const wolves = enemies.filter((candidate) => candidate && !candidate.dead && candidate.role === "shadow_wolf");
+      const current = wolves
+        .map((wolf) => wolf.shadowPackTarget)
+        .find((target) => target && !target.dead && targets.includes(target));
+      const target = current || nearestAlive(enemy, targets);
+      for (const wolf of wolves) {
+        wolf.shadowPackTarget = target;
+      }
+      return target;
     }
 
     return {

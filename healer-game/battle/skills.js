@@ -164,12 +164,49 @@
       return Math.max(0, 0.75 - getSkillUpgradeLevel(source, key, skill) * 0.1);
     }
 
+    function getFocusIgnoreChance(source, key, skill) {
+      const base = Number.isFinite(skill && skill.focusIgnoreBase) ? skill.focusIgnoreBase : 0.7;
+      return Math.max(0, base - getSkillUpgradeLevel(source, key, skill) * 0.1);
+    }
+
     function getFocusDamageTakenBonus(source, key, skill) {
       if (!isSkillSource(skill, "finald", "take_aim")) {
         return 0;
       }
-      const perLevel = Number.isFinite(skill.focusDamageTakenBonusPerLevel) ? skill.focusDamageTakenBonusPerLevel : 0.02;
+      const perLevel = Number.isFinite(skill.focusDamageTakenBonusPerLevel) ? skill.focusDamageTakenBonusPerLevel : 0;
       return getSkillUpgradeLevel(source, key, skill) * perLevel;
+    }
+
+    function getFocusIgnoredUnitIds(source, key, skill) {
+      if (!isSkillSource(skill, "finald", "take_aim")) {
+        return [];
+      }
+      const ignoreChance = getFocusIgnoreChance(source, key, skill);
+      if (ignoreChance <= 0) {
+        return [];
+      }
+      const ignored = [];
+      for (const member of ctx.getFieldPartyMembers()) {
+        if (!isCommandTarget(member) || member.mood === null) {
+          continue;
+        }
+        if ((member.mood >= 70 || member.mood <= 30) && Math.random() < ignoreChance) {
+          ignored.push(member.id);
+        }
+      }
+      return ignored;
+    }
+
+    function addFocusIgnoredFloats(ignoredUnitIds) {
+      if (!Array.isArray(ignoredUnitIds) || ignoredUnitIds.length === 0) {
+        return;
+      }
+      const ignored = new Set(ignoredUnitIds);
+      for (const member of ctx.getFieldPartyMembers()) {
+        if (member && ignored.has(member.id)) {
+          ctx.addFloat("無視", member.x, member.y - 34, "#f7fff6");
+        }
+      }
     }
 
     function getSkillCastTime(unit, key, skill, baseTime, castFn = getCastTime) {
@@ -286,6 +323,22 @@
       return Boolean(source && target && source !== target && source.forcedTarget === target && source.tauntTimer > 0 && !target.dead);
     }
 
+    function isPlayerControlLocked() {
+      const player = ctx.player;
+      return isForcedHostileTarget(player, player && player.forcedTarget);
+    }
+
+    function showPlayerControlLocked() {
+      const origin = ctx.getSupportOrigin ? ctx.getSupportOrigin() : ctx.player;
+      if (origin && ctx.addFloat) {
+        ctx.addFloat("挑発中", origin.x + 26, origin.y - 28, "#ffd0d0");
+      }
+    }
+
+    function isActionDisabled(unit) {
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+    }
+
     function canOffensiveAffect(source, target) {
       if (!source || !target || source === target || target.dead) {
         return false;
@@ -297,6 +350,16 @@
         return ctx.canFriendlyFireAffect ? ctx.canFriendlyFireAffect(source, target) : true;
       }
       return true;
+    }
+
+    function canSupportAffect(source, target) {
+      if (!source || !target || source === target || target.dead) {
+        return false;
+      }
+      if (target.team === "party") {
+        return true;
+      }
+      return isForcedHostileTarget(source, target);
     }
 
     function getAutoUltimateEnemyDamageMultiplier(target, automatic) {
@@ -415,7 +478,11 @@
         return false;
       }
       if (unit.team === "enemy") {
-        return key === "casterLine" || key === "heavySlam";
+        if (key === "casterLine" || key === "heavySlam") {
+          return true;
+        }
+        const skill = getUnitSkill(unit, key);
+        return Boolean(skill && skill.category !== "通常攻撃" && Number.isFinite(skill.cd) && skill.cd > 0);
       }
       const skill = getUnitSkill(unit, key);
       return Boolean(skill && Number.isFinite(skill.cd) && skill.cd > 0);
@@ -525,10 +592,28 @@
     }
 
     function getActionCooldown(unit) {
-      const base = ctx.ACTION_COOLDOWN_BASE || 7;
+      const base = unit && unit.team === "enemy" ? getEnemyActionCooldownBase(unit) : (ctx.ACTION_COOLDOWN_BASE || 7);
       const cooldown = unit.team === "party" && unit.id !== "finald" ? ctx.getCommandActionCooldown(unit, base) : base;
-      const actionSpeed = ctx.getEquipmentStatBonusSum ? ctx.getEquipmentStatBonusSum(unit, "actionSpeed") : 0;
+      const actionSpeed = (ctx.getEquipmentStatBonusSum ? ctx.getEquipmentStatBonusSum(unit, "actionSpeed") : 0) + getActionSpeedStatusBonus(unit);
       return cooldown / Math.max(0.1, 1 + actionSpeed);
+    }
+
+    function getEnemyActionCooldownBase(unit) {
+      const fallback = ctx.ACTION_COOLDOWN_BASE || 7;
+      if (!unit || unit.team !== "enemy" || typeof ctx.getEquippedActiveSkills !== "function") {
+        return fallback;
+      }
+      const normal = ctx.getEquippedActiveSkills(unit)
+        .find((entry) => entry && entry.skill && entry.skill.category === "通常攻撃" && Number.isFinite(entry.skill.cd));
+      return normal ? Math.max(0.1, normal.skill.cd) : fallback;
+    }
+
+    function getActionSpeedStatusBonus(unit) {
+      let bonus = 0;
+      if (unit && (unit.shadowDashTimer || 0) > 0) {
+        bonus += 0.3;
+      }
+      return bonus;
     }
 
     function commitActionStart(unit) {
@@ -567,7 +652,7 @@
       if (isForcedHostileTarget(unit, unit && unit.forcedTarget)) {
         return unit.forcedTarget;
       }
-      return (ctx.getPriorityTarget && ctx.getPriorityTarget()) || ctx.nearestAlive(unit, ctx.enemies);
+      return (ctx.getPriorityTarget && ctx.getPriorityTarget(unit)) || ctx.nearestAlive(unit, ctx.enemies);
     }
 
     function getSupportablePartyMembers() {
@@ -675,13 +760,14 @@
     }
 
     function thinkPartyUnit(unit, avoidingTelegraph = false) {
-      const target = getPartyAttackTarget(unit);
+      const forcedTarget = isForcedHostileTarget(unit, unit && unit.forcedTarget) ? unit.forcedTarget : null;
+      const target = forcedTarget || getPartyAttackTarget(unit);
       const candidates = [];
       for (const { key, skill } of getUnitActiveSkillEntries(unit)) {
         if (!canQueuePartySkill(unit, key, skill)) {
           continue;
         }
-        const actionTarget = getPartySkillTarget(unit, skill, target);
+        const actionTarget = forcedTarget || getPartySkillTarget(unit, skill, target);
         if (!actionTarget) {
           continue;
         }
@@ -707,6 +793,9 @@
     }
 
     function thinkEnemy(enemy, target, distance) {
+      if (enemy.usesCustomSkillSet) {
+        return thinkCustomEnemy(enemy, target, distance);
+      }
       const attack = need("enemy", "attack");
       const candidates = [];
       if (enemy.role === "caster") {
@@ -718,6 +807,223 @@
         candidates.push({ key: "attack", use: () => enemyBite(enemy, target) });
       }
       useQueuedInstantAction(enemy, candidates);
+    }
+
+    function thinkCustomEnemy(enemy, target, distance) {
+      const candidates = [];
+      for (const { key, skill } of getUnitActiveSkillEntries(enemy)) {
+        if (!canUseEnemySkill(enemy, key, skill)) {
+          continue;
+        }
+        if (key === "shadow_dash") {
+          if ((enemy.shadowDashTimer || 0) <= 0) {
+            candidates.push({ key, use: () => useEnemyShadowDash(enemy, key, skill) });
+          }
+          continue;
+        }
+        if (key === "sleep_scent") {
+          if (hasEnemyTargetInRadius(enemy, skill.radius || 0)) {
+            candidates.push({ key, use: () => useEnemySleepScent(enemy, key, skill) });
+          }
+          continue;
+        }
+        if (key === "pollen_spraying") {
+          if (target && distance <= (skill.range || 0) + target.radius) {
+            candidates.push({ key, use: () => useEnemyPollenSpraying(enemy, key, skill, target) });
+          }
+          continue;
+        }
+        const range = getEnemySkillRange(skill);
+        if (target && distance <= range + target.radius) {
+          candidates.push({ key, use: () => useEnemySingleTargetSkill(enemy, key, skill, target) });
+        }
+      }
+      useQueuedInstantAction(enemy, candidates);
+    }
+
+    function canUseEnemySkill(enemy, key, skill) {
+      if (!enemy || !skill || (enemy.cds[key] || 0) > 0) {
+        return false;
+      }
+      const cost = Number.isFinite(skill.cost) ? skill.cost : 0;
+      return cost <= 0 || (enemy.mp || 0) >= cost;
+    }
+
+    function payEnemySkillCost(enemy, skill) {
+      const cost = Number.isFinite(skill && skill.cost) ? skill.cost : 0;
+      if (cost > 0) {
+        enemy.mp = Math.max(0, (enemy.mp || 0) - cost);
+      }
+    }
+
+    function getEnemySkillRange(skill) {
+      if (skill && Number.isFinite(skill.range)) return skill.range;
+      if (skill && Number.isFinite(skill.hitRange)) return skill.hitRange;
+      if (skill && Number.isFinite(skill.radius)) return skill.radius;
+      return ctx.battlePx(50);
+    }
+
+    function hasEnemyTargetInRadius(enemy, radius) {
+      return ctx.getFieldPartyMembers().some((member) => {
+        return member && !member.dead && ctx.distPoint(member.x, member.y, enemy.x, enemy.y) <= radius + member.radius;
+      });
+    }
+
+    function beginEnemySkill(enemy, key, skill) {
+      payEnemySkillCost(enemy, skill);
+      speakSkill(enemy, key);
+      setActionCooldown(enemy);
+      if (skill && skill.category !== "通常攻撃" && Number.isFinite(skill.cd) && skill.cd > 0) {
+        trackSkillCooldown(enemy, key, key, skill.cd);
+      }
+    }
+
+    function getEnemySkillDamage(enemy, target, skill) {
+      let damage = Number.isFinite(skill.damageBase) ? skill.damageBase : 0;
+      if (Number.isFinite(skill.attackScale)) {
+        damage += getAttackStat(enemy) * skill.attackScale;
+      }
+      if (Number.isFinite(skill.magicScale)) {
+        damage += getMagicStat(enemy) * skill.magicScale;
+      }
+      if (Number.isFinite(skill.missingHpScale) && target && target.maxHp > 0) {
+        const missingRatio = ctx.clamp((target.maxHp - target.hp) / target.maxHp, 0, 1);
+        const scaledPart = Number.isFinite(skill.attackScale) ? getAttackStat(enemy) * skill.attackScale : damage;
+        damage += scaledPart * missingRatio * skill.missingHpScale;
+      }
+      return damage;
+    }
+
+    function applySleep(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return;
+      }
+      target.sleepTimer = Math.max(target.sleepTimer || 0, duration);
+      target.sleepMax = Math.max(target.sleepMax || 0, duration);
+      ctx.addFloat("睡眠", target.x, target.y - 34, "#b9a8ff");
+    }
+
+    function applyInjury(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return;
+      }
+      target.injuryTimer = Math.max(target.injuryTimer || 0, duration);
+      target.injuryMax = Math.max(target.injuryMax || 0, duration);
+      ctx.addFloat("負傷", target.x, target.y - 34, "#d96b5f");
+    }
+
+    function useEnemySingleTargetSkill(enemy, key, skill, target) {
+      if (!target || target.dead) {
+        return false;
+      }
+      beginEnemySkill(enemy, key, skill);
+      const cast = getCastTime(skill.cast, enemy);
+      if (cast > 0) {
+        enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+        const telegraph = {
+          type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(8), ctx.battlePx(24)), team: "enemy", time: cast,
+          getPosition: () => ({ x: target.x, y: target.y }),
+          resolve: () => resolveEnemySingleTargetSkill(enemy, key, skill, target),
+        };
+        ctx.addTelegraph(telegraph);
+        return true;
+      }
+      return resolveEnemySingleTargetSkill(enemy, key, skill, target);
+    }
+
+    function resolveEnemySingleTargetSkill(enemy, key, skill, target) {
+      if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius) {
+        return false;
+      }
+      const repeat = Math.max(1, Math.floor(Number.isFinite(skill.repeat) ? skill.repeat : 1));
+      const delayMs = Math.max(0, Math.floor(Number.isFinite(skill.repeatDelayMs) ? skill.repeatDelayMs : 0));
+      for (let i = 0; i < repeat; i += 1) {
+        setTimeout(() => {
+          if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius) {
+            return;
+          }
+          ctx.dealDamage(enemy, target, getEnemySkillDamage(enemy, target, skill), getSkillDamageOptions(skill));
+          if (Number.isFinite(skill.injuryDuration)) {
+            applyInjury(enemy, target, skill.injuryDuration);
+          }
+          if (typeof ctx.slashEffect === "function") {
+            ctx.slashEffect(enemy, target);
+          }
+        }, i * delayMs);
+      }
+      return true;
+    }
+
+    function useEnemySleepScent(enemy, key, skill) {
+      beginEnemySkill(enemy, key, skill);
+      const cast = getCastTime(skill.cast, enemy);
+      enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      ctx.addTelegraph({
+        type: "circle", x: enemy.x, y: enemy.y, radius: skill.radius, team: "enemy", time: cast,
+        getPosition: () => ({ x: enemy.x, y: enemy.y }),
+        resolve: () => {
+          if (enemy.dead || isActionDisabled(enemy)) return;
+          const center = { x: enemy.x, y: enemy.y };
+          ctx.areas.push({
+            type: "sleep_scent", x: center.x, y: center.y, radius: skill.radius, time: skill.duration, tick: 0, tickRate: skill.tickRate || 0.25,
+            apply: () => {
+              for (const member of ctx.getFieldPartyMembers()) {
+                if (!member.dead && ctx.distPoint(member.x, member.y, center.x, center.y) <= skill.radius + member.radius) {
+                  applySleep(enemy, member, skill.sleepDuration || 0);
+                }
+              }
+            },
+          });
+          ctx.addBurst(center.x, center.y, skill.radius, "rgba(185,168,255,0.18)");
+        },
+      });
+      return true;
+    }
+
+    function useEnemyPollenSpraying(enemy, key, skill, target) {
+      if (!target || target.dead) {
+        return false;
+      }
+      beginEnemySkill(enemy, key, skill);
+      const cast = getCastTime(skill.cast, enemy);
+      enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      const center = { x: target.x, y: target.y };
+      ctx.addTelegraph({
+        type: "circle", x: center.x, y: center.y, radius: skill.radius, team: "enemy", time: cast,
+        resolve: () => {
+          if (enemy.dead || isActionDisabled(enemy)) return;
+          let ticksLeft = Math.max(1, Math.floor(skill.maxTicks || 5));
+          ctx.areas.push({
+            type: "pollen_spraying", x: center.x, y: center.y, radius: skill.radius, time: skill.duration, tick: 0, tickRate: skill.tickRate || 1,
+            apply: () => {
+              if (ticksLeft <= 0) return;
+              ticksLeft -= 1;
+              for (const member of ctx.getFieldPartyMembers()) {
+                if (!member.dead && ctx.distPoint(member.x, member.y, center.x, center.y) <= skill.radius + member.radius) {
+                  ctx.dealDamage(enemy, member, getEnemySkillDamage(enemy, member, skill), getSkillDamageOptions(skill, { magic: true, dotDamage: true, damageType: skill.damageType }));
+                }
+              }
+            },
+          });
+          ctx.addBurst(center.x, center.y, skill.radius, "rgba(178,213,104,0.18)");
+        },
+      });
+      return true;
+    }
+
+    function useEnemyShadowDash(enemy, key, skill) {
+      payEnemySkillCost(enemy, skill);
+      speakSkill(enemy, key);
+      const duration = Math.max(0, Number.isFinite(skill.duration) ? skill.duration : 0);
+      enemy.shadowDashTimer = Math.max(enemy.shadowDashTimer || 0, duration);
+      enemy.shadowDashMax = Math.max(enemy.shadowDashMax || 0, duration);
+      setActionCooldown(enemy);
+      if (Number.isFinite(skill.cd) && skill.cd > 0) {
+        trackSkillCooldown(enemy, key, key, skill.cd);
+      }
+      ctx.addFloat(skill.name || "強化", enemy.x, enemy.y - 34, "#9aa7ff");
+      ctx.addBurst(enemy.x, enemy.y, enemy.radius + ctx.battlePx(18), "rgba(89,97,125,0.28)");
+      return true;
     }
 
     function getPartySkillCooldowns(unit, key, skill) {
@@ -741,12 +1047,34 @@
       return damage;
     }
 
+    function getSkillDamageType(skill) {
+      return skill && skill.damageType ? String(skill.damageType) : "";
+    }
+
+    function isDotDamageSkill(skill) {
+      const rawType = getSkillDamageType(skill);
+      const type = rawType.toLowerCase();
+      return type.includes("dot") || rawType.includes("ドット");
+    }
+
     function isMagicDamageSkill(skill) {
+      const rawType = getSkillDamageType(skill);
+      const type = rawType.toLowerCase();
+      if (type.includes("magic") || rawType.includes("魔法")) {
+        return true;
+      }
+      if (type.includes("physical") || rawType.includes("物理")) {
+        return false;
+      }
       return Boolean(skill && (skill.damageType === "magic" || (Number.isFinite(skill.magicScale) && !Number.isFinite(skill.attackScale))));
     }
 
     function getSkillDamageOptions(skill, options = {}) {
-      return Object.assign({ magic: isMagicDamageSkill(skill) }, options);
+      return Object.assign({
+        magic: isMagicDamageSkill(skill),
+        dotDamage: isDotDamageSkill(skill),
+        damageType: getSkillDamageType(skill),
+      }, options);
     }
 
     function dealPartySkillDamage(unit, target, skill, damage, options = {}) {
@@ -817,7 +1145,7 @@
         getAngle: () => target.dead ? unit.aimAngle : ctx.angleTo(unit, target),
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           let hits = 0;
           unit.aimAngle = target.dead ? unit.aimAngle : ctx.angleTo(unit, target);
           for (const unitHit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
@@ -850,7 +1178,7 @@
         getPosition: () => ({ x: unit.x, y: unit.y }),
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           let hits = 0;
           for (const unitHit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
             if (unitHit.dead || unitHit === unit) continue;
@@ -887,7 +1215,7 @@
         getPosition: getLanding,
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           const impact = { x: telegraph.x, y: telegraph.y };
           let hits = 0;
           unit.x = impact.x;
@@ -924,10 +1252,11 @@
         getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           speakSkill(unit, key);
           const count = Math.max(1, Math.floor(skill.projectileCount));
           const damage = getSkillDamage(unit, skill);
+          const damageOptions = getSkillDamageOptions(skill);
           const pierceCount = getProjectilePierceCount(unit, key, skill);
           for (let i = 0; i < count; i += 1) {
             const spread = (i - Math.floor(count / 2)) * (Number.isFinite(skill.spread) ? skill.spread : 0);
@@ -940,7 +1269,9 @@
               team: "party",
               owner: unit,
               damage,
-              magic: isMagicDamageSkill(skill),
+              magic: damageOptions.magic,
+              dotDamage: damageOptions.dotDamage,
+              damageType: damageOptions.damageType,
               life: Number.isFinite(skill.life) ? skill.life : 1.2,
               hit: new Set(),
               pierce: Boolean(skill.pierce) || pierceCount > 0,
@@ -967,7 +1298,7 @@
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           speakSkill(unit, key);
           const impact = { x: telegraph.x, y: telegraph.y };
           let hits = 0;
@@ -1002,7 +1333,7 @@
         getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-          if (unit.dead || unit.frozen > 0 || !target || target.dead || !canOffensiveAffect(unit, target)) return;
+          if (unit.dead || isActionDisabled(unit) || !target || target.dead || !canOffensiveAffect(unit, target)) return;
           speakSkill(unit, key);
           dealPartySkillDamage(unit, target, skill, getSkillDamage(unit, skill));
           ctx.effects.push({ type: "beam", x: unit.x, y: unit.y, x2: target.x, y2: target.y, color: skill.beamColor || "rgba(255,255,255,0.72)", time: 0.22, age: 0 });
@@ -1023,7 +1354,7 @@
       for (let i = 0; i < skill.repeat; i += 1) {
         setTimeout(() => {
           if (!unit.dead && !target.dead && canOffensiveAffect(unit, target) && ctx.dist(unit, target) <= skill.hitRange) {
-            ctx.dealDamage(unit, target, getSkillDamage(unit, skill), { crit: true });
+            ctx.dealDamage(unit, target, getSkillDamage(unit, skill), getSkillDamageOptions(skill, { crit: true }));
             ctx.slashEffect(unit, target);
           }
         }, i * skill.repeatDelayMs);
@@ -1045,14 +1376,14 @@
         getAngle: () => target.dead ? unit.aimAngle : ctx.angleTo(unit, target),
         resolve: () => {
           finishPartyAction(unit, [{ key: "heroSlash", value: ctx.getMoodCooldown(unit, skill.cd) }]);
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           let hits = 0;
           unit.aimAngle = target.dead ? unit.aimAngle : ctx.angleTo(unit, target);
           for (const unitHit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             if (ctx.inFan(unitHit, unit.x, unit.y, skill.radius, unit.aimAngle, ctx.deg(skill.arcDeg))) {
-              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill), { crit: true });
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill), getSkillDamageOptions(skill, { crit: true }));
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1074,13 +1405,13 @@
         getPosition: () => ({ x: unit.x, y: unit.y }),
         resolve: () => {
           finishPartyAction(unit);
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           let hits = 0;
           for (const unitHit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             if (ctx.distPoint(unitHit.x, unitHit.y, unit.x, unit.y) <= skill.radius + unitHit.radius) {
-              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill));
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill), getSkillDamageOptions(skill));
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1108,7 +1439,7 @@
         getPosition: getLanding,
         resolve: () => {
           finishPartyAction(unit, [{ key: "lan_wave", value: ctx.getMoodCooldown(unit, skill.cd) }]);
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           const impact = { x: telegraph.x, y: telegraph.y };
           let hits = 0;
           unit.x = impact.x;
@@ -1118,10 +1449,10 @@
             if (!canOffensiveAffect(unit, unitHit)) continue;
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
             if (d <= skill.radius + unitHit.radius) {
-              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill));
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill), getSkillDamageOptions(skill));
               hits += unitHit.team === "enemy" ? 1 : 0;
             } else if (d <= skill.shockRadius + unitHit.radius) {
-              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill, "shockDamageBase", "shockAttackScale", "shockMagicScale"), { magic: true });
+              ctx.dealDamage(unit, unitHit, getSkillDamage(unit, skill, "shockDamageBase", "shockAttackScale", "shockMagicScale"), getSkillDamageOptions(Object.assign({}, skill, { damageType: "magic" }), { magic: true }));
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1143,13 +1474,14 @@
         getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
         resolve: () => {
           finishPartyAction(unit);
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           speakSkill(unit, "attack");
           const pierceCount = getProjectilePierceCount(unit, "attack", skill);
+          const damageOptions = getSkillDamageOptions(skill, { magic: true });
           for (let i = 0; i < skill.projectileCount; i += 1) {
             const spread = (i - Math.floor(skill.projectileCount / 2)) * skill.spread;
             const angle = ctx.angleTo(unit, target) + spread;
-            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), magic: true, life: skill.life, hit: new Set(), pierce: pierceCount > 0, pierceCount: pierceCount > 0 ? pierceCount : undefined, affectsAllies: true, color: skill.color });
+            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), magic: damageOptions.magic, dotDamage: damageOptions.dotDamage, damageType: damageOptions.damageType, life: skill.life, hit: new Set(), pierce: pierceCount > 0, pierceCount: pierceCount > 0 ? pierceCount : undefined, affectsAllies: true, color: skill.color });
           }
         },
       });
@@ -1166,7 +1498,7 @@
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           finishPartyAction(unit, [{ key: "bomb", value: ctx.getMoodCooldown(unit, skill.cd) }]);
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           speakSkill(unit, "bomb");
           const impact = { x: telegraph.x, y: telegraph.y };
           let hits = 0;
@@ -1178,7 +1510,7 @@
               const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
               const falloff = getDistanceFalloffMax(unit, skill, 0.8) * distanceRatio;
               const damage = getSkillDamage(unit, skill) * Math.max(0, 1 - falloff);
-              ctx.dealDamage(unit, unitHit, damage, { magic: true });
+              ctx.dealDamage(unit, unitHit, damage, getSkillDamageOptions(skill, { magic: true }));
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1201,9 +1533,9 @@
         getLine: () => ({ x: unit.x, y: unit.y, x2: target.x, y2: target.y }),
         resolve: () => {
           finishPartyAction(unit, [{ key: "fire", value: ctx.getMoodCooldown(unit, skill.cd) }]);
-          if (unit.dead || unit.frozen > 0 || !target || target.dead || !canOffensiveAffect(unit, target)) return;
+          if (unit.dead || isActionDisabled(unit) || !target || target.dead || !canOffensiveAffect(unit, target)) return;
           speakSkill(unit, "fire");
-          const damaged = ctx.dealDamage(unit, target, getFireDamage(unit, skill), { magic: true }) > 0;
+          const damaged = ctx.dealDamage(unit, target, getFireDamage(unit, skill), getSkillDamageOptions(skill, { magic: true })) > 0;
           const burnDuration = getOffensiveEffectDuration(unit, target, getSkillBurnDuration(unit, skill));
           if (burnDuration > 0) {
             applyBurn(unit, target, Object.assign({}, skill, { burnDuration }));
@@ -1218,7 +1550,7 @@
 
     function usePartyHeal(unit, key, target) {
       const skill = getUnitSkill(unit, key);
-      if (!skill || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) return false;
+      if (!skill || !target || target.dead || !canSupportAffect(unit, target) || !ctx.isFieldUnit(target)) return false;
       beginPartyAction(unit);
       paySkillCost(unit, skill);
       const cast = getCastTime(skill.cast, unit);
@@ -1233,7 +1565,7 @@
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           finishPartyAction(unit, [{ key, value: ctx.getMoodCooldown(unit, skill.cd) }]);
-          if (unit.dead || unit.frozen > 0 || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) return;
+          if (unit.dead || isActionDisabled(unit) || !target || target.dead || !canSupportAffect(unit, target) || !ctx.isFieldUnit(target)) return;
           speakSkill(unit, key);
           ctx.healUnit(unit, target, getUpgradedBaseValue(unit, key, skill, "healBase") + getMagicStat(unit) * skill.magicScale, { noMood: target === unit });
           ctx.effects.push({ type: "beam", x: unit.x, y: unit.y, x2: target.x, y2: target.y, color: skill.beamColor, time: 0.24, age: 0 });
@@ -1245,7 +1577,7 @@
 
     function usePartyShield(unit, key, target) {
       const skill = getUnitSkill(unit, key);
-      if (!skill || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) return false;
+      if (!skill || !target || target.dead || !canSupportAffect(unit, target) || !ctx.isFieldUnit(target)) return false;
       beginPartyAction(unit);
       paySkillCost(unit, skill);
       const cast = getCastTime(skill.cast, unit);
@@ -1260,12 +1592,10 @@
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           finishPartyAction(unit, [{ key, value: ctx.getMoodCooldown(unit, skill.cd) }]);
-          if (unit.dead || unit.frozen > 0 || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) return;
+          if (unit.dead || isActionDisabled(unit) || !target || target.dead || !canSupportAffect(unit, target) || !ctx.isFieldUnit(target)) return;
           speakSkill(unit, key);
           const addedShield = ctx.addShield(target, getUpgradedBaseValue(unit, key, skill, "shieldBase") + getMagicStat(unit) * skill.magicScale, skill.duration);
           if (addedShield > 0 && ctx.awardSupportUltimate) ctx.awardSupportUltimate(unit, target);
-          const moodGain = Number.isFinite(skill.moodGain) ? skill.moodGain : 0;
-          if (target !== unit && ctx.addMoodGain && moodGain > 0) ctx.addMoodGain(target, moodGain * ctx.MOOD_EVENT_MULT);
           ctx.addTelegraph({ type: "circle", x: target.x, y: target.y, radius: target.radius + ctx.battlePx(18), team: "support", time: 0.18, resolve: () => {} });
           ctx.addBurst(target.x, target.y, target.radius + ctx.battlePx(18), "rgba(143,233,255,0.25)");
         },
@@ -1276,7 +1606,11 @@
 
     function startPlayerAim(type) {
       const player = ctx.player;
-      if (player.dead || player.channel || player.cast || player.frozen > 0) return false;
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (player.dead || player.channel || player.cast || isActionDisabled(player)) return false;
       if (hasPlayerMoveIntent()) {
         showPlayerMoveIntentBusy();
         return false;
@@ -1388,7 +1722,12 @@
 
     function confirmPlayerAim() {
       const player = ctx.player;
-      if (!player.aim || player.dead || player.channel || player.cast || player.frozen > 0) return false;
+      if (isPlayerControlLocked()) {
+        player.aim = null;
+        showPlayerControlLocked();
+        return false;
+      }
+      if (!player.aim || player.dead || player.channel || player.cast || isActionDisabled(player)) return false;
       ctx.game.hover = ctx.getHoveredPartyMember();
       if (player.aim.type === "attack") return firePlayerShot();
       if (player.aim.type === "heal") return castHeal();
@@ -1402,7 +1741,11 @@
     function firePlayerShot(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = need("finald", "attack");
-      if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
       const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
       const rangeState = ensurePlayerSkillRange("attack", target, skill, 0, options);
@@ -1429,7 +1772,7 @@
         }
         if (!canOffensiveAffect(player, unit)) continue;
         if (ctx.distPoint(unit.x, unit.y, target.x, target.y) <= skill.radius + unit.radius) {
-          ctx.dealDamage(player, unit, damage, { magic: true });
+          ctx.dealDamage(player, unit, damage, getSkillDamageOptions(skill, { magic: true }));
           hits += 1;
         }
       }
@@ -1440,7 +1783,11 @@
     function castHeal(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = need("finald", "heal");
-      if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
       const target = lockedTarget || ctx.game.hover;
       if (!target || target.dead || target.team !== "party") { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
       const rangeState = ensurePlayerSkillRange("heal", target, skill, target.radius, { ...options, support: true });
@@ -1470,7 +1817,11 @@
     function castShield(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = need("finald", "shield");
-      if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
       const target = lockedTarget || ctx.game.hover;
       const origin = target || ctx.getSupportOrigin();
       if (!target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
@@ -1495,7 +1846,6 @@
       speakSkill(player, "shield");
       const addedShield = ctx.addShield(target, getUpgradedBaseValue(player, "shield", skill, "shieldBase") + getMagicStat(player) * skill.magicScale, skill.duration);
       if (addedShield > 0 && ctx.awardSupportUltimate) ctx.awardSupportUltimate(player, target);
-      if (target !== player) ctx.addMoodGain(target, skill.moodGain * ctx.MOOD_EVENT_MULT);
       ctx.addTelegraph({ type: "circle", x: target.x, y: target.y, radius: target.radius + 18, team: "support", time: 0.18, resolve: () => {} });
       ctx.addBurst(target.x, target.y, target.radius + 18, "rgba(143,233,255,0.25)");
     }
@@ -1503,7 +1853,11 @@
     function castPlayerFire(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = get("finald", "fire");
-      if (!skill || player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (!skill || player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
       const target = lockedTarget || getHoveredEnemy();
       if (!target) { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
       const rangeState = ensurePlayerSkillRange("fire", target, skill, target.radius, options);
@@ -1525,7 +1879,7 @@
         return;
       }
       speakSkill(player, "fire");
-      const damaged = ctx.dealDamage(player, target, getFireDamage(player, skill), { magic: true }) > 0;
+      const damaged = ctx.dealDamage(player, target, getFireDamage(player, skill), getSkillDamageOptions(skill, { magic: true })) > 0;
       const burnDuration = getOffensiveEffectDuration(player, target, getSkillBurnDuration(player, skill));
       if (burnDuration > 0) {
         applyBurn(player, target, Object.assign({}, skill, { burnDuration }));
@@ -1539,7 +1893,11 @@
     function castPlayerBomb(lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = get("finald", "bomb");
-      if (!skill || player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) return false;
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (!skill || player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
       const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
       const rangeState = ensurePlayerSkillRange("bomb", target, skill, 0, options);
@@ -1568,7 +1926,7 @@
           const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
           const falloff = getDistanceFalloffMax(player, skill, 0.8) * distanceRatio;
           const damage = getSkillDamage(player, skill) * Math.max(0, 1 - falloff);
-          ctx.dealDamage(player, unitHit, damage, { magic: true });
+          ctx.dealDamage(player, unitHit, damage, getSkillDamageOptions(skill, { magic: true }));
           hits += unitHit.team === "enemy" ? 1 : 0;
         }
       }
@@ -1583,6 +1941,10 @@
     function usePlayerCommand(key, lockedTarget = null, options = {}) {
       const player = ctx.player;
       const skill = get("finald", key);
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
       if (!skill || !isCommandSkill(key)) {
         return false;
       }
@@ -1595,7 +1957,7 @@
         ctx.addFloat("未セット", origin.x + 26, origin.y - 28, "#ffffff");
         return false;
       }
-      if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
+      if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) {
         return false;
       }
       const origin = ctx.getSupportOrigin();
@@ -1617,16 +1979,22 @@
         const rangeState = ensurePlayerSkillRange(key, target, skill, target.radius, options);
         if (stopIfPlayerSkillQueued(rangeState)) return true;
         if (rangeState !== "inRange") return false;
+        const ignoredUnitIds = getFocusIgnoredUnitIds(player, key, skill);
         if (ctx.setPriorityTarget) {
-          if (!ctx.setPriorityTarget(target, skill.duration, skill.name)) {
+          if (!ctx.setPriorityTarget(target, skill.duration, skill.name, { ignoredUnitIds })) {
             ctx.addFloat("対象なし", target.x, target.y - 28, "#ffffff");
             return false;
           }
         } else {
           ctx.game.priorityTarget = target;
           ctx.game.priorityTargetTimer = Number.isFinite(skill.duration) && skill.duration > 0 ? skill.duration : 0;
+          ctx.game.priorityTargetIgnoredUnitIds = {};
+          for (const unitId of ignoredUnitIds) {
+            ctx.game.priorityTargetIgnoredUnitIds[unitId] = true;
+          }
         }
         target.focusDamageTakenBonus = getFocusDamageTakenBonus(player, key, skill);
+        addFocusIgnoredFloats(ignoredUnitIds);
         paySkillCost(player, skill);
         player.cds[key] = skill.cd;
         player.aim = null;
@@ -1733,7 +2101,11 @@
 
     function triggerUltimate(id, automatic = false) {
       const unit = ctx.party.find((member) => member.id === id);
-      if (!unit || unit.dead || unit.frozen > 0 || !canUseUltimate(unit) || unit.actionLock > 0 || unit.cast || unit.channel) return false;
+      if (id === "finald" && !automatic && isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (!unit || unit.dead || isActionDisabled(unit) || !canUseUltimate(unit) || unit.actionLock > 0 || unit.cast || unit.channel) return false;
       if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 50) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
       if (id !== "finald") spendUltimate(unit);
       if (id === "ulpes") ultUlpes(unit, automatic);
@@ -1756,7 +2128,7 @@
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           finishPartyAction(unit);
-          if (unit.dead || unit.frozen > 0 || target.dead) return;
+          if (unit.dead || isActionDisabled(unit) || target.dead) return;
           const impact = { x: telegraph.x, y: telegraph.y };
           let hits = 0;
           const point = ctx.clampBattlePoint
@@ -1771,7 +2143,7 @@
             if (d <= skill.hitRadius + unitHit.radius) {
               const rawDamage = skill.damageBase + getAttackStat(unit) * skill.attackScale;
               const multiplier = unitHit.team === "enemy" ? getAutoUltimateEnemyDamageMultiplier(unitHit, automatic) : 1;
-              ctx.dealDamage(unit, unitHit, rawDamage * multiplier, { noUltGain: true, critChanceBonus: getUltimateCritChanceBonus(unit, skill) });
+              ctx.dealDamage(unit, unitHit, rawDamage * multiplier, getSkillDamageOptions(skill, { noUltGain: true, critChanceBonus: getUltimateCritChanceBonus(unit, skill) }));
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1814,7 +2186,7 @@
         getPosition: () => ({ x: unit.x, y: unit.y }),
         resolve: () => {
           finishPartyAction(unit);
-          if (unit.dead || unit.frozen > 0) return;
+          if (unit.dead || isActionDisabled(unit)) return;
           speakSkill(unit, "ult");
           const center = { x: unit.x, y: unit.y };
           const frozen = new Set();
@@ -1838,7 +2210,7 @@
                     frozen.add(unitHit);
                   }
                   const ultimateDamageMultiplier = unitHit.team === "enemy" ? getAutoUltimateEnemyDamageMultiplier(unitHit, automatic) : 1;
-                  ctx.dealDamage(unit, unitHit, (skill.damageBase + getMagicStat(unit) * skill.magicScale) * scale * ultimateDamageMultiplier, { magic: true, noUltGain: true });
+                  ctx.dealDamage(unit, unitHit, (skill.damageBase + getMagicStat(unit) * skill.magicScale) * scale * ultimateDamageMultiplier, getSkillDamageOptions(skill, { magic: true, noUltGain: true }));
                   hits += unitHit.team === "enemy" ? 1 : 0;
                 }
               }
@@ -2143,6 +2515,7 @@
       startPlayerAim,
       cancelPlayerAim,
       confirmPlayerAim,
+      isPlayerControlLocked,
       executePlayerMoveIntent,
       usePlayerCommand,
       firePlayerShot,

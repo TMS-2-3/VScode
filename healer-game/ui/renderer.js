@@ -80,6 +80,14 @@
     const statusRenderer = window.createHealerStatusRenderer(context);
     const tooltipText = window.createHealerTooltipText(context);
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];
+    const equipmentCharacterArtPaths = {
+      finaldMale: "img/arjuna_man_img/default/front.png",
+      finaldFemale: "img/arjuna_woman_img/default/front.png",
+      ulpes: "img/ulpes_img/default/front.png",
+      rihas: "img/rihas_img/default/front.png",
+      sushia: "img/sushia_img/default/front.png",
+    };
+    const equipmentCharacterArtImages = createEquipmentCharacterArtImages();
     const equipmentSlotLayout = {
       left: ["head", "body", "legs"],
       right: ["hands", "feet", "accessory"],
@@ -88,6 +96,33 @@
     const keybindTools = KEYBINDS || window.HEALER_KEYBINDS || null;
     const equipmentTooltipTargets = [];
     const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
+
+  function createEquipmentCharacterArtImages() {
+    const images = {};
+    if (typeof Image !== "function") {
+      return images;
+    }
+    for (const [key, imagePath] of Object.entries(equipmentCharacterArtPaths)) {
+      const image = new Image();
+      image.src = imagePath;
+      images[key] = image;
+    }
+    return images;
+  }
+
+  function getEquipmentCharacterArtImage(unit) {
+    if (!unit) {
+      return null;
+    }
+    const key = unit.id === "finald"
+      ? playerProfile.gender === "女の子" ? "finaldFemale" : "finaldMale"
+      : unit.id;
+    return equipmentCharacterArtImages[key] || null;
+  }
+
+  function isSystemImageReady(image) {
+    return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+  }
 
   function draw() {
     ctx.clearRect(0, 0, view.w, view.h);
@@ -261,6 +296,48 @@
         ctx.strokeStyle = "#f7fdff";
         ctx.lineWidth = 2;
         ctx.stroke();
+        ctx.restore();
+      } else if (area.type === "sleep_scent") {
+        const alpha = clamp(area.time / 3, 0.14, 0.36);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#c785ff";
+        ctx.beginPath();
+        ctx.arc(area.x, area.y, area.radius, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = "#f3dcff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.fillStyle = "#fff0a8";
+        for (let i = 0; i < 9; i += 1) {
+          const angle = (i / 9) * TAU + area.time * 0.45;
+          const distance = area.radius * (0.18 + (i % 4) * 0.16);
+          ctx.beginPath();
+          ctx.arc(area.x + Math.cos(angle) * distance, area.y + Math.sin(angle) * distance, 3 + (i % 3), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (area.type === "pollen_spraying") {
+        const alpha = clamp(area.time / 5, 0.12, 0.34);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#d8d35b";
+        ctx.beginPath();
+        ctx.arc(area.x, area.y, area.radius, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = "#fff7a6";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.fillStyle = "#f7e36a";
+        for (let i = 0; i < 14; i += 1) {
+          const angle = (i / 14) * TAU - area.time * 0.35;
+          const distance = area.radius * (0.12 + (i % 5) * 0.15);
+          ctx.beginPath();
+          ctx.arc(area.x + Math.cos(angle) * distance, area.y + Math.sin(angle) * distance, 2 + (i % 2), 0, TAU);
+          ctx.fill();
+        }
         ctx.restore();
       }
     }
@@ -2736,6 +2813,24 @@
   }
 
   function drawEquipmentCharacterArt(unit, x, y, size) {
+    const image = getEquipmentCharacterArtImage(unit);
+    if (isSystemImageReady(image)) {
+      const height = size * 2.45;
+      const width = height * image.naturalWidth / image.naturalHeight;
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#102018";
+      ctx.beginPath();
+      ctx.ellipse(x, y + size * 1.56, size * 0.74, size * 0.18, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      const previousSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(image, x - width / 2, y + size * 1.42 - height, width, height);
+      ctx.imageSmoothingEnabled = previousSmoothing;
+      ctx.restore();
+      return;
+    }
     const color = unit && unit.color ? unit.color : "#57c7c9";
     ctx.save();
     ctx.globalAlpha = 0.18;
@@ -3629,16 +3724,18 @@
     if (!skill) {
       return "#60756a";
     }
+    const damageType = String(skill.damageType || "");
+    const damageTypeLower = damageType.toLowerCase();
     if (skill.category === "通常攻撃") {
       return "#607f8a";
     }
     if (skill.category === "指示") {
       return "#6d7a4f";
     }
-    if (skill.damageType === "magic") {
+    if (damageType === "magic" || damageTypeLower.includes("magic") || damageType.includes("魔法")) {
       return "#7563a1";
     }
-    if (skill.damageType === "physical") {
+    if (damageType === "physical" || damageTypeLower.includes("physical") || damageType.includes("物理")) {
       return "#8a5f47";
     }
     return "#60756a";

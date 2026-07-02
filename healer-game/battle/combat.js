@@ -62,6 +62,9 @@
       hasPassive,
     } = context;
 
+    const DEFENSE_BASELINE = 100;
+    const DEFENSE_OVER_BASE_SCALE = 0.4;
+
     function addShield(unit, amount, duration) {
       if (!unit || amount <= 0 || duration <= 0) {
         return 0;
@@ -74,7 +77,17 @@
       }
       getShieldStacks(unit).push({ amount: added, timer: duration });
       syncShieldTotal(unit);
+      applyShieldMoodGain(unit, added);
       return added;
+    }
+
+    function applyShieldMoodGain(unit, addedShield) {
+      if (!unit || unit.team !== "party" || unit.id === "finald" || addedShield <= 0) {
+        return 0;
+      }
+      const shieldRatio = getHpRatio(addedShield, unit);
+      const referenceShield = shieldRatio * Math.max(1, unit.maxHp || 1);
+      return addMoodGain(unit, referenceShield * MOOD_HEAL_RATE * MOOD_EVENT_MULT);
     }
 
     function getShieldStacks(unit) {
@@ -104,6 +117,12 @@
       return unit.shield;
     }
 
+    function isDotDamageOptions(options = {}) {
+      const rawType = String(options.damageType || "");
+      const type = rawType.toLowerCase();
+      return options.dotDamage === true || options.dot === true || type.includes("dot") || rawType.includes("ドット");
+    }
+
     function dealDamage(source, target, amount, options = {}) {
       if (!target || target.dead) {
         return 0;
@@ -127,8 +146,9 @@
       finalAmount *= getElementDamageMultiplier(source, target, options);
       finalAmount *= getFriendlyFireDamageMultiplier(source, target);
 
+      const dotDamage = isDotDamageOptions(options);
       let guarded = false;
-      if (target.team === "party" && target.id !== "finald") {
+      if (!dotDamage && target.team === "party" && target.id !== "finald") {
         guarded = tryGuard(target);
         if (guarded) {
           finalAmount *= getGuardDamageMultiplier(target);
@@ -163,6 +183,9 @@
       }
 
       finalAmount = Math.max(0, finalAmount);
+      if (!dotDamage && (finalAmount > 0 || shielded > 0)) {
+        clearSleep(target);
+      }
       let delayedAmount = 0;
       if (hasPassive(target, "painless") && finalAmount > 0 && !options.delayed) {
         addRihasPassiveStack(target);
@@ -173,6 +196,8 @@
           ticks: 5,
           amount: Math.max(1, delayedAmount / 5),
           color: damageFloatColor,
+          dotDamage: true,
+          damageType: "dot",
         });
       }
 
@@ -236,9 +261,18 @@
         return 0;
       }
       const damageRatio = getHpRatio(hpDamage, target);
-      const referenceDamage = damageRatio * getMoodReferenceHp(target);
+      const referenceDamage = damageRatio * Math.max(1, target.maxHp || 1);
       const baseLoss = Number.isFinite(MOOD_DAMAGE_TAKEN_BASE_LOSS) ? MOOD_DAMAGE_TAKEN_BASE_LOSS : 0;
       return addMoodLoss(target, referenceDamage * MOOD_DAMAGE_TAKEN_RATE * MOOD_EVENT_MULT + baseLoss);
+    }
+
+    function clearSleep(unit) {
+      if (!unit || (unit.sleepTimer || 0) <= 0) {
+        return;
+      }
+      unit.sleepTimer = 0;
+      unit.sleepMax = 0;
+      addFloat("睡眠解除", unit.x, unit.y - 34, "#f7fff6");
     }
 
     function awardOffensiveUltimate(source, target, options = {}) {
@@ -275,7 +309,7 @@
     }
 
     function shouldRollCritical(source, options = {}) {
-      if (!source || options.noCrit === true || options.crit === false) {
+      if (!source || options.noCrit === true || options.crit === false || isDotDamageOptions(options)) {
         return false;
       }
       const bonus = Number.isFinite(options.critChanceBonus) ? options.critChanceBonus : 0;
@@ -464,7 +498,16 @@
 
     function reduceByDefense(target, amount, isMagic) {
       const defense = isMagic ? getEffectiveMagicDefense(target) : getEffectiveDefense(target);
-      return amount * (100 / Math.max(1, defense));
+      const scaledDefense = getDefenseValueForDamage(defense);
+      return amount * (DEFENSE_BASELINE / scaledDefense);
+    }
+
+    function getDefenseValueForDamage(defense) {
+      const safeDefense = Math.max(1, Number.isFinite(defense) ? defense : 1);
+      if (safeDefense <= DEFENSE_BASELINE) {
+        return safeDefense;
+      }
+      return DEFENSE_BASELINE + (safeDefense - DEFENSE_BASELINE) * DEFENSE_OVER_BASE_SCALE;
     }
 
     function getDamageFloatColor(source, target) {
@@ -490,7 +533,7 @@
         const entry = unit.delayedDamageQueue[i];
         entry.timer -= dt;
         while (entry.timer <= 0 && entry.ticks > 0 && !unit.dead) {
-          applyDelayedDamage(unit, entry.amount, entry.color);
+          applyDelayedDamage(unit, entry.amount, entry.color, { dotDamage: entry.dotDamage !== false, damageType: entry.damageType || "dot" });
           entry.ticks -= 1;
           entry.timer += 1;
         }
@@ -500,11 +543,12 @@
       }
     }
 
-    function applyDelayedDamage(unit, amount, color = "#ff4f4f") {
+    function applyDelayedDamage(unit, amount, color = "#ff4f4f", options = {}) {
       const damage = Math.max(0, amount);
       if (damage <= 0 || unit.dead) {
         return;
       }
+      // Painless delayed ticks are DoT-style direct HP damage; future sleep wake checks should read options.dotDamage.
       const before = unit.hp;
       unit.hp = Math.max(0, unit.hp - damage);
       const actualDamage = before - unit.hp;
@@ -522,7 +566,7 @@
     }
 
     function tryGuard(unit) {
-      if (unit.frozen > 0 || unit.actionLock > 0) {
+      if (unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || unit.actionLock > 0) {
         return false;
       }
       const chance = getEffectiveGuardChance(unit);

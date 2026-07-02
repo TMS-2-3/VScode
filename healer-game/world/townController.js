@@ -15,6 +15,7 @@
       areas,
       effects,
       TOWN_DATA,
+      STATUS_DATA,
       EQUIPMENT_DATA,
       MATERIAL_DATA,
       QUEST_DATA,
@@ -52,7 +53,10 @@
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const INN_REST_COST = 100;
-
+    const TOWN_WALK_ANIMATION_SEQUENCE = [2, 1, 3, 1];
+    const TOWN_WALK_FRAME_INTERVAL = 0.16;
+    const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
+    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "Injury"];
     function keyLabel(actionId, fallback) {
       return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
     }
@@ -118,10 +122,95 @@
       }
     }
 
+    function savePartyStatuses() {
+      game.partyStatusById = game.partyStatusById && typeof game.partyStatusById === "object"
+        ? game.partyStatusById
+        : {};
+      const seen = new Set();
+      for (const member of party) {
+        if (!member || !member.id || seen.has(member.id)) {
+          continue;
+        }
+        seen.add(member.id);
+        const statuses = collectCarryoverStatuses(member);
+        if (Object.keys(statuses).length > 0) {
+          game.partyStatusById[member.id] = statuses;
+        } else {
+          delete game.partyStatusById[member.id];
+        }
+      }
+    }
+
+    function collectCarryoverStatuses(member) {
+      const statuses = {};
+      if (isStatusCarryover("buff_itaminasi") && (member.rihasPassiveStacks || 0) > 0 && (member.rihasPassiveTimer || 0) > 0) {
+        statuses.buff_itaminasi = {
+          stacks: Math.max(0, Math.floor(member.rihasPassiveStacks || 0)),
+          timer: Math.max(0, member.rihasPassiveTimer || 0),
+          cooldown: Math.max(0, member.rihasPassiveStackCooldown || 0),
+        };
+      }
+      if (isStatusCarryover("buff_warmup") && (member.castStacks || 0) > 0 && (member.stackTimer || 0) > 0) {
+        statuses.buff_warmup = {
+          stacks: Math.max(0, Math.floor(member.castStacks || 0)),
+          timer: Math.max(0, member.stackTimer || 0),
+          cooldown: Math.max(0, member.stackCooldown || 0),
+        };
+      }
+      if (isStatusCarryover("debuff_taunt") && (member.tauntTimer || 0) > 0) {
+        statuses.debuff_taunt = {
+          timer: Math.max(0, member.tauntTimer || 0),
+          forcedTargetId: member.forcedTarget && member.forcedTarget.id || null,
+        };
+      }
+      if (isStatusCarryover("debuff_freeze") && (member.frozen || 0) > 0) {
+        statuses.debuff_freeze = {
+          timer: Math.max(0, member.frozen || 0),
+          max: Math.max(member.frozen || 0, member.frozenMax || 0),
+        };
+      }
+      if (isStatusCarryover("debuff_burn") && (member.burnTimer || 0) > 0) {
+        statuses.debuff_burn = {
+          timer: Math.max(0, member.burnTimer || 0),
+          max: Math.max(member.burnTimer || 0, member.burnMax || 0),
+          tick: Math.max(0, member.burnTick || 0),
+          tickRate: Math.max(0, member.burnTickRate || 1),
+          damageHpRatio: Math.max(0, member.burnDamageHpRatio || 0),
+        };
+      }
+      if (isStatusCarryover("debuff_sleep") && (member.sleepTimer || 0) > 0) {
+        statuses.debuff_sleep = {
+          timer: Math.max(0, member.sleepTimer || 0),
+          max: Math.max(member.sleepTimer || 0, member.sleepMax || 0),
+        };
+      }
+      if (isStatusCarryover("Injury") && (member.injuryTimer || 0) > 0) {
+        statuses.Injury = {
+          timer: Math.max(0, member.injuryTimer || 0),
+          max: Math.max(member.injuryTimer || 0, member.injuryMax || 0),
+        };
+      }
+      return statuses;
+    }
+
+    function isStatusCarryover(statusId) {
+      if (!CARRYOVER_STATUS_IDS.includes(statusId)) {
+        return false;
+      }
+      const status = STATUS_DATA && STATUS_DATA[statusId];
+      const values = status ? [status.carryover, status.inherit, status.battleCarryover, status["引き継ぎ"]] : [];
+      return values.some((value) => value === true || value === "あり" || value === "有" || value === "true" || value === "yes");
+    }
+
+    function clearSavedPartyStatuses() {
+      game.partyStatusById = {};
+    }
+
     function startTown() {
       const returningFromBattle = game.state === "won" || game.state === "lost";
       if (returningFromBattle) {
         savePartyHp();
+        savePartyStatuses();
       }
       projectiles.length = 0;
       telegraphs.length = 0;
@@ -210,7 +299,7 @@
         return;
       }
       updateTownMovement(dt);
-      updateTownFollowers();
+      updateTownFollowers(dt);
       town.interaction = getTownInteraction();
     }
 
@@ -219,25 +308,95 @@
       town.camera.y = 0;
     }
 
-    function updateTownMovement(dt) {
-      if (town.panel || dt <= 0) {
+    function updateTownMovementInputOrder(keys) {
+      town.movementKeyOrder = Array.isArray(town.movementKeyOrder) ? town.movementKeyOrder : [];
+      town.movementKeysDown = town.movementKeysDown && typeof town.movementKeysDown === "object" ? town.movementKeysDown : {};
+      for (const key of TOWN_MOVEMENT_KEYS) {
+        const pressed = Boolean(keys && keys[key]);
+        const wasPressed = Boolean(town.movementKeysDown[key]);
+        if (pressed && !wasPressed) {
+          town.movementKeyOrder = town.movementKeyOrder.filter((entry) => entry !== key);
+          town.movementKeyOrder.push(key);
+        } else if (!pressed && wasPressed) {
+          town.movementKeyOrder = town.movementKeyOrder.filter((entry) => entry !== key);
+        }
+        town.movementKeysDown[key] = pressed;
+      }
+    }
+
+    function getTownFacingFromInput(keys, dx, dy, fallback = "down") {
+      const order = Array.isArray(town.movementKeyOrder) ? town.movementKeyOrder : [];
+      for (const key of order) {
+        if (!keys || !keys[key]) {
+          continue;
+        }
+        if (key === "a" && dx < 0) return "left";
+        if (key === "d" && dx > 0) return "right";
+        if (key === "w" && dy < 0) return "up";
+        if (key === "s" && dy > 0) return "down";
+      }
+      if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0) {
+        return dx > 0 ? "right" : "left";
+      }
+      if (Math.abs(dy) > 0) {
+        return dy > 0 ? "down" : "up";
+      }
+      return fallback;
+    }
+
+    function updateTownActorWalkAnimation(actor, dt, moving) {
+      if (!actor) {
         return;
       }
+      if (!moving) {
+        actor.moving = false;
+        actor.walkFrame = 1;
+        actor.walkFrameIndex = -1;
+        actor.walkTimer = 0;
+        return;
+      }
+      if (!actor.moving || !Number.isFinite(actor.walkFrameIndex) || actor.walkFrameIndex < 0) {
+        actor.moving = true;
+        actor.walkFrameIndex = 0;
+        actor.walkFrame = TOWN_WALK_ANIMATION_SEQUENCE[0];
+        actor.walkTimer = 0;
+        return;
+      }
+      actor.walkTimer = (Number.isFinite(actor.walkTimer) ? actor.walkTimer : 0) + Math.max(0, dt || 0);
+      while (actor.walkTimer >= TOWN_WALK_FRAME_INTERVAL) {
+        actor.walkTimer -= TOWN_WALK_FRAME_INTERVAL;
+        actor.walkFrameIndex = (actor.walkFrameIndex + 1) % TOWN_WALK_ANIMATION_SEQUENCE.length;
+      }
+      actor.walkFrame = TOWN_WALK_ANIMATION_SEQUENCE[actor.walkFrameIndex] || 1;
+    }
+    function updateTownMovement(dt) {
       const keys = input.keys || {};
+      updateTownMovementInputOrder(keys);
+      if (town.panel || dt <= 0) {
+        updateTownActorWalkAnimation(town.player, dt, false);
+        return;
+      }
       const dx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
       const dy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
       const len = Math.hypot(dx, dy);
       if (len <= 0) {
+        updateTownActorWalkAnimation(town.player, dt, false);
         return;
       }
+      town.player.facing = getTownFacingFromInput(keys, dx, dy, town.player.facing || "down");
+      const beforeX = town.player.x;
+      const beforeY = town.player.y;
       const speed = town.player.speed || 235;
       const vx = (dx / len) * speed * dt;
       const vy = (dy / len) * speed * dt;
       moveTownPlayerAxis(vx, 0);
       moveTownPlayerAxis(0, vy);
-      appendTownTrailPoint();
+      const moved = distPoint(beforeX, beforeY, town.player.x, town.player.y) > 0.05;
+      updateTownActorWalkAnimation(town.player, dt, moved);
+      if (moved) {
+        appendTownTrailPoint();
+      }
     }
-
     function moveTownPlayerAxis(dx, dy) {
       const nextX = town.player.x + dx;
       const nextY = town.player.y + dy;
@@ -286,14 +445,14 @@
       const startX = town.player.x;
       const startY = town.player.y;
       town.followers = [
-        { id: "ulpes", label: "ウ", color: "#f4c54f", x: startX - 44, y: startY + 52 },
-        { id: "rihas", label: "リ", color: "#e37a3f", x: startX, y: startY + 72 },
-        { id: "sushia", label: "ス", color: "#b985ee", x: startX + 44, y: startY + 52 },
+        { id: "ulpes", label: "ウ", color: "#f4c54f", x: startX - 44, y: startY + 52, facing: "down", walkFrame: 1, walkFrameIndex: -1, walkTimer: 0 },
+        { id: "rihas", label: "リ", color: "#e37a3f", x: startX, y: startY + 72, facing: "down", walkFrame: 1, walkFrameIndex: -1, walkTimer: 0 },
+        { id: "sushia", label: "ス", color: "#b985ee", x: startX + 44, y: startY + 52, facing: "down", walkFrame: 1, walkFrameIndex: -1, walkTimer: 0 },
       ];
     }
 
     function resetTownTrail() {
-      town.trail = [{ x: town.player.x, y: town.player.y }];
+      town.trail = [{ x: town.player.x, y: town.player.y, facing: town.player.facing || "down" }];
     }
 
     function appendTownTrailPoint() {
@@ -305,13 +464,13 @@
       if (distPoint(last.x, last.y, town.player.x, town.player.y) < 8) {
         return;
       }
-      town.trail.push({ x: town.player.x, y: town.player.y });
+      town.trail.push({ x: town.player.x, y: town.player.y, facing: town.player.facing || "down" });
       if (town.trail.length > 420) {
         town.trail.splice(0, town.trail.length - 420);
       }
     }
 
-    function updateTownFollowers() {
+    function updateTownFollowers(dt = 0) {
       if (!town.meetingDone) {
         town.followers = [];
         return;
@@ -321,19 +480,26 @@
         resetTownTrail();
       }
       for (let i = 0; i < town.followers.length; i += 1) {
+        const follower = town.followers[i];
+        const beforeX = follower.x;
+        const beforeY = follower.y;
         const target = getTrailPointBehind((i + 1) * 58);
-        town.followers[i].x = target.x;
-        town.followers[i].y = target.y;
+        follower.x = target.x;
+        follower.y = target.y;
+        if (target.facing) {
+          follower.facing = target.facing;
+        }
+        const moved = distPoint(beforeX, beforeY, follower.x, follower.y) > 0.05;
+        updateTownActorWalkAnimation(follower, dt, moved);
       }
     }
-
     function getTrailPointBehind(distance) {
       const trail = town.trail || [];
       if (trail.length === 0) {
-        return { x: town.player.x, y: town.player.y };
+        return { x: town.player.x, y: town.player.y, facing: town.player.facing || "down" };
       }
       let remaining = distance;
-      let current = { x: town.player.x, y: town.player.y };
+      let current = { x: town.player.x, y: town.player.y, facing: town.player.facing || "down" };
       for (let i = trail.length - 1; i >= 0; i -= 1) {
         const next = trail[i];
         const segment = distPoint(current.x, current.y, next.x, next.y);
@@ -342,14 +508,16 @@
           return {
             x: current.x + (next.x - current.x) * t,
             y: current.y + (next.y - current.y) * t,
+            facing: current.facing || next.facing || "down",
           };
         }
         remaining -= segment;
         current = next;
       }
       const fallback = trail[0];
-      return { x: fallback.x, y: fallback.y };
+      return { x: fallback.x, y: fallback.y, facing: fallback.facing || "down" };
     }
+
     function getTownInteraction() {
       if (town.panel || town.story) {
         return null;
@@ -540,6 +708,7 @@
       }
       recoverPartyFull();
       saveFullPartyHp();
+      clearSavedPartyStatuses();
       game.innRestUsedUntilBattle = true;
       setTownPanelMessage(`全員が全回復しました。-${formatGoldSafe(INN_REST_COST)}`);
     }
@@ -561,7 +730,23 @@
         member.burnTimer = 0;
         member.burnMax = 0;
         member.burnTick = 0;
+        member.burnTickRate = 1;
+        member.burnDamageHpRatio = 0;
         member.burnSource = null;
+        member.sleepTimer = 0;
+        member.sleepMax = 0;
+        member.injuryTimer = 0;
+        member.injuryMax = 0;
+        member.shadowDashTimer = 0;
+        member.shadowDashMax = 0;
+        member.rihasPassiveStacks = 0;
+        member.rihasPassiveTimer = 0;
+        member.rihasPassiveStackCooldown = 0;
+        member.castStacks = 0;
+        member.stackTimer = 0;
+        member.stackCooldown = 0;
+        member.forcedTarget = null;
+        member.tauntTimer = 0;
         member.delayedDamageQueue = [];
       }
     }

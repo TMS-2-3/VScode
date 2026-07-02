@@ -88,6 +88,12 @@
         burnTickRate: 1,
         burnDamageHpRatio: 0,
         burnSource: null,
+        sleepTimer: 0,
+        sleepMax: 0,
+        injuryTimer: 0,
+        injuryMax: 0,
+        shadowDashTimer: 0,
+        shadowDashMax: 0,
         dead: false,
         noDamage: 999,
         channel: null,
@@ -165,10 +171,12 @@
         element: stats.element,
         elementBoosts: stats.elementBoosts,
         elementResistances: stats.elementResistances,
+        loadout: Array.isArray(stats.skills) ? { passive: null, active: stats.skills.slice() } : undefined,
         drops: stats.drops,
       });
       enemy.x = x;
       enemy.y = y;
+      enemy.usesCustomSkillSet = Array.isArray(stats.skills);
       enemy.cds.attack = Math.random() * getActionCooldown(enemy);
       const skillSystem = getSkillSystem();
       if (kind === "caster") {
@@ -176,6 +184,15 @@
         enemy.cds.skill = casterLine.cdBase + Math.random() * casterLine.cdRandom;
       } else if (kind === "elite") {
         enemy.cds.skill = skillSystem.requireSkill("enemy", "heavySlam").cd;
+      } else if (Array.isArray(stats.skills)) {
+        for (const skillKey of stats.skills) {
+          const skill = skillSystem.getSkill ? skillSystem.getSkill("enemy", skillKey) : null;
+          if (!skill || skill.category === "通常攻撃" || !Number.isFinite(skill.cd) || skill.cd <= 0) {
+            continue;
+          }
+          enemy.cds[skillKey] = Math.random() * skill.cd;
+        }
+        enemy.cds.skill = 0;
       } else {
         enemy.cds.skill = 0;
       }

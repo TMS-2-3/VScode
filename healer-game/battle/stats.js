@@ -84,46 +84,7 @@
     }
 
     function applyMoodCommandBiasAuto(unit) {
-      if (!unit || unit.team !== "party" || unit.id === "finald" || unit.mood === null) {
-        return;
-      }
-      if ((unit.commandBiasActionCount || 0) < COMMAND_BIAS_AUTO_GRACE_ACTIONS) {
-        unit.commandBiasActionCount = (unit.commandBiasActionCount || 0) + 1;
-        return;
-      }
-
-      if (unit.mood <= 20) {
-        const roll = Math.random();
-        if (roll < 0.1) {
-          unit.commandBias = -2;
-        } else if (roll < 0.35) {
-          unit.commandBias = clampCommandBias(unit.commandBias - 1);
-        }
-        return;
-      }
-
-      if (unit.mood <= 40) {
-        if (Math.random() < 0.15) {
-          unit.commandBias = clampCommandBias(unit.commandBias - 1);
-        }
-        return;
-      }
-
-      if (unit.mood > 80) {
-        const roll = Math.random();
-        if (roll < 0.1) {
-          unit.commandBias = 2;
-        } else if (roll < 0.35) {
-          unit.commandBias = clampCommandBias(unit.commandBias + 1);
-        }
-        return;
-      }
-
-      if (unit.mood >= 65) {
-        if (Math.random() < 0.15) {
-          unit.commandBias = clampCommandBias(unit.commandBias + 1);
-        }
-      }
+      return;
     }
 
     function clampCommandBias(value) {
@@ -469,6 +430,18 @@
           bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_ATTACK_BONUS, 0);
         } else if (statKey === "defense") {
           bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_DEFENSE_BONUS, 0);
+        }
+      }
+      if (unit && (unit.injuryTimer || 0) > 0) {
+        if (statKey === "defense" || statKey === "moveSpeed") {
+          bonus -= 0.1;
+        }
+      }
+      if (unit && (unit.shadowDashTimer || 0) > 0) {
+        if (statKey === "moveSpeed") {
+          bonus += 0.5;
+        } else if (statKey === "actionSpeed") {
+          bonus += 0.3;
         }
       }
       return bonus;

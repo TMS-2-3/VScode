@@ -33,7 +33,7 @@
       shield: {
         id: "shelt", key: "shield", owner: "finald", name: "シェルト", rank: "D", category: "スキル", skillType: "単体シールド",
         requiredWeapons: ["杖", "魔導書", "魔楽器"],
-        cd: 8, cast: 2, cost: 25, range: px(280), shieldBase: 40, magicScale: 0.45, duration: 8, moodGain: 4, lines: ["シェルト"],
+        cd: 8, cast: 2, cost: 25, range: px(280), shieldBase: 40, magicScale: 0.45, duration: 8, lines: ["シェルト"],
         formula: [{ text: "40 + 魔力 * 0.45", stat: "magic", baseProp: "shieldBase", scaleProp: "magicScale" }],
         description: "２秒の詠唱を行った後、指定した味方１人に8秒間持続する(式=値)のシールドを付与する。",
         simpleDescription: "詠唱後、指定した味方１人にシールドを付与する。",
@@ -43,11 +43,11 @@
       take_aim: {
         id: "take_aim", key: "take_aim", owner: "finald", name: "フォーカス", rank: "D", category: "指示", skillType: "対象指示",
         conditionText: "アルジュナ",
-        cd: 40, cost: 0, range: px(550), duration: 20, target: "enemy", focusDamageTakenBonusPerLevel: 0.02, lines: ["フォーカス"],
-        description: "指定した敵1体を味方達が狙うようになる。20秒経過するか対象が戦闘不能になるまで続く。",
+        cd: 40, cost: 0, range: px(550), duration: 15, target: "enemy", focusIgnoreBase: 0.7, lines: ["フォーカス"],
+        description: "指定した敵1体を味方達が狙うようになる。15秒経過するか対象が戦闘不能になるまで続く。調子70%以上、もしくは30%以下の味方は70%の確率で無視する。",
         simpleDescription: "指定した敵1体を一定時間、味方達が狙うようになる。",
-        upgradeSimpleDescription: "レベルが上がるごとに指定した敵1体の狙っている間の受けるダメージが上昇する",
-        upgradeDescription: "レベルが上がるごとに指定した敵1体の狙っている間の被ダメージ率(+2/+4/+6/+8/+10)%",
+        upgradeSimpleDescription: "レベルが上がるごとに無視される確率が低下する",
+        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/50)%低下する",
       },
       commandDefend: {
         id: "1_defend", key: "commandDefend", owner: "finald", name: "防御指示", rank: "D", category: "指示", skillType: "対象指示",
@@ -65,7 +65,7 @@
         description: "指定した味方１人に指示を出し、攻防メーターを攻撃よりに１つずらす。対象の調子が30%以下だと75%の確率で無視されることがある。",
         simpleDescription: "指定した味方１人に指示を出し、攻防メーターを攻撃よりに１つずらす。対象の調子が低いと無視されることがある。",
         upgradeSimpleDescription: "レベルが上がるごとに無視される確率が低下する",
-        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/51)%低下する",
+        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/50)%低下する",
       },
       commandDefendAll: {
         id: "all_defend", key: "commandDefendAll", owner: "finald", name: "防御陣形", rank: "D", category: "指示", skillType: "範囲指示",
@@ -74,7 +74,7 @@
         description: "自分を中心とした範囲内の味方全員に指示を出し、攻防メーターを防御よりに１つずらす。対象の調子が70%以上だと75%の確率で無視されることがある。",
         simpleDescription: "自分を中心とした範囲内の味方全員に指示を出し、攻防メーターを防御よりに１つずらす。対象の調子が高いと無視されることがある。",
         upgradeSimpleDescription: "レベルが上がるごとに無視される確率が低下する",
-        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/52)%低下する",
+        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/50)%低下する",
       },
       commandAttackAll: {
         id: "all_attack", key: "commandAttackAll", owner: "finald", name: "攻撃陣形", rank: "D", category: "指示", skillType: "範囲指示",
@@ -83,7 +83,7 @@
         description: "自分を中心とした範囲内の味方全員に指示を出し、攻防メーターを攻撃よりに１つずらす。対象の調子が30%以下だと75%の確率で無視される。",
         simpleDescription: "自分を中心とした範囲内の味方全員に指示を出し、攻防メーターを攻撃よりに１つずらす。対象の調子が低いと無視されることがある。",
         upgradeSimpleDescription: "レベルが上がるごとに無視される確率が低下する",
-        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/53)%低下する",
+        upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/50)%低下する",
       },
       ult: {
         id: "hull_heal", key: "ult", owner: "finald", name: "ストレプション", rank: "D", category: "必殺技", skillType: "全体回復",
@@ -186,9 +186,9 @@
       fire: {
         id: "fire", key: "fire", owner: "sushia", name: "ファイア", rank: "D", category: "スキル", skillType: "単体攻撃",
         requiredWeapons: ["杖", "魔導書", "魔楽器"],
-        cd: 14, cost: 40, range: px(450), cast: 3, damageBase: 30, magicScale: 0.55, burnDuration: 3, burnDamageHpRatio: 0.01, burnTickRate: 1, beamColor: "rgba(255,139,67,0.74)", burstRadius: px(44), lines: ["チャッカ"], damageType: "magic", statusIds: ["debuff_burn"],
-        formula: [{ text: "30 + 魔力 * 0.55", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
-        description: "３秒の詠唱を行った後、対象の敵１体に炎を放ち、(式=値)の魔法ダメージを与え、3秒の\"燃焼\"を付与する。",
+        cd: 14, cost: 40, range: px(450), cast: 1, damageBase: 30, magicScale: 0.45, burnDuration: 3, burnDamageHpRatio: 0.01, burnTickRate: 1, beamColor: "rgba(255,139,67,0.74)", burstRadius: px(44), lines: ["ファイア"], damageType: "magic", statusIds: ["debuff_burn"],
+        formula: [{ text: "30 + 魔力 * 0.45", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
+        description: "１秒の詠唱を行った後、対象の敵１体に炎を放ち、(式=値)の魔法ダメージを与え、3秒の\"燃焼\"を付与する。",
         simpleDescription: "詠唱後、対象の敵１体に炎を放ち、魔法ダメージを与え、\"燃焼\"を付与する。",
         upgradeSimpleDescription: "レベルが上がるごとに付与する\"燃焼\"の効果時間が増加する",
         upgradeDescription: "レベルが上がるごとに付与する\"燃焼\"の効果時間が+(1/2/3/4/5)秒増加する",
@@ -207,9 +207,45 @@
       },
     },
     enemy: {
-      attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", cd: 5, bruteRange: px(48), eliteRange: px(58), cast: 0.32, radius: px(42), damageBonus: 8 },
-      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", cdBase: 12, cdRandom: 0, cast: 2, aimLockBeforeFire: 1.3, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
-      heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", cd: 17, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
+      attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", category: "通常攻撃", cd: 5, bruteRange: px(48), eliteRange: px(58), cast: 0.32, radius: px(42), damageBonus: 8 },
+      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", category: "スキル", cdBase: 12, cdRandom: 0, cast: 2, aimLockBeforeFire: 1.3, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
+      heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", category: "スキル", cd: 17, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
+      d_enemy_attack: {
+        id: "d_enemy_attack", key: "d_enemy_attack", owner: "enemy", name: "通常攻撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
+        cd: 5, range: px(50), damageBase: 10, attackScale: 0.2, damageType: "physical", lines: ["！！"],
+      },
+      rush: {
+        id: "rush", key: "rush", owner: "enemy", name: "突進", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 8, cast: 0.5, range: px(85), damageBase: 10, attackScale: 0.35, damageType: "physical", lines: ["突撃"],
+      },
+      multi_biting: {
+        id: "multi_biting", key: "multi_biting", owner: "enemy", name: "連続噛みつき", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 13, range: px(70), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.1, missingHpScale: 1 / 3, damageType: "physical", lines: ["連続噛みつき"],
+      },
+      vine_punch: {
+        id: "vine_punch", key: "vine_punch", owner: "enemy", name: "つるの打撃", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 10, range: px(100), damageBase: 13, attackScale: 0.3, damageType: "physical", lines: ["つるの打撃"],
+      },
+      sleep_scent: {
+        id: "sleep_scent", key: "sleep_scent", owner: "enemy", name: "甘い香り", rank: "D", category: "スキル", skillType: "範囲デバフ",
+        cd: 25, cost: 20, cast: 1, radius: px(130), duration: 3, tickRate: 0.25, sleepDuration: 12, lines: ["甘い香り"], statusIds: ["debuff_sleep"],
+      },
+      pollen_spraying: {
+        id: "pollen_spraying", key: "pollen_spraying", owner: "enemy", name: "花粉散布", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 20, cost: 20, cast: 0.5, range: px(80), radius: px(140), duration: 5, tickRate: 1, maxTicks: 5, damageBase: 5, magicScale: 0.1, damageType: "ドット魔法", lines: ["花粉散布"],
+      },
+      biting: {
+        id: "biting", key: "biting", owner: "enemy", name: "噛みつき", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 15, range: px(50), damageBase: 15, attackScale: 0.2, injuryDuration: 4, damageType: "physical", lines: ["噛みつき"], statusIds: ["Injury"],
+      },
+      shadow_dash: {
+        id: "shadow_dash", key: "shadow_dash", owner: "enemy", name: "影走り", rank: "D", category: "スキル", skillType: "自身バフ",
+        cd: 20, cost: 10, duration: 10, moveSpeedBonus: 0.5, actionSpeedBonus: 0.3, lines: ["影走り"],
+      },
+      throat_hunt: {
+        id: "throat_hunt", key: "throat_hunt", owner: "enemy", name: "喉笛狩り", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 15, range: px(30), damageBase: 8, attackScale: 0.3, missingHpScale: 1, damageType: "physical", lines: ["喉笛狩り"],
+      },
     },
   };
 
@@ -273,7 +309,7 @@
       finald: {
         passive: "hilment",
         ultimate: "ult",
-        active: ["attack", "heal", "shield"],
+        active: ["attack", "heal", "shield", "commandAttack", "commandDefend"],
       },
       ulpes: { passive: "swordwork", ultimate: "ult", active: ["attack"] },
       rihas: { passive: "painless", ultimate: "ult", active: ["attack"] },

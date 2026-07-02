@@ -9,6 +9,7 @@
       startPlayerAim,
       usePlayerCommand,
       cancelPlayerAim,
+      isPlayerControlLocked,
       triggerUltimate,
       useItemSlot,
       cancelItemAim,
@@ -18,6 +19,11 @@
       for (let i = statusUiButtons.length - 1; i >= 0; i -= 1) {
         const button = statusUiButtons[i];
         if (x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) {
+          if (isLockedBattleControlButton(button)) {
+            cancelPlayerAim();
+            cancelItemAim();
+            return true;
+          }
           if (button.action === "close") {
             expandedStatusUnitIds.delete(button.unitId);
           } else if (button.action === "toggle") {
@@ -39,6 +45,9 @@
             }
           } else if (button.action === "itemSlot") {
             useItemSlot(button.slotIndex);
+          } else if (button.action === "unitUltimate") {
+            cancelItemAim();
+            triggerUltimate(button.unitId);
           } else if (button.action === "playerSkill") {
             cancelItemAim();
             if (button.ultimate) {
@@ -51,6 +60,17 @@
         }
       }
       return false;
+    }
+
+    function isLockedBattleControlButton(button) {
+      if (!button || !isPlayerControlLocked || !isPlayerControlLocked()) {
+        return false;
+      }
+      return button.action === "toggleSkillPage"
+        || button.action === "playerCommand"
+        || button.action === "itemSlot"
+        || button.action === "unitUltimate"
+        || button.action === "playerSkill";
     }
 
     function hasCommandBiasDrag() {

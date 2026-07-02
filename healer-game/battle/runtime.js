@@ -47,6 +47,10 @@
       return Boolean(game.state === "playing" && menu && (menu.open || menu.panel || menu.confirm));
     }
 
+    function isActionDisabled(unit) {
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+    }
+
     function update(dt) {
       if (isSystemMenuPaused()) {
         return;
@@ -104,6 +108,18 @@
         if (unit.frozen <= 0) {
           unit.frozenMax = 0;
         }
+        unit.sleepTimer = Math.max(0, (unit.sleepTimer || 0) - dt);
+        if (unit.sleepTimer <= 0) {
+          unit.sleepMax = 0;
+        }
+        unit.injuryTimer = Math.max(0, (unit.injuryTimer || 0) - dt);
+        if (unit.injuryTimer <= 0) {
+          unit.injuryMax = 0;
+        }
+        unit.shadowDashTimer = Math.max(0, (unit.shadowDashTimer || 0) - dt);
+        if (unit.shadowDashTimer <= 0) {
+          unit.shadowDashMax = 0;
+        }
         unit.stackCooldown = Math.max(0, unit.stackCooldown - dt);
         updateDelayedDamage(unit, dt);
         updateRihasPassiveStacks(unit, dt);
@@ -126,7 +142,7 @@
         updateShieldStacks(unit, dt);
 
         for (const key of Object.keys(unit.cds)) {
-          if (key === "attack" && unit.frozen > 0) continue;
+          if (key === "attack" && isActionDisabled(unit)) continue;
           const before = unit.cds[key] || 0;
           unit.cds[key] = Math.max(0, before - dt);
           if (before > 0 && unit.cds[key] <= 0 && skillSystem.onCooldownReady) {
@@ -154,6 +170,7 @@
       clearInvalidPriorityTarget();
       if (!game.priorityTarget) {
         game.priorityTargetTimer = 0;
+        game.priorityTargetIgnoredUnitIds = {};
         return;
       }
       if (!Number.isFinite(game.priorityTargetTimer) || game.priorityTargetTimer <= 0) {
@@ -164,6 +181,7 @@
         const target = game.priorityTarget;
         clearFocusDamageTakenBonus(target);
         game.priorityTarget = null;
+        game.priorityTargetIgnoredUnitIds = {};
         clearPartyAttackIntents();
         addFloat("フォーカス終了", target.x, target.y - 36, "#f7fff6");
       }
@@ -187,7 +205,7 @@
         if (damage > 0) {
           const burnSource = unit.burnSource && !unit.burnSource.dead ? unit.burnSource : null;
           const damageSource = burnSource && burnSource.team !== unit.team ? burnSource : (unit.team === "enemy" ? burnSource : null);
-          dealDamage(damageSource, unit, damage, { magic: true, noCrit: true, noUltGain: true });
+          dealDamage(damageSource, unit, damage, { magic: true, dotDamage: true, damageType: "ドット魔法", noUltGain: true });
         }
         unit.burnTick += tickRate;
       }
@@ -258,7 +276,7 @@
     }
 
     function startPlayerCast(type, data, castTime) {
-      if (player.dead || player.channel || player.cast || player.frozen > 0 || player.actionLock > 0) {
+      if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) {
         return false;
       }
       player.aim = null;
@@ -273,7 +291,7 @@
       if (!cast) {
         return;
       }
-      if (player.dead || player.frozen > 0) {
+      if (player.dead || isActionDisabled(player)) {
         applyPlayerCastCooldown(cast);
         return;
       }
@@ -319,7 +337,7 @@
             if (shot.healAllies && unit.team === shot.owner.team) {
               healUnit(shot.owner, unit, shot.heal ?? shot.damage, { noMood: unit === player });
             } else {
-              dealDamage(shot.owner, unit, shot.damage, { magic: shot.magic });
+              dealDamage(shot.owner, unit, shot.damage, { magic: shot.magic, dotDamage: shot.dotDamage, damageType: shot.damageType });
             }
             if (Number.isFinite(shot.pierceCount)) {
               if (shot.pierceCount <= 0) {
@@ -620,12 +638,18 @@
       return best;
     }
 
-    function getPriorityTarget() {
+    function getPriorityTarget(unit = null) {
       clearInvalidPriorityTarget();
-      return game.priorityTarget || null;
+      if (!game.priorityTarget) {
+        return null;
+      }
+      if (unit && game.priorityTargetIgnoredUnitIds && game.priorityTargetIgnoredUnitIds[unit.id]) {
+        return null;
+      }
+      return game.priorityTarget;
     }
 
-    function setPriorityTarget(target, duration = 0, label = "ターゲット指定") {
+    function setPriorityTarget(target, duration = 0, label = "ターゲット指定", options = {}) {
       if (!target || target.dead || !enemies.includes(target)) {
         return false;
       }
@@ -634,6 +658,14 @@
       }
       game.priorityTarget = target;
       game.priorityTargetTimer = Number.isFinite(duration) && duration > 0 ? duration : 0;
+      game.priorityTargetIgnoredUnitIds = {};
+      if (Array.isArray(options.ignoredUnitIds)) {
+        for (const unitId of options.ignoredUnitIds) {
+          if (unitId) {
+            game.priorityTargetIgnoredUnitIds[unitId] = true;
+          }
+        }
+      }
       clearFocusDamageTakenBonus(target);
       clearPartyAttackIntents();
       if (label) {
@@ -651,6 +683,7 @@
         clearFocusDamageTakenBonus(enemy);
         game.priorityTarget = null;
         game.priorityTargetTimer = 0;
+        game.priorityTargetIgnoredUnitIds = {};
         clearPartyAttackIntents();
         addFloat("ターゲット解除", enemy.x, enemy.y - 36, "#f7fff6");
       } else {
@@ -669,6 +702,7 @@
       for (const member of party) {
         if (member.id !== "finald") {
           member.aiIntent = null;
+          member.aiMoveTarget = null;
         }
       }
     }
@@ -678,6 +712,7 @@
         clearFocusDamageTakenBonus(game.priorityTarget);
         game.priorityTarget = null;
         game.priorityTargetTimer = 0;
+        game.priorityTargetIgnoredUnitIds = {};
         clearPartyAttackIntents();
       }
     }
