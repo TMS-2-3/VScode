@@ -116,6 +116,11 @@
         if (unit.injuryTimer <= 0) {
           unit.injuryMax = 0;
         }
+        unit.magicNeutralizeTimer = Math.max(0, (unit.magicNeutralizeTimer || 0) - dt);
+        if (unit.magicNeutralizeTimer <= 0) {
+          unit.magicNeutralizeMax = 0;
+          unit.magicNeutralizeRatio = 0;
+        }
         unit.shadowDashTimer = Math.max(0, (unit.shadowDashTimer || 0) - dt);
         if (unit.shadowDashTimer <= 0) {
           unit.shadowDashMax = 0;
@@ -337,7 +342,8 @@
             if (shot.healAllies && unit.team === shot.owner.team) {
               healUnit(shot.owner, unit, shot.heal ?? shot.damage, { noMood: unit === player });
             } else {
-              dealDamage(shot.owner, unit, shot.damage, { magic: shot.magic, dotDamage: shot.dotDamage, damageType: shot.damageType });
+              const damage = typeof shot.getDamage === "function" ? shot.getDamage(unit) : shot.damage;
+              dealDamage(shot.owner, unit, damage, { magic: shot.magic, dotDamage: shot.dotDamage, damageType: shot.damageType });
             }
             if (Number.isFinite(shot.pierceCount)) {
               if (shot.pierceCount <= 0) {
@@ -357,42 +363,68 @@
     function updateTelegraphs(dt) {
       for (let i = telegraphs.length - 1; i >= 0; i -= 1) {
         const telegraph = telegraphs[i];
+        if (!telegraph) {
+          telegraphs.splice(i, 1);
+          continue;
+        }
         updateTelegraphDynamic(telegraph);
-        telegraph.time -= dt;
+        telegraph.time = (Number.isFinite(telegraph.time) ? telegraph.time : 0) - dt;
         if (telegraph.time <= 0) {
           updateTelegraphDynamic(telegraph);
-          telegraph.resolve();
-          telegraphs.splice(i, 1);
+          try {
+            if (typeof telegraph.resolve === "function") {
+              telegraph.resolve();
+            }
+          } finally {
+            telegraphs.splice(i, 1);
+          }
         }
       }
     }
 
     function updateTelegraphDynamic(telegraph) {
-      if (telegraph.getPosition) {
+      if (!telegraph) {
+        return;
+      }
+      if (typeof telegraph.getPosition === "function") {
         const position = telegraph.getPosition();
-        telegraph.x = position.x;
-        telegraph.y = position.y;
+        if (position && Number.isFinite(position.x) && Number.isFinite(position.y)) {
+          telegraph.x = position.x;
+          telegraph.y = position.y;
+        }
       }
-      if (telegraph.getLine) {
+      if (typeof telegraph.getLine === "function") {
         const line = telegraph.getLine();
-        telegraph.x = line.x;
-        telegraph.y = line.y;
-        telegraph.x2 = line.x2;
-        telegraph.y2 = line.y2;
+        if (line) {
+          telegraph.x = Number.isFinite(line.x) ? line.x : telegraph.x;
+          telegraph.y = Number.isFinite(line.y) ? line.y : telegraph.y;
+          telegraph.x2 = Number.isFinite(line.x2) ? line.x2 : telegraph.x2;
+          telegraph.y2 = Number.isFinite(line.y2) ? line.y2 : telegraph.y2;
+        }
       }
-      if (telegraph.getAngle) {
-        telegraph.angle = telegraph.getAngle();
+      if (typeof telegraph.getAngle === "function") {
+        const angle = telegraph.getAngle();
+        if (Number.isFinite(angle)) {
+          telegraph.angle = angle;
+        }
       }
     }
 
     function updateAreas(dt) {
       for (let i = areas.length - 1; i >= 0; i -= 1) {
         const area = areas[i];
-        area.time -= dt;
-        area.tick -= dt;
+        if (!area) {
+          areas.splice(i, 1);
+          continue;
+        }
+        const tickRate = Number.isFinite(area.tickRate) && area.tickRate > 0 ? area.tickRate : 1;
+        area.time = (Number.isFinite(area.time) ? area.time : 0) - dt;
+        area.tick = (Number.isFinite(area.tick) ? area.tick : tickRate) - dt;
         if (area.tick <= 0) {
-          area.tick = area.tickRate;
-          area.apply();
+          area.tick = tickRate;
+          if (typeof area.apply === "function") {
+            area.apply();
+          }
         }
         if (area.time <= 0) {
           areas.splice(i, 1);
@@ -416,22 +448,46 @@
 
     function checkBattleState(dt) {
       if (getFieldPartyMembers().some((member) => member.dead)) {
+        clearBattleActionReservations();
         game.state = "lost";
         game.message = "戦闘不能者が出た";
         game.messageTimer = 999;
         return;
       }
       if (enemies.every((enemy) => enemy.dead)) {
-        if (!game.reinforcementsSpawned) {
-          spawnRearVanguardWave();
+        if (!game.reinforcementsSpawned && spawnRearVanguardWave()) {
           return;
         }
         game.stageClearTimer += dt;
         grantBattleRewards();
+        clearBattleActionReservations();
         game.state = "won";
         game.message = "依頼達成";
         game.messageTimer = 999;
       }
+    }
+
+    function clearBattleActionReservations() {
+      for (const unit of [...party, ...enemies]) {
+        clearUnitActionReservation(unit);
+      }
+    }
+
+    function clearUnitActionReservation(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.aiIntent = null;
+      unit.aiMoveTarget = null;
+      unit.battleFacingIntent = null;
+      unit.aim = null;
+      unit.itemAim = null;
+      unit.itemUseRequest = null;
+      unit.itemCast = null;
+      unit.cast = null;
+      unit.channel = null;
+      unit.pendingActionQueueKey = null;
+      unit.skillQueue = [];
     }
 
     function ensureBattleRewards() {
@@ -746,7 +802,13 @@
     }
 
     function addTelegraph(data) {
-      data.total = data.total || data.time || 1;
+      if (!data || typeof data !== "object") {
+        return;
+      }
+      data.time = Number.isFinite(data.time) ? data.time : 0;
+      data.total = Number.isFinite(data.total) && data.total > 0
+        ? data.total
+        : (data.time > 0 ? data.time : 1);
       telegraphs.push(data);
     }
 

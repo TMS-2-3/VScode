@@ -112,8 +112,11 @@
     }
 
     function normalize(x, y) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return { x: 0, y: 0, len: 0 };
+      }
       const len = Math.hypot(x, y);
-      if (len === 0) {
+      if (!Number.isFinite(len) || len === 0) {
         return { x: 0, y: 0, len: 0 };
       }
       return { x: x / len, y: y / len, len };
@@ -132,9 +135,12 @@
     }
 
     function angleDiff(a, b) {
-      let d = a - b;
-      while (d > Math.PI) d -= TAU;
-      while (d < -Math.PI) d += TAU;
+      if (!Number.isFinite(a) || !Number.isFinite(b)) {
+        return Infinity;
+      }
+      let d = (a - b) % TAU;
+      if (d > Math.PI) d -= TAU;
+      if (d < -Math.PI) d += TAU;
       return d;
     }
 

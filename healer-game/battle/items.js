@@ -60,6 +60,25 @@
         simpleDescription: "飲むと体力が回復する。",
         description: "飲むとHPが250回復する。",
       },
+      horn_rabbit_corner: {
+        id: "horn_rabbit_corner",
+        name: "ツノウサギの角",
+        shortName: "角",
+        kind: "素材",
+        useTiming: "戦闘中",
+        target: "self",
+        inventoryStore: "material",
+        consumeCount: 1,
+        maxCount: 1,
+        battleMaxCount: 1,
+        cast: 5,
+        reuseCd: 0,
+        cd: 0,
+        maxCd: 0,
+        baseStatBuffs: { magic: 20 },
+        simpleDescription: "魔力がこもっている角。戦闘中に使用すると魔力が上昇する",
+        description: "吸収された魔力がこもっている角。\n戦闘中に使用することで\nその戦闘の間、基礎魔力が20上昇する",
+      },
       d_power_flag: {
         id: "d_power_flag",
         name: "力の結晶(D)",
@@ -111,6 +130,18 @@
         game.itemInventoryById = {};
       }
       return game.itemInventoryById;
+    }
+
+    function getMaterialInventoryStore() {
+      if (!game.materialsById || typeof game.materialsById !== "object") {
+        game.materialsById = {};
+      }
+      return game.materialsById;
+    }
+
+    function usesMaterialInventory(itemId) {
+      const def = ITEM_DATA[normalizeItemId(itemId)];
+      return Boolean(def && def.inventoryStore === "material");
     }
 
     function normalizePartyItems() {
@@ -205,6 +236,10 @@
 
     function getItemInventoryCount(itemId) {
       const normalizedId = normalizeItemId(itemId);
+      if (usesMaterialInventory(normalizedId)) {
+        const store = getMaterialInventoryStore();
+        return Math.max(0, Math.floor(Number.isFinite(store[normalizedId]) ? store[normalizedId] : 0));
+      }
       const store = getInventoryStore();
       return Math.max(0, Math.floor(Number.isFinite(store[normalizedId]) ? store[normalizedId] : 0));
     }
@@ -236,6 +271,11 @@
       let remaining = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
       if (remaining <= 0) {
         return 0;
+      }
+      if (usesMaterialInventory(normalizedId)) {
+        const store = getMaterialInventoryStore();
+        store[normalizedId] = getItemInventoryCount(normalizedId) + remaining;
+        return remaining;
       }
       const store = getInventoryStore();
       store[normalizedId] = getItemInventoryCount(normalizedId) + remaining;
@@ -407,11 +447,16 @@
       if (amount <= 0) {
         return true;
       }
-      const store = getInventoryStore();
       const current = getItemInventoryCount(normalizedId);
       if (current < amount) {
         return false;
       }
+      if (usesMaterialInventory(normalizedId)) {
+        const store = getMaterialInventoryStore();
+        store[normalizedId] = current - amount;
+        return true;
+      }
+      const store = getInventoryStore();
       store[normalizedId] = current - amount;
       return true;
     }
@@ -636,6 +681,23 @@
     }
 
     function applyItemEffect(unit, item) {
+      if (item && item.baseStatBuffs && typeof item.baseStatBuffs === "object") {
+        let applied = false;
+        for (const [statKey, value] of Object.entries(item.baseStatBuffs)) {
+          if (!Number.isFinite(value) || value === 0) {
+            continue;
+          }
+          unit[statKey] = (Number.isFinite(unit[statKey]) ? unit[statKey] : 0) + value;
+          addFloat(`${getItemStatLabel(statKey)}+${value}`, unit.x, unit.y - 30, "#d9afff");
+          applied = true;
+        }
+        if (applied) {
+          if (addBurst) {
+            addBurst(unit.x, unit.y, unit.radius + battlePx(18), "rgba(217,175,255,0.22)");
+          }
+          return true;
+        }
+      }
       if (Number.isFinite(item.healFlat) || Number.isFinite(item.healRatio)) {
         const amount = Number.isFinite(item.healFlat)
           ? item.healFlat
@@ -652,6 +714,18 @@
       }
       addFloat("未実装", unit.x, unit.y - 30, "#f7fff6");
       return false;
+    }
+
+    function getItemStatLabel(statKey) {
+      const labels = {
+        attack: "攻撃力",
+        magic: "魔力",
+        defense: "防御力",
+        magicDefense: "魔防",
+        maxHp: "HP",
+        maxMp: "MP",
+      };
+      return labels[statKey] || statKey;
     }
 
     function getRequestItem(request) {
@@ -718,6 +792,7 @@
         return;
       }
       const speed = typeof getEffectiveMoveSpeed === "function" ? getEffectiveMoveSpeed(unit) : unit.speed;
+      unit.battleFacingIntent = "move";
       unit.x += away.x * speed * dt;
       unit.y += away.y * speed * dt;
       if (clampUnit) {

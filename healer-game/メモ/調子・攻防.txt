@@ -332,7 +332,7 @@ noDamage:
 後衛扱いの武器:
 - 杖
 - 魔導書
-- 魔楽器
+- 楽器
 
 武器が判定できない場合:
 - role が mage/caster/support なら後衛。

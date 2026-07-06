@@ -538,7 +538,11 @@
         unit.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
       }
-      const action = chooseQueuedCandidate(unit, candidates);
+      const inRangeCandidates = candidates.filter((candidate) => {
+        const actionTarget = candidate.target || target;
+        return actionTarget && ctx.dist(unit, actionTarget) <= candidate.range;
+      });
+      const action = chooseQueuedCandidate(unit, inRangeCandidates.length ? inRangeCandidates : candidates);
       if (!action) {
         unit.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
@@ -553,6 +557,46 @@
       }
       unit.aiIntent = { key: action.key, target: actionTarget, range: action.range, support: Boolean(action.support) };
       return true;
+    }
+
+    function chooseEnemyAction(enemy, candidates) {
+      if (!candidates.length) {
+        enemy.aiTick = ctx.AI_IDLE_RECHECK;
+        return false;
+      }
+      const inRangeCandidates = candidates.filter((candidate) => isEnemyActionInRange(enemy, candidate));
+      const action = chooseQueuedCandidate(enemy, inRangeCandidates.length ? inRangeCandidates : candidates);
+      if (!action) {
+        enemy.aiTick = ctx.AI_IDLE_RECHECK;
+        return false;
+      }
+      if (isEnemyActionInRange(enemy, action)) {
+        const used = action.use();
+        if (used !== false) {
+          markSkillUsed(enemy, action.key);
+          return true;
+        }
+        enemy.aiTick = ctx.AI_IDLE_RECHECK;
+        return false;
+      }
+      enemy.aiIntent = {
+        enemySkill: true,
+        key: action.key,
+        skill: action.skill || null,
+        target: action.target,
+        range: Math.max(0, Number.isFinite(action.range) ? action.range : 0),
+      };
+      return true;
+    }
+
+    function isEnemyActionInRange(enemy, action) {
+      if (!action) {
+        return false;
+      }
+      if (!Number.isFinite(action.range) || !action.target) {
+        return true;
+      }
+      return ctx.dist(enemy, action.target) <= action.range;
     }
 
     function executePartyIntent(unit) {
@@ -574,6 +618,40 @@
       }
       unit.aiIntent = null;
       return executePartyAction(unit, intent.key, intent.target);
+    }
+
+    function executeEnemyIntent(enemy) {
+      const intent = enemy && enemy.aiIntent;
+      if (!intent || !intent.enemySkill) {
+        return false;
+      }
+      if (!intent.target || intent.target.dead) {
+        enemy.aiIntent = null;
+        return false;
+      }
+      if (Number.isFinite(intent.range) && ctx.dist(enemy, intent.target) > intent.range) {
+        return false;
+      }
+      const key = intent.key;
+      const skill = intent.skill || getUnitSkill(enemy, key);
+      if (!canUseEnemyIntentSkill(enemy, key, skill)) {
+        enemy.aiIntent = null;
+        return false;
+      }
+      enemy.aiIntent = null;
+      const used = useEnemyActionByKey(enemy, key, skill, intent.target);
+      if (used !== false) {
+        markSkillUsed(enemy, key);
+        return true;
+      }
+      return false;
+    }
+
+    function canUseEnemyIntentSkill(enemy, key, skill) {
+      if (key === "attack" || key === "casterLine" || key === "heavySlam") {
+        return true;
+      }
+      return canUseEnemySkill(enemy, key, skill);
     }
 
     function executePartyAction(unit, key, target) {
@@ -611,7 +689,7 @@
     function getActionSpeedStatusBonus(unit) {
       let bonus = 0;
       if (unit && (unit.shadowDashTimer || 0) > 0) {
-        bonus += 0.3;
+        bonus += 0.8;
       }
       return bonus;
     }
@@ -688,7 +766,8 @@
         || Number.isFinite(skill.shockDamageBase)
         || Number.isFinite(skill.attackScale)
         || Number.isFinite(skill.magicScale)
-        || Number.isFinite(skill.projectileCount);
+        || Number.isFinite(skill.projectileCount)
+        || Number.isFinite(skill.magicNeutralizeBase);
     }
 
     function canQueuePartySkill(unit, key, skill) {
@@ -715,7 +794,7 @@
     }
 
     function getPartySkillRange(skill) {
-      if (skill && Number.isFinite(skill.range)) return skill.range;
+      if (skill && Number.isFinite(skill.range) && skill.range > 0) return skill.range;
       if (skill && Number.isFinite(skill.hitRange)) return skill.hitRange;
       if (skill && Number.isFinite(skill.radius)) return skill.radius;
       return ctx.battlePx(80);
@@ -799,14 +878,16 @@
       const attack = need("enemy", "attack");
       const candidates = [];
       if (enemy.role === "caster") {
-        if (isSkillEquipped(enemy, "casterLine") && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "casterLine", use: () => enemyLineAttack(enemy, target) });
+        const skill = need("enemy", "casterLine");
+        if (isSkillEquipped(enemy, "casterLine") && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "casterLine", skill, target, range: skill.length, use: () => enemyLineAttack(enemy, target) });
       } else if (enemy.role === "elite") {
-        if (isSkillEquipped(enemy, "heavySlam") && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "heavySlam", use: () => enemyHeavySlam(enemy, target) });
-        if (isSkillEquipped(enemy, "attack") && distance <= attack.eliteRange) candidates.push({ key: "attack", use: () => enemyBite(enemy, target) });
-      } else if (isSkillEquipped(enemy, "attack") && distance <= attack.bruteRange) {
-        candidates.push({ key: "attack", use: () => enemyBite(enemy, target) });
+        const skill = need("enemy", "heavySlam");
+        if (isSkillEquipped(enemy, "heavySlam") && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "heavySlam", skill, target, range: Infinity, use: () => enemyHeavySlam(enemy, target) });
+        if (isSkillEquipped(enemy, "attack")) candidates.push({ key: "attack", skill: attack, target, range: attack.eliteRange, use: () => enemyBite(enemy, target) });
+      } else if (isSkillEquipped(enemy, "attack")) {
+        candidates.push({ key: "attack", skill: attack, target, range: attack.bruteRange, use: () => enemyBite(enemy, target) });
       }
-      useQueuedInstantAction(enemy, candidates);
+      chooseEnemyAction(enemy, candidates);
     }
 
     function thinkCustomEnemy(enemy, target, distance) {
@@ -817,28 +898,39 @@
         }
         if (key === "shadow_dash") {
           if ((enemy.shadowDashTimer || 0) <= 0) {
-            candidates.push({ key, use: () => useEnemyShadowDash(enemy, key, skill) });
+            candidates.push({ key, skill, target: enemy, range: Infinity, use: () => useEnemyShadowDash(enemy, key, skill) });
           }
           continue;
         }
         if (key === "sleep_scent") {
-          if (hasEnemyTargetInRadius(enemy, skill.radius || 0)) {
-            candidates.push({ key, use: () => useEnemySleepScent(enemy, key, skill) });
+          if (target) {
+            const range = (skill.radius || 0) + target.radius;
+            candidates.push({ key, skill, target, range, use: () => useEnemySleepScent(enemy, key, skill) });
           }
           continue;
         }
         if (key === "pollen_spraying") {
-          if (target && distance <= (skill.range || 0) + target.radius) {
-            candidates.push({ key, use: () => useEnemyPollenSpraying(enemy, key, skill, target) });
+          if (target) {
+            candidates.push({ key, skill, target, range: (skill.range || 0) + target.radius, use: () => useEnemyPollenSpraying(enemy, key, skill, target) });
           }
           continue;
         }
         const range = getEnemySkillRange(skill);
-        if (target && distance <= range + target.radius) {
-          candidates.push({ key, use: () => useEnemySingleTargetSkill(enemy, key, skill, target) });
+        if (target) {
+          candidates.push({ key, skill, target, range: range + target.radius, use: () => useEnemySingleTargetSkill(enemy, key, skill, target) });
         }
       }
-      useQueuedInstantAction(enemy, candidates);
+      chooseEnemyAction(enemy, candidates);
+    }
+
+    function useEnemyActionByKey(enemy, key, skill, target) {
+      if (key === "attack") return enemyBite(enemy, target);
+      if (key === "casterLine") return enemyLineAttack(enemy, target);
+      if (key === "heavySlam") return enemyHeavySlam(enemy, target);
+      if (key === "shadow_dash") return useEnemyShadowDash(enemy, key, skill || getUnitSkill(enemy, key));
+      if (key === "sleep_scent") return useEnemySleepScent(enemy, key, skill || getUnitSkill(enemy, key));
+      if (key === "pollen_spraying") return useEnemyPollenSpraying(enemy, key, skill || getUnitSkill(enemy, key), target);
+      return useEnemySingleTargetSkill(enemy, key, skill || getUnitSkill(enemy, key), target);
     }
 
     function canUseEnemySkill(enemy, key, skill) {
@@ -896,11 +988,15 @@
 
     function applySleep(source, target, duration) {
       if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
-        return;
+        return false;
+      }
+      if ((target.sleepTimer || 0) > 0) {
+        return false;
       }
       target.sleepTimer = Math.max(target.sleepTimer || 0, duration);
       target.sleepMax = Math.max(target.sleepMax || 0, duration);
       ctx.addFloat("睡眠", target.x, target.y - 34, "#b9a8ff");
+      return true;
     }
 
     function applyInjury(source, target, duration) {
@@ -922,6 +1018,7 @@
         enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
         const telegraph = {
           type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(8), ctx.battlePx(24)), team: "enemy", time: cast,
+          hidden: true,
           getPosition: () => ({ x: target.x, y: target.y }),
           resolve: () => resolveEnemySingleTargetSkill(enemy, key, skill, target),
         };
@@ -1034,17 +1131,37 @@
     }
 
     function getSkillDamage(unit, skill, baseProp = "damageBase", attackProp = "attackScale", magicProp = "magicScale") {
+      return getSkillDamageAgainst(unit, skill, null, baseProp, attackProp, magicProp);
+    }
+
+    function getSkillDamageAgainst(unit, skill, target = null, baseProp = "damageBase", attackProp = "attackScale", magicProp = "magicScale") {
       let damage = getUpgradedBaseValue(unit, getSkillSourceKey(skill), skill, baseProp);
+      let scaledDamage = 0;
       if (Number.isFinite(skill[attackProp])) {
-        damage += getAttackStat(unit) * skill[attackProp];
+        scaledDamage += getAttackStat(unit) * skill[attackProp];
       }
       if (Number.isFinite(skill[magicProp])) {
-        damage += getMagicStat(unit) * skill[magicProp];
+        scaledDamage += getMagicStat(unit) * skill[magicProp];
       }
+      scaledDamage *= getSkillScaleUpgradeMultiplier(unit, skill);
+      if (target && Number.isFinite(skill.missingHpScale) && target.maxHp > 0) {
+        const missingRatio = ctx.clamp ? ctx.clamp(1 - Math.max(0, target.hp || 0) / target.maxHp, 0, 1) : Math.max(0, Math.min(1, 1 - Math.max(0, target.hp || 0) / target.maxHp));
+        scaledDamage *= 1 + missingRatio * skill.missingHpScale;
+      }
+      damage += scaledDamage;
       if (isSkillSource(skill, "rihas", "lan_wave") && baseProp === "shockDamageBase") {
         damage += getAttackStat(unit) * getSkillUpgradeLevel(unit, getSkillSourceKey(skill, "lan_wave"), skill) * 0.08;
       }
       return damage;
+    }
+
+    function getSkillScaleUpgradeMultiplier(unit, skill) {
+      const values = skill && Array.isArray(skill.scaleUpgradeMultipliers) ? skill.scaleUpgradeMultipliers : null;
+      if (!values || !values.length) {
+        return 1;
+      }
+      const key = skill.category === "通常攻撃" ? "attack" : getSkillSourceKey(skill);
+      return getSkillUpgradeIndexedValue(unit, key, skill, values);
     }
 
     function getSkillDamageType(skill) {
@@ -1087,6 +1204,41 @@
       return damaged;
     }
 
+    function getMagicNeutralizeRatio(unit, key, skill) {
+      const base = Number.isFinite(skill && skill.magicNeutralizeBase) ? skill.magicNeutralizeBase : 0;
+      const perLevel = Number.isFinite(skill && skill.magicNeutralizePerLevel) ? skill.magicNeutralizePerLevel : 0;
+      const level = getSkillUpgradeLevel(unit, key || getSkillSourceKey(skill), skill);
+      return Math.max(0, base + perLevel * level);
+    }
+
+    function applyMagicNeutralize(unit, target, key, skill) {
+      const ratio = getMagicNeutralizeRatio(unit, key, skill);
+      const duration = getOffensiveEffectDuration(unit, target, Number.isFinite(skill && skill.magicNeutralizeDuration) ? skill.magicNeutralizeDuration : 0);
+      if (!target || target.dead || ratio <= 0 || duration <= 0) {
+        return false;
+      }
+      target.magicNeutralizeTimer = Math.max(target.magicNeutralizeTimer || 0, duration);
+      target.magicNeutralizeMax = Math.max(target.magicNeutralizeMax || 0, duration);
+      target.magicNeutralizeRatio = Math.max(target.magicNeutralizeRatio || 0, ratio);
+      ctx.addFloat("魔力低下", target.x, target.y - 34, "#9ef7ff");
+      return true;
+    }
+
+    function applyPartySkillHitEffects(unit, target, key, skill, damageOptions = {}) {
+      let damaged = false;
+      let effectApplied = false;
+      if (Number.isFinite(skill.damageBase) || Number.isFinite(skill.attackScale) || Number.isFinite(skill.magicScale)) {
+        damaged = dealPartySkillDamage(unit, target, skill, getSkillDamageAgainst(unit, skill, target), damageOptions);
+      }
+      if (Number.isFinite(skill.magicNeutralizeBase)) {
+        effectApplied = applyMagicNeutralize(unit, target, key, skill) || effectApplied;
+      }
+      if (effectApplied && !damaged && ctx.awardOffensiveUltimate) {
+        ctx.awardOffensiveUltimate(unit, target);
+      }
+      return damaged || effectApplied;
+    }
+
     function isSelfCenteredPartySkill(key, skill) {
       return Boolean(skill && Number.isFinite(skill.radius) && (
         skill.center === "self" ||
@@ -1122,7 +1274,7 @@
       for (let i = 0; i < repeats; i += 1) {
         setTimeout(() => {
           if (!unit.dead && !target.dead && canOffensiveAffect(unit, target) && ctx.dist(unit, target) <= skill.hitRange) {
-            dealPartySkillDamage(unit, target, skill, getSkillDamage(unit, skill), { crit: true });
+            dealPartySkillDamage(unit, target, skill, getSkillDamageAgainst(unit, skill, target), { crit: true });
             ctx.slashEffect(unit, target);
           }
         }, i * delayMs);
@@ -1152,7 +1304,7 @@
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             if (ctx.inFan(unitHit, unit.x, unit.y, skill.radius, unit.aimAngle, ctx.deg(skill.arcDeg))) {
-              dealPartySkillDamage(unit, unitHit, skill, getSkillDamage(unit, skill), { crit: true });
+              dealPartySkillDamage(unit, unitHit, skill, getSkillDamageAgainst(unit, skill, unitHit), { crit: true });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -1184,8 +1336,9 @@
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             if (ctx.distPoint(unitHit.x, unitHit.y, unit.x, unit.y) <= skill.radius + unitHit.radius) {
-              dealPartySkillDamage(unit, unitHit, skill, getSkillDamage(unit, skill));
-              hits += unitHit.team === "enemy" ? 1 : 0;
+              if (applyPartySkillHitEffects(unit, unitHit, key, skill)) {
+                hits += unitHit.team === "enemy" ? 1 : 0;
+              }
             }
           }
           ctx.applyMultiHitMoodBonus(unit, hits);
@@ -1225,10 +1378,10 @@
             if (!canOffensiveAffect(unit, unitHit)) continue;
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
             if (d <= skill.radius + unitHit.radius) {
-              dealPartySkillDamage(unit, unitHit, skill, getSkillDamage(unit, skill));
+              dealPartySkillDamage(unit, unitHit, skill, getSkillDamageAgainst(unit, skill, unitHit));
               hits += unitHit.team === "enemy" ? 1 : 0;
             } else if (Number.isFinite(skill.shockRadius) && d <= skill.shockRadius + unitHit.radius) {
-              const shockDamage = getSkillDamage(unit, skill, "shockDamageBase", "shockAttackScale", "shockMagicScale");
+              const shockDamage = getSkillDamageAgainst(unit, skill, unitHit, "shockDamageBase", "shockAttackScale", "shockMagicScale");
               dealPartySkillDamage(unit, unitHit, Object.assign({}, skill, { damageType: "magic" }), shockDamage, { magic: true });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
@@ -1269,6 +1422,7 @@
               team: "party",
               owner: unit,
               damage,
+              getDamage: (hitTarget) => getSkillDamageAgainst(unit, skill, hitTarget),
               magic: damageOptions.magic,
               dotDamage: damageOptions.dotDamage,
               damageType: damageOptions.damageType,
@@ -1309,7 +1463,7 @@
             if (d <= skill.radius + unitHit.radius) {
               const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
               const falloff = getDistanceFalloffMax(unit, skill, 0) * distanceRatio;
-              const damage = getSkillDamage(unit, skill) * Math.max(0, 1 - falloff);
+              const damage = getSkillDamageAgainst(unit, skill, unitHit) * Math.max(0, 1 - falloff);
               dealPartySkillDamage(unit, unitHit, skill, damage);
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
@@ -1335,7 +1489,7 @@
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
           if (unit.dead || isActionDisabled(unit) || !target || target.dead || !canOffensiveAffect(unit, target)) return;
           speakSkill(unit, key);
-          dealPartySkillDamage(unit, target, skill, getSkillDamage(unit, skill));
+          dealPartySkillDamage(unit, target, skill, getSkillDamageAgainst(unit, skill, target));
           ctx.effects.push({ type: "beam", x: unit.x, y: unit.y, x2: target.x, y2: target.y, color: skill.beamColor || "rgba(255,255,255,0.72)", time: 0.22, age: 0 });
           ctx.addBurst(target.x, target.y, skill.burstRadius || target.radius + ctx.battlePx(12), "rgba(255,139,67,0.24)");
         },
@@ -1481,7 +1635,7 @@
           for (let i = 0; i < skill.projectileCount; i += 1) {
             const spread = (i - Math.floor(skill.projectileCount / 2)) * skill.spread;
             const angle = ctx.angleTo(unit, target) + spread;
-            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), magic: damageOptions.magic, dotDamage: damageOptions.dotDamage, damageType: damageOptions.damageType, life: skill.life, hit: new Set(), pierce: pierceCount > 0, pierceCount: pierceCount > 0 ? pierceCount : undefined, affectsAllies: true, color: skill.color });
+            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), getDamage: (hitTarget) => getSkillDamageAgainst(unit, skill, hitTarget), magic: damageOptions.magic, dotDamage: damageOptions.dotDamage, damageType: damageOptions.damageType, life: skill.life, hit: new Set(), pierce: pierceCount > 0, pierceCount: pierceCount > 0 ? pierceCount : undefined, affectsAllies: true, color: skill.color });
           }
         },
       });
@@ -1645,6 +1799,13 @@
       return skill && Number.isFinite(skill.radius) ? skill.radius : Infinity;
     }
 
+    function isSelfCenteredPlayerSkill(skill) {
+      return Boolean(skill && Number.isFinite(skill.radius) && (
+        skill.target === "allAllies" ||
+        skill.center === "self"
+      ));
+    }
+
     function isPointInPlayerRange(x, y, range, extra = 0) {
       if (!Number.isFinite(range)) {
         return true;
@@ -1684,6 +1845,69 @@
         target,
         range: range + Math.max(0, Number.isFinite(extra) ? extra : 0),
         support: Boolean(options.support),
+      };
+      ctx.player.aim = null;
+      showPlayerMoveIntentBusy();
+      return "queued";
+    }
+
+    function getPlayerSelfCenteredAimPoint() {
+      return ctx.clampBattlePoint
+        ? ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12))
+        : { x: ctx.input.mouse.x, y: ctx.input.mouse.y };
+    }
+
+    function getPlayerMovePreviewPoint(target, range, extra = 0) {
+      const player = ctx.player;
+      if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y) || !Number.isFinite(range)) {
+        return null;
+      }
+      const stopRange = Math.max(0, range + Math.max(0, Number.isFinite(extra) ? extra : 0));
+      const dx = target.x - player.x;
+      const dy = target.y - player.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= stopRange || distance <= 0.001) {
+        return null;
+      }
+      const travel = distance - stopRange;
+      return {
+        x: player.x + dx / distance * travel,
+        y: player.y + dy / distance * travel,
+      };
+    }
+
+    function getPlayerSelfCenteredMovePreviewPoint(target) {
+      const player = ctx.player;
+      if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+        return null;
+      }
+      if (ctx.distPoint(player.x, player.y, target.x, target.y) <= ctx.battlePx(8)) {
+        return null;
+      }
+      return target;
+    }
+
+    function ensurePlayerSelfCenteredSkillPosition(key, target, skill, options = {}) {
+      if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+        return "blocked";
+      }
+      if (!isSelfCenteredPlayerSkill(skill)) {
+        return "inRange";
+      }
+      const arrivalRange = ctx.battlePx(8);
+      if (ctx.distPoint(ctx.player.x, ctx.player.y, target.x, target.y) <= arrivalRange) {
+        return "inRange";
+      }
+      if (options.fromMoveIntent) {
+        showPlayerRangeError(target.x, target.y);
+        return "blocked";
+      }
+      ctx.player.aiIntent = {
+        manual: true,
+        key,
+        target: { x: target.x, y: target.y, selfCenteredSkillPoint: true },
+        range: arrivalRange,
+        support: true,
       };
       ctx.player.aim = null;
       showPlayerMoveIntentBusy();
@@ -1740,7 +1964,7 @@
 
     function firePlayerShot(lockedTarget = null, options = {}) {
       const player = ctx.player;
-      const skill = need("finald", "attack");
+      const skill = getUnitSkill(player, "attack") || need("finald", "attack");
       if (isPlayerControlLocked()) {
         showPlayerControlLocked();
         return false;
@@ -1748,7 +1972,9 @@
       if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
       const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
       const origin = ctx.getSupportOrigin(target);
-      const rangeState = ensurePlayerSkillRange("attack", target, skill, 0, options);
+      const rangeState = isSelfCenteredPlayerSkill(skill)
+        ? ensurePlayerSelfCenteredSkillPosition("attack", target, skill, options)
+        : ensurePlayerSkillRange("attack", target, skill, 0, options);
       if (stopIfPlayerSkillQueued(rangeState)) return true;
       if (rangeState !== "inRange") return false;
       if ((player.cds.attack || 0) > 0) { ctx.addFloat("再詠唱中", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
@@ -1760,25 +1986,26 @@
 
     function completePlayerShot(lockedTarget) {
       const player = ctx.player;
-      const skill = need("finald", "attack");
+      const skill = getUnitSkill(player, "attack") || need("finald", "attack");
       const target = lockedTarget || ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
-      const origin = ctx.getSupportOrigin(target);
+      const center = isSelfCenteredPlayerSkill(skill) ? { x: player.x, y: player.y } : target;
+      const origin = ctx.getSupportOrigin(center);
       speakSkill(player, "attack");
       let hits = 0;
-      const damage = getSkillDamage(player, skill);
       for (const unit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
         if (unit.dead || unit === player) {
           continue;
         }
         if (!canOffensiveAffect(player, unit)) continue;
-        if (ctx.distPoint(unit.x, unit.y, target.x, target.y) <= skill.radius + unit.radius) {
-          ctx.dealDamage(player, unit, damage, getSkillDamageOptions(skill, { magic: true }));
-          hits += 1;
+        if (ctx.distPoint(unit.x, unit.y, center.x, center.y) <= skill.radius + unit.radius) {
+          if (applyPartySkillHitEffects(player, unit, "attack", skill, { magic: true })) {
+            hits += 1;
+          }
         }
       }
-      ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: target.x, y2: target.y, color: "rgba(158,247,255,0.78)", time: 0.18, age: 0 });
-      ctx.addTelegraph({ type: "circle", x: target.x, y: target.y, radius: skill.radius, team: "support", time: 0.16, resolve: () => {} });
-      ctx.addBurst(target.x, target.y, skill.burstRadius, hits > 0 ? "rgba(158,247,255,0.28)" : "rgba(158,247,255,0.14)");
+      ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: center.x, y2: center.y, color: skill.color || "rgba(158,247,255,0.78)", time: 0.18, age: 0 });
+      ctx.addTelegraph({ type: "circle", x: center.x, y: center.y, radius: skill.radius, team: "support", time: 0.16, resolve: () => {} });
+      ctx.addBurst(center.x, center.y, skill.burstRadius || skill.radius, hits > 0 ? "rgba(158,247,255,0.28)" : "rgba(158,247,255,0.14)");
     }
     function castHeal(lockedTarget = null, options = {}) {
       const player = ctx.player;
@@ -2025,10 +2252,17 @@
       }
 
       if (skill.target === "allAllies") {
+        const targetPoint = lockedTarget && Number.isFinite(lockedTarget.x) && Number.isFinite(lockedTarget.y)
+          ? lockedTarget
+          : getPlayerSelfCenteredAimPoint();
+        const positionState = ensurePlayerSelfCenteredSkillPosition(key, targetPoint, skill, options);
+        if (stopIfPlayerSkillQueued(positionState)) return true;
+        if (positionState !== "inRange") return false;
         let targets = 0;
         const radius = getPlayerSkillRadius(skill);
+        const center = { x: player.x, y: player.y };
         for (const member of ctx.getFieldPartyMembers()) {
-          if (isCommandTarget(member) && isPointInPlayerRange(member.x, member.y, radius, member.radius)) {
+          if (isCommandTarget(member) && ctx.distPoint(member.x, member.y, center.x, center.y) <= radius + member.radius) {
             const changed = applyCommandBiasChange(member, skill.commandDelta, player, key, skill);
             if (changed && ctx.awardSupportUltimate) ctx.awardSupportUltimate(player, member);
             ctx.addFloat(changed ? skill.name : "無視", member.x, member.y - 34, changed ? getCommandFloatColor(skill.commandDelta) : "#f7fff6");
@@ -2044,6 +2278,7 @@
         player.aim = null;
         player.actionLock = Math.max(player.actionLock, ctx.ACTION_GAP);
         speakSkill(player, key);
+        ctx.addBurst(center.x, center.y, radius, skill.commandDelta < 0 ? "rgba(156,198,255,0.16)" : "rgba(255,213,107,0.16)");
         return true;
       }
 
@@ -2307,8 +2542,9 @@
       const skill = need("enemy", "casterLine");
       setActionCooldown(enemy);
       trackSkillCooldown(enemy, "skill", "casterLine", skill.cdBase + Math.random() * skill.cdRandom);
-      const lockBeforeFire = Number.isFinite(skill.aimLockBeforeFire) ? skill.aimLockBeforeFire : 1.3;
-      const cast = Math.max(getCastTime(skill.cast, enemy), lockBeforeFire);
+      const cast = getCastTime(skill.cast, enemy);
+      const configuredLockBeforeFire = Number.isFinite(skill.aimLockBeforeFire) ? skill.aimLockBeforeFire : 1.3;
+      const lockBeforeFire = Math.min(configuredLockBeforeFire, cast);
       enemy.actionLock = cast + ctx.ACTION_GAP;
       let lockedLine = null;
       let telegraph = null;
@@ -2363,14 +2599,20 @@
       const player = ctx.player;
       if (!player.aim || player.dead) return;
       const draw = ctx.canvasCtx;
-      const skill = get("finald", player.aim.type);
+      const skill = getUnitSkill(player, player.aim.type) || get("finald", player.aim.type);
+      let movePreview = null;
       draw.save();
       if (skill && Number.isFinite(skill.range)) {
         drawPlayerRangeCircle(draw, skill.range, "rgba(247,255,246,0.42)");
       }
       if (player.aim.type === "attack") {
         const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
-        const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill));
+        const inRange = isSelfCenteredPlayerSkill(skill)
+          ? !getPlayerSelfCenteredMovePreviewPoint(target)
+          : isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill));
+        movePreview = isSelfCenteredPlayerSkill(skill)
+          ? getPlayerSelfCenteredMovePreviewPoint(target)
+          : getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill));
         draw.fillStyle = inRange ? "rgba(158,247,255,0.18)" : "rgba(255,255,255,0.08)";
         draw.strokeStyle = inRange ? "#9ef7ff" : "rgba(255,255,255,0.45)";
         draw.lineWidth = 3;
@@ -2379,6 +2621,7 @@
         const target = ctx.game.hover;
         if (target && target.team === "party" && !target.dead) {
           const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
           draw.strokeStyle = inRange ? "#79ff8d" : "rgba(255,255,255,0.45)";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 15, 0, ctx.TAU); draw.stroke();
@@ -2387,6 +2630,7 @@
         const target = ctx.game.hover;
         if (target && target.team === "party" && !target.dead) {
           const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
           draw.strokeStyle = inRange ? "#8fe9ff" : "rgba(255,255,255,0.45)";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 15, 0, ctx.TAU); draw.stroke();
@@ -2395,6 +2639,7 @@
         const target = getHoveredEnemy();
         if (target) {
           const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
           draw.strokeStyle = inRange ? "#ff8b43" : "rgba(255,255,255,0.45)";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 15, 0, ctx.TAU); draw.stroke();
@@ -2402,6 +2647,7 @@
       } else if (player.aim.type === "bomb") {
         const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
         const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill));
+        movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill));
         draw.fillStyle = inRange ? "rgba(185,133,238,0.18)" : "rgba(255,255,255,0.08)";
         draw.strokeStyle = inRange ? "#b985ee" : "rgba(255,255,255,0.45)";
         draw.lineWidth = 3;
@@ -2410,6 +2656,7 @@
         const target = ctx.game.hover;
         if (isCommandTarget(target)) {
           const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
           draw.strokeStyle = inRange
             ? (player.aim.type === "commandDefend" ? "#9cc6ff" : "#ffd56b")
             : "rgba(255,255,255,0.45)";
@@ -2420,10 +2667,25 @@
         const target = ctx.getHoveredEnemy ? ctx.getHoveredEnemy() : null;
         if (target) {
           const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
           draw.strokeStyle = inRange ? "#ffd56b" : "rgba(255,255,255,0.45)";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 18, 0, ctx.TAU); draw.stroke();
         }
+      } else if (isSelfCenteredPlayerSkill(skill)) {
+        const target = getPlayerSelfCenteredAimPoint();
+        movePreview = getPlayerSelfCenteredMovePreviewPoint(target);
+        const color = skill.commandDelta < 0 ? "#9cc6ff" : "#ffd56b";
+        draw.fillStyle = skill.commandDelta < 0 ? "rgba(156,198,255,0.12)" : "rgba(255,213,107,0.12)";
+        draw.strokeStyle = color;
+        draw.lineWidth = 3;
+        draw.beginPath();
+        draw.arc(target.x, target.y, getPlayerSkillRadius(skill), 0, ctx.TAU);
+        draw.fill();
+        draw.stroke();
+      }
+      if (movePreview) {
+        drawPlayerMovePrediction(draw, movePreview);
       }
       draw.restore();
     }
@@ -2441,6 +2703,48 @@
       draw.stroke();
       draw.restore();
     }
+
+    function drawPlayerMovePrediction(draw, destination) {
+      const player = ctx.player;
+      const dx = destination.x - player.x;
+      const dy = destination.y - player.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= ctx.battlePx(6)) {
+        return;
+      }
+      const ux = dx / distance;
+      const uy = dy / distance;
+      const startOffset = player.radius + ctx.battlePx(8);
+      const endOffset = ctx.battlePx(10);
+      const sx = player.x + ux * startOffset;
+      const sy = player.y + uy * startOffset;
+      const ex = destination.x - ux * endOffset;
+      const ey = destination.y - uy * endOffset;
+      const head = ctx.battlePx(13);
+      const wing = ctx.battlePx(7);
+      draw.save();
+      draw.strokeStyle = "rgba(255,255,255,0.92)";
+      draw.fillStyle = "rgba(255,255,255,0.92)";
+      draw.lineWidth = Math.max(2, ctx.battlePx(2));
+      draw.setLineDash([ctx.battlePx(10), ctx.battlePx(6)]);
+      draw.beginPath();
+      draw.moveTo(sx, sy);
+      draw.lineTo(ex, ey);
+      draw.stroke();
+      draw.setLineDash([]);
+      draw.beginPath();
+      draw.moveTo(destination.x, destination.y);
+      draw.lineTo(destination.x - ux * head - uy * wing, destination.y - uy * head + ux * wing);
+      draw.lineTo(destination.x - ux * head + uy * wing, destination.y - uy * head - ux * wing);
+      draw.closePath();
+      draw.fill();
+      draw.strokeStyle = "rgba(255,216,107,0.82)";
+      draw.lineWidth = 2;
+      draw.beginPath();
+      draw.arc(destination.x, destination.y, ctx.battlePx(9), 0, ctx.TAU);
+      draw.stroke();
+      draw.restore();
+    }
     function getPanelSkills(player, pageIndex = 0) {
       const page = Math.max(0, Math.floor(Number(pageIndex) || 0));
       const pageStart = page * PLAYER_ULTIMATE_SLOT_INDEX;
@@ -2452,6 +2756,7 @@
             return null;
           }
           const command = isCommandSkill(key);
+          const positioned = command && isSelfCenteredPlayerSkill(skill);
           return {
             key,
             name: skill.name,
@@ -2460,6 +2765,7 @@
             max: skill.cd || 0.1,
             skill,
             targeted: command && (skill.target === "ally" || skill.target === "enemy"),
+            positioned,
             command,
             commandDelta: command ? skill.commandDelta : 0,
             level: getSkillUpgradeLevel(player, key, skill),
@@ -2538,6 +2844,7 @@
       drawPlayerAimPreview,
       getPanelSkills,
       executePartyIntent,
+      executeEnemyIntent,
     };
   }
 

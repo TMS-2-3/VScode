@@ -38,7 +38,7 @@
             cancelItemAim();
           } else if (button.action === "playerCommand") {
             cancelItemAim();
-            if (button.targeted) {
+            if (button.targeted || button.positioned) {
               startPlayerAim(button.skillKey);
             } else {
               usePlayerCommand(button.skillKey);

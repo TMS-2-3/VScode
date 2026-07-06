@@ -16,6 +16,7 @@
       profileClickTargets,
       COLORS,
       EQUIPMENT_DATA,
+      MATERIAL_DATA,
       itemSystem,
       getEquipmentInstancesByItemId,
       getEquipmentItemRef,
@@ -521,11 +522,21 @@
     drawPanelFooter(x, y, w, h);
   }
 
+  function getTownFacilityPageRect() {
+    const marginX = view.w >= 1280 ? 32 : 24;
+    const marginY = view.h >= 760 ? 28 : 22;
+    const w = Math.max(360, view.w - marginX * 2);
+    const h = Math.max(360, view.h - marginY * 2);
+    return {
+      x: (view.w - w) / 2,
+      y: (view.h - h) / 2,
+      w,
+      h,
+    };
+  }
+
   function drawItemShopPanel() {
-    const w = Math.min(1040, Math.max(360, view.w - 48));
-    const h = Math.min(680, Math.max(360, view.h - 72));
-    const x = (view.w - w) / 2;
-    const y = (view.h - h) / 2;
+    const { x, y, w, h } = getTownFacilityPageRect();
     const items = getShopItems();
     drawPanel(x, y, w, h);
 
@@ -648,10 +659,7 @@
   }
 
   function drawEquipmentShopPanel() {
-    const w = Math.min(1160, Math.max(520, view.w - 48));
-    const h = Math.min(760, Math.max(430, view.h - 72));
-    const x = (view.w - w) / 2;
-    const y = (view.h - h) / 2;
+    const { x, y, w, h } = getTownFacilityPageRect();
     const shopKind = town.panel.shopKind === "weapon" ? "weapon" : "armor";
     const tab = town.panel.tab === "reset" ? "reset" : town.panel.tab === "upgrade" ? "upgrade" : "craft";
     const rows = getEquipmentShopRows(shopKind, tab);
@@ -1030,6 +1038,9 @@
       if (!item) {
         continue;
       }
+      if (item.shopHidden) {
+        continue;
+      }
       if (shopKind === "weapon" && item.slot !== "weapon") {
         continue;
       }
@@ -1224,7 +1235,8 @@
     }
     const materials = recipe.materials || recipe.materialCost || {};
     for (const [key, count] of Object.entries(materials)) {
-      const name = key === "kari_dorop" ? "仮素材" : key;
+      const material = MATERIAL_DATA && MATERIAL_DATA.materials ? MATERIAL_DATA.materials[key] : null;
+      const name = material && material.name ? material.name : key === "kari_dorop" ? "仮素材" : key;
       parts.push(`${name} x${count}`);
     }
     return parts.length ? parts.join(" / ") : "無料";
@@ -1378,23 +1390,38 @@
     ctx.font = "800 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(town.panel.title || "依頼一覧", x + 26, y + 44);
 
-    let cursorY = y + 76;
     if (quests.length === 0) {
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
       ctx.fillStyle = "#dce9dc";
       ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText("今はこの種類の依頼がありません。", x + 26, cursorY);
+      ctx.fillText("今はこの種類の依頼がありません。", x + 26, y + 84);
     } else {
-      for (const quest of quests) {
-        const buttonH = 82;
-        drawQuestButton(x + 24, cursorY, w - 48, buttonH, `${quest.rank || "-"}  ${quest.name}`, quest.summary || "", {
+      const listRect = { x: x + 24, y: y + 76, w: w - 48, h: Math.max(120, h - 146) };
+      const buttonH = 82;
+      const gap = 12;
+      const contentH = quests.length * buttonH + Math.max(0, quests.length - 1) * gap;
+      const scrollMax = Math.max(0, contentH - listRect.h);
+      const scroll = Math.max(0, Math.min(scrollMax, town.panel.scroll || 0));
+      town.panel.scroll = scroll;
+      town.panel.scrollMax = scrollMax;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
+      ctx.clip();
+      for (let i = 0; i < quests.length; i += 1) {
+        const quest = quests[i];
+        const rowY = listRect.y + i * (buttonH + gap) - scroll;
+        if (rowY + buttonH < listRect.y || rowY > listRect.y + listRect.h) {
+          continue;
+        }
+        drawQuestButton(listRect.x, rowY, listRect.w, buttonH, `${quest.rank || "-"}  ${quest.name}`, quest.summary || "", {
           kind: "selectQuest",
           questId: quest.id,
         });
-        cursorY += buttonH + 12;
-        if (cursorY > y + h - 84) {
-          break;
-        }
       }
+      ctx.restore();
+      drawTownScrollbar(listRect, scroll, scrollMax);
     }
 
     drawTextButton(x + 24, y + h - 54, 130, 34, "戻る", { kind: "backToQuestTypes" });

@@ -178,6 +178,9 @@
       if (typeof game.settings.powerCrystalAutoUse !== "boolean") {
         game.settings.powerCrystalAutoUse = true;
       }
+      if (typeof game.settings.mapDebugMode !== "boolean") {
+        game.settings.mapDebugMode = false;
+      }
       if (keybindTools) {
         game.settings.keybinds = keybindTools.normalizeKeybinds(
           game.settings.keybinds || keybindTools.loadSavedKeybinds()
@@ -2425,6 +2428,10 @@
           const settings = getGameSettings();
           settings.powerCrystalAutoUse = settings.powerCrystalAutoUse === false;
           clearMovementKeys();
+        } else if (target.action === "toggleMapDebugMode") {
+          const settings = getGameSettings();
+          settings.mapDebugMode = !settings.mapDebugMode;
+          clearMovementKeys();
         } else if (target.action === "selectSettingsTab") {
           selectSettingsTab(target.tab);
         } else if (target.action === "startKeybindCapture") {
@@ -2604,7 +2611,7 @@
         triggerUltimate("finald");
       } else if (skill.command) {
         cancelItemAim();
-        if (skill.targeted) {
+        if (skill.targeted || skill.positioned) {
           startPlayerAim(skill.key);
         } else {
           usePlayerCommand(skill.key);

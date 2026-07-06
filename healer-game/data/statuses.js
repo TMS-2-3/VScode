@@ -73,5 +73,15 @@
       description: "移動速度と防御力が10%ずつ低下する。",
       simpleDescription: "移動速度と防御力が低下する。",
     },
+    debuff_magic_neutralize: {
+      id: "debuff_magic_neutralize",
+      name: "魔力中和",
+      type: "ステータスデバフ",
+      label: "魔",
+      color: "#9ef7ff",
+      carryover: false,
+      description: "魔力が低下する。",
+      simpleDescription: "魔力が低下する。",
+    },
   };
 })();

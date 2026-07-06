@@ -1129,11 +1129,19 @@
       if (!unit) {
         return 0;
       }
-      const base = getNumber(unit[statKey]);
+      const base = getUnitBaseStat(unit, statKey);
       const flatBonus = getFlatStatBonusSum(unit, statKey);
       const baseValue = base + flatBonus;
       const bonus = getStatBonusSum(unit, statKey);
       return isAdditiveBonusStat(statKey) ? baseValue + bonus : baseValue + baseValue * bonus;
+    }
+
+    function getUnitBaseStat(unit, statKey) {
+      const baseStats = unit && unit.baseStats;
+      if (baseStats && Number.isFinite(baseStats[statKey])) {
+        return baseStats[statKey];
+      }
+      return getNumber(unit && unit[statKey]);
     }
 
     function getWeaponElement(unit) {

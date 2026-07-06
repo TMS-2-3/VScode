@@ -80,6 +80,17 @@
     const statusRenderer = window.createHealerStatusRenderer(context);
     const tooltipText = window.createHealerTooltipText(context);
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];
+    const BATTLE_WALK_DIRECTIONS = ["down", "left", "right", "up"];
+    const BATTLE_WALK_FRAMES = [1, 2, 3];
+    const BATTLE_WALK_SEQUENCE = [2, 1, 3, 1];
+    const BATTLE_WALK_FRAME_INTERVAL = 0.16;
+    const battleCharacterSpritePaths = {
+      finaldMale: "arjuna_man_img",
+      finaldFemale: "arjuna_woman_img",
+      ulpes: "ulpes_img",
+      rihas: "rihas_img",
+      sushia: "sushia_img",
+    };
     const equipmentCharacterArtPaths = {
       finaldMale: "img/arjuna_man_img/default/front.png",
       finaldFemale: "img/arjuna_woman_img/default/front.png",
@@ -87,6 +98,11 @@
       rihas: "img/rihas_img/default/front.png",
       sushia: "img/sushia_img/default/front.png",
     };
+    const battleCharacterSprites = createBattleCharacterSprites();
+    const battleWalkRenderCache = new WeakMap();
+    const battleWalkWarmQueue = [];
+    let battleWalkWarmScheduled = false;
+    const battleSpriteStates = new Map();
     const equipmentCharacterArtImages = createEquipmentCharacterArtImages();
     const equipmentSlotLayout = {
       left: ["head", "body", "legs"],
@@ -105,7 +121,28 @@
     for (const [key, imagePath] of Object.entries(equipmentCharacterArtPaths)) {
       const image = new Image();
       image.src = imagePath;
+      prepareSystemImage(image);
       images[key] = image;
+    }
+    return images;
+  }
+
+  function createBattleCharacterSprites() {
+    const images = {};
+    if (typeof Image !== "function") {
+      return images;
+    }
+    for (const [unitKey, spritePath] of Object.entries(battleCharacterSpritePaths)) {
+      images[unitKey] = {};
+      for (const direction of BATTLE_WALK_DIRECTIONS) {
+        images[unitKey][direction] = {};
+        for (const frame of BATTLE_WALK_FRAMES) {
+          const image = new Image();
+          image.src = `img/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
+          prepareBattleWalkImage(image);
+          images[unitKey][direction][frame] = image;
+        }
+      }
     }
     return images;
   }
@@ -122,6 +159,87 @@
 
   function isSystemImageReady(image) {
     return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+  }
+
+  function prepareSystemImage(image) {
+    if (!image) {
+      return;
+    }
+    image.decoding = "async";
+    if (typeof image.decode !== "function") {
+      return;
+    }
+    const decode = () => {
+      image.decode().catch(() => {});
+    };
+    if (image.complete) {
+      decode();
+    } else if (typeof image.addEventListener === "function") {
+      image.addEventListener("load", decode, { once: true });
+    }
+  }
+
+  function prepareBattleWalkImage(image) {
+    if (!image) {
+      return;
+    }
+    image.decoding = "async";
+    const warmCache = () => {
+      if (isSystemImageReady(image)) {
+        queueBattleWalkWarm(image);
+      }
+    };
+    if (typeof image.decode === "function") {
+      const decodeAndWarm = () => {
+        image.decode().catch(() => {}).then(warmCache);
+      };
+      if (image.complete) {
+        decodeAndWarm();
+      } else if (typeof image.addEventListener === "function") {
+        image.addEventListener("load", decodeAndWarm, { once: true });
+      }
+      return;
+    }
+    if (image.complete) {
+      warmCache();
+    } else if (typeof image.addEventListener === "function") {
+      image.addEventListener("load", warmCache, { once: true });
+    }
+  }
+
+  function queueBattleWalkWarm(image) {
+    if (!image || battleWalkRenderCache.has(image) || battleWalkWarmQueue.includes(image)) {
+      return;
+    }
+    battleWalkWarmQueue.push(image);
+    scheduleBattleWalkWarm();
+  }
+
+  function scheduleBattleWalkWarm() {
+    if (battleWalkWarmScheduled) {
+      return;
+    }
+    battleWalkWarmScheduled = true;
+    const schedule = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame
+      : (callback) => setTimeout(callback, 16);
+    schedule(processBattleWalkWarmQueue);
+  }
+
+  function processBattleWalkWarmQueue() {
+    battleWalkWarmScheduled = false;
+    const startedAt = performance.now();
+    let processed = 0;
+    while (battleWalkWarmQueue.length && processed < 2 && performance.now() - startedAt < 4) {
+      const image = battleWalkWarmQueue.shift();
+      if (isSystemImageReady(image)) {
+        getBattleWalkRenderImage(image);
+      }
+      processed += 1;
+    }
+    if (battleWalkWarmQueue.length) {
+      scheduleBattleWalkWarm();
+    }
   }
 
   function draw() {
@@ -345,6 +463,9 @@
 
   function drawTelegraphs() {
     for (const telegraph of telegraphs) {
+      if (telegraph.hidden) {
+        continue;
+      }
       updateTelegraphDynamic(telegraph);
       const progress = clamp(1 - telegraph.time / telegraph.total, 0, 1);
       const enemy = telegraph.team === "enemy";
@@ -496,8 +617,20 @@
   function drawUnits() {
     const units = [...enemies, ...party].filter((unit) => !unit.dead && isFieldUnit(unit));
     units.sort((a, b) => a.y - b.y);
+    cleanupBattleSpriteStates(units);
     for (const unit of units) {
       drawUnit(unit);
+    }
+  }
+
+  function cleanupBattleSpriteStates(units) {
+    const livePartyIds = new Set(units
+      .filter((unit) => unit && unit.team === "party")
+      .map((unit) => unit.id));
+    for (const unitId of battleSpriteStates.keys()) {
+      if (!livePartyIds.has(unitId)) {
+        battleSpriteStates.delete(unitId);
+      }
     }
   }
 
@@ -665,27 +798,35 @@
       ctx.stroke();
     }
 
-    ctx.fillStyle = unit.frozen > 0 ? "#cfefff" : unit.color;
-    ctx.strokeStyle = unit.team === "enemy" ? "#3a1816" : "#101814";
-    ctx.lineWidth = Math.max(2, battlePx(3));
-    ctx.beginPath();
-    ctx.arc(unit.x, unit.y, unit.radius, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
+    const drewPartySprite = unit.team === "party" && drawBattleCharacterSprite(unit);
+    if (!drewPartySprite) {
+      ctx.fillStyle = unit.frozen > 0 ? "#cfefff" : unit.color;
+      ctx.strokeStyle = unit.team === "enemy" ? "#3a1816" : "#101814";
+      ctx.lineWidth = Math.max(2, battlePx(3));
+      ctx.beginPath();
+      ctx.arc(unit.x, unit.y, unit.radius, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
 
-    drawUnitGear(unit);
+      drawUnitGear(unit);
 
-    ctx.fillStyle = unit.team === "enemy" ? "#ffe7df" : "#101814";
-    ctx.font = `700 ${Math.max(12, unit.radius)}px "Segoe UI", "Yu Gothic UI", sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(unit.label, unit.x, unit.y + 0.5);
+      ctx.fillStyle = unit.team === "enemy" ? "#ffe7df" : "#101814";
+      ctx.font = `700 ${Math.max(12, unit.radius)}px "Segoe UI", "Yu Gothic UI", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(unit.label, unit.x, unit.y + 0.5);
+    }
 
     if (unit.team === "enemy") {
       const barWidth = Math.max(battlePx(44), unit.radius * 2.8);
       drawFieldHpBar(unit, unit.x - barWidth / 2, unit.y + unit.radius + battlePx(9), barWidth, battlePx(6), "#241312");
     } else {
-      drawFieldHpBar(unit);
+      if (drewPartySprite) {
+        const metrics = getBattleCharacterSpriteMetrics(unit);
+        drawFieldHpBar(unit, unit.x - battlePx(24), metrics.top - battlePx(10), battlePx(48), battlePx(6));
+      } else {
+        drawFieldHpBar(unit);
+      }
     }
 
     if (unit.tauntTimer > 0 && unit.forcedTarget) {
@@ -699,6 +840,169 @@
     }
 
     ctx.restore();
+  }
+
+  function drawBattleCharacterSprite(unit) {
+    const state = updateBattleSpriteState(unit);
+    const image = getBattleWalkImage(unit, state.facing, state.frame);
+    if (!isSystemImageReady(image)) {
+      return false;
+    }
+    const renderImage = getBattleWalkRenderImage(image);
+    const metrics = getBattleCharacterSpriteMetrics(unit, renderImage);
+    ctx.save();
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(renderImage, metrics.x, metrics.y, metrics.w, metrics.h);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+    ctx.restore();
+    return true;
+  }
+
+  function getBattleWalkRenderImage(image) {
+    if (!isSystemImageReady(image)) {
+      return image;
+    }
+    const targetH = battlePx(64);
+    const cached = battleWalkRenderCache.get(image);
+    if (cached && cached.height === targetH) {
+      return cached.canvas;
+    }
+    const sourceW = image.naturalWidth || image.width || 1;
+    const sourceH = image.naturalHeight || image.height || 1;
+    const targetW = Math.max(1, Math.round(targetH * sourceW / Math.max(1, sourceH)));
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const offscreen = canvas.getContext("2d");
+    if (!offscreen) {
+      return image;
+    }
+    const previousSmoothing = offscreen.imageSmoothingEnabled;
+    offscreen.imageSmoothingEnabled = false;
+    offscreen.clearRect(0, 0, targetW, targetH);
+    offscreen.drawImage(image, 0, 0, targetW, targetH);
+    offscreen.imageSmoothingEnabled = previousSmoothing;
+    battleWalkRenderCache.set(image, { canvas, height: targetH });
+    return canvas;
+  }
+
+  function getBattleWalkImage(unit, facing, frame) {
+    if (!unit || unit.team !== "party") {
+      return null;
+    }
+    const imageKey = unit.id === "finald"
+      ? playerProfile.gender === "女の子" ? "finaldFemale" : "finaldMale"
+      : unit.id;
+    const direction = BATTLE_WALK_DIRECTIONS.includes(facing) ? facing : "down";
+    const normalizedFrame = BATTLE_WALK_FRAMES.includes(frame) ? frame : 1;
+    return battleCharacterSprites[imageKey] && battleCharacterSprites[imageKey][direction] && battleCharacterSprites[imageKey][direction][normalizedFrame] || null;
+  }
+
+  function updateBattleSpriteState(unit) {
+    let state = battleSpriteStates.get(unit.id);
+    if (!state) {
+      state = {
+        x: unit.x,
+        y: unit.y,
+        facing: getBattleFacingFromTarget(unit) || "down",
+        frame: 1,
+        moving: false,
+      };
+      battleSpriteStates.set(unit.id, state);
+    }
+
+    const dx = unit.x - state.x;
+    const dy = unit.y - state.y;
+    const moved = Math.hypot(dx, dy) > 0.25;
+    const facingIntent = unit.battleFacingIntent;
+    if (moved && facingIntent === "move") {
+      state.facing = getFacingFromVector(dx, dy, state.facing);
+    } else {
+      state.facing = getBattleFacingFromTarget(unit) || state.facing || "down";
+    }
+    unit.battleFacingIntent = null;
+    state.frame = moved ? BATTLE_WALK_SEQUENCE[Math.floor(game.time / BATTLE_WALK_FRAME_INTERVAL) % BATTLE_WALK_SEQUENCE.length] || 1 : 1;
+    state.moving = moved;
+    state.x = unit.x;
+    state.y = unit.y;
+    return state;
+  }
+
+  function getBattleFacingFromTarget(unit) {
+    const target = getBattleFacingTarget(unit);
+    if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+      return null;
+    }
+    return getFacingFromVector(target.x - unit.x, target.y - unit.y, null);
+  }
+
+  function getBattleFacingTarget(unit) {
+    if (!unit) {
+      return null;
+    }
+    if (unit.cast && unit.cast.target && !unit.cast.target.dead) {
+      return unit.cast.target;
+    }
+    if (unit.aiIntent && unit.aiIntent.target && unit.aiIntent.target.team === "enemy" && !unit.aiIntent.target.dead) {
+      return unit.aiIntent.target;
+    }
+    if (unit.forcedTarget && !unit.forcedTarget.dead) {
+      return unit.forcedTarget;
+    }
+    if (unit.aiMoveTarget && !unit.aiMoveTarget.dead) {
+      return unit.aiMoveTarget;
+    }
+    if (game.priorityTarget && !game.priorityTarget.dead) {
+      return game.priorityTarget;
+    }
+    return getNearestLivingEnemy(unit);
+  }
+
+  function getNearestLivingEnemy(unit) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const enemy of enemies) {
+      if (!enemy || enemy.dead || !isFieldUnit(enemy)) {
+        continue;
+      }
+      const d = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
+      if (d < bestDist) {
+        best = enemy;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  function getFacingFromVector(dx, dy, fallback) {
+    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+      return fallback;
+    }
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx >= 0 ? "right" : "left";
+    }
+    return dy >= 0 ? "down" : "up";
+  }
+
+  function getBattleCharacterSpriteMetrics(unit, image = null) {
+    const height = battlePx(64);
+    const sourceW = image && (image.naturalWidth || image.width || 0);
+    const sourceH = image && (image.naturalHeight || image.height || 0);
+    const width = sourceH > 0
+      ? height * sourceW / sourceH
+      : height;
+    const footY = unit.y + unit.radius + battlePx(13);
+    const x = unit.x - width / 2;
+    const y = footY - height;
+    return {
+      x,
+      y,
+      w: width,
+      h: height,
+      top: y,
+      footY,
+    };
   }
 
   function drawPriorityTargetMark(unit) {
@@ -1222,6 +1526,9 @@
     if (typeof game.settings.powerCrystalAutoUse !== "boolean") {
       game.settings.powerCrystalAutoUse = true;
     }
+    if (typeof game.settings.mapDebugMode !== "boolean") {
+      game.settings.mapDebugMode = false;
+    }
     if (keybindTools) {
       game.settings.keybinds = keybindTools.normalizeKeybinds(
         game.settings.keybinds || keybindTools.loadSavedKeybinds()
@@ -1236,6 +1543,10 @@
 
   function isPowerCrystalAutoUseEnabled() {
     return getGameSettings().powerCrystalAutoUse !== false;
+  }
+
+  function isMapDebugModeEnabled() {
+    return getGameSettings().mapDebugMode === true;
   }
 
   function getSettingsUi() {
@@ -2255,6 +2566,7 @@
     const rows = [
       { type: "toggleDetailedDescriptions", label: "詳細説明文の適用" },
       { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用" },
+      { type: "toggleMapDebugMode", label: "マップデバッグモード" },
     ];
     const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
     const listContentH = rows.length * rowH;
@@ -2301,6 +2613,8 @@
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isDetailedDescriptionEnabled(), "toggleDetailedDescriptions");
     } else if (entry.type === "togglePowerCrystalAutoUse") {
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isPowerCrystalAutoUseEnabled(), "togglePowerCrystalAutoUse");
+    } else if (entry.type === "toggleMapDebugMode") {
+      drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isMapDebugModeEnabled(), "toggleMapDebugMode");
     }
   }
 
@@ -2818,12 +3132,6 @@
       const height = size * 2.45;
       const width = height * image.naturalWidth / image.naturalHeight;
       ctx.save();
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = "#102018";
-      ctx.beginPath();
-      ctx.ellipse(x, y + size * 1.56, size * 0.74, size * 0.18, 0, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 1;
       const previousSmoothing = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(image, x - width / 2, y + size * 1.42 - height, width, height);
@@ -2833,12 +3141,6 @@
     }
     const color = unit && unit.color ? unit.color : "#57c7c9";
     ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = "#102018";
-    ctx.beginPath();
-    ctx.ellipse(x, y + size * 1.7, size * 0.72, size * 0.18, 0, 0, TAU);
-    ctx.fill();
-    ctx.globalAlpha = 1;
     ctx.strokeStyle = "#102018";
     ctx.lineWidth = Math.max(2, size * 0.045);
     ctx.lineCap = "round";
@@ -3762,12 +4064,17 @@
       lines.push(`強化: +${item.upgradeLevel}`);
     }
     if (item.normalAttackSkillId) {
-      lines.push(`通常攻撃: ${item.normalAttackSkillId}`);
+      lines.push(`通常攻撃: ${getNormalAttackSkillDisplayName(item.normalAttackSkillId)}`);
     }
     if (item.description) {
       lines.push(item.description);
     }
     return { title: item.name || item.id, lines };
+  }
+
+  function getNormalAttackSkillDisplayName(skillId) {
+    const found = findNormalAttackSkillById(skillId);
+    return found && found.skill && found.skill.name || skillId;
   }
 
   function getEquipmentCharacterItem(unit) {
@@ -4629,7 +4936,8 @@
         .forEach((entry) => {
           const description = getSetEffectDescription(entry);
           if (description) {
-            lines.push({ text: description, header: false });
+            const effectName = getSetEffectName(entry);
+            lines.push({ text: effectName ? `${effectName}: ${description}` : description, header: false });
           }
         });
     }
@@ -4657,6 +4965,15 @@
       return effect.description;
     }
     return getSetEffectStatsText(effect);
+  }
+
+  function getSetEffectName(entry) {
+    const effect = entry && entry.effect;
+    if (effect && effect.name) {
+      return effect.name;
+    }
+    const threshold = entry && Number.isFinite(entry.threshold) ? Math.floor(entry.threshold) : 0;
+    return threshold > 0 ? `${threshold}セット効果` : "";
   }
 
   function getSetEffectStatsText(effect) {

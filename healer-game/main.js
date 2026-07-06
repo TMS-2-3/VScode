@@ -171,6 +171,7 @@
         settings: {
           tooltipDescriptionMode: "simple",
           powerCrystalAutoUse: true,
+          mapDebugMode: false,
           keybinds: window.HEALER_KEYBINDS
             ? window.HEALER_KEYBINDS.normalizeKeybinds(window.HEALER_KEYBINDS.loadSavedKeybinds())
             : null,

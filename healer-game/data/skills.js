@@ -22,7 +22,7 @@
       },
       heal: {
         id: "heal", key: "heal", owner: "finald", name: "ヒール", rank: "D", category: "スキル", skillType: "単体回復",
-        requiredWeapons: ["杖", "魔導書", "魔楽器"],
+        requiredWeapons: ["杖", "魔導書", "楽器"],
         cd: 6, cast: 2, cost: 20, range: px(300), healBase: 38, magicScale: 0.55, beamColor: "rgba(151,247,255,0.72)", lines: ["ヒール"],
         formula: [{ text: "38 + 魔力 * 0.55", stat: "magic", baseProp: "healBase", scaleProp: "magicScale" }],
         description: "２秒の詠唱を行った後、指定した味方１人の体力を(式=値)回復する。",
@@ -32,7 +32,7 @@
       },
       shield: {
         id: "shelt", key: "shield", owner: "finald", name: "シェルト", rank: "D", category: "スキル", skillType: "単体シールド",
-        requiredWeapons: ["杖", "魔導書", "魔楽器"],
+        requiredWeapons: ["杖", "魔導書", "楽器"],
         cd: 8, cast: 2, cost: 25, range: px(280), shieldBase: 40, magicScale: 0.45, duration: 8, lines: ["シェルト"],
         formula: [{ text: "40 + 魔力 * 0.45", stat: "magic", baseProp: "shieldBase", scaleProp: "magicScale" }],
         description: "２秒の詠唱を行った後、指定した味方１人に8秒間持続する(式=値)のシールドを付与する。",
@@ -87,7 +87,7 @@
       },
       ult: {
         id: "hull_heal", key: "ult", owner: "finald", name: "ストレプション", rank: "D", category: "必殺技", skillType: "全体回復",
-        requiredWeapons: ["杖", "魔導書", "魔楽器"],
+        requiredWeapons: ["杖", "魔導書", "楽器"],
         cast: 5, ultimateCost: 110, costMaxMpRatio: 0.3, healMagicScale: 0.25, healHpBasePercent: 5, healHpThresholdPercent: 50, lines: ["ストレプション"],
         formula: [{ text: "魔力 * 0.25 + 最大HP * (5 + max(0, 50 - HP%))%", type: "strepionHeal" }],
         description: "５秒の詠唱を行った後、味方全員の体力を(式=値)回復する。体力が50%以下だとHPの減少割合に基づいて回復量が上昇する。",
@@ -109,7 +109,7 @@
       },
       heroSlash: {
         id: "hero_slash", key: "heroSlash", owner: "ulpes", name: "ウルペススラッシュ", rank: "D", category: "スキル", skillType: "範囲攻撃",
-        requiredWeapons: ["片手剣"],
+        requiredWeapons: ["両手剣"],
         cd: 10, cost: 10, range: px(128), radius: px(120), arcDeg: 200, cast: 0.62, damageBase: 18, attackScale: 0.7, minCdAfterHit: 0, cdRefundPerHit: 0.8, burstRadius: px(116), lines: ["ウルペススラッシュ"], damageType: "physical",
         formula: [{ text: "18 + 攻撃力 * 0.7", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "広い範囲を薙ぎ払い、範囲内の敵に(式=値)の物理ダメージを与える。命中した敵の数が１体ごとにこのスキルのクールタイムを0.8秒短縮する。",
@@ -119,7 +119,7 @@
       },
       ult: {
         id: "hero_one_slash", key: "ult", owner: "ulpes", name: "真っ二つ", rank: "D", category: "必殺技", skillType: "単体攻撃",
-        requiredWeapons: ["片手剣", "両手剣"],
+        requiredWeapons: ["両手剣"],
         cast: 0.7, autoCast: 0.45, radius: px(72), hitRadius: px(70), damageBase: 74, attackScale: 2.1, teleportOffset: px(22), burstRadius: px(84), lines: ["真っ二つ"], damageType: "physical",
         formula: [{ text: "74 + 攻撃力 * 2.1", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "0.7秒のチャージを行った後、最も距離が近い敵の傍に移動し、対象の敵１体に強力な斬撃をお見舞いし、(式=値)の物理ダメージを与える。",
@@ -175,7 +175,7 @@
       },
       bomb: {
         id: "bomber", key: "bomb", owner: "sushia", name: "ボンバー", rank: "D", category: "スキル", skillType: "範囲攻撃",
-        requiredWeapons: ["杖", "魔導書", "魔楽器"],
+        requiredWeapons: ["杖", "魔導書", "楽器"],
         cd: 15, cost: 40, range: px(400), cast: 3, radius: px(150), damageBase: 32, magicScale: 0.9, distanceFalloffMax: 0.8, burstRadius: px(154), lines: ["ボンバー"], damageType: "magic",
         formula: [{ text: "32 + 魔力 * 0.9", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "３秒の詠唱を行った後、対象を中心とした一定範囲内の敵に(式=値)の魔法ダメージを与える爆発を引き起こす。爆発の中心から離れているユニットほど受けるダメージが低下する。",
@@ -185,7 +185,7 @@
       },
       fire: {
         id: "fire", key: "fire", owner: "sushia", name: "ファイア", rank: "D", category: "スキル", skillType: "単体攻撃",
-        requiredWeapons: ["杖", "魔導書", "魔楽器"],
+        requiredWeapons: ["杖", "魔導書", "楽器"],
         cd: 14, cost: 40, range: px(450), cast: 1, damageBase: 30, magicScale: 0.45, burnDuration: 3, burnDamageHpRatio: 0.01, burnTickRate: 1, beamColor: "rgba(255,139,67,0.74)", burstRadius: px(44), lines: ["ファイア"], damageType: "magic", statusIds: ["debuff_burn"],
         formula: [{ text: "30 + 魔力 * 0.45", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "１秒の詠唱を行った後、対象の敵１体に炎を放ち、(式=値)の魔法ダメージを与え、3秒の\"燃焼\"を付与する。",
@@ -195,7 +195,7 @@
       },
       ult: {
         id: "ice_word", key: "ult", owner: "sushia", name: "アイスワールド", rank: "D", category: "必殺技", skillType: "範囲攻撃", ultimateCost: 130, cast: 5, autoCast: 5, radius: px(330), manualRadiusBonus: 0,
-        requiredWeapons: ["杖", "魔導書", "魔楽器"],
+        requiredWeapons: ["杖", "魔導書", "楽器"],
         duration: 8, autoDuration: 8, tickRate: 1, falloffMin: 0.5,
         freezeEnemy: 5, freezeAlly: 5, autoFreezeAlly: 5,
         damageBase: 8, magicScale: 0.18, lines: ["アイスワールド"], damageType: "magic", statusIds: ["debuff_freeze"],
@@ -206,9 +206,73 @@
         upgradeDescription: "レベルが上がるごとに付与する\"凍結\"の効果時間が+(1/2/3/4/5)秒増加する",
       },
     },
+    weapon: {
+      hornRabbitKnife: {
+        id: "horn_rabbit_attack_knife", key: "hornRabbitKnife", owner: "weapon", name: "突き刺し", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
+        cd: 6, range: px(50), damageBase: 13, attackScale: 0.5, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["突き刺し"], damageType: "physical",
+        formula: [{ text: "13 + 攻撃力 * 0.5 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "敵に剣を突き刺し、(式=値)の物理ダメージを与える。",
+        simpleDescription: "敵に剣を突き刺し、物理ダメージを与える。",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとにスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      hornRabbitSword: {
+        id: "horn_rabbit_attack_sword", key: "hornRabbitSword", owner: "weapon", name: "振りかざし", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
+        cd: 6, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["振りかざし"], damageType: "physical",
+        formula: [{ text: "10 + 攻撃力 * 0.6 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "1秒のチャージ後、敵に剣を振りかざし、(式=値)の物理ダメージを与える。",
+        simpleDescription: "少しのチャージを行い、敵に剣を振りかざし、物理ダメージを与える。",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとにスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      hornRabbitFist: {
+        id: "horn_rabbit_attack_fist", key: "hornRabbitFist", owner: "weapon", name: "顔面パンチ", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
+        cd: 6, range: px(40), damageBase: 14, attackScale: 0.55, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["顔面パンチ"], damageType: "physical",
+        formula: [{ text: "14 + 攻撃力 * 0.55 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "敵の顔を殴り、(式=値)の物理ダメージを与える。",
+        simpleDescription: "敵の顔を殴り、物理ダメージを与える。",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとにスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      hornRabbitStaff: {
+        id: "horn_rabbit_attack_staff", key: "hornRabbitStaff", owner: "weapon", name: "2連打撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
+        cd: 6, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["2連打撃"], damageType: "physical",
+        formula: [{ text: "8 + 攻撃力 * 0.2 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "棒具を振り、端を2回ずつ当て、(式=値)の物理ダメージを2度与える。",
+        simpleDescription: "棒具を振り、端を1回ずつ当て、物理ダメージを与える。",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとにスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      hornRabbitStick: {
+        id: "horn_rabbit_attack_stick", key: "hornRabbitStick", owner: "weapon", name: "魔力弾", rank: "D", category: "通常攻撃", skillType: "方向指定攻撃",
+        cd: 6, cost: 25, range: px(350), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(12), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.5, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], life: rangeLife(350, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic",
+        formula: [{ text: "10 + 魔力 * 0.5 * (1 + 対象の減少HP割合 / 4)", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
+        description: "１秒の詠唱を行った後、指定した方向に魔力で生成した弾を発射する。当たった敵に(式=値)の魔法ダメージを与える。魔力弾は敵に当たるか最大射程まで飛ぶと消滅する。",
+        simpleDescription: "詠唱後、魔力で生成された弾を発射する。",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとにスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      hornRabbitBook: {
+        id: "horn_rabbit_attack_book", key: "hornRabbitBook", owner: "weapon", name: "ショック", rank: "D", category: "通常攻撃", skillType: "範囲攻撃",
+        cd: 6, cost: 20, range: px(230), radius: px(60), burstRadius: px(68), cast: 1, damageBase: 10, magicScale: 0.35, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], color: "#9ef7ff", lines: ["ショック"], damageType: "magic",
+        formula: [{ text: "10 + 魔力 * 0.35 * (1 + 対象の減少HP割合 / 4)", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
+        description: "1秒の詠唱後、指定した範囲内の敵に衝撃を与え、(式=値)の魔法ダメージを与える。",
+        simpleDescription: "詠唱後、指定した範囲内の敵に衝撃を与え、魔法ダメージを与える。",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとにスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      hornRabbitFlute: {
+        id: "horn_rabbit_attack_flute", key: "hornRabbitFlute", owner: "weapon", name: "魔力中和音", rank: "D", category: "通常攻撃", skillType: "範囲デバフ",
+        cd: 6, cost: 20, range: px(0), radius: px(200), burstRadius: px(208), cast: 0.5, center: "self", magicNeutralizeBase: 0.05, magicNeutralizePerLevel: 0.01, magicNeutralizeDuration: 4, lines: ["魔力中和音"], statusIds: ["debuff_magic_neutralize"],
+        description: "詠唱後、周囲の敵の魔力を中和し、4秒間対象の魔力を5%減少させる。",
+        simpleDescription: "詠唱後、周囲の敵の魔力を中和し、4秒間魔力を減少させる。",
+        upgradeSimpleDescription: "レベルが上がるごとに魔力の中和効果が上昇する",
+        upgradeDescription: "レベルが上がるごとに魔力の中和効果が+(1/2/3/4/5)%上昇する",
+      },
+    },
     enemy: {
       attack: { id: "enemy_attack", key: "attack", owner: "enemy", name: "通常攻撃", category: "通常攻撃", cd: 5, bruteRange: px(48), eliteRange: px(58), cast: 0.32, radius: px(42), damageBonus: 8 },
-      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", category: "スキル", cdBase: 12, cdRandom: 0, cast: 2, aimLockBeforeFire: 1.3, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
+      casterLine: { id: "enemy_caster_line", key: "casterLine", owner: "enemy", name: "射撃線", category: "スキル", cdBase: 12, cdRandom: 0, cast: 0.86, aimLockBeforeFire: 1.3, length: px(620), width: px(26), hitWidth: px(18), damageBonus: 17 },
       heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", category: "スキル", cd: 17, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
       d_enemy_attack: {
         id: "d_enemy_attack", key: "d_enemy_attack", owner: "enemy", name: "通常攻撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
@@ -232,28 +296,28 @@
       },
       pollen_spraying: {
         id: "pollen_spraying", key: "pollen_spraying", owner: "enemy", name: "花粉散布", rank: "D", category: "スキル", skillType: "範囲攻撃",
-        cd: 20, cost: 20, cast: 0.5, range: px(80), radius: px(140), duration: 5, tickRate: 1, maxTicks: 5, damageBase: 5, magicScale: 0.1, damageType: "ドット魔法", lines: ["花粉散布"],
+        cd: 20, cost: 20, cast: 0.5, range: px(80), radius: px(140), duration: 3, tickRate: 1, maxTicks: 5, damageBase: 5, magicScale: 0.1, damageType: "ドット魔法", lines: ["花粉散布"],
       },
       biting: {
         id: "biting", key: "biting", owner: "enemy", name: "噛みつき", rank: "D", category: "スキル", skillType: "単体攻撃",
         cd: 15, range: px(50), damageBase: 15, attackScale: 0.2, injuryDuration: 4, damageType: "physical", lines: ["噛みつき"], statusIds: ["Injury"],
       },
       shadow_dash: {
-        id: "shadow_dash", key: "shadow_dash", owner: "enemy", name: "影走り", rank: "D", category: "スキル", skillType: "自身バフ",
-        cd: 20, cost: 10, duration: 10, moveSpeedBonus: 0.5, actionSpeedBonus: 0.3, lines: ["影走り"],
+        id: "shadow_dash", key: "shadow_dash", owner: "enemy", name: "影走り", rank: "D", category: "スキル", skillType: "対象バフ",
+        cd: 20, cost: 10, duration: 10, moveSpeedBonus: 0.5, actionSpeedBonus: 0.8, lines: ["影走り"],
       },
       throat_hunt: {
         id: "throat_hunt", key: "throat_hunt", owner: "enemy", name: "喉笛狩り", rank: "D", category: "スキル", skillType: "単体攻撃",
-        cd: 15, range: px(30), damageBase: 8, attackScale: 0.3, missingHpScale: 1, damageType: "physical", lines: ["喉笛狩り"],
+        cd: 15, range: px(30), damageBase: 10, attackScale: 0.3, missingHpScale: 1, damageType: "physical", lines: ["喉笛狩り"],
       },
     },
   };
 
   const skillData = window.HEALER_SKILL_DATA;
   const skillWeaponTypesByOwner = {
-    finald: ["魔導書", "魔楽器"],
+    finald: ["魔導書", "楽器"],
     ulpes: ["片手剣", "両手剣"],
-    rihas: ["拳具", "棒具"],
+    rihas: ["片手剣", "拳具", "棒具"],
     sushia: ["杖", "魔導書", "棒具"],
   };
   window.HEALER_SKILL_WEAPON_TYPES_BY_OWNER = skillWeaponTypesByOwner;

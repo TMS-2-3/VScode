@@ -22,6 +22,24 @@
           },
         },
       },
+      horn_rabbit: {
+        key: "horn_rabbit",
+        name: "ツノウサギ",
+        setEffects: {
+          2: {
+            name: "丈夫な毛皮",
+            flatStatBonuses: { defense: 20 },
+            simpleDescription: "防御力が上昇する",
+            description: "防御力が20上昇する",
+          },
+          5: {
+            name: "角の加護",
+            flatStatBonuses: { magicDefense: 25 },
+            simpleDescription: "魔法防御力が上昇する",
+            description: "魔法防御力が25上昇する",
+          },
+        },
+      },
     },
   };
 })();

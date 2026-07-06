@@ -19,6 +19,8 @@
       getSupportOrigin,
       makePartyMember,
       makeEnemy,
+      getUltimateCost,
+      getEffectiveStat,
       normalizeEquipment,
       normalizeLoadout,
       clampBattlePoint,
@@ -28,6 +30,7 @@
     } = context;
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
+    const BATTLE_START_ULTIMATE_RATIO = 0.5;
     const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "Injury"];
 
     function getCarriedHp(unit) {
@@ -148,8 +151,52 @@
       unit.sleepMax = 0;
       unit.injuryTimer = 0;
       unit.injuryMax = 0;
+      unit.magicNeutralizeTimer = 0;
+      unit.magicNeutralizeMax = 0;
+      unit.magicNeutralizeRatio = 0;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
+    }
+
+    function resetUnitBattleActionState(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.aiIntent = null;
+      unit.aiMoveTarget = null;
+      unit.battleFacingIntent = null;
+      unit.aim = null;
+      unit.itemAim = null;
+      unit.itemUseRequest = null;
+      unit.itemCast = null;
+      unit.cast = null;
+      unit.channel = null;
+      unit.pendingActionQueueKey = null;
+      unit.skillQueue = [];
+    }
+
+    function applyBattleStartUltimate(unit) {
+      if (!unit || unit.team !== "party") {
+        return;
+      }
+      const cost = typeof getUltimateCost === "function" ? getUltimateCost(unit) : 100;
+      unit.ult = Math.max(0, (Number.isFinite(cost) ? cost : 100) * BATTLE_START_ULTIMATE_RATIO);
+    }
+
+    function applyEffectiveResourceMaximums(unit) {
+      if (!unit) {
+        return;
+      }
+      const maxHp = getEffectiveResourceMaximum(unit, "maxHp", 1);
+      const maxMp = getEffectiveResourceMaximum(unit, "maxMp", 0);
+      unit.maxHp = maxHp;
+      unit.maxMp = maxMp;
+    }
+
+    function getEffectiveResourceMaximum(unit, statKey, minimum) {
+      const fallback = unit && Number.isFinite(unit[statKey]) ? unit[statKey] : minimum;
+      const value = typeof getEffectiveStat === "function" ? getEffectiveStat(unit, statKey) : fallback;
+      return Math.max(minimum, Math.round(Number.isFinite(value) ? value : fallback));
     }
 
     function findBattleUnitById(unitId) {
@@ -168,6 +215,54 @@
       return values.some((value) => value === true || value === "あり" || value === "有" || value === "true" || value === "yes");
     }
 
+    function spawnQuestEnemies(quest, bounds) {
+      const layout = quest && Array.isArray(quest.enemies) ? quest.enemies : null;
+      if (!layout || !layout.length) {
+        return false;
+      }
+      const baseX = Math.min(bounds.right - battlePx(120), bounds.left + bounds.width * 0.72);
+      const baseY = bounds.centerY;
+      let spawned = 0;
+      for (let index = 0; index < layout.length; index += 1) {
+        const entry = layout[index] || {};
+        const role = entry.role || entry.enemyId || entry.type;
+        if (!role) {
+          continue;
+        }
+        const fallbackDy = (index - (layout.length - 1) / 2) * 48;
+        const dx = Number.isFinite(entry.dx) ? entry.dx : 0;
+        const dy = Number.isFinite(entry.dy) ? entry.dy : fallbackDy;
+        const x = Number.isFinite(entry.x) ? bounds.left + bounds.width * entry.x : baseX + battlePx(dx);
+        const y = Number.isFinite(entry.y) ? bounds.top + bounds.height * entry.y : baseY + battlePx(dy);
+        const enemy = makeEnemy(entry.name || `敵${index + 1}`, x, y, role);
+        const point = clampBattlePoint(enemy.x, enemy.y, enemy.radius);
+        enemy.x = point.x;
+        enemy.y = point.y;
+        enemies.push(enemy);
+        spawned += 1;
+      }
+      return spawned > 0;
+    }
+
+    function spawnTutorialEnemies(bounds) {
+      const startX = Math.min(bounds.right - battlePx(120), bounds.left + bounds.width * 0.72);
+      const startY = bounds.centerY;
+      const enemySpread = Math.min(battlePx(150), bounds.height * 0.32);
+      enemies.push(
+        makeEnemy("魔物A", startX, startY - enemySpread, "brute"),
+        makeEnemy("魔物B", startX + battlePx(72), startY - enemySpread * 0.53, "skirmisher"),
+        makeEnemy("魔物C", startX + battlePx(18), startY + battlePx(5), "brute"),
+        makeEnemy("魔物D", startX + battlePx(92), startY + enemySpread * 0.59, "skirmisher"),
+        makeEnemy("小術師A", startX + battlePx(205), startY - enemySpread * 0.64, "caster"),
+        makeEnemy("小術師B", startX + battlePx(220), startY + enemySpread * 0.53, "caster"),
+        makeEnemy("大魔物", startX + battlePx(150), startY + battlePx(4), "elite"),
+      );
+    }
+
+    function hasQuestReinforcements(quest) {
+      return Boolean(quest && Array.isArray(quest.reinforcements) && quest.reinforcements.length > 0);
+    }
+
     function resetGame(quest = null) {
       projectiles.length = 0;
       telegraphs.length = 0;
@@ -177,7 +272,7 @@
       game.state = "playing";
       game.time = 0;
       game.stageClearTimer = 0;
-      game.reinforcementsSpawned = false;
+      game.reinforcementsSpawned = !hasQuestReinforcements(quest);
       game.priorityTarget = null;
       game.priorityTargetTimer = 0;
       game.priorityTargetIgnoredUnitIds = {};
@@ -193,21 +288,18 @@
       const cy = bounds.centerY;
 
       const playerStart = clampBattlePoint(bounds.left + bounds.width * 0.26, cy, player.radius);
-      const playerHp = getCarriedHp(player);
-      const playerMp = getCarriedMp(player);
-
       Object.assign(player, {
         x: playerStart.x,
         y: playerStart.y,
-        hp: playerHp,
-        mp: playerMp,
+        hp: 0,
+        mp: 0,
         shield: 0,
         shieldTimer: 0,
         shields: [],
         ult: 0,
         moodActionId: 0,
         moodActionGain: 0,
-        dead: playerHp <= 0,
+        dead: false,
         cds: {},
         channel: null,
         actionLock: 0,
@@ -223,9 +315,14 @@
         noDamage: 999,
         cast: null,
         aim: null,
+        aiIntent: null,
+        aiMoveTarget: null,
+        battleFacingIntent: null,
         itemAim: null,
         itemUseRequest: null,
         itemCast: null,
+        pendingActionQueueKey: null,
+        skillQueue: [],
         selfHealFloat: 0,
         delayedDamageQueue: [],
         field: true,
@@ -233,6 +330,8 @@
         collidable: true,
       });
       applyStoredPartyConfig(player);
+      applyEffectiveResourceMaximums(player);
+      applyCarriedHp(player);
 
       const ulpes = makePartyMember("ulpes");
       const rihas = makePartyMember("rihas");
@@ -244,25 +343,24 @@
       Object.assign(ulpes, { x: cx + battlePx(28), y: cy - battlePx(72) });
       Object.assign(rihas, { x: cx + battlePx(62), y: cy + battlePx(55) });
       Object.assign(sushia, { x: cx - battlePx(28), y: cy - battlePx(6) });
+      applyEffectiveResourceMaximums(ulpes);
+      applyEffectiveResourceMaximums(rihas);
+      applyEffectiveResourceMaximums(sushia);
       applyCarriedHp(ulpes);
       applyCarriedHp(rihas);
       applyCarriedHp(sushia);
       party.length = 0;
       party.push(player, ulpes, rihas, sushia);
 
-      const startX = Math.min(bounds.right - battlePx(120), bounds.left + bounds.width * 0.72);
-      const startY = bounds.centerY;
-      const enemySpread = Math.min(battlePx(150), bounds.height * 0.32);
+      for (const member of party) {
+        resetUnitBattleActionState(member);
+        applyBattleStartUltimate(member);
+      }
+
       enemies.length = 0;
-      enemies.push(
-        makeEnemy("魔物A", startX, startY - enemySpread, "brute"),
-        makeEnemy("魔物B", startX + battlePx(72), startY - enemySpread * 0.53, "skirmisher"),
-        makeEnemy("魔物C", startX + battlePx(18), startY + battlePx(5), "brute"),
-        makeEnemy("魔物D", startX + battlePx(92), startY + enemySpread * 0.59, "skirmisher"),
-        makeEnemy("小術師A", startX + battlePx(205), startY - enemySpread * 0.64, "caster"),
-        makeEnemy("小術師B", startX + battlePx(220), startY + enemySpread * 0.53, "caster"),
-        makeEnemy("大魔物", startX + battlePx(150), startY + battlePx(4), "elite"),
-      );
+      if (!spawnQuestEnemies(quest, bounds)) {
+        spawnTutorialEnemies(bounds);
+      }
 
       for (const member of party) {
         applyCarriedStatuses(member);
@@ -272,28 +370,43 @@
     }
 
     function spawnRearVanguardWave() {
+      const quest = game.currentQuest;
+      const layout = quest && Array.isArray(quest.reinforcements) ? quest.reinforcements : null;
+      if (!layout || !layout.length) {
+        game.reinforcementsSpawned = true;
+        return false;
+      }
       const bounds = getBattleBounds();
       const spawnX = bounds.left + battlePx(34);
       const centerY = bounds.centerY;
-      const spread = Math.min(battlePx(92), bounds.height * 0.24);
-      const wave = [
-        makeEnemy("小魔物A", spawnX, centerY - spread, "smallVanguard"),
-        makeEnemy("小魔物B", spawnX - battlePx(8), centerY, "smallVanguard"),
-        makeEnemy("小魔物C", spawnX, centerY + spread, "smallVanguard"),
-      ];
-
-      for (const enemy of wave) {
+      let spawned = 0;
+      for (let index = 0; index < layout.length; index += 1) {
+        const entry = layout[index] || {};
+        const role = entry.role || entry.enemyId || entry.type;
+        if (!role) {
+          continue;
+        }
+        const fallbackDy = (index - (layout.length - 1) / 2) * 92;
+        const dx = Number.isFinite(entry.dx) ? entry.dx : 0;
+        const dy = Number.isFinite(entry.dy) ? entry.dy : fallbackDy;
+        const enemy = makeEnemy(entry.name || `増援${index + 1}`, spawnX + battlePx(dx), centerY + battlePx(dy), role);
         const point = clampBattlePoint(enemy.x, enemy.y, enemy.radius);
         enemy.x = point.x;
         enemy.y = point.y;
         enemies.push(enemy);
         addBurst(enemy.x, enemy.y, enemy.radius * 3.2, "rgba(230,151,99,0.28)");
+        spawned += 1;
       }
 
-      addFloat("増援!", spawnX + battlePx(46), centerY - spread - battlePx(28), COLORS.enemy);
       game.reinforcementsSpawned = true;
-      game.message = "後方から増援!";
-      game.messageTimer = 4;
+      if (spawned > 0) {
+        const message = quest && quest.reinforcementMessage || "後方から増援!";
+        addFloat("増援!", spawnX + battlePx(46), centerY - battlePx(120), COLORS.enemy);
+        game.message = message;
+        game.messageTimer = 4;
+        return true;
+      }
+      return false;
     }
 
     return {

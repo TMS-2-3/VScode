@@ -875,6 +875,16 @@
       const injuryMax = Math.max(0.1, unit.injuryMax || unit.injuryTimer);
       icons.push(makeStatusIcon(unit, "Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
     }
+    if ((unit.magicNeutralizeTimer || 0) > 0) {
+      const neutralizeMax = Math.max(0.1, unit.magicNeutralizeMax || unit.magicNeutralizeTimer);
+      const ratio = Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);
+      icons.push(makeStatusIcon(unit, "debuff_magic_neutralize", {
+        ratio: unit.magicNeutralizeTimer / neutralizeMax,
+        remaining: unit.magicNeutralizeTimer,
+        description: `魔力-${Math.round(ratio * 100)}%`,
+        simpleDescription: `魔力-${Math.round(ratio * 100)}%`,
+      }));
+    }
     if (hasPassive(unit, "warmup") && (unit.castStacks || 0) > 0) {
       icons.push(makeStatusIcon(unit, "buff_warmup", { ratio: unit.stackTimer / SUSHIA_PASSIVE_STACK_DURATION, stack: unit.castStacks, remaining: unit.stackTimer }));
     }
@@ -1659,6 +1669,7 @@
         skillKey: skill.key,
         ultimate: false,
         targeted: skill.targeted,
+        positioned: skill.positioned,
         x: sx,
         y: itemY,
         w: itemW,

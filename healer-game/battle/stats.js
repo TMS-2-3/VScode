@@ -359,7 +359,7 @@
     }
 
     function getEffectiveMoveSpeed(unit) {
-      const base = getBaseStat(unit, "speed", 0);
+      const base = getBaseStat(unit, "speed", 0) + getEquipmentFlatBonus(unit, "speed") + getEquipmentFlatBonus(unit, "moveSpeed");
       const bonus = getMoveSpeedBonus(unit);
       return Math.max(0, base + base * bonus);
     }
@@ -405,6 +405,10 @@
     }
 
     function getBaseStat(unit, statKey, fallback = 0) {
+      const baseStats = unit && unit.baseStats;
+      if (baseStats && Number.isFinite(baseStats[statKey])) {
+        return baseStats[statKey];
+      }
       return unit && Number.isFinite(unit[statKey]) ? unit[statKey] : fallback;
     }
 
@@ -437,11 +441,14 @@
           bonus -= 0.1;
         }
       }
+      if (unit && (unit.magicNeutralizeTimer || 0) > 0 && statKey === "magic") {
+        bonus -= Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);
+      }
       if (unit && (unit.shadowDashTimer || 0) > 0) {
         if (statKey === "moveSpeed") {
           bonus += 0.5;
         } else if (statKey === "actionSpeed") {
-          bonus += 0.3;
+          bonus += 0.8;
         }
       }
       return bonus;
@@ -456,7 +463,7 @@
     }
 
     function getInternalBonus(unit, statKey) {
-      const base = unit && Number.isFinite(unit[statKey]) ? unit[statKey] : 0;
+      const base = getBaseStat(unit, statKey, 0);
       return base + getEquipmentBonus(unit, statKey);
     }
 

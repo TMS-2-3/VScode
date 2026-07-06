@@ -411,6 +411,7 @@
 
     function createGameLoopContext() {
       return {
+        game: state.game,
         update: callLater("battleRuntime", "update"),
         draw: callLater("renderer", "draw"),
       };
@@ -552,6 +553,8 @@
         getSupportOrigin: callLater("battleRuntime", "getSupportOrigin"),
         makePartyMember: callLater("unitFactory", "makePartyMember"),
         makeEnemy: callLater("unitFactory", "makeEnemy"),
+        getUltimateCost: callLater("skillSystem", "getUltimateCost"),
+        getEffectiveStat: callLater("battleStats", "getEffectiveStat"),
         normalizeEquipment: callLater("equipmentSystem", "normalizeEquipment"),
         normalizeLoadout: callLater("loadoutSystem", "normalizeLoadout"),
         clampBattlePoint: callLater("geometry", "clampBattlePoint"),

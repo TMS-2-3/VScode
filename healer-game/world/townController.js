@@ -606,6 +606,8 @@
         action: "questList",
         questType: typeKey,
         quests: getQuestsByType(typeKey),
+        scroll: 0,
+        scrollMax: 0,
         clickTargets: [],
       };
     }
@@ -881,6 +883,10 @@
         setTownPanelMessage("装備データが見つかりません。");
         return;
       }
+      if (item.shopHidden) {
+        setTownPanelMessage("この装備は現在店頭にありません。");
+        return;
+      }
       const recipe = getCraftRecipe(item);
       if (!recipe) {
         setTownPanelMessage("この装備にはまだ製作データがありません。");
@@ -939,7 +945,11 @@
     function getTownEquipmentSlotLabel(slot) {
       const labels = {
         weapon: "武器",
-        armor: "防具",
+        head: "頭",
+        body: "胴",
+        hands: "手",
+        legs: "足",
+        feet: "靴",
         accessory: "アクセサリ",
       };
       return labels[slot] || slot || "装備";

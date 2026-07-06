@@ -100,10 +100,11 @@
         return false;
       }
       const d = dist(unit, target);
-      const avoidDir = getTelegraphAvoidance(unit);
+      const avoidDir = unit.aiIntent ? null : getTelegraphAvoidance(unit);
       const moodSpeed = 1 + Math.max(0, unit.mood - MOOD_BASELINE) * 0.003;
       const speed = getUnitMoveSpeed(unit);
       if (avoidDir) {
+        unit.battleFacingIntent = "move";
         moveUnitWithWallSlide(unit, avoidDir, speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt);
         return true;
       }
@@ -118,6 +119,7 @@
           return false;
         }
         const dir = normalize(target.x - unit.x, target.y - unit.y);
+        unit.battleFacingIntent = "move";
         moveUnitWithWallSlide(unit, dir, speed * moodSpeed * dt);
         return false;
       }
@@ -125,6 +127,7 @@
       const desired = getPartyPreferredRange(unit);
       const dir = getPreferredRangeMoveDir(unit, target, d, desired);
 
+      unit.battleFacingIntent = "target";
       moveUnitWithWallSlide(unit, dir, speed * moodSpeed * dt);
       return false;
     }
@@ -172,13 +175,14 @@
       return { dir, count };
     }
 
-    function moveUnitWithWallSlide(unit, dir, distance) {
+    function moveUnitWithWallSlide(unit, dir, distance, options = {}) {
+      const detailed = Boolean(options && options.detailed);
       if (!unit || !dir || !Number.isFinite(distance) || distance <= 0) {
-        return false;
+        return detailed ? { moved: false, blockedByWall: false, wallRejected: false } : false;
       }
       const moveDir = dir.len === 0 ? dir : normalize(dir.x, dir.y);
       if (!moveDir || moveDir.len <= 0) {
-        return false;
+        return detailed ? { moved: false, blockedByWall: false, wallRejected: false } : false;
       }
 
       let dx = moveDir.x * distance;
@@ -188,7 +192,7 @@
         unit.x += dx;
         unit.y += dy;
         clampUnit(unit);
-        return true;
+        return detailed ? { moved: true, blockedByWall: false, wallRejected: false } : true;
       }
 
       const radius = Number.isFinite(unit.radius) ? unit.radius : 0;
@@ -215,12 +219,21 @@
         dx = getWallSlideSign(unit, "x", minX, maxX, minY, maxY) * slideDistance;
       }
 
-      const nextX = clamp(unit.x + dx, minX, maxX);
-      const nextY = clamp(unit.y + dy, minY, maxY);
-      const moved = Math.abs(nextX - unit.x) > 0.01 || Math.abs(nextY - unit.y) > 0.01;
+      const unclampedX = unit.x + dx;
+      const unclampedY = unit.y + dy;
+      const nextX = clamp(unclampedX, minX, maxX);
+      const nextY = clamp(unclampedY, minY, maxY);
+      const actualDx = nextX - unit.x;
+      const actualDy = nextY - unit.y;
+      const moved = Math.abs(actualDx) > 0.01 || Math.abs(actualDy) > 0.01;
+      const clampedByWall = Math.abs(nextX - unclampedX) > 0.01 || Math.abs(nextY - unclampedY) > 0.01;
       unit.x = nextX;
       unit.y = nextY;
-      return moved;
+      const blockedByWall = blockedX || blockedY || clampedByWall;
+      const intendedProgress = distance;
+      const actualProgress = actualDx * moveDir.x + actualDy * moveDir.y;
+      const wallRejected = blockedByWall && actualProgress < intendedProgress * 0.35;
+      return detailed ? { moved, blockedByWall, wallRejected } : moved;
     }
 
     function getWallSlideSign(unit, axis, minX, maxX, minY, maxY) {
@@ -308,7 +321,7 @@
     function getPreferredRangeRole(unit) {
       const weapon = typeof getEquippedSlotItem === "function" ? getEquippedSlotItem(unit, "weapon") : null;
       const weaponType = weapon && weapon.weaponType;
-      if (["杖", "魔導書", "魔楽器"].includes(weaponType)) {
+      if (["杖", "魔導書", "楽器"].includes(weaponType)) {
         return "back";
       }
       if (["片手剣", "両手剣", "拳具", "棒具"].includes(weaponType)) {
@@ -346,7 +359,7 @@
       let x = 0;
       let y = 0;
       for (const telegraph of telegraphs) {
-        if (telegraph.team !== "enemy") {
+        if (telegraph.hidden || telegraph.team !== "enemy") {
           continue;
         }
         updateTelegraphDynamic(telegraph);
@@ -433,6 +446,7 @@
     }
 
     function updateEnemyAi(dt) {
+      syncShadowWolfPackTarget();
       for (const enemy of enemies) {
         if (enemy.dead || isActionDisabled(enemy)) {
           continue;
@@ -443,11 +457,17 @@
           continue;
         }
 
-        const d = dist(enemy, target);
+        const rangeTarget = getEnemyPreferredRangeTarget(enemy, target);
+        const d = dist(enemy, rangeTarget);
         const preferred = getEnemyPreferredRange(enemy);
-        const dir = normalize(target.x - enemy.x, target.y - enemy.y);
+        const dir = normalize(rangeTarget.x - enemy.x, rangeTarget.y - enemy.y);
         const speed = typeof getEffectiveMoveSpeed === "function" ? getEffectiveMoveSpeed(enemy) : enemy.speed;
-        if (enemy.actionLock <= 0 && d > preferred + battlePx(10)) {
+        if (updateEnemySkillIntent(enemy, dt, speed)) {
+          continue;
+        }
+        if (enemy.actionLock <= 0 && enemy.role === "shadow_wolf" && (enemy.cds.attack || 0) > 0) {
+          updateShadowWolfOrbit(enemy, rangeTarget, d, preferred, speed, dt);
+        } else if (enemy.actionLock <= 0 && d > preferred + battlePx(10)) {
           moveUnitWithWallSlide(enemy, dir, speed * dt);
         } else if (enemy.actionLock <= 0 && d < preferred - battlePx(20) && getPreferredRangeRole(enemy) === "back") {
           moveUnitWithWallSlide(enemy, { x: -dir.x, y: -dir.y }, speed * 0.65 * dt);
@@ -457,8 +477,79 @@
           continue;
         }
 
-        thinkEnemy(enemy, target, d);
+        thinkEnemy(enemy, target, dist(enemy, target));
       }
+    }
+
+    function updateEnemySkillIntent(enemy, dt, speed) {
+      const intent = enemy && enemy.aiIntent;
+      if (!intent || !intent.enemySkill) {
+        return false;
+      }
+      if (!intent.target || intent.target.dead) {
+        enemy.aiIntent = null;
+        return false;
+      }
+      if (enemy.actionLock > 0 || (enemy.cds.attack || 0) > 0) {
+        return true;
+      }
+      const range = Math.max(0, Number.isFinite(intent.range) ? intent.range : 0);
+      const distance = dist(enemy, intent.target);
+      if (distance <= range) {
+        skillSystem.executeEnemyIntent(enemy);
+        return true;
+      }
+      const dir = normalize(intent.target.x - enemy.x, intent.target.y - enemy.y);
+      enemy.battleFacingIntent = "move";
+      moveUnitWithWallSlide(enemy, dir, speed * dt);
+      return true;
+    }
+
+    function updateShadowWolfOrbit(enemy, target, distance, preferred, speed, dt) {
+      if (!enemy || !target || !Number.isFinite(distance) || !Number.isFinite(preferred)) {
+        return false;
+      }
+      const dir = distance > 0.001 ? normalize(target.x - enemy.x, target.y - enemy.y) : { x: 1, y: 0, len: 1 };
+      if (!Number.isFinite(enemy.shadowOrbitDir) || enemy.shadowOrbitDir === 0) {
+        enemy.shadowOrbitDir = Math.random() < 0.5 ? -1 : 1;
+      }
+
+      const rawError = distance - preferred;
+      if (enemy.shadowOrbitTarget !== target || !Number.isFinite(enemy.shadowRangeError)) {
+        enemy.shadowOrbitTarget = target;
+        enemy.shadowRangeError = rawError;
+      } else {
+        const smoothing = clamp(dt * 5.5, 0, 1);
+        enemy.shadowRangeError += (rawError - enemy.shadowRangeError) * smoothing;
+      }
+
+      const deadBand = battlePx(16);
+      const correctionWidth = battlePx(96);
+      const error = Math.abs(enemy.shadowRangeError) <= deadBand ? 0 : enemy.shadowRangeError;
+      const correction = error === 0
+        ? 0
+        : Math.sign(error) * clamp((Math.abs(error) - deadBand) / correctionWidth, 0, 1);
+      const correctionStrength = Math.abs(correction);
+      const tangentWeight = clamp(1 - correctionStrength * 0.85, 0.18, 1);
+      const radialWeight = correction * 1.35;
+      const orbitDir = {
+        x: -dir.y * enemy.shadowOrbitDir,
+        y: dir.x * enemy.shadowOrbitDir,
+        len: 1,
+      };
+      const moveDir = normalize(
+        orbitDir.x * tangentWeight + dir.x * radialWeight,
+        orbitDir.y * tangentWeight + dir.y * radialWeight,
+      );
+      const moveSpeed = speed * (0.68 + correctionStrength * 0.26);
+      const movement = moveUnitWithWallSlide(enemy, moveDir, moveSpeed * dt, { detailed: true });
+
+      enemy.shadowOrbitFlipCooldown = Math.max(0, (enemy.shadowOrbitFlipCooldown || 0) - dt);
+      if (movement.wallRejected && tangentWeight > 0.25 && enemy.shadowOrbitFlipCooldown <= 0) {
+        enemy.shadowOrbitDir = -(Number.isFinite(enemy.shadowOrbitDir) && enemy.shadowOrbitDir !== 0 ? enemy.shadowOrbitDir : 1);
+        enemy.shadowOrbitFlipCooldown = 0.35;
+      }
+      return movement.moved;
     }
 
     function thinkUlpes(unit, avoidingTelegraph = false) {
@@ -489,13 +580,20 @@
         return enemy.forcedTarget;
       }
       const targets = getTargetablePartyMembers();
-      if (enemy.role === "corner_rabbit") {
-        return getLowestHpTarget(targets);
+      if (enemy.role === "horn_rabbit") {
+        return getLowestHpTargetBelowRatio(targets, 0.4) || nearestAlive(enemy, targets);
       }
       if (enemy.role === "shadow_wolf") {
         return getShadowWolfPackTarget(enemy, targets);
       }
       return nearestAlive(enemy, targets);
+    }
+
+    function getEnemyPreferredRangeTarget(enemy, fallbackTarget) {
+      if (enemy && enemy.role === "shadow_wolf") {
+        return getCurrentShadowWolfPackTarget(getTargetablePartyMembers()) || fallbackTarget;
+      }
+      return fallbackTarget;
     }
 
     function getLowestHpTarget(targets) {
@@ -504,16 +602,70 @@
         .sort((a, b) => (a.hp || 0) - (b.hp || 0))[0] || null;
     }
 
+    function getLowestHpTargetBelowRatio(targets, threshold) {
+      return (targets || [])
+        .filter((unit) => unit && !unit.dead && unit.maxHp > 0 && unit.hp / unit.maxHp < threshold)
+        .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0] || null;
+    }
+
     function getShadowWolfPackTarget(enemy, targets) {
-      const wolves = enemies.filter((candidate) => candidate && !candidate.dead && candidate.role === "shadow_wolf");
-      const current = wolves
-        .map((wolf) => wolf.shadowPackTarget)
-        .find((target) => target && !target.dead && targets.includes(target));
-      const target = current || nearestAlive(enemy, targets);
-      for (const wolf of wolves) {
-        wolf.shadowPackTarget = target;
-      }
+      const wolves = getAliveShadowWolves();
+      const current = getCurrentShadowWolfPackTarget(targets, wolves);
+      const target = getShadowWolfPriorityTarget(targets, current);
+      setShadowWolfPackTarget(wolves, target);
       return target;
+    }
+
+    function syncShadowWolfPackTarget() {
+      const wolves = getAliveShadowWolves();
+      if (!wolves.length) {
+        return null;
+      }
+      const targets = getTargetablePartyMembers();
+      if (!targets.length) {
+        setShadowWolfPackTarget(wolves, null);
+        return null;
+      }
+      const current = getCurrentShadowWolfPackTarget(targets, wolves);
+      const target = getShadowWolfPriorityTarget(targets, current);
+      setShadowWolfPackTarget(wolves, target);
+      return target;
+    }
+
+    function getAliveShadowWolves() {
+      return enemies.filter((candidate) => candidate && !candidate.dead && candidate.role === "shadow_wolf");
+    }
+
+    function getCurrentShadowWolfPackTarget(targets, wolves = getAliveShadowWolves()) {
+      return wolves
+        .map((wolf) => wolf.shadowPackTarget)
+        .find((target) => target && !target.dead && targets.includes(target)) || null;
+    }
+
+    function setShadowWolfPackTarget(wolves, target) {
+      for (const wolf of wolves) {
+        wolf.shadowPackTarget = target || null;
+      }
+    }
+
+    function getShadowWolfPriorityTarget(targets, current = null) {
+      const candidates = (targets || []).filter((unit) => unit && !unit.dead);
+      if (!candidates.length) {
+        return null;
+      }
+      const highestMaxHp = Math.max(...candidates.map((unit) => getUnitMaxHpForTargeting(unit)));
+      const topTargets = candidates.filter((unit) => getUnitMaxHpForTargeting(unit) === highestMaxHp);
+      if (current && topTargets.includes(current)) {
+        return current;
+      }
+      return topTargets[Math.floor(Math.random() * topTargets.length)] || null;
+    }
+
+    function getUnitMaxHpForTargeting(unit) {
+      if (unit && Number.isFinite(unit.maxHp)) {
+        return unit.maxHp;
+      }
+      return unit && Number.isFinite(unit.hp) ? unit.hp : 0;
     }
 
     return {

@@ -41,7 +41,33 @@
     };
   }
 
-  function makeWeapon(id, name, weaponType, allowedUnitIds, statKey, normalAttackSkillId) {
+  function makeCost(gold, materials = {}) {
+    return {
+      gold: Math.max(0, Math.floor(Number.isFinite(gold) ? gold : 0)),
+      materials: { ...materials },
+    };
+  }
+
+  function makeFixedUpgrade(mode, cost) {
+    return {
+      mode,
+      maxLevel: 5,
+      costs: Array.from({ length: 5 }, () => cloneCost(cost)),
+      multipliers: upgradeMultipliers.slice(),
+    };
+  }
+
+  const weaponAllowedUnitIds = {
+    "片手剣": ["ulpes", "rihas"],
+    "両手剣": ["ulpes"],
+    "拳具": ["rihas"],
+    "棒具": ["rihas", "sushia"],
+    "杖": ["sushia"],
+    "魔導書": ["finald", "sushia"],
+    "楽器": ["finald"],
+  };
+
+  function makeKariWeapon(id, name, weaponType, allowedUnitIds, statKey, normalAttackSkillId) {
     return {
       id,
       name,
@@ -50,6 +76,7 @@
       weaponType,
       series: "kari_set",
       material: "仮素材",
+      shopHidden: true,
       allowedUnitIds,
       craft: cloneCraftCost(),
       flatStatBonuses: { [statKey]: 20 },
@@ -62,7 +89,7 @@
     };
   }
 
-  function makeArmor(id, name, slot, statBonuses) {
+  function makeKariArmor(id, name, slot, statBonuses) {
     return {
       id,
       name,
@@ -70,6 +97,7 @@
       slot,
       series: "kari_set",
       material: "仮素材",
+      shopHidden: true,
       craft: cloneCraftCost(),
       statBonuses: { ...(statBonuses || {}) },
       upgrade: makeUpgrade("randomStatMultiplier"),
@@ -79,7 +107,7 @@
     };
   }
 
-  function makeAccessory(id, name, statBonuses) {
+  function makeKariAccessory(id, name, statBonuses) {
     return {
       id,
       name,
@@ -87,11 +115,65 @@
       slot: "accessory",
       series: "kari_set",
       material: "仮素材",
+      shopHidden: true,
       craft: cloneCraftCost(),
       statBonuses: { ...(statBonuses || {}) },
       effect: null,
       simpleDescription: "仮素材で作れる仮アクセサリ。",
       description: "仮素材で作れる仮アクセサリ。製作時の追加ステータスは固定。",
+    };
+  }
+
+  function makeHornRabbitWeapon(id, name, weaponType, statKey, statValue, normalAttackSkillId, craftMaterials, upgradeMaterials) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "weapon",
+      weaponType,
+      series: "horn_rabbit",
+      material: "ツノウサギ素材",
+      allowedUnitIds: (weaponAllowedUnitIds[weaponType] || []).slice(),
+      craft: makeCost(100, craftMaterials),
+      flatStatBonuses: { [statKey]: statValue },
+      upgrade: makeFixedUpgrade("flatStatMultiplier", makeCost(50, upgradeMaterials)),
+      normalAttackSkillId,
+      effect: null,
+      simpleDescription: "ツノウサギ素材で作れる武器。",
+      description: "ツノウサギ素材で作れる武器。強化すると主ステータスが伸びる。",
+    };
+  }
+
+  function makeHornRabbitArmor(id, name, slot, statBonuses, craftGold, craftMaterials, upgradeMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot,
+      series: "horn_rabbit",
+      material: "ツノウサギ素材",
+      craft: makeCost(craftGold, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      upgrade: makeFixedUpgrade("randomStatMultiplier", makeCost(50, upgradeMaterials)),
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
+  function makeHornRabbitAccessory(id, name, statBonuses, craftGold, craftMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "accessory",
+      series: "horn_rabbit",
+      material: "ツノウサギ素材",
+      craft: makeCost(craftGold, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      effect: null,
+      simpleDescription: description,
+      description,
     };
   }
 
@@ -114,7 +196,7 @@
         name: "ウルペスソード",
         rank: "D",
         slot: "weapon",
-        weaponType: "片手剣",
+        weaponType: "両手剣",
         material: "製作不可",
         allowedUnitIds: ["ulpes"],
         flatStatBonuses: { attack: 10 },
@@ -165,19 +247,147 @@
         simpleDescription: "アルジュナ用の初期武器",
         description: "アルジュナ用の初期武器",
       },
-      kari_ken: makeWeapon("kari_ken", "仮の片手剣", "片手剣", ["ulpes"], "attack", "speed_slash"),
-      kari_ryouken: makeWeapon("kari_ryouken", "仮の両手剣", "両手剣", ["ulpes"], "attack", "huriharai"),
-      kari_kengu: makeWeapon("kari_kengu", "仮の拳具", "拳具", ["rihas"], "attack", "huriharai"),
-      kari_bougu: makeWeapon("kari_bougu", "仮の棒具", "棒具", ["rihas", "sushia"], "attack", "huriharai"),
-      kari_tue: makeWeapon("kari_tue", "仮の杖", "杖", ["sushia"], "magic", "masic_shot"),
-      kari_book: makeWeapon("kari_book", "仮の魔導書", "魔導書", ["finald", "sushia"], "magic", "shock"),
-      kari_hue: makeWeapon("kari_hue", "仮の魔楽器", "魔楽器", ["finald"], "magic", "shock"),
-      kari_atama: makeArmor("kari_atama", "仮ヘルメット", "head", { maxHp: 0.05 }),
-      kari_huku: makeArmor("kari_huku", "仮服", "body", { defense: 0.03 }),
-      kari_zubon: makeArmor("kari_zubon", "仮レギンス", "legs", { magicDefense: 0.03 }),
-      kari_kutu: makeArmor("kari_kutu", "仮ブーツ", "feet", { attack: 0.03 }),
-      kari_te: makeArmor("kari_te", "仮グローブ", "hands", { magic: 0.03 }),
-      kari_akuse: makeAccessory("kari_akuse", "仮ネックレス", { damageResistance: 0.1 }),
+      kari_ken: makeKariWeapon("kari_ken", "仮の片手剣", "片手剣", ["ulpes", "rihas"], "attack", "speed_slash"),
+      kari_ryouken: makeKariWeapon("kari_ryouken", "仮の両手剣", "両手剣", ["ulpes"], "attack", "huriharai"),
+      kari_kengu: makeKariWeapon("kari_kengu", "仮の拳具", "拳具", ["rihas"], "attack", "huriharai"),
+      kari_bougu: makeKariWeapon("kari_bougu", "仮の棒具", "棒具", ["rihas", "sushia"], "attack", "huriharai"),
+      kari_tue: makeKariWeapon("kari_tue", "仮の杖", "杖", ["sushia"], "magic", "masic_shot"),
+      kari_book: makeKariWeapon("kari_book", "仮の魔導書", "魔導書", ["finald", "sushia"], "magic", "shock"),
+      kari_hue: makeKariWeapon("kari_hue", "仮の楽器", "楽器", ["finald"], "magic", "shock"),
+      kari_atama: makeKariArmor("kari_atama", "仮ヘルメット", "head", { maxHp: 0.05 }),
+      kari_huku: makeKariArmor("kari_huku", "仮服", "body", { defense: 0.03 }),
+      kari_zubon: makeKariArmor("kari_zubon", "仮レギンス", "legs", { magicDefense: 0.03 }),
+      kari_kutu: makeKariArmor("kari_kutu", "仮ブーツ", "feet", { attack: 0.03 }),
+      kari_te: makeKariArmor("kari_te", "仮グローブ", "hands", { magic: 0.03 }),
+      kari_akuse: makeKariAccessory("kari_akuse", "仮ネックレス", { damageResistance: 0.1 }),
+      horn_rabbit_knife: makeHornRabbitWeapon(
+        "horn_rabbit_knife",
+        "ツサギナイフ",
+        "片手剣",
+        "attack",
+        15,
+        "horn_rabbit_attack_knife",
+        { horn_rabbit_fur: 5, horn_rabbit_tooth: 1 },
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 }
+      ),
+      horn_rabbit_sword: makeHornRabbitWeapon(
+        "horn_rabbit_sword",
+        "ツサギソード",
+        "両手剣",
+        "attack",
+        20,
+        "horn_rabbit_attack_sword",
+        { horn_rabbit_fur: 5, horn_rabbit_tooth: 1 },
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 }
+      ),
+      horn_rabbit_fist: makeHornRabbitWeapon(
+        "horn_rabbit_fist",
+        "ツサギフィスト",
+        "拳具",
+        "attack",
+        15,
+        "horn_rabbit_attack_fist",
+        { horn_rabbit_fur: 5, horn_rabbit_tooth: 1 },
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 }
+      ),
+      horn_rabbit_staff: makeHornRabbitWeapon(
+        "horn_rabbit_staff",
+        "ツサギスタッフ",
+        "棒具",
+        "attack",
+        13,
+        "horn_rabbit_attack_staff",
+        { horn_rabbit_fur: 5, horn_rabbit_tooth: 1 },
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 }
+      ),
+      horn_rabbit_stick: makeHornRabbitWeapon(
+        "horn_rabbit_stick",
+        "ツサギステッキ",
+        "杖",
+        "magic",
+        15,
+        "horn_rabbit_attack_stick",
+        { horn_rabbit_fur: 5, horn_rabbit_corner: 1 },
+        { horn_rabbit_corner: 1 }
+      ),
+      horn_rabbit_book: makeHornRabbitWeapon(
+        "horn_rabbit_book",
+        "魔導書・ツサギ",
+        "魔導書",
+        "magic",
+        15,
+        "horn_rabbit_attack_book",
+        { horn_rabbit_fur: 5, horn_rabbit_corner: 1 },
+        { horn_rabbit_corner: 1 }
+      ),
+      horn_rabbit_flute: makeHornRabbitWeapon(
+        "horn_rabbit_flute",
+        "ツサギフルート",
+        "楽器",
+        "magic",
+        20,
+        "horn_rabbit_attack_flute",
+        { horn_rabbit_fur: 5, horn_rabbit_tooth: 1 },
+        { horn_rabbit_corner: 1 }
+      ),
+      horn_rabbit_helm: makeHornRabbitArmor(
+        "horn_rabbit_helm",
+        "ツサギヘルム",
+        "head",
+        { maxHp: 0.05, magicDefense: 0.03 },
+        100,
+        { horn_rabbit_fur: 3, horn_rabbit_corner: 1 },
+        { horn_rabbit_fur: 1, horn_rabbit_corner: 1 },
+        "ツノウサギの毛皮を元に作られた暖かい頭装備"
+      ),
+      horn_rabbit_armor: makeHornRabbitArmor(
+        "horn_rabbit_armor",
+        "ツサギアーマー",
+        "body",
+        { maxHp: 0.05, defense: 0.03 },
+        100,
+        { horn_rabbit_fur: 5 },
+        { horn_rabbit_fur: 2 },
+        "ツノウサギの毛皮を元に作られた暖かい胴装備"
+      ),
+      horn_rabbit_leggings: makeHornRabbitArmor(
+        "horn_rabbit_leggings",
+        "ツサギレギンス",
+        "legs",
+        { magic: 0.05 },
+        100,
+        { horn_rabbit_fur: 3, horn_rabbit_corner: 1 },
+        { horn_rabbit_fur: 1, horn_rabbit_corner: 1 },
+        "ツノウサギの毛皮を元に作られた暖かい足装備"
+      ),
+      horn_rabbit_boots: makeHornRabbitArmor(
+        "horn_rabbit_boots",
+        "ツサギブーツ",
+        "feet",
+        { attack: 0.05 },
+        100,
+        { horn_rabbit_fur: 2, horn_rabbit_tooth: 2 },
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 },
+        "ツノウサギの毛皮を元に作られた暖かい靴装備"
+      ),
+      horn_rabbit_glove: makeHornRabbitArmor(
+        "horn_rabbit_glove",
+        "ツサギグローブ",
+        "hands",
+        { attack: 0.05 },
+        100,
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 4 },
+        { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 },
+        "ツノウサギの毛皮を元に作られた暖かい手装備"
+      ),
+      horn_rabbit_pendant: makeHornRabbitAccessory(
+        "horn_rabbit_pendant",
+        "ツサギペンダント",
+        { magicDamageBoost: 0.1 },
+        150,
+        { horn_rabbit_corner: 3 },
+        "ツノウサギの角を元に作られた魔力溢れるペンダント"
+      ),
     },
     series: seriesData.series,
   };

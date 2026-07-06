@@ -21,6 +21,20 @@
 
     function makeUnit(options) {
       const skillOwner = options.skillOwner || options.id;
+      const baseMaxHp = options.maxHp || 100;
+      const baseMaxMp = options.maxMp || 0;
+      const baseHpRegenRate = Number.isFinite(options.hpRegenRate) ? options.hpRegenRate : 0;
+      const baseMpRegenRate = Number.isFinite(options.mpRegenRate) ? options.mpRegenRate : DEFAULT_MP_REGEN_RATE;
+      const baseSpeed = options.speed || battlePx(100);
+      const baseAttack = options.attack || 10;
+      const baseMagic = options.magic || 10;
+      const baseDefense = options.defense || 0;
+      const baseMagicDefense = options.magicDefense || 0;
+      const baseCritChance = Number.isFinite(options.critChance) ? options.critChance : BASE_CRIT_CHANCE;
+      const baseCritDamage = Number.isFinite(options.critDamage) ? options.critDamage : BASE_CRIT_DAMAGE_RATE;
+      const baseCastSpeed = Number.isFinite(options.castSpeed) ? options.castSpeed : 0;
+      const baseGuardChance = options.guardChance || 0;
+      const baseGuardDamageReduction = Number.isFinite(options.guardDamageReduction) ? options.guardDamageReduction : 0;
       const unit = {
         id: options.id,
         skillOwner,
@@ -35,27 +49,47 @@
         element: "none",
         elementBoosts: {},
         elementResistances: {},
-        maxHp: options.maxHp || 100,
-        hp: options.maxHp || 100,
-        moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || options.maxHp || 100,
-        maxMp: options.maxMp || 0,
-        mp: options.maxMp || 0,
-        hpRegenRate: Number.isFinite(options.hpRegenRate) ? options.hpRegenRate : 0,
-        mpRegenRate: Number.isFinite(options.mpRegenRate) ? options.mpRegenRate : DEFAULT_MP_REGEN_RATE,
-        speed: options.speed || battlePx(100),
-        attack: options.attack || 10,
-        magic: options.magic || 10,
-        defense: options.defense || 0,
-        magicDefense: options.magicDefense || 0,
+        baseStats: {
+          maxHp: baseMaxHp,
+          maxMp: baseMaxMp,
+          hpRegenRate: baseHpRegenRate,
+          mpRegenRate: baseMpRegenRate,
+          speed: baseSpeed,
+          attack: baseAttack,
+          magic: baseMagic,
+          defense: baseDefense,
+          magicDefense: baseMagicDefense,
+          physicalDamageBoost: Number.isFinite(options.physicalDamageBoost) ? options.physicalDamageBoost : 0,
+          magicDamageBoost: Number.isFinite(options.magicDamageBoost) ? options.magicDamageBoost : 0,
+          physicalDamageResistance: Number.isFinite(options.physicalDamageResistance) ? options.physicalDamageResistance : 0,
+          magicDamageResistance: Number.isFinite(options.magicDamageResistance) ? options.magicDamageResistance : 0,
+          critChance: baseCritChance,
+          critDamage: baseCritDamage,
+          castSpeed: baseCastSpeed,
+          guardChance: baseGuardChance,
+          guardDamageReduction: baseGuardDamageReduction,
+        },
+        maxHp: baseMaxHp,
+        hp: baseMaxHp,
+        moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || baseMaxHp,
+        maxMp: baseMaxMp,
+        mp: baseMaxMp,
+        hpRegenRate: baseHpRegenRate,
+        mpRegenRate: baseMpRegenRate,
+        speed: baseSpeed,
+        attack: baseAttack,
+        magic: baseMagic,
+        defense: baseDefense,
+        magicDefense: baseMagicDefense,
         physicalDamageBoost: Number.isFinite(options.physicalDamageBoost) ? options.physicalDamageBoost : 0,
         magicDamageBoost: Number.isFinite(options.magicDamageBoost) ? options.magicDamageBoost : 0,
         physicalDamageResistance: Number.isFinite(options.physicalDamageResistance) ? options.physicalDamageResistance : 0,
         magicDamageResistance: Number.isFinite(options.magicDamageResistance) ? options.magicDamageResistance : 0,
-        critChance: Number.isFinite(options.critChance) ? options.critChance : BASE_CRIT_CHANCE,
-        critDamage: Number.isFinite(options.critDamage) ? options.critDamage : BASE_CRIT_DAMAGE_RATE,
-        castSpeed: Number.isFinite(options.castSpeed) ? options.castSpeed : 0,
-        guardChance: options.guardChance || 0,
-        guardDamageReduction: Number.isFinite(options.guardDamageReduction) ? options.guardDamageReduction : 0,
+        critChance: baseCritChance,
+        critDamage: baseCritDamage,
+        castSpeed: baseCastSpeed,
+        guardChance: baseGuardChance,
+        guardDamageReduction: baseGuardDamageReduction,
         commandBias: 0,
         activeCommandBias: 0,
         commandBiasActionCount: 0,
@@ -92,8 +126,12 @@
         sleepMax: 0,
         injuryTimer: 0,
         injuryMax: 0,
+        magicNeutralizeTimer: 0,
+        magicNeutralizeMax: 0,
+        magicNeutralizeRatio: 0,
         shadowDashTimer: 0,
         shadowDashMax: 0,
+        shadowOrbitDir: 0,
         dead: false,
         noDamage: 999,
         channel: null,
