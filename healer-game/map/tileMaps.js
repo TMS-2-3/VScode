@@ -1,8 +1,9 @@
 (() => {
   "use strict";
 
+  // Map data edited by map collaborators.
   // Tile images are optional for now. When assets are ready, set image to a path
-  // such as "img/tiles/forest/grass.png".
+  // such as "map/img_tile/forest/grass.png".
   window.HEALER_TILE_DEFS = {
     grass: {
       id: "grass",

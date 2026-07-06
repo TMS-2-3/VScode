@@ -92,11 +92,11 @@
       sushia: "sushia_img",
     };
     const equipmentCharacterArtPaths = {
-      finaldMale: "img/arjuna_man_img/default/front.png",
-      finaldFemale: "img/arjuna_woman_img/default/front.png",
-      ulpes: "img/ulpes_img/default/front.png",
-      rihas: "img/rihas_img/default/front.png",
-      sushia: "img/sushia_img/default/front.png",
+      finaldMale: "img/char/arjuna_man_img/default/front.png",
+      finaldFemale: "img/char/arjuna_woman_img/default/front.png",
+      ulpes: "img/char/ulpes_img/default/front.png",
+      rihas: "img/char/rihas_img/default/front.png",
+      sushia: "img/char/sushia_img/default/front.png",
     };
     const battleCharacterSprites = createBattleCharacterSprites();
     const battleWalkRenderCache = new WeakMap();
@@ -138,7 +138,7 @@
         images[unitKey][direction] = {};
         for (const frame of BATTLE_WALK_FRAMES) {
           const image = new Image();
-          image.src = `img/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
+          image.src = `img/char/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
           prepareBattleWalkImage(image);
           images[unitKey][direction][frame] = image;
         }

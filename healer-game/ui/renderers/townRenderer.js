@@ -81,7 +81,7 @@
         images[unitId][direction] = {};
         for (const frame of TOWN_WALK_FRAMES) {
           const image = new Image();
-          image.src = `img/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
+          image.src = `img/char/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
           images[unitId][direction][frame] = image;
         }
       }
@@ -96,7 +96,7 @@
     }
     for (const [key, spritePath] of Object.entries(ARJUNA_TOWN_SPRITE_PATHS)) {
       const image = new Image();
-      image.src = `img/${spritePath}/default/front.png`;
+      image.src = `img/char/${spritePath}/default/front.png`;
       images[key] = image;
     }
     return images;

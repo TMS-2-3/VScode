@@ -1283,8 +1283,8 @@ memo.xlsxには状態シートを作成済み。
 - マップも後で本制作予定
 
 画像フォルダ:
-- img/main_char_pixel: ドット寄り素材
-- img/main_char_yuru: ゆるキャラ風素材
+- img/char/main_char_pixel: ドット寄り素材
+- img/char/main_char_yuru: ゆるキャラ風素材
 
 ============================================================
 25. Excel / メモ管理
