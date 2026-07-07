@@ -277,6 +277,11 @@
         return [...stack].reverse().find((item) => item.def) || stack[0];
       }
 
+      function resolvePreviewImagePath(src) {
+        if (!src) return "";
+        return src.startsWith("map/") ? `../${src}` : src;
+      }
+
       function hasTag(stack, tag) {
         return stack.some((item) => item.def && item.def.tags && item.def.tags.includes(tag));
       }
@@ -315,7 +320,7 @@
             if (!item.def || !item.def.image) continue;
             const img = document.createElement("img");
             img.className = "tile-image";
-            img.src = item.def.image;
+            img.src = resolvePreviewImagePath(item.def.image);
             img.alt = item.def.name || item.tileId;
             img.style.left = `${(item.def.drawOffsetX || 0) * drawScale}px`;
             img.style.top = `${(item.def.drawOffsetY || 0) * drawScale}px`;
