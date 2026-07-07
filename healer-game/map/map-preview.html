@@ -1,0 +1,433 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f2e8;
+        --ink: #2d2a24;
+        --muted: #6f695d;
+        --panel: #fffaf0;
+        --line: #d7cbb6;
+        --accent: #2f7c6d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) 1fr;
+      }
+
+      aside {
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+        padding: 20px;
+      }
+
+      main {
+        padding: 20px;
+        overflow: auto;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+
+      h2 {
+        margin-top: 24px;
+        font-size: 15px;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      select {
+        width: 100%;
+        margin-top: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: white;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      .meta,
+      .legend,
+      .events,
+      .diagnostics {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+        font-size: 13px;
+      }
+
+      .meta div,
+      .legend-item,
+      .event-item,
+      .diagnostic-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(215, 203, 182, 0.7);
+      }
+
+      .legend-item {
+        justify-content: flex-start;
+      }
+
+      .swatch {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 18px;
+        border: 1px solid rgba(45, 42, 36, 0.24);
+        border-radius: 4px;
+      }
+
+      .map-wrap {
+        width: max-content;
+        min-width: 100%;
+      }
+
+      .map-title {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .map-title strong {
+        color: var(--accent);
+      }
+
+      .tile-grid {
+        display: grid;
+        width: max-content;
+        border: 1px solid #9e927f;
+        background: #efe7d8;
+      }
+
+      .tile {
+        position: relative;
+        width: 34px;
+        height: 34px;
+        border-right: 1px solid rgba(45, 42, 36, 0.15);
+        border-bottom: 1px solid rgba(45, 42, 36, 0.15);
+        background-size: cover;
+        background-position: center;
+      }
+
+      .tile-image {
+        position: absolute;
+        pointer-events: none;
+        object-fit: cover;
+        image-rendering: auto;
+      }
+
+      .tile.block::after {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        border: 2px solid rgba(45, 42, 36, 0.55);
+        border-radius: 4px;
+      }
+
+      .tile.event::before {
+        content: "";
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #e55a4c;
+        box-shadow: 0 0 0 2px rgba(255, 250, 240, 0.8);
+      }
+
+      .empty {
+        padding: 24px;
+        border: 1px dashed var(--line);
+        color: var(--muted);
+        background: var(--panel);
+      }
+
+      @media (max-width: 780px) {
+        .app {
+          display: block;
+        }
+
+        aside {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside>
+        <h1>Map Preview</h1>
+        <p>同じフォルダー内の <code>tileMaps.js</code> を読み込んで、タイル定義とマップを確認します。</p>
+
+        <label for="map-select">表示マップ</label>
+        <select id="map-select"></select>
+
+        <h2>マップ情報</h2>
+        <div id="meta" class="meta"></div>
+
+        <h2>凡例</h2>
+        <div id="legend" class="legend"></div>
+
+        <h2>イベント</h2>
+        <div id="events" class="events"></div>
+
+        <h2>データ確認</h2>
+        <div id="diagnostics" class="diagnostics"></div>
+      </aside>
+
+      <main>
+        <div class="map-title">
+          <div>
+            <h2 id="map-name">マップ</h2>
+            <p id="map-note"></p>
+          </div>
+          <strong id="map-size"></strong>
+        </div>
+        <div id="map-wrap" class="map-wrap"></div>
+      </main>
+    </div>
+
+    <script src="tileMaps.js"></script>
+    <script>
+      const tileColors = {
+        grass: "#79b66a",
+        road: "#c9aa74",
+        soil: "#9a6f44",
+        floor: "#c7bca5",
+        wall: "#898376",
+        tree: "#337d4c",
+        rock: "#888b8d",
+        water: "#4f9ec7",
+        door: "#9e6a3a",
+        sign: "#d8bd61",
+      };
+
+      const defs = window.HEALER_TILE_DEFS || {};
+      const maps = window.HEALER_TILE_MAPS || {};
+
+      const mapSelect = document.getElementById("map-select");
+      const meta = document.getElementById("meta");
+      const legend = document.getElementById("legend");
+      const events = document.getElementById("events");
+      const diagnostics = document.getElementById("diagnostics");
+      const mapName = document.getElementById("map-name");
+      const mapNote = document.getElementById("map-note");
+      const mapSize = document.getElementById("map-size");
+      const mapWrap = document.getElementById("map-wrap");
+
+      function createDiv(className, text) {
+        const element = document.createElement("div");
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function getTileAt(layer, index) {
+        return Array.isArray(layer.tiles) ? layer.tiles[index] : null;
+      }
+
+      function getStack(map, index) {
+        const stack = [];
+        for (const layer of map.layers || []) {
+          const tileId = getTileAt(layer, index);
+          if (tileId) stack.push({ layer, tileId, def: defs[tileId] });
+        }
+        if (stack.length === 0 && map.defaultTile) {
+          stack.push({ layer: null, tileId: map.defaultTile, def: defs[map.defaultTile] });
+        }
+        return stack;
+      }
+
+      function getTopVisible(stack) {
+        return [...stack].reverse().find((item) => item.def) || stack[0];
+      }
+
+      function hasTag(stack, tag) {
+        return stack.some((item) => item.def && item.def.tags && item.def.tags.includes(tag));
+      }
+
+      function isBlocked(stack) {
+        return stack.some((item) => item.def && item.def.passable === false);
+      }
+
+      function renderMap(map) {
+        mapName.textContent = map.name || map.id;
+        mapNote.textContent = map.id === "template" ? "雛形は width/height が 0 のため、表示グリッドはありません。" : "";
+        mapSize.textContent = `${map.width} x ${map.height} / ${map.tileSize}px`;
+
+        mapWrap.innerHTML = "";
+        if (!map.width || !map.height) {
+          mapWrap.appendChild(createDiv("empty", "このマップにはまだタイルがありません。"));
+          return;
+        }
+
+        const grid = createDiv("tile-grid");
+        const cellSize = Math.min(48, Math.max(24, Number(map.tileSize) || 48));
+        const drawScale = cellSize / (Number(map.tileSize) || 48);
+        grid.style.gridTemplateColumns = `repeat(${map.width}, ${cellSize}px)`;
+
+        for (let index = 0; index < map.width * map.height; index += 1) {
+          const stack = getStack(map, index);
+          const top = getTopVisible(stack);
+          const tile = createDiv("tile");
+          tile.style.width = `${cellSize}px`;
+          tile.style.height = `${cellSize}px`;
+          const def = top && top.def;
+          const tileId = top && top.tileId;
+
+          tile.style.backgroundColor = tileColors[tileId] || "#d7cbb6";
+          for (const item of stack) {
+            if (!item.def || !item.def.image) continue;
+            const img = document.createElement("img");
+            img.className = "tile-image";
+            img.src = item.def.image;
+            img.alt = item.def.name || item.tileId;
+            img.style.left = `${(item.def.drawOffsetX || 0) * drawScale}px`;
+            img.style.top = `${(item.def.drawOffsetY || 0) * drawScale}px`;
+            img.style.width = `${(item.def.drawWidth || map.tileSize || cellSize) * drawScale}px`;
+            img.style.height = `${(item.def.drawHeight || map.tileSize || cellSize) * drawScale}px`;
+            tile.appendChild(img);
+          }
+          tile.classList.toggle("block", isBlocked(stack));
+          tile.classList.toggle("event", hasTag(stack, "event"));
+          tile.title = stack
+            .map((item) => `${item.layer ? item.layer.name : "default"}: ${item.def ? item.def.name : item.tileId}`)
+            .join("\n");
+          grid.appendChild(tile);
+        }
+
+        mapWrap.appendChild(grid);
+      }
+
+      function renderMeta(map) {
+        meta.innerHTML = "";
+        [
+          ["ID", map.id],
+          ["タイルサイズ", map.tileSize],
+          ["幅", map.width],
+          ["高さ", map.height],
+          ["標準タイル", map.defaultTile],
+          ["レイヤー数", (map.layers || []).length],
+        ].forEach(([label, value]) => {
+          const row = createDiv();
+          row.append(createDiv("", label), createDiv("", String(value)));
+          meta.appendChild(row);
+        });
+      }
+
+      function renderLegend(map) {
+        legend.innerHTML = "";
+        const used = new Set([map.defaultTile]);
+        for (const layer of map.layers || []) {
+          for (const tileId of layer.tiles || []) {
+            if (tileId) used.add(tileId);
+          }
+        }
+
+        for (const tileId of used) {
+          const def = defs[tileId];
+          if (!def) continue;
+          const row = createDiv("legend-item");
+          const swatch = createDiv("swatch");
+          swatch.style.background = tileColors[tileId] || "#d7cbb6";
+          row.append(swatch, createDiv("", `${def.name} (${tileId})`));
+          legend.appendChild(row);
+        }
+      }
+
+      function renderEvents(map) {
+        events.innerHTML = "";
+        if (!map.events || map.events.length === 0) {
+          events.appendChild(createDiv("event-item", "イベントなし"));
+          return;
+        }
+
+        for (const event of map.events) {
+          const row = createDiv("event-item");
+          row.append(createDiv("", event.name || event.id), createDiv("", `${event.type} / ${event.x},${event.y}`));
+          events.appendChild(row);
+        }
+      }
+
+      function renderDiagnostics(map) {
+        diagnostics.innerHTML = "";
+        const expected = map.width * map.height;
+        for (const layer of map.layers || []) {
+          const count = Array.isArray(layer.tiles) ? layer.tiles.length : 0;
+          const row = createDiv("diagnostic-item");
+          const ok = expected === 0 || count === 0 || count === expected;
+          row.append(createDiv("", layer.name || layer.id), createDiv("", ok ? "OK" : `${count} / ${expected}`));
+          diagnostics.appendChild(row);
+        }
+      }
+
+      function renderSelectedMap() {
+        const map = maps[mapSelect.value];
+        if (!map) return;
+        renderMap(map);
+        renderMeta(map);
+        renderLegend(map);
+        renderEvents(map);
+        renderDiagnostics(map);
+      }
+
+      function init() {
+        const mapList = Object.values(maps);
+        if (mapList.length === 0) {
+          mapWrap.appendChild(createDiv("empty", "マップ定義が見つかりません。"));
+          return;
+        }
+
+        for (const map of mapList) {
+          const option = document.createElement("option");
+          option.value = map.id;
+          option.textContent = map.name || map.id;
+          mapSelect.appendChild(option);
+        }
+
+        mapSelect.value = mapList.find((map) => map.id !== "template")?.id || mapList[0].id;
+        mapSelect.addEventListener("change", renderSelectedMap);
+        renderSelectedMap();
+      }
+
+      init();
+    </script>
+  </body>
+</html>
+
+
