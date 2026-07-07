@@ -300,12 +300,13 @@
     }
 
     function getRawCritChance(unit) {
-      let chance = getEffectiveStat(unit, "critChance");
+      let chance = getBaseAndEquipmentStat(unit, "critChance", 0);
       if (hasPassive(unit, "swordwork")) {
         const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER) ? ULPES_PASSIVE_CRIT_CHANCE_MULTIPLIER : 1;
         chance *= multiplier;
       }
-      return Math.max(0, chance);
+      chance += getStatusStatBonus(unit, "critChance");
+      return applyStatMinimum("critChance", chance);
     }
 
     function getEffectiveCritChance(unit) {
@@ -313,15 +314,16 @@
     }
 
     function getEffectiveCritDamageRate(unit) {
-      let rate = getEffectiveStat(unit, "critDamage");
+      let rate = getBaseAndEquipmentStat(unit, "critDamage", 0);
       if (hasPassive(unit, "swordwork")) {
         const multiplier = Number.isFinite(ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER)
           ? ULPES_PASSIVE_CRIT_DAMAGE_BONUS_MULTIPLIER
           : 0.5;
         rate *= multiplier;
       }
+      rate += getStatusStatBonus(unit, "critDamage");
       rate += Math.max(0, getRawCritChance(unit) - 1) * getSafeNumber(CRIT_OVERFLOW_DAMAGE_RATE, 0.5);
-      return Math.max(0, rate);
+      return applyStatMinimum("critDamage", rate);
     }
 
     function getCritDamageMultiplier(unit) {
@@ -380,6 +382,12 @@
       const base = getBaseStat(unit, statKey, fallback) + getEquipmentFlatBonus(unit, statKey);
       const percentBonus = getEquipmentBonus(unit, statKey) + getStatusStatBonus(unit, statKey);
       return applyStatMinimum(statKey, isAdditiveBonusStat(statKey) ? base + percentBonus : base + base * percentBonus);
+    }
+
+    function getBaseAndEquipmentStat(unit, statKey, fallback = 0) {
+      const base = getBaseStat(unit, statKey, fallback) + getEquipmentFlatBonus(unit, statKey);
+      const equipmentBonus = getEquipmentBonus(unit, statKey);
+      return applyStatMinimum(statKey, isAdditiveBonusStat(statKey) ? base + equipmentBonus : base + base * equipmentBonus);
     }
 
     function isAdditiveBonusStat(statKey) {

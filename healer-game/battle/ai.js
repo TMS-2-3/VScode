@@ -27,6 +27,7 @@
       updateTelegraphDynamic,
       getTargetablePartyMembers,
       getPriorityTarget,
+      isAvoidTarget,
       getEffectiveMoveSpeed,
       getEquippedSlotItem,
       triggerUltimate,
@@ -270,12 +271,13 @@
         unit.aiMoveTarget = priorityTarget;
         return priorityTarget;
       }
-      const nearest = nearestAlive(unit, enemies);
+      const targetableEnemies = getPartyTargetableEnemies();
+      const nearest = nearestAlive(unit, targetableEnemies);
       if (!nearest) {
         unit.aiMoveTarget = null;
         return null;
       }
-      const current = unit.aiMoveTarget && !unit.aiMoveTarget.dead && enemies.includes(unit.aiMoveTarget)
+      const current = unit.aiMoveTarget && !unit.aiMoveTarget.dead && targetableEnemies.includes(unit.aiMoveTarget)
         ? unit.aiMoveTarget
         : null;
       if (!current) {
@@ -289,6 +291,10 @@
         return nearest;
       }
       return current;
+    }
+
+    function getPartyTargetableEnemies() {
+      return enemies.filter((enemy) => enemy && !enemy.dead && !(typeof isAvoidTarget === "function" && isAvoidTarget(enemy)));
     }
 
     function isForcedHostileTarget(source, target) {
@@ -320,6 +326,9 @@
 
     function getPreferredRangeRole(unit) {
       const weapon = typeof getEquippedSlotItem === "function" ? getEquippedSlotItem(unit, "weapon") : null;
+      if (weapon && (weapon.preferredRangeRole === "front" || weapon.preferredRangeRole === "back")) {
+        return weapon.preferredRangeRole;
+      }
       const weaponType = weapon && weapon.weaponType;
       if (["杖", "魔導書", "楽器"].includes(weaponType)) {
         return "back";

@@ -63,8 +63,8 @@
       description: "寝てしまい、一切の行動ができなくなる。睡眠中は行動クールタイムは停止する。\nドットダメージ以外のダメージで解除することができる。",
       simpleDescription: "寝てしまい、行動ができなくなる。",
     },
-    Injury: {
-      id: "Injury",
+    debuff_Injury: {
+      id: "debuff_Injury",
       name: "負傷",
       type: "ステータスデバフ",
       label: "負",

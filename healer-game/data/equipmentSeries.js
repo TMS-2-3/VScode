@@ -40,6 +40,42 @@
           },
         },
       },
+      bud_alraune: {
+        key: "bud_alraune",
+        name: "つぼみのアルラウネ",
+        setEffects: {
+          2: {
+            name: "つぼみの中",
+            statBonuses: { magicDefense: 0.1 },
+            simpleDescription: "魔法防御力が上昇する",
+            description: "魔法防御力が10%上昇する",
+          },
+          5: {
+            name: "ツタの棘",
+            statBonuses: { attack: 0.1 },
+            simpleDescription: "攻撃力が上昇する",
+            description: "攻撃力が10%上昇する",
+          },
+        },
+      },
+      shadow_wolf: {
+        key: "shadow_wolf",
+        name: "シャドウウルフ",
+        setEffects: {
+          2: {
+            name: "ハントダッシュ",
+            statBonuses: { moveSpeed: 0.2 },
+            simpleDescription: "移動速度が上昇する",
+            description: "移動速度が20%上昇する",
+          },
+          5: {
+            name: "ハントアイ",
+            guaranteedCritHpRatio: 0.2,
+            simpleDescription: "HPが低い敵に攻撃をする時、会心が発生する",
+            description: "HPが20%以下の敵に対する攻撃が必ず会心になる",
+          },
+        },
+      },
     },
   };
 })();

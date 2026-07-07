@@ -47,6 +47,7 @@
       getEffectiveGuardChance,
       getEffectiveCritChance,
       getCritDamageMultiplier,
+      getActiveSetEffects,
       getUltimateCost,
       getEffectiveDefense,
       getEffectiveMagicDefense,
@@ -136,7 +137,7 @@
       let finalAmount = amount;
       let criticalHit = false;
 
-      if (shouldRollCritical(source, options)) {
+      if (shouldRollCritical(source, target, options)) {
         finalAmount *= getCritDamageMultiplier(source);
         criticalHit = true;
       }
@@ -308,12 +309,26 @@
       return `${prefix}${Math.round(amount)}`;
     }
 
-    function shouldRollCritical(source, options = {}) {
+    function shouldRollCritical(source, target, options = {}) {
       if (!source || options.noCrit === true || options.crit === false || isDotDamageOptions(options)) {
         return false;
       }
+      if (hasGuaranteedSetCritical(source, target)) {
+        return true;
+      }
       const bonus = Number.isFinite(options.critChanceBonus) ? options.critChanceBonus : 0;
       return Math.random() < clamp(getEffectiveCritChance(source) + bonus, 0, 1);
+    }
+
+    function hasGuaranteedSetCritical(source, target) {
+      if (!source || source.team !== "party" || !target || target.team !== "enemy" || target.maxHp <= 0 || typeof getActiveSetEffects !== "function") {
+        return false;
+      }
+      const hpRatio = clamp(target.hp / Math.max(1, target.maxHp), 0, 1);
+      return getActiveSetEffects(source).some((entry) => {
+        const threshold = entry && entry.effect && entry.effect.guaranteedCritHpRatio;
+        return Number.isFinite(threshold) && hpRatio <= threshold;
+      });
     }
 
     function applyDamageModifierSum(source, target, amount, options = {}) {

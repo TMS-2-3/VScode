@@ -30,6 +30,45 @@
         simpleDescription: "強靭なツノウサギの歯",
         description: "強靭なツノウサギの歯",
       },
+      alraune_leaf: {
+        key: "alraune_leaf",
+        name: "アルラウネの葉",
+        simpleDescription: "まだ小さいアルラウネの葉",
+        description: "まだ小さいアルラウネの葉",
+      },
+      alraune_ivy: {
+        key: "alraune_ivy",
+        name: "アルラウネのツタ",
+        simpleDescription: "少し刺が生えてるアルラウネのツタ",
+        description: "少し刺が生えてるアルラウネのツタ",
+      },
+      alraune_bud: {
+        key: "alraune_bud",
+        name: "アルラウネの蕾",
+        simpleDescription: "まだほとんど開いていないアルラウネの蕾",
+        description: "まだほとんど開いていないアルラウネの蕾",
+      },
+      shadow_wolf_fur: {
+        key: "shadow_wolf_fur",
+        name: "シャドウウルフの毛皮",
+        sellPrice: 60,
+        simpleDescription: "綺麗なシャドウウルフの毛皮",
+        description: "綺麗なシャドウウルフの毛皮",
+      },
+      shadow_wolf_nail: {
+        key: "shadow_wolf_nail",
+        name: "シャドウウルフの爪",
+        sellPrice: 80,
+        simpleDescription: "鋭いシャドウウルフの爪",
+        description: "鋭いシャドウウルフの爪",
+      },
+      shadow_wolf_fang: {
+        key: "shadow_wolf_fang",
+        name: "シャドウウルフの牙",
+        sellPrice: 110,
+        simpleDescription: "強靭なシャドウウルフの牙",
+        description: "強靭なシャドウウルフの牙",
+      },
     },
   };
 })();

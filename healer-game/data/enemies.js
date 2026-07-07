@@ -159,16 +159,16 @@
       elementResistances: {},
       skills: ["d_enemy_attack", "rush", "multi_biting"],
       drops: [
-        { type: "currency", key: "gold", name: "お金", amount: 20, chance: 1 },
+        { type: "currency", key: "gold", name: "お金", amount: 30, chance: 1 },
         { type: "material", key: "horn_rabbit_fur", name: "ツノウサギの毛皮", count: 1, chance: 0.7 },
         { type: "material", key: "horn_rabbit_fur", name: "ツノウサギの毛皮", count: 1, chance: 0.7 },
-        { type: "material", key: "horn_rabbit_corner", name: "ツノウサギの角", count: 1, chance: 0.5 },
+        { type: "material", key: "horn_rabbit_corner", name: "ツノウサギの角", count: 1, chance: 0.4 },
         { type: "material", key: "horn_rabbit_tooth", name: "ツノウサギの歯", count: 1, chance: 0.8 },
         { type: "item", key: "d_power_flag", name: "力の結晶(D)", count: 1, chance: 0.7 },
       ],
       color: "#d2b16a",
     },
-    bud_Alraune: {
+    bud_alraune: {
       label: "蕾",
       hp: 370,
       mp: 60,
@@ -190,6 +190,11 @@
       elementResistances: {},
       skills: ["d_enemy_attack", "vine_punch", "sleep_scent", "pollen_spraying"],
       drops: [
+        { type: "currency", key: "gold", name: "お金", amount: 40, chance: 1 },
+        { type: "material", key: "alraune_leaf", name: "アルラウネの葉", count: 1, chance: 0.7 },
+        { type: "material", key: "alraune_leaf", name: "アルラウネの葉", count: 1, chance: 0.7 },
+        { type: "material", key: "alraune_ivy", name: "アルラウネのツタ", count: 1, chance: 0.8 },
+        { type: "material", key: "alraune_bud", name: "アルラウネの蕾", count: 1, chance: 0.4 },
         { type: "item", key: "d_power_flag", name: "力の結晶(D)", count: 1, chance: 0.7 },
       ],
       color: "#76a96a",
@@ -216,6 +221,11 @@
       elementResistances: {},
       skills: ["d_enemy_attack", "biting", "shadow_dash", "throat_hunt"],
       drops: [
+        { type: "currency", key: "gold", name: "お金", amount: 60, chance: 1 },
+        { type: "material", key: "shadow_wolf_fur", name: "シャドウウルフの毛皮", count: 2, chance: 0.5 },
+        { type: "material", key: "shadow_wolf_fur", name: "シャドウウルフの毛皮", count: 1, chance: 0.8 },
+        { type: "material", key: "shadow_wolf_nail", name: "シャドウウルフの爪", count: 1, chance: 0.7 },
+        { type: "material", key: "shadow_wolf_fang", name: "シャドウウルフの牙", count: 1, chance: 0.7 },
         { type: "item", key: "d_power_flag", name: "力の結晶(D)", count: 1, chance: 0.7 },
       ],
       color: "#59617d",

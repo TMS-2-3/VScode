@@ -74,6 +74,10 @@
     const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
     const statusData = STATUS_DATA || window.HEALER_STATUS_DATA || {};
     const tooltipText = window.createHealerTooltipText(context);
+    const statPresenter = context.statPresenter || (window.createHealerStatPresenter ? window.createHealerStatPresenter(context) : null);
+    if (!statPresenter || typeof statPresenter.getDetailedStats !== "function") {
+      throw new Error("createHealerStatPresenter must be loaded before ui/renderers/statusRenderer.js");
+    }
 
   function getBattleActionLabel(actionId, fallback = "") {
     if (typeof getKeybindLabel !== "function" || !actionId) {
@@ -390,180 +394,7 @@
   }
 
   function getDetailedStats(unit) {
-    const outgoing = getUnitOutgoingDamageMultiplier(unit);
-    const incoming = getUnitIncomingDamageMultiplier(unit);
-    const castSpeed = getUnitCastSpeed(unit);
-    const skillSpeed = 1 / getMoodCooldownMultiplier(unit) - 1;
-    const stats = [
-      { label: "攻撃力", value: formatNumber(getEffectiveAttack(unit)) },
-      { label: "魔力", value: formatNumber(getEffectiveMagic(unit)) },
-      { label: "防御力", value: formatNumber(getEffectiveDefense(unit)) },
-      { label: "魔法防御力", value: formatNumber(getEffectiveMagicDefense(unit)) },
-      { label: "会心率", value: formatPercent(getUnitCritChance(unit)) },
-      { label: "会心ダメージ", value: formatPercent(getUnitCritDamageRate(unit)) },
-      { label: "ガード率", value: formatPercent(getEffectiveGuardChance(unit)) },
-      { label: "ガード軽減率", value: formatPercent(getGuardDamageReductionRate(unit)) },
-      { label: "与ダメージ率", value: formatPercent(outgoing) },
-      { label: "被ダメージ率", value: formatPercent(incoming) },
-      { label: "物理与ダメージ率", value: formatPercent(getPhysicalOutgoingDamageRate(unit)) },
-      { label: "物理被ダメージ率", value: formatPercent(getPhysicalIncomingDamageRate(unit)) },
-      { label: "魔法与ダメージ率", value: formatPercent(getMagicOutgoingDamageRate(unit)) },
-      { label: "魔法被ダメージ率", value: formatPercent(getMagicIncomingDamageRate(unit)) },
-      { label: "HP再生率", value: formatPercent(getHpRegenRate(unit)) },
-      { label: "MP回復率", value: formatPercent(getMpRegenRate(unit)) },
-      { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
-      { label: "クールタイム", value: formatSignedPercent(skillSpeed) },
-      { label: "行動速度", value: getActionSpeedText(unit) },
-      { breakAfter: true },
-      { label: "ゲージ上昇率", value: formatPercent(getUltimateChargeRate(unit)) },
-      { label: "移動速度", value: `${Math.round(getUnitMoveSpeed(unit))}` },
-    ];
-    return stats;
-  }
-
-  function getActionSpeedText(unit) {
-    return formatPercent(getUnitActionSpeedRate(unit));
-  }
-
-  function getUnitActionSpeedRate(unit) {
-    if (!unit) {
-      return 1;
-    }
-    const config = unit.id !== "finald" ? getCommandBiasConfig(unit.activeCommandBias || 0) : null;
-    const actionCdMultiplier = config && Number.isFinite(config.actionCd) && config.actionCd > 0 ? config.actionCd : 1;
-    return Math.max(0, 1 + getUnitActionSpeedBonus(unit)) / actionCdMultiplier;
-  }
-
-  function getUnitActionSpeedBonus(unit) {
-    let bonus = 0;
-    if (typeof getEquipmentStatBonusSum === "function") {
-      bonus += getEquipmentStatBonusSum(unit, "actionSpeed");
-    }
-    return bonus;
-  }
-
-  function getUnitMoveSpeed(unit) {
-    if (typeof getEffectiveMoveSpeed === "function") {
-      return getEffectiveMoveSpeed(unit);
-    }
-    return unit && Number.isFinite(unit.speed) ? unit.speed : 0;
-  }
-
-  function getCommandBiasConfig(value) {
-    const normalized = Math.max(-2, Math.min(2, Math.round(Number(value) || 0)));
-    if (Array.isArray(COMMAND_BIAS_CONFIGS)) {
-      const found = COMMAND_BIAS_CONFIGS.find((config) => config && config.value === normalized);
-      if (found) {
-        return found;
-      }
-    }
-    return { value: 0, actionCd: 1 };
-  }
-
-  function getUltimateCost(unit) {
-    return skillSystem && typeof skillSystem.getUltimateCost === "function" ? skillSystem.getUltimateCost(unit) : 100;
-  }
-
-  function getUltimateChargeRate(unit) {
-    if (typeof getBattleUltimateChargeRate === "function") {
-      return getBattleUltimateChargeRate(unit);
-    }
-    let bonus = 0;
-    if (typeof getEquipmentStatBonusSum === "function") {
-      bonus += getEquipmentStatBonusSum(unit, "ultimateChargeRate");
-    }
-    return Math.max(0, (unit && Number.isFinite(unit.ultimateChargeRate) ? unit.ultimateChargeRate : 1) + bonus);
-  }
-
-  function getUnitElementKeys() {
-    return typeof getElementKeys === "function" ? getElementKeys() : ["none"];
-  }
-
-  function getUnitElementLabel(elementKey) {
-    return typeof getElementName === "function" ? getElementName(elementKey) : elementKey;
-  }
-
-  function getUnitElementShortLabel(elementKey) {
-    if (typeof getElementShortName === "function") {
-      return getElementShortName(elementKey);
-    }
-    return getUnitElementLabel(elementKey).replace(/属性/g, "");
-  }
-
-  function getUnitElementName(unit) {
-    const elementKey = typeof getNormalElement === "function" ? getNormalElement(unit) : "none";
-    return getUnitElementLabel(elementKey);
-  }
-
-  function getElementBoostValue(unit, elementKey) {
-    return typeof getElementBoostBonus === "function" ? getElementBoostBonus(unit, elementKey) : 0;
-  }
-
-  function getElementResistanceValue(unit, elementKey) {
-    return typeof getElementResistanceBonus === "function" ? getElementResistanceBonus(unit, elementKey) : 0;
-  }
-
-  function getUnitOutgoingDamageMultiplier(unit) {
-    let bonus = multiplierToBonus(getMoodOutgoingDamageMultiplier(unit)) + multiplierToBonus(getCommandOutgoingDamageMultiplier(unit));
-    if (hasPassive(unit, "painless")) {
-      bonus += multiplierToBonus(getRihasPassiveDamageMultiplier(unit));
-    }
-    if (typeof getDamageBoost === "function") {
-      bonus += getDamageBoost(unit);
-    }
-    return Math.max(0, 1 + bonus);
-  }
-
-  function getUnitIncomingDamageMultiplier(unit) {
-    let bonus = multiplierToBonus(getMoodIncomingDamageMultiplier(unit)) + multiplierToBonus(getCommandIncomingDamageMultiplier(unit));
-    if (hasPassive(unit, "painless")) {
-      bonus += multiplierToBonus(getRihasPassiveIncomingMultiplier(unit));
-    }
-    if (typeof getDamageResistance === "function") {
-      bonus -= getDamageResistance(unit);
-    }
-    return Math.max(0, 1 + bonus);
-  }
-
-  function getPhysicalOutgoingDamageRate(unit) {
-    const boost = typeof getPhysicalDamageBoost === "function" ? getPhysicalDamageBoost(unit) : 0;
-    return Math.max(0, 1 + boost);
-  }
-
-  function getPhysicalIncomingDamageRate(unit) {
-    const resistance = typeof getPhysicalDamageResistance === "function" ? getPhysicalDamageResistance(unit) : 0;
-    return Math.max(0, 1 - resistance);
-  }
-
-  function getMagicOutgoingDamageRate(unit) {
-    const boost = typeof getMagicDamageBoost === "function" ? getMagicDamageBoost(unit) : 0;
-    return Math.max(0, 1 + boost);
-  }
-
-  function getMagicIncomingDamageRate(unit) {
-    const resistance = typeof getMagicDamageResistance === "function" ? getMagicDamageResistance(unit) : 0;
-    return Math.max(0, 1 - resistance);
-  }
-  function multiplierToBonus(multiplier) {
-    return (Number.isFinite(multiplier) ? multiplier : 1) - 1;
-  }
-
-  function getUnitCritChance(unit) {
-    return typeof getEffectiveCritChance === "function" ? getEffectiveCritChance(unit) : 0;
-  }
-
-  function getUnitCritDamageRate(unit) {
-    return typeof getEffectiveCritDamageRate === "function" ? getEffectiveCritDamageRate(unit) : 0;
-  }
-  function getUnitCastTimeMultiplier(unit) {
-    if (hasPassive(unit, "warmup")) {
-      return getSushiaCastTime(1, unit);
-    }
-    return getMoodCastTimeMultiplier(unit);
-  }
-
-  function getUnitCastSpeed(unit) {
-    return typeof getCastSpeed === "function" ? getCastSpeed(unit) : 1 - getUnitCastTimeMultiplier(unit);
+    return statPresenter.getDetailedStats(unit);
   }
 
   function drawDetailedSkills(unit, x, y, w, h) {
@@ -690,19 +521,6 @@
     ctx.textBaseline = "middle";
     ctx.fillText(label, x + width / 2, y + height / 2 + 0.4);
     ctx.restore();
-  }
-
-  function formatNumber(value) {
-    return `${Math.floor(value)}`;
-  }
-
-  function formatPercent(value) {
-    return `${Math.round(value * 100)}%`;
-  }
-
-  function formatSignedPercent(value) {
-    const rounded = Math.round(value * 100);
-    return `${rounded > 0 ? "+" : ""}${rounded}%`;
   }
 
   function drawCharacterUiPortrait(unit, x, y, size) {
@@ -873,7 +691,7 @@
     }
     if ((unit.injuryTimer || 0) > 0) {
       const injuryMax = Math.max(0.1, unit.injuryMax || unit.injuryTimer);
-      icons.push(makeStatusIcon(unit, "Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
+      icons.push(makeStatusIcon(unit, "debuff_Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
     }
     if ((unit.magicNeutralizeTimer || 0) > 0) {
       const neutralizeMax = Math.max(0.1, unit.magicNeutralizeMax || unit.magicNeutralizeTimer);

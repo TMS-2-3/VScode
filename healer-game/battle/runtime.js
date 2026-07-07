@@ -76,6 +76,7 @@
         itemSystem.updateItemUsage(dt);
       }
       updatePriorityTarget(dt);
+      updateAvoidTarget(dt);
       updatePlayer(dt);
       updatePartyAi(dt);
       updateEnemyAi(dt);
@@ -84,6 +85,7 @@
       updateAreas(dt);
       separateUnits(dt);
       clearInvalidPriorityTarget();
+      clearInvalidAvoidTarget();
       collectDefeatedEnemyDrops();
       checkBattleState(dt);
     }
@@ -189,6 +191,24 @@
         game.priorityTargetIgnoredUnitIds = {};
         clearPartyAttackIntents();
         addFloat("フォーカス終了", target.x, target.y - 36, "#f7fff6");
+      }
+    }
+
+    function updateAvoidTarget(dt) {
+      clearInvalidAvoidTarget();
+      if (!game.avoidTarget) {
+        game.avoidTargetTimer = 0;
+        return;
+      }
+      if (!Number.isFinite(game.avoidTargetTimer) || game.avoidTargetTimer <= 0) {
+        return;
+      }
+      game.avoidTargetTimer = Math.max(0, game.avoidTargetTimer - dt);
+      if (game.avoidTargetTimer <= 0) {
+        const target = game.avoidTarget;
+        game.avoidTarget = null;
+        clearPartyAttackIntents();
+        addFloat("ディスタンス終了", target.x, target.y - 36, "#f7fff6");
       }
     }
 
@@ -344,6 +364,9 @@
             } else {
               const damage = typeof shot.getDamage === "function" ? shot.getDamage(unit) : shot.damage;
               dealDamage(shot.owner, unit, damage, { magic: shot.magic, dotDamage: shot.dotDamage, damageType: shot.damageType });
+              if (typeof shot.onHit === "function") {
+                shot.onHit(unit);
+              }
             }
             if (Number.isFinite(shot.pierceCount)) {
               if (shot.pierceCount <= 0) {
@@ -699,6 +722,9 @@
       if (!game.priorityTarget) {
         return null;
       }
+      if (isAvoidTarget(game.priorityTarget)) {
+        return null;
+      }
       if (unit && game.priorityTargetIgnoredUnitIds && game.priorityTargetIgnoredUnitIds[unit.id]) {
         return null;
       }
@@ -708,6 +734,10 @@
     function setPriorityTarget(target, duration = 0, label = "ターゲット指定", options = {}) {
       if (!target || target.dead || !enemies.includes(target)) {
         return false;
+      }
+      if (game.avoidTarget) {
+        game.avoidTarget = null;
+        game.avoidTargetTimer = 0;
       }
       if (game.priorityTarget && game.priorityTarget !== target) {
         clearFocusDamageTakenBonus(game.priorityTarget);
@@ -726,6 +756,34 @@
       clearPartyAttackIntents();
       if (label) {
         addFloat(label, target.x, target.y - 36, "#ffd56b");
+      }
+      return true;
+    }
+
+    function getAvoidTarget() {
+      clearInvalidAvoidTarget();
+      return game.avoidTarget || null;
+    }
+
+    function isAvoidTarget(target) {
+      return Boolean(target && getAvoidTarget() === target);
+    }
+
+    function setAvoidTarget(target, duration = 0, label = "ディスタンス") {
+      if (!target || target.dead || !enemies.includes(target)) {
+        return false;
+      }
+      if (game.priorityTarget) {
+        clearFocusDamageTakenBonus(game.priorityTarget);
+        game.priorityTarget = null;
+        game.priorityTargetTimer = 0;
+        game.priorityTargetIgnoredUnitIds = {};
+      }
+      game.avoidTarget = target;
+      game.avoidTargetTimer = Number.isFinite(duration) && duration > 0 ? duration : 0;
+      clearPartyAttackIntents();
+      if (label) {
+        addFloat(label, target.x, target.y - 36, "#9cc6ff");
       }
       return true;
     }
@@ -769,6 +827,14 @@
         game.priorityTarget = null;
         game.priorityTargetTimer = 0;
         game.priorityTargetIgnoredUnitIds = {};
+        clearPartyAttackIntents();
+      }
+    }
+
+    function clearInvalidAvoidTarget() {
+      if (game.avoidTarget && (game.avoidTarget.dead || !enemies.includes(game.avoidTarget))) {
+        game.avoidTarget = null;
+        game.avoidTargetTimer = 0;
         clearPartyAttackIntents();
       }
     }
@@ -893,9 +959,13 @@
       getHoveredEnemy,
       getPriorityTarget,
       setPriorityTarget,
+      getAvoidTarget,
+      isAvoidTarget,
+      setAvoidTarget,
       togglePriorityTargetAt,
       clearPartyAttackIntents,
       clearInvalidPriorityTarget,
+      clearInvalidAvoidTarget,
       isFieldUnit,
       isTargetableUnit,
       getFieldPartyMembers,

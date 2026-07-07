@@ -31,7 +31,7 @@
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const BATTLE_START_ULTIMATE_RATIO = 0.5;
-    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "Injury"];
+    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury"];
 
     function getCarriedHp(unit) {
       const savedHp = game.partyHpById && game.partyHpById[unit.id];
@@ -120,8 +120,8 @@
         unit.sleepTimer = Math.max(0, sleep.timer || 0);
         unit.sleepMax = Math.max(unit.sleepTimer, sleep.max || 0);
       }
-      const injury = statuses.Injury;
-      if (isStatusCarryover("Injury") && injury && injury.timer > 0) {
+      const injury = statuses.debuff_Injury || statuses.Injury;
+      if (isStatusCarryover("debuff_Injury") && injury && injury.timer > 0) {
         unit.injuryTimer = Math.max(0, injury.timer || 0);
         unit.injuryMax = Math.max(unit.injuryTimer, injury.max || 0);
       }
@@ -276,6 +276,8 @@
       game.priorityTarget = null;
       game.priorityTargetTimer = 0;
       game.priorityTargetIgnoredUnitIds = {};
+      game.avoidTarget = null;
+      game.avoidTargetTimer = 0;
       game.skillPage = "page1";
       game.currentQuest = quest;
       game.battleRewards = { pending: [], granted: [], claimed: false };

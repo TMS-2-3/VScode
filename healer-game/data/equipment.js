@@ -67,6 +67,16 @@
     "楽器": ["finald"],
   };
 
+  const weaponTypeStatBonuses = {
+    "片手剣": { guardChance: 0.2 },
+    "両手剣": { critDamage: 0.4 },
+    "拳具": { actionSpeed: 0.1 },
+    "棒具": { cooldownReduction: 0.2 },
+    "杖": { magicDamageBoost: 0.2 },
+    "魔導書": { castSpeed: 0.2 },
+    "楽器": { ultimateChargeRate: 0.2 },
+  };
+
   function makeKariWeapon(id, name, weaponType, allowedUnitIds, statKey, normalAttackSkillId) {
     return {
       id,
@@ -177,6 +187,113 @@
     };
   }
 
+  function makeAlrauneWeapon(id, name, weaponType, statKey, statValue, normalAttackSkillId, craftMaterials, upgradeMaterials) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "weapon",
+      weaponType,
+      series: "bud_alraune",
+      material: "アルラウネ素材",
+      allowedUnitIds: (weaponAllowedUnitIds[weaponType] || []).slice(),
+      craft: makeCost(130, craftMaterials),
+      flatStatBonuses: { [statKey]: statValue },
+      preferredRangeRole: weaponType === "楽器" ? null : "back",
+      upgrade: makeFixedUpgrade("flatStatMultiplier", makeCost(65, upgradeMaterials)),
+      normalAttackSkillId,
+      effect: null,
+      simpleDescription: "アルラウネ素材で作れる武器。",
+      description: "アルラウネ素材で作れる武器。強化すると主ステータスが伸びる。",
+    };
+  }
+
+  function makeAlrauneArmor(id, name, slot, statBonuses, craftMaterials, upgradeMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot,
+      series: "bud_alraune",
+      material: "アルラウネ素材",
+      craft: makeCost(130, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      upgrade: makeFixedUpgrade("randomStatMultiplier", makeCost(65, upgradeMaterials)),
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
+  function makeAlrauneAccessory(id, name, statBonuses, craftGold, craftMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "accessory",
+      series: "bud_alraune",
+      material: "アルラウネ素材",
+      craft: makeCost(craftGold, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
+  function makeShadowWolfWeapon(id, name, weaponType, statKey, statValue, normalAttackSkillId, craftMaterials, upgradeMaterials) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "weapon",
+      weaponType,
+      series: "shadow_wolf",
+      material: "シャドウウルフ素材",
+      allowedUnitIds: (weaponAllowedUnitIds[weaponType] || []).slice(),
+      craft: makeCost(130, craftMaterials),
+      flatStatBonuses: { [statKey]: statValue },
+      upgrade: makeFixedUpgrade("flatStatMultiplier", makeCost(65, upgradeMaterials)),
+      normalAttackSkillId,
+      effect: null,
+      simpleDescription: "シャドウウルフ素材で作れる武器。",
+      description: "シャドウウルフ素材で作れる武器。強化すると主ステータスが伸びる。",
+    };
+  }
+
+  function makeShadowWolfArmor(id, name, slot, statBonuses, craftMaterials, upgradeMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot,
+      series: "shadow_wolf",
+      material: "シャドウウルフ素材",
+      craft: makeCost(130, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      upgrade: makeFixedUpgrade("randomStatMultiplier", makeCost(65, upgradeMaterials)),
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
+  function makeShadowWolfAccessory(id, name, statBonuses, craftGold, craftMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "accessory",
+      series: "shadow_wolf",
+      material: "シャドウウルフ素材",
+      craft: makeCost(craftGold, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
   window.HEALER_EQUIPMENT_DATA = {
     defaultElement: elementData.defaultElement,
     slots: [
@@ -190,6 +307,7 @@
     ],
     setThresholds: seriesData.setThresholds,
     elements: elementData.elements,
+    weaponTypeStatBonuses,
     items: {
       default_u: {
         id: "default_u",
@@ -374,7 +492,7 @@
         "horn_rabbit_glove",
         "ツサギグローブ",
         "hands",
-        { attack: 0.05 },
+        { magic: 0.05 },
         100,
         { horn_rabbit_fur: 1, horn_rabbit_tooth: 4 },
         { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 },
@@ -387,6 +505,232 @@
         150,
         { horn_rabbit_corner: 3 },
         "ツノウサギの角を元に作られた魔力溢れるペンダント"
+      ),
+      bud_alraune_knife: makeAlrauneWeapon(
+        "bud_alraune_knife",
+        "アルラナイフ",
+        "片手剣",
+        "attack",
+        18,
+        "bud_alraune_attack_knife",
+        { alraune_ivy: 4, alraune_bud: 1 },
+        { alraune_ivy: 1 }
+      ),
+      bud_alraune_sword: makeAlrauneWeapon(
+        "bud_alraune_sword",
+        "アルラソード",
+        "両手剣",
+        "attack",
+        25,
+        "bud_alraune_attack_sword",
+        { alraune_ivy: 5, alraune_leaf: 1, alraune_bud: 1 },
+        { alraune_ivy: 1 }
+      ),
+      bud_alraune_fist: makeAlrauneWeapon(
+        "bud_alraune_fist",
+        "アルラフィスト",
+        "拳具",
+        "attack",
+        20,
+        "bud_alraune_attack_fist",
+        { alraune_bud: 4 },
+        { alraune_bud: 1 }
+      ),
+      bud_alraune_staff: makeAlrauneWeapon(
+        "bud_alraune_staff",
+        "アルラスタッフ",
+        "棒具",
+        "attack",
+        17,
+        "bud_alraune_attack_staff",
+        { alraune_ivy: 4, alraune_bud: 1 },
+        { alraune_ivy: 1 }
+      ),
+      bud_alraune_stick: makeAlrauneWeapon(
+        "bud_alraune_stick",
+        "アルラステッキ",
+        "杖",
+        "magic",
+        15,
+        "bud_alraune_attack_stick",
+        { alraune_leaf: 4, alraune_ivy: 1 },
+        { alraune_leaf: 1 }
+      ),
+      bud_alraune_book: makeAlrauneWeapon(
+        "bud_alraune_book",
+        "魔導書・アルラ",
+        "魔導書",
+        "magic",
+        15,
+        "bud_alraune_attack_book",
+        { alraune_leaf: 8 },
+        { alraune_leaf: 1 }
+      ),
+      bud_alraune_flute: makeAlrauneWeapon(
+        "bud_alraune_flute",
+        "アルラフルート",
+        "楽器",
+        "magic",
+        25,
+        "bud_alraune_attack_flute",
+        { alraune_leaf: 3, alraune_bud: 1 },
+        { alraune_leaf: 1 }
+      ),
+      bud_alraune_helm: makeAlrauneArmor(
+        "bud_alraune_helm",
+        "アルラヘルム",
+        "head",
+        { maxHp: 0.05, defense: 0.1 },
+        { alraune_leaf: 4, alraune_bud: 2 },
+        { alraune_leaf: 1, alraune_bud: 1 },
+        "アルラウネの葉を元に作られた頭装備"
+      ),
+      bud_alraune_armor: makeAlrauneArmor(
+        "bud_alraune_armor",
+        "アルラアーマー",
+        "body",
+        { maxHp: 0.05, attack: 0.05 },
+        { alraune_leaf: 3, alraune_ivy: 3 },
+        { alraune_leaf: 1, alraune_ivy: 1 },
+        "アルラウネの葉を元に作られた胴装備"
+      ),
+      bud_alraune_leggings: makeAlrauneArmor(
+        "bud_alraune_leggings",
+        "アルラレギンス",
+        "legs",
+        { maxHp: 0.05, attack: 0.03 },
+        { alraune_leaf: 2, alraune_ivy: 2 },
+        { alraune_leaf: 1, alraune_ivy: 1 },
+        "アルラウネの葉を元に作られた足装備"
+      ),
+      bud_alraune_boots: makeAlrauneArmor(
+        "bud_alraune_boots",
+        "アルラブーツ",
+        "feet",
+        { maxHp: 0.1 },
+        { alraune_leaf: 2, alraune_bud: 2 },
+        { alraune_leaf: 1, alraune_bud: 1 },
+        "アルラウネの葉を元に作られた靴装備"
+      ),
+      bud_alraune_glove: makeAlrauneArmor(
+        "bud_alraune_glove",
+        "アルラグローブ",
+        "hands",
+        { attack: 0.08 },
+        { alraune_leaf: 2, alraune_ivy: 3 },
+        { alraune_leaf: 1, alraune_ivy: 1 },
+        "アルラウネの葉を元に作られた手装備"
+      ),
+      bud_alraune_pendant: makeAlrauneAccessory(
+        "bud_alraune_pendant",
+        "アルラペンダント",
+        { physicalDamageBoost: 0.1 },
+        200,
+        { alraune_ivy: 5 },
+        "アルラウネの蕾を元に作られたペンダント"
+      ),
+      shadow_wolf_knife: makeShadowWolfWeapon(
+        "shadow_wolf_knife",
+        "影狼刃",
+        "片手剣",
+        "attack",
+        18,
+        "shadow_wolf_attack_knife",
+        { shadow_wolf_fur: 2, shadow_wolf_fang: 2 },
+        { shadow_wolf_fang: 1 }
+      ),
+      shadow_wolf_sword: makeShadowWolfWeapon(
+        "shadow_wolf_sword",
+        "影狼刀",
+        "両手剣",
+        "attack",
+        25,
+        "shadow_wolf_attack_sword",
+        { shadow_wolf_fur: 1, shadow_wolf_fang: 3 },
+        { shadow_wolf_fang: 1 }
+      ),
+      shadow_wolf_fist: makeShadowWolfWeapon(
+        "shadow_wolf_fist",
+        "影狼爪",
+        "拳具",
+        "attack",
+        20,
+        "shadow_wolf_attack_fist",
+        { shadow_wolf_fur: 2, shadow_wolf_nail: 2 },
+        { shadow_wolf_nail: 1 }
+      ),
+      shadow_wolf_staff: makeShadowWolfWeapon(
+        "shadow_wolf_staff",
+        "影狼薙",
+        "棒具",
+        "attack",
+        17,
+        "shadow_wolf_attack_staff",
+        { shadow_wolf_fur: 1, shadow_wolf_fang: 1, shadow_wolf_nail: 1 },
+        { shadow_wolf_fang: 1 }
+      ),
+      shadow_wolf_flute: makeShadowWolfWeapon(
+        "shadow_wolf_flute",
+        "影狼笛",
+        "楽器",
+        "magic",
+        17,
+        "shadow_wolf_attack_flute",
+        { shadow_wolf_fur: 1, shadow_wolf_fang: 1, shadow_wolf_nail: 1 },
+        { shadow_wolf_fang: 1 }
+      ),
+      shadow_wolf_helm: makeShadowWolfArmor(
+        "shadow_wolf_helm",
+        "影狼兜",
+        "head",
+        { attack: 0.08 },
+        { shadow_wolf_fur: 3, shadow_wolf_fang: 2 },
+        { shadow_wolf_fur: 1, shadow_wolf_fang: 1 },
+        "シャドウウルフの毛皮を元に作られた頭装備"
+      ),
+      shadow_wolf_armor: makeShadowWolfArmor(
+        "shadow_wolf_armor",
+        "影狼鎧",
+        "body",
+        { magicDefense: 0.1 },
+        { shadow_wolf_fur: 7 },
+        { shadow_wolf_fur: 2 },
+        "シャドウウルフの毛皮を元に作られた胴装備"
+      ),
+      shadow_wolf_leggings: makeShadowWolfArmor(
+        "shadow_wolf_leggings",
+        "影狼脚",
+        "legs",
+        { maxHp: 0.05 },
+        { shadow_wolf_fur: 4 },
+        { shadow_wolf_fur: 2 },
+        "シャドウウルフの毛皮を元に作られた足装備"
+      ),
+      shadow_wolf_boots: makeShadowWolfArmor(
+        "shadow_wolf_boots",
+        "影狼靴",
+        "feet",
+        { attack: 0.05 },
+        { shadow_wolf_fur: 2, shadow_wolf_nail: 2 },
+        { shadow_wolf_fur: 1, shadow_wolf_nail: 1 },
+        "シャドウウルフの毛皮を元に作られた靴装備"
+      ),
+      shadow_wolf_glove: makeShadowWolfArmor(
+        "shadow_wolf_glove",
+        "影狼手",
+        "hands",
+        { defense: 0.05 },
+        { shadow_wolf_fur: 2 },
+        { shadow_wolf_fur: 1 },
+        "シャドウウルフの毛皮を元に作られた手装備"
+      ),
+      shadow_wolf_pendant: makeShadowWolfAccessory(
+        "shadow_wolf_pendant",
+        "影狼飾",
+        { critChance: 0.1 },
+        200,
+        { shadow_wolf_nail: 5 },
+        "シャドウウルフの爪を元に作られたペンダント"
       ),
     },
     series: seriesData.series,

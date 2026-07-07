@@ -7,6 +7,7 @@
     const slotKeys = slots.map((slot) => slot.key);
     const slotByKey = Object.fromEntries(slots.map((slot) => [slot.key, slot]));
     const defaultElement = EQUIPMENT_DATA.defaultElement || "none";
+    const weaponTypeStatBonuses = EQUIPMENT_DATA.weaponTypeStatBonuses || {};
     const upgradeMultipliers = [1, 1.1, 1.2, 1.3, 1.4, 1.5];
     const armorRandomTotals = { D: 0.3, C: 0.6, B: 0.9, A: 1.2, S: 1.5 };
     const armorRandomNegativeMaxCounts = { D: 0, C: 0, B: 1, A: 1, S: 2 };
@@ -471,8 +472,17 @@
       };
       applyGeneratedRandomStats(effective, item, instance);
       applyUpgradeBonuses(effective, item, instance);
+      applyWeaponTypeStatBonuses(effective);
       effective.summaryStats = getItemSummaryStats(effective);
       return effective;
+    }
+
+    function applyWeaponTypeStatBonuses(effective) {
+      if (!effective || effective.slot !== "weapon" || !effective.weaponType) {
+        return;
+      }
+      addBonusObject(effective.statBonuses, weaponTypeStatBonuses[effective.weaponType]);
+      effective.weaponTypeStatBonusesApplied = true;
     }
 
     function applyGeneratedRandomStats(effective, source, instance) {

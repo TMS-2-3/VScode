@@ -18,6 +18,8 @@
       effects,
       COLORS,
       MOOD_BASELINE,
+      BASE_CRIT_CHANCE,
+      BASE_CRIT_DAMAGE_RATE,
       STATUS_FULL_NAMES,
       CHARACTER_DEFS,
       SKILL_DATA,
@@ -76,8 +78,12 @@
     if (!window.createHealerStatusRenderer) {
       throw new Error("createHealerStatusRenderer must be loaded before ui/renderer.js");
     }
+    if (!window.createHealerStatPresenter) {
+      throw new Error("createHealerStatPresenter must be loaded before ui/renderer.js");
+    }
+    const statPresenter = window.createHealerStatPresenter(context);
     const townRenderer = window.createHealerTownRenderer(context);
-    const statusRenderer = window.createHealerStatusRenderer(context);
+    const statusRenderer = window.createHealerStatusRenderer({ ...context, statPresenter });
     const tooltipText = window.createHealerTooltipText(context);
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];
     const BATTLE_WALK_DIRECTIONS = ["down", "left", "right", "up"];
@@ -768,6 +774,9 @@
     if (unit.team === "enemy" && unit === game.priorityTarget) {
       drawPriorityTargetMark(unit);
     }
+    if (unit.team === "enemy" && unit === game.avoidTarget) {
+      drawAvoidTargetMark(unit);
+    }
 
     if (unit === player && (player.cast || player.channel)) {
       drawCastOrbit(unit);
@@ -963,7 +972,7 @@
     let best = null;
     let bestDist = Infinity;
     for (const enemy of enemies) {
-      if (!enemy || enemy.dead || !isFieldUnit(enemy)) {
+      if (!enemy || enemy.dead || !isFieldUnit(enemy) || enemy === game.avoidTarget) {
         continue;
       }
       const d = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
@@ -1028,6 +1037,27 @@
       ctx.lineTo(x2, y2);
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  function drawAvoidTargetMark(unit) {
+    const radius = unit.radius + battlePx(14);
+    const pulse = 0.58 + Math.sin(game.time * 7) * 0.16;
+    ctx.save();
+    ctx.strokeStyle = `rgba(156,198,255,${pulse})`;
+    ctx.lineWidth = Math.max(2, battlePx(3));
+    ctx.beginPath();
+    ctx.arc(unit.x, unit.y, radius, 0, TAU);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(247,255,246,0.92)";
+    ctx.lineWidth = Math.max(2, battlePx(3));
+    ctx.beginPath();
+    ctx.moveTo(unit.x - radius * 0.58, unit.y - radius * 0.58);
+    ctx.lineTo(unit.x + radius * 0.58, unit.y + radius * 0.58);
+    ctx.moveTo(unit.x + radius * 0.58, unit.y - radius * 0.58);
+    ctx.lineTo(unit.x - radius * 0.58, unit.y + radius * 0.58);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -2968,11 +2998,20 @@
     if (!def) {
       return null;
     }
+    const critChance = Number.isFinite(def.critChance) ? def.critChance : Number.isFinite(BASE_CRIT_CHANCE) ? BASE_CRIT_CHANCE : 0;
+    const critDamage = Number.isFinite(def.critDamage) ? def.critDamage : Number.isFinite(BASE_CRIT_DAMAGE_RATE) ? BASE_CRIT_DAMAGE_RATE : 0;
     const unit = {
       ...def,
       skillOwner: def.skillOwner || def.id,
       hp: def.maxHp || 100,
       mp: def.maxMp || 0,
+      critChance,
+      critDamage,
+      baseStats: {
+        ...(def.baseStats || {}),
+        critChance,
+        critDamage,
+      },
       mood: def.id === "finald" ? null : MOOD_BASELINE,
       ult: 0,
       cds: {},
@@ -4885,8 +4924,8 @@
   }
 
   function getEquipmentStatRows(unit) {
-    if (statusRenderer && typeof statusRenderer.getDetailedStats === "function") {
-      return statusRenderer.getDetailedStats(unit);
+    if (statPresenter && typeof statPresenter.getDetailedStats === "function") {
+      return statPresenter.getDetailedStats(unit);
     }
     return [
       { label: "HP", value: formatSystemNumber(unit.maxHp) },
@@ -4900,7 +4939,7 @@
       { label: "ガード率", value: formatSystemPercent(callStat(getEffectiveGuardChance, unit, unit.guardChance || 0)) },
       { label: "ガード軽減率", value: formatSystemPercent(callStat(getGuardDamageReductionRate, unit, 0)) },
       { label: "HP再生率", value: formatSystemPercent(callStat(getHpRegenRate, unit, 0)) },
-      { label: "MP回復率", value: formatSystemPercent(callStat(getMpRegenRate, unit, 0)) },
+      { label: "MP再生率", value: formatSystemPercent(callStat(getMpRegenRate, unit, 0)) },
     ];
   }
 
@@ -4995,26 +5034,26 @@
     const labels = {
       maxHp: "HP",
       maxMp: "MP",
-      attack: "攻撃",
+      attack: "攻撃力",
       magic: "魔力",
-      defense: "防御",
-      magicDefense: "魔防",
-      guardChance: "ガード",
-      guardDamageReduction: "ガード軽減",
-      critChance: "会心",
-      critDamage: "会心ダメ",
-      damageBoost: "与ダメ",
-      damageResistance: "被ダメ",
-      physicalDamageBoost: "物理与ダメ",
-      physicalDamageResistance: "物理被ダメ",
-      magicDamageBoost: "魔法与ダメ",
-      magicDamageResistance: "魔法被ダメ",
-      hpRegenRate: "HP再生",
-      mpRegenRate: "MP再生",
+      defense: "防御力",
+      magicDefense: "魔法防御力",
+      guardChance: "ガード率",
+      guardDamageReduction: "ガード軽減率",
+      critChance: "会心率",
+      critDamage: "会心ダメージ",
+      damageBoost: "与ダメージ率",
+      damageResistance: "被ダメージ率",
+      physicalDamageBoost: "物理与ダメージ率",
+      physicalDamageResistance: "物理被ダメージ率",
+      magicDamageBoost: "魔法与ダメージ率",
+      magicDamageResistance: "魔法被ダメージ率",
+      hpRegenRate: "HP再生率",
+      mpRegenRate: "MP再生率",
       castSpeed: "詠唱速度",
       cooldownReduction: "クールタイム",
       actionSpeed: "行動速度",
-      ultimateChargeRate: "ゲージ上昇",
+      ultimateChargeRate: "ゲージ上昇率",
       moveSpeed: "移動速度",
     };
     return labels[key] || key;
@@ -5036,7 +5075,7 @@
   }
 
   function isReductionStatKey(key) {
-    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance"].includes(key);
+    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance", "cooldownReduction"].includes(key);
   }
 
   function formatSystemPercent(value, signed = false) {

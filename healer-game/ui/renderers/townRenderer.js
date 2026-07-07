@@ -738,6 +738,7 @@
   function drawEquipmentShopRow(item, tab, x, y, w, h) {
     const baseId = getEquipmentBaseIdForTown(item);
     const itemRef = getEquipmentRefForTown(item);
+    const displayItem = typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(itemRef) || item : item;
     const owned = getEquipmentOwnedCount(baseId);
     const currentLevel = getEquipmentUpgradeLevel(tab === "upgrade" || tab === "reset" ? itemRef : baseId);
     const upgradeRecipe = getUpgradeRecipe(item);
@@ -781,7 +782,7 @@
     drawFittedTownText(stateParts.join(" / "), x + 18, y + 70, textW, 800, 12, 9, enabled ? "#ffd86b" : "rgba(220,233,220,0.55)");
     ctx.fillStyle = "#dce9dc";
     ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    const statLines = getEquipmentShopStatLines(item, textW, h >= 116 ? 2 : 1);
+    const statLines = getEquipmentShopStatLines(displayItem, textW, h >= 116 ? 2 : 1);
     for (let i = 0; i < statLines.length; i += 1) {
       ctx.fillText(statLines[i], x + 18, y + 93 + i * 16);
     }
@@ -1276,26 +1277,26 @@
     const labels = {
       maxHp: "HP",
       maxMp: "MP",
-      attack: "攻撃",
+      attack: "攻撃力",
       magic: "魔力",
-      defense: "防御",
-      magicDefense: "魔防",
-      critChance: "会心",
-      critDamage: "会心ダメ",
-      guardChance: "ガード",
-      guardDamageReduction: "ガード軽減",
-      damageBoost: "与ダメ",
-      damageResistance: "被ダメ",
-      physicalDamageBoost: "物理与ダメ",
-      physicalDamageResistance: "物理被ダメ",
-      magicDamageBoost: "魔法与ダメ",
-      magicDamageResistance: "魔法被ダメ",
-      hpRegenRate: "HP再生",
-      mpRegenRate: "MP再生",
+      defense: "防御力",
+      magicDefense: "魔法防御力",
+      critChance: "会心率",
+      critDamage: "会心ダメージ",
+      guardChance: "ガード率",
+      guardDamageReduction: "ガード軽減率",
+      damageBoost: "与ダメージ率",
+      damageResistance: "被ダメージ率",
+      physicalDamageBoost: "物理与ダメージ率",
+      physicalDamageResistance: "物理被ダメージ率",
+      magicDamageBoost: "魔法与ダメージ率",
+      magicDamageResistance: "魔法被ダメージ率",
+      hpRegenRate: "HP再生率",
+      mpRegenRate: "MP再生率",
       castSpeed: "詠唱速度",
       cooldownReduction: "クールタイム",
       actionSpeed: "行動速度",
-      ultimateChargeRate: "ゲージ上昇",
+      ultimateChargeRate: "ゲージ上昇率",
       moveSpeed: "移動速度",
     };
     return labels[statKey] || statKey;
@@ -1314,7 +1315,7 @@
   }
 
   function isReductionStatKey(key) {
-    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance"].includes(key);
+    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance", "cooldownReduction"].includes(key);
   }
 
   function formatSignedTownPercent(value) {
