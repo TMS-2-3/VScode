@@ -463,6 +463,26 @@
           ctx.fill();
         }
         ctx.restore();
+      } else if (area.type === "enemy_line") {
+        const total = Math.max(0.001, Number.isFinite(area.total) ? area.total : area.time || 1);
+        const alpha = clamp(area.time / total, 0.18, 0.42);
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "rgba(255,52,44,0.24)";
+        ctx.lineWidth = (area.width || battlePx(12)) + battlePx(10);
+        ctx.beginPath();
+        ctx.moveTo(area.x, area.y);
+        ctx.lineTo(area.x2, area.y2);
+        ctx.stroke();
+        ctx.globalAlpha = Math.min(0.85, alpha + 0.25);
+        ctx.strokeStyle = "#ff4d46";
+        ctx.lineWidth = area.width || battlePx(12);
+        ctx.beginPath();
+        ctx.moveTo(area.x, area.y);
+        ctx.lineTo(area.x2, area.y2);
+        ctx.stroke();
+        ctx.restore();
       }
     }
   }

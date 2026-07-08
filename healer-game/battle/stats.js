@@ -449,6 +449,16 @@
           bonus -= 0.1;
         }
       }
+      if (unit && (unit.plantStage || 0) > 0 && statKey === "hpRegenRate") {
+        const penalties = [0, 0.001, 0.003, 0.005, 0.008];
+        const stage = Math.max(1, Math.min(4, Math.floor(unit.plantStage || 1)));
+        bonus -= penalties[stage] || 0;
+      }
+      if (unit && (unit.contemptStacks || 0) > 0 && (unit.contemptTimer || 0) > 0) {
+        if (statKey === "damageBoost" || statKey === "damageResistance") {
+          bonus += 0.15;
+        }
+      }
       if (unit && (unit.magicNeutralizeTimer || 0) > 0 && statKey === "magic") {
         bonus -= Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);
       }

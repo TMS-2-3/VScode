@@ -105,6 +105,21 @@
           { name: "シャドウウルフC", role: "shadow_wolf", dx: 116, dy: 58 },
         ],
       },
+      {
+        id: "free_flostiny_001",
+        type: "free",
+        rank: "D",
+        name: "フロスティーニ討伐",
+        summary: "森の奥で力を蓄えたフロスティーニを討伐する。",
+        objective: "フロスティーニを1体討伐する",
+        recommended: "森のボス",
+        enemyPreview: "フロスティーニ x1",
+        reward: "ボス討伐報酬",
+        battleId: "free_flostiny_001",
+        enemies: [
+          { name: "フロスティーニ", role: "flostiny", x: 0.5, y: 0.5 },
+        ],
+      },
     ],
   };
 })();

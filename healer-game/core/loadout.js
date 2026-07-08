@@ -429,7 +429,7 @@
           continue;
         }
         for (const [key, skill] of Object.entries(skills || {})) {
-          if (!skill || skill.disabled || skill.rank !== rank || skill.category === "通常攻撃" || !skill.upgradeDescription) {
+          if (!skill || skill.disabled || skill.crystalExcluded || skill.rank !== rank || skill.category === "通常攻撃" || !skill.upgradeDescription) {
             continue;
           }
           const sourceOwner = skill.sourceOwner || owner;

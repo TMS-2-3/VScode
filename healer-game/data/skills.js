@@ -50,13 +50,19 @@
         upgradeDescription: "レベルが上がるごとに無視される確率が-(10/20/30/40/50)%低下する",
       },
       distance: {
-        id: "distance", key: "distance", owner: "finald", name: "ディスタンス", rank: "D", category: "スキル", skillType: "全体指示",
+        id: "distance", key: "distance", owner: "finald", name: "ノータッチ", rank: "D", category: "スキル", skillType: "全体指示",
         conditionText: "アルジュナ",
-        cd: 20, cost: 0, range: px(400), duration: 8, target: "enemy", avoidTarget: true, lines: ["ディスタンス"],
+        cd: 20, cost: 0, range: px(400), duration: 8, target: "enemy", avoidTarget: true, lines: ["ノータッチ"],
         description: "８秒間、対象の敵を味方がターゲットにしなくなる。範囲攻撃などの巻き込みは発生する。",
         simpleDescription: "一定時間、対象の敵を味方が狙わなくなる。",
         upgradeSimpleDescription: "レベルが上がるごとにスキルのクールタイムが短くなる",
         upgradeDescription: "レベルが上がるごとにスキルのクールタイムが(2/4/6/8/10)秒短縮される",
+      },
+      regret: {
+        id: "regret", key: "regret", owner: "party", name: "悔恨", rank: "D", category: "状態依存スキル", skillType: "自傷",
+        cast: 5, cost: 0, currentHpDamageRatio: 0.75, damageType: "不変", lines: ["悔恨"], hidden: true, crystalExcluded: true,
+        description: "悔恨状態の時だけ発動する。詠唱開始時に悔恨を解除し、5秒後に自身の現在HPの75%の不変ダメージを受ける。",
+        simpleDescription: "悔恨状態の次の行動として発動し、自身に大きなダメージを与える。",
       },
       commandDefend: {
         id: "1_defend", key: "commandDefend", owner: "finald", name: "防御指示", rank: "D", category: "指示", skillType: "対象指示",
@@ -424,6 +430,62 @@
       throat_hunt: {
         id: "throat_hunt", key: "throat_hunt", owner: "enemy", name: "喉笛狩り", rank: "D", category: "スキル", skillType: "単体攻撃",
         cd: 15, range: px(30), damageBase: 10, attackScale: 0.3, missingHpScale: 1, damageType: "physical", lines: ["喉笛狩り"],
+      },
+      vine_whip: {
+        id: "vine_whip", key: "vine_whip", owner: "enemy", name: "ツル鞭", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 8, range: px(150), damageBase: 15, attackScale: 0.3, damageType: "physical", lines: ["ツル鞭"],
+      },
+      poisonous_stinger: {
+        id: "poisonous_stinger", key: "poisonous_stinger", owner: "enemy", name: "毒針", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 30, range: px(130), damageBase: 5, attackScale: 0.1, poison: true, damageType: "physical", lines: ["毒針"], statusIds: ["debuff_poison"],
+      },
+      absorption_of_reunion: {
+        id: "absorption_of_reunion", key: "absorption_of_reunion", owner: "enemy", name: "吸収", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 5, cast: 3, range: px(120), duration: 4, tickRate: 1, damageBase: 5, attackScale: 0.1, magicScale: 0.1, absorbHealMultiplier: 2, damageType: "不変ドット", lines: ["吸収"],
+      },
+      sowing_seeds: {
+        id: "sowing_seeds", key: "sowing_seeds", owner: "enemy", name: "種まき", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 25, range: px(0), radius: px(500), damageBase: 5, attackScale: 0.05, enemyArea: true, plantApply: true, plantNoOverwrite: true, damageType: "physical", lines: ["種まき"], statusIds: ["debuff_plant"],
+      },
+      welcome_rain: {
+        id: "welcome_rain", key: "welcome_rain", owner: "enemy", name: "恵みの雨", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 15, cast: 1, range: px(0), radius: px(400), damageBase: 10, magicScale: 0.2, enemyArea: true, plantUpgrade: true, damageType: "magic", lines: ["恵みの雨"], statusIds: ["debuff_plant"],
+      },
+      dappled_sunlight: {
+        id: "dappled_sunlight", key: "dappled_sunlight", owner: "enemy", name: "木漏れ日", rank: "D", category: "スキル", skillType: "範囲回復",
+        cd: 15, cast: 1, range: px(0), radius: px(600), healBase: 10, magicScale: 0.3, selfHealMultiplier: 3, enemyArea: true, affectsEveryone: true, plantUpgrade: true, lines: ["木漏れ日"], statusIds: ["debuff_plant"],
+      },
+      intertwined_roots: {
+        id: "intertwined_roots", key: "intertwined_roots", owner: "enemy", name: "絡み合う根", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 15, cast: 1, range: px(0), radius: px(350), damageBase: 10, attackScale: 0.2, enemyArea: true, plantUpgrade: true, damageType: "physical", lines: ["絡み合う根"], statusIds: ["debuff_plant"],
+      },
+      picking_flowers: {
+        id: "picking_flowers", key: "picking_flowers", owner: "enemy", name: "お花摘み", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 10, range: px(700), damageBase: 10, attackScale: 0.1, requiresFullPlant: true, removePlantOnHit: true, woundStacks: 1, forcedFlowerSkill: true, damageType: "physical", lines: ["お花摘み"], statusIds: ["debuff_wound"],
+      },
+      rue: {
+        id: "rue", key: "rue", owner: "enemy", name: "ヘンルーダ", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 5, cast: 1, range: px(500), damageBase: 25, contemptStacks: 3, contemptDuration: 22, damageType: "physical", lines: ["ヘンルーダ"], statusIds: ["buff_contempt"],
+      },
+      purple_hyacinth: {
+        id: "purple_hyacinth", key: "purple_hyacinth", owner: "enemy", name: "紫のヒヤシンス", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 5, cast: 1, range: px(500), damageBase: 25, sorrowDuration: 5, damageType: "physical", lines: ["紫のヒヤシンス"], statusIds: ["debuff_sorrow"],
+      },
+      calendula: {
+        id: "calendula", key: "calendula", owner: "enemy", name: "キンセンカ", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 5, cast: 1, range: px(500), damageBase: 25, sleepDuration: 5, forceNextSkillOnHit: "calendula_beam", damageType: "physical", lines: ["キンセンカ"], statusIds: ["debuff_sleep"],
+      },
+      calendula_beam: {
+        id: "calendula_beam", key: "calendula_beam", owner: "enemy", name: "キンセンカビーム", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 5, cast: 5.2, range: px(800), radius: px(150), duration: 5, damageBase: 5, magicScale: 0.2, enemyLine: true, damageType: "magic", lines: [],
+      },
+      red_spider_lily: {
+        id: "red_spider_lily", key: "red_spider_lily", owner: "enemy", name: "赤の彼岸花", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 5, cast: 1, range: px(500), damageBase: 25, reunionDuration: 10, damageType: "physical", lines: ["赤の彼岸花"], statusIds: ["reunion"],
+      },
+      chocolate_lily: {
+        id: "chocolate_lily", key: "chocolate_lily", owner: "enemy", name: "クロユリ", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 30, cast: 6, range: px(0), radius: px(200), damageBase: 0, receivedDamageScale: 0.7, enemyArea: true, damageType: "magic", lines: ["クロユリ"],
       },
     },
   };

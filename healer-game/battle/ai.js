@@ -34,7 +34,7 @@
     } = context;
 
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
     }
 
     function updatePartyAi(dt) {
@@ -45,7 +45,8 @@
 
         member.aiTick -= dt;
         const playerTaunted = member === player && isForcedHostileTarget(member, member.forcedTarget);
-        if (playerTaunted) {
+        const regretForced = (member.regretTimer || 0) > 0;
+        if (playerTaunted || regretForced) {
           member.aim = null;
           member.itemAim = null;
           if (member.aiIntent && member.aiIntent.manual) {
@@ -53,6 +54,9 @@
           }
         }
         const itemSystem = getItemSystem ? getItemSystem() : null;
+        if (regretForced && itemSystem && itemSystem.cancelItemUse) {
+          itemSystem.cancelItemUse(member);
+        }
         if (itemSystem && itemSystem.isItemUseControlling && itemSystem.isItemUseControlling(member)) {
           if (!(member === player && member.aiIntent && member.aiIntent.manual)) {
             member.aiIntent = null;
@@ -63,10 +67,10 @@
         if (member.aiIntent) {
           continue;
         }
-        if (member === player && !playerTaunted) {
+        if (member === player && !playerTaunted && !regretForced) {
           continue;
         }
-        if (!avoidingTelegraph && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
+        if (!regretForced && !avoidingTelegraph && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
           triggerUltimate(member.id, true);
           continue;
         }
@@ -75,7 +79,7 @@
           continue;
         }
 
-        if (!avoidingTelegraph && member.mood >= 85 && member.ult >= skillSystem.getUltimateCost(member) && Math.random() < 0.16) {
+        if (!regretForced && !avoidingTelegraph && member.mood >= 85 && member.ult >= skillSystem.getUltimateCost(member) && Math.random() < 0.16) {
           triggerUltimate(member.id, true);
           continue;
         }

@@ -261,6 +261,9 @@
     }
 
     function getUnitSkill(unit, key) {
+      if (key === "regret") {
+        return get("finald", "regret");
+      }
       if (key === "ult") {
         return getUnitUltimateEntry(unit).skill;
       }
@@ -333,18 +336,18 @@
 
     function isPlayerControlLocked() {
       const player = ctx.player;
-      return isForcedHostileTarget(player, player && player.forcedTarget);
+      return isForcedHostileTarget(player, player && player.forcedTarget) || hasRegret(player);
     }
 
     function showPlayerControlLocked() {
       const origin = ctx.getSupportOrigin ? ctx.getSupportOrigin() : ctx.player;
       if (origin && ctx.addFloat) {
-        ctx.addFloat("挑発中", origin.x + 26, origin.y - 28, "#ffd0d0");
+        ctx.addFloat(hasRegret(ctx.player) ? "悔恨中" : "挑発中", origin.x + 26, origin.y - 28, "#ffd0d0");
       }
     }
 
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
     }
 
     function canOffensiveAffect(source, target) {
@@ -775,6 +778,18 @@
       ));
     }
 
+    function hasRegret(unit) {
+      return Boolean(unit && (unit.regretTimer || 0) > 0);
+    }
+
+    function clearRegret(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.regretTimer = 0;
+      unit.regretMax = 0;
+    }
+
     function isOffensiveSkill(skill) {
       if (!skill || isSupportSkill(skill)) {
         return false;
@@ -862,6 +877,10 @@
     }
 
     function thinkPartyUnit(unit, avoidingTelegraph = false) {
+      if (hasRegret(unit)) {
+        usePartyRegret(unit);
+        return;
+      }
       const forcedTarget = isForcedHostileTarget(unit, unit && unit.forcedTarget) ? unit.forcedTarget : null;
       const target = forcedTarget || getPartyAttackTarget(unit);
       const candidates = [];
@@ -915,8 +934,38 @@
 
     function thinkCustomEnemy(enemy, target, distance) {
       const candidates = [];
+      if (enemy.forcedEnemySkillKey) {
+        const forcedKey = enemy.forcedEnemySkillKey;
+        const forcedSkill = getUnitSkill(enemy, forcedKey);
+        const forcedTarget = enemy.forcedEnemySkillTarget && !enemy.forcedEnemySkillTarget.dead ? enemy.forcedEnemySkillTarget : target;
+        if (forcedSkill && forcedTarget && canUseEnemySkill(enemy, forcedKey, forcedSkill)) {
+          const range = Infinity;
+          candidates.push({ key: forcedKey, skill: forcedSkill, target: forcedTarget, range, use: () => useEnemyActionByKey(enemy, forcedKey, forcedSkill, forcedTarget) });
+          chooseEnemyAction(enemy, candidates);
+          return;
+        }
+        enemy.forcedEnemySkillKey = null;
+        enemy.forcedEnemySkillTarget = null;
+      }
       for (const { key, skill } of getUnitActiveSkillEntries(enemy)) {
         if (!canUseEnemySkill(enemy, key, skill)) {
+          continue;
+        }
+        if (skill.requiresFullPlant) {
+          const plantTarget = getFullPlantTarget(enemy);
+          if (plantTarget) {
+            candidates.push({ key, skill, target: plantTarget, range: getEnemySkillRange(skill) + plantTarget.radius, use: () => useEnemySingleTargetSkill(enemy, key, skill, plantTarget) });
+          }
+          continue;
+        }
+        if (skill.enemyArea) {
+          candidates.push({ key, skill, target: enemy, range: Infinity, use: () => useEnemyAreaSkill(enemy, key, skill) });
+          continue;
+        }
+        if (skill.enemyLine) {
+          if (target) {
+            candidates.push({ key, skill, target, range: getEnemySkillRange(skill) + target.radius, use: () => useEnemyLineSkill(enemy, key, skill, target) });
+          }
           continue;
         }
         if (key === "shadow_dash") {
@@ -953,6 +1002,9 @@
       if (key === "shadow_dash") return useEnemyShadowDash(enemy, key, skill || getUnitSkill(enemy, key));
       if (key === "sleep_scent") return useEnemySleepScent(enemy, key, skill || getUnitSkill(enemy, key));
       if (key === "pollen_spraying") return useEnemyPollenSpraying(enemy, key, skill || getUnitSkill(enemy, key), target);
+      if (key === "absorption_of_reunion") return useEnemyAbsorption(enemy, key, skill || getUnitSkill(enemy, key), target);
+      if (skill && skill.enemyArea) return useEnemyAreaSkill(enemy, key, skill);
+      if (skill && skill.enemyLine) return useEnemyLineSkill(enemy, key, skill, target);
       return useEnemySingleTargetSkill(enemy, key, skill || getUnitSkill(enemy, key), target);
     }
 
@@ -984,9 +1036,15 @@
       });
     }
 
-    function beginEnemySkill(enemy, key, skill) {
+    function beginEnemySkill(enemy, key, skill, options = {}) {
       payEnemySkillCost(enemy, skill);
-      speakSkill(enemy, key);
+      if (!options.skipSpeech) {
+        speakSkill(enemy, key);
+      }
+      if (enemy && enemy.forcedEnemySkillKey === key) {
+        enemy.forcedEnemySkillKey = null;
+        enemy.forcedEnemySkillTarget = null;
+      }
       setActionCooldown(enemy);
       if (skill && skill.category !== "通常攻撃" && Number.isFinite(skill.cd) && skill.cd > 0) {
         trackSkillCooldown(enemy, key, key, skill.cd);
@@ -1032,10 +1090,141 @@
       return true;
     }
 
+    function applyPoison(source, target, skill) {
+      if (!target || target.dead) {
+        return false;
+      }
+      target.poisonActive = true;
+      target.poisonTickRate = Number.isFinite(skill && skill.poisonTickRate) && skill.poisonTickRate > 0 ? skill.poisonTickRate : 1;
+      target.poisonTick = Math.min(Number.isFinite(target.poisonTick) && target.poisonTick > 0 ? target.poisonTick : target.poisonTickRate, target.poisonTickRate);
+      target.poisonDamageHpRatio = Number.isFinite(skill && skill.poisonDamageHpRatio) ? skill.poisonDamageHpRatio : 0.01;
+      target.poisonSource = source || null;
+      ctx.addFloat("毒", target.x, target.y - 34, "#8fd66b");
+      return true;
+    }
+
+    function applyWound(source, target, stacks = 1) {
+      if (!target || target.dead) {
+        return false;
+      }
+      target.woundStacks = Math.min(100, Math.max(0, Math.floor(target.woundStacks || 0)) + Math.max(1, Math.floor(stacks || 1)));
+      ctx.addFloat("傷口", target.x, target.y - 34, "#e07266");
+      return true;
+    }
+
+    function applyPlant(source, target) {
+      if (!target || target.dead || (target.plantStage || 0) > 0) {
+        return false;
+      }
+      target.plantStage = 1;
+      target.plantSource = source || null;
+      target.plantUpgradedBy = {};
+      ctx.addFloat("種", target.x, target.y - 34, "#84c66f");
+      return true;
+    }
+
+    function upgradePlant(source, target, key) {
+      if (!target || target.dead || (target.plantStage || 0) <= 0 || (target.plantStage || 0) >= 4) {
+        return false;
+      }
+      if (!target.plantUpgradedBy || typeof target.plantUpgradedBy !== "object" || Array.isArray(target.plantUpgradedBy)) {
+        target.plantUpgradedBy = {};
+      }
+      if (key && target.plantUpgradedBy[key]) {
+        return false;
+      }
+      target.plantStage = Math.min(4, Math.max(1, Math.floor(target.plantStage || 1)) + 1);
+      target.plantSource = source || target.plantSource || null;
+      if (key) {
+        target.plantUpgradedBy[key] = true;
+      }
+      ctx.addFloat(getPlantStageName(target), target.x, target.y - 34, "#84c66f");
+      return true;
+    }
+
+    function clearPlant(target) {
+      if (!target) {
+        return;
+      }
+      target.plantStage = 0;
+      target.plantSource = null;
+      target.plantUpgradedBy = {};
+    }
+
+    function getPlantStageName(target) {
+      const stage = Math.max(0, Math.floor(target && target.plantStage || 0));
+      if (stage <= 1) return "種";
+      if (stage === 2) return "発芽";
+      if (stage === 3) return "開花";
+      if (target && target.id === "ulpes") return "ヘンルーダ";
+      if (target && target.id === "rihas") return "紫のヒヤシンス";
+      if (target && target.id === "sushia") return "キンセンカ";
+      if (target && target.id === "finald") return "赤の彼岸花";
+      return "花";
+    }
+
+    function isFullPlantTarget(target) {
+      return Boolean(target && !target.dead && (target.plantStage || 0) >= 4);
+    }
+
+    function getFlowerSkillForTarget(target) {
+      if (!target) return null;
+      if (target.id === "ulpes") return "rue";
+      if (target.id === "rihas") return "purple_hyacinth";
+      if (target.id === "sushia") return "calendula";
+      if (target.id === "finald") return "red_spider_lily";
+      return null;
+    }
+
+    function getFullPlantTarget(enemy) {
+      const candidates = ctx.getFieldPartyMembers().filter(isFullPlantTarget);
+      if (!candidates.length) {
+        return null;
+      }
+      return ctx.nearestAlive(enemy, candidates) || candidates[0];
+    }
+
+    function applyContempt(source, target, stacks, duration) {
+      if (!target || target.dead) {
+        return false;
+      }
+      const active = (target.contemptStacks || 0) > 0 && (target.contemptTimer || 0) > 0;
+      target.contemptStacks = Math.max(0, Math.floor(target.contemptStacks || 0)) + Math.max(1, Math.floor(stacks || 1));
+      if (!active) {
+        target.contemptTimer = Math.max(0, Number.isFinite(duration) ? duration : 0);
+        target.contemptMax = Math.max(0, target.contemptTimer);
+      }
+      ctx.addFloat("軽蔑", target.x, target.y - 34, "#f2c56d");
+      return true;
+    }
+
+    function applySorrow(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.sorrowTimer = Math.max(target.sorrowTimer || 0, duration);
+      target.sorrowMax = Math.max(target.sorrowMax || 0, duration);
+      target.sorrowTick = Math.min(Number.isFinite(target.sorrowTick) && target.sorrowTick > 0 ? target.sorrowTick : 1, 1);
+      ctx.addFloat("悲哀", target.x, target.y - 34, "#7d8fd8");
+      return true;
+    }
+
+    function applyReunion(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.reunionTimer = Math.max(target.reunionTimer || 0, duration);
+      target.reunionMax = Math.max(target.reunionMax || 0, duration);
+      target.reunionSource = source || null;
+      ctx.addFloat("再会", target.x, target.y - 34, "#d889b9");
+      return true;
+    }
+
     function useEnemySingleTargetSkill(enemy, key, skill, target) {
       if (!target || target.dead) {
         return false;
       }
+      const forced = enemy && enemy.forcedEnemySkillKey === key;
       beginEnemySkill(enemy, key, skill);
       const cast = getCastTime(skill.cast, enemy);
       if (cast > 0) {
@@ -1044,28 +1233,65 @@
           type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(8), ctx.battlePx(24)), team: "enemy", time: cast,
           hidden: true,
           getPosition: () => ({ x: target.x, y: target.y }),
-          resolve: () => resolveEnemySingleTargetSkill(enemy, key, skill, target),
+          resolve: () => resolveEnemySingleTargetSkill(enemy, key, skill, target, { ignoreRange: forced }),
         };
         ctx.addTelegraph(telegraph);
         return true;
       }
-      return resolveEnemySingleTargetSkill(enemy, key, skill, target);
+      return resolveEnemySingleTargetSkill(enemy, key, skill, target, { ignoreRange: forced });
     }
 
-    function resolveEnemySingleTargetSkill(enemy, key, skill, target) {
-      if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius) {
+    function resolveEnemySingleTargetSkill(enemy, key, skill, target, options = {}) {
+      if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || (!options.ignoreRange && ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius)) {
         return false;
       }
       const repeat = Math.max(1, Math.floor(Number.isFinite(skill.repeat) ? skill.repeat : 1));
       const delayMs = Math.max(0, Math.floor(Number.isFinite(skill.repeatDelayMs) ? skill.repeatDelayMs : 0));
       for (let i = 0; i < repeat; i += 1) {
         setTimeout(() => {
-          if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius) {
+          if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || (!options.ignoreRange && ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius)) {
             return;
           }
-          ctx.dealDamage(enemy, target, getEnemySkillDamage(enemy, target, skill), getSkillDamageOptions(skill));
+          const dealt = ctx.dealDamage(enemy, target, getEnemySkillDamage(enemy, target, skill), getSkillDamageOptions(skill));
           if (Number.isFinite(skill.injuryDuration)) {
             applyInjury(enemy, target, skill.injuryDuration);
+          }
+          if (skill.poison) {
+            applyPoison(enemy, target, skill);
+          }
+          if (Number.isFinite(skill.woundStacks)) {
+            applyWound(enemy, target, skill.woundStacks);
+          }
+          if (Number.isFinite(skill.sleepDuration)) {
+            applySleep(enemy, target, skill.sleepDuration);
+          }
+          if (Number.isFinite(skill.contemptStacks)) {
+            applyContempt(enemy, target, skill.contemptStacks, skill.contemptDuration);
+          }
+          if (Number.isFinite(skill.sorrowDuration)) {
+            applySorrow(enemy, target, skill.sorrowDuration);
+          }
+          if (Number.isFinite(skill.reunionDuration)) {
+            applyReunion(enemy, target, skill.reunionDuration);
+          }
+          if (skill.removePlantOnHit) {
+            clearPlant(target);
+          }
+          if (skill.forcedFlowerSkill) {
+            const flowerSkill = getFlowerSkillForTarget(target);
+            if (flowerSkill) {
+              enemy.forcedEnemySkillKey = flowerSkill;
+              enemy.forcedEnemySkillTarget = null;
+              enemy.cds.attack = 0;
+              enemy.aiIntent = null;
+              ctx.addFloat("花獲得", enemy.x, enemy.y - 34, "#f2c56d");
+            }
+          }
+          if (skill.forceNextSkillOnHit && dealt > 0) {
+            enemy.forcedEnemySkillKey = skill.forceNextSkillOnHit;
+            enemy.forcedEnemySkillTarget = target;
+            enemy.cds.attack = 0;
+            enemy.aiIntent = null;
           }
           if (typeof ctx.slashEffect === "function") {
             ctx.slashEffect(enemy, target);
@@ -1127,6 +1353,174 @@
             },
           });
           ctx.addBurst(center.x, center.y, skill.radius, "rgba(178,213,104,0.18)");
+        },
+      });
+      return true;
+    }
+
+    function useEnemyAreaSkill(enemy, key, skill) {
+      const speakOnCastStart = key === "chocolate_lily";
+      beginEnemySkill(enemy, key, skill, { skipSpeech: speakOnCastStart });
+      const cast = getCastTime(skill.cast, enemy);
+      enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      if (key === "chocolate_lily") {
+        enemy.chocolateLilyCharging = true;
+        enemy.chocolateLilyDamageTaken = 0;
+        speakSkill(enemy, key);
+      }
+      const center = { x: enemy.x, y: enemy.y };
+      const resolve = () => {
+        if (enemy.dead || isActionDisabled(enemy)) {
+          if (key === "chocolate_lily") {
+            enemy.chocolateLilyCharging = false;
+            enemy.chocolateLilyDamageTaken = 0;
+          }
+          return;
+        }
+        resolveEnemyAreaSkill(enemy, key, skill, center);
+      };
+      if (cast > 0) {
+        ctx.addTelegraph({
+          type: "circle", x: center.x, y: center.y, radius: skill.radius, team: "enemy", time: cast,
+          getPosition: () => ({ x: enemy.x, y: enemy.y }),
+          resolve,
+        });
+      } else {
+        resolve();
+      }
+      return true;
+    }
+
+    function resolveEnemyAreaSkill(enemy, key, skill, center) {
+      if (key === "chocolate_lily") {
+        enemy.chocolateLilyCharging = false;
+      }
+      const partyTargets = ctx.getFieldPartyMembers().filter((member) => {
+        return member && !member.dead && ctx.distPoint(member.x, member.y, center.x, center.y) <= skill.radius + member.radius;
+      });
+      if (Number.isFinite(skill.healBase)) {
+        const healTargets = skill.affectsEveryone
+          ? [...ctx.getFieldPartyMembers(), ...ctx.enemies].filter((unit) => unit && !unit.dead && ctx.distPoint(unit.x, unit.y, center.x, center.y) <= skill.radius + unit.radius)
+          : [enemy];
+        for (const unit of healTargets) {
+          const multiplier = unit === enemy ? (Number.isFinite(skill.selfHealMultiplier) ? skill.selfHealMultiplier : 1) : 1;
+          const amount = (skill.healBase + getMagicStat(enemy) * (skill.magicScale || 0)) * multiplier;
+          if (ctx.healUnit) {
+            ctx.healUnit(enemy, unit, amount, { noUltGain: true });
+          }
+        }
+      }
+      let damage = getEnemySkillDamage(enemy, null, skill);
+      if (key === "chocolate_lily") {
+        damage = Math.max(0, (enemy.chocolateLilyDamageTaken || 0) * (Number.isFinite(skill.receivedDamageScale) ? skill.receivedDamageScale : 0.7));
+        enemy.chocolateLilyDamageTaken = 0;
+      }
+      if (damage > 0) {
+        for (const member of partyTargets) {
+          ctx.dealDamage(enemy, member, damage, getSkillDamageOptions(skill));
+        }
+      }
+      for (const member of partyTargets) {
+        if (skill.plantApply) {
+          applyPlant(enemy, member);
+        }
+        if (skill.plantUpgrade) {
+          upgradePlant(enemy, member, key);
+        }
+      }
+      if (skill.radius > 0 && ctx.addBurst) {
+        ctx.addBurst(center.x, center.y, skill.radius, key === "dappled_sunlight" ? "rgba(255,232,141,0.18)" : "rgba(132,198,111,0.18)");
+      }
+    }
+
+    function useEnemyLineSkill(enemy, key, skill, target) {
+      if (!target || target.dead) {
+        return false;
+      }
+      beginEnemySkill(enemy, key, skill);
+      const cast = getCastTime(skill.cast, enemy);
+      enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      const line = buildEnemyLine(enemy, target, skill);
+      ctx.addTelegraph({
+        type: "line", x: line.x, y: line.y, x2: line.x2, y2: line.y2, width: skill.radius, team: "enemy", time: cast,
+        getLine: () => line,
+        resolve: () => {
+          if (enemy.dead || isActionDisabled(enemy)) return;
+          if (Number.isFinite(skill.duration) && skill.duration > 0) {
+            startEnemyLineArea(enemy, skill, line);
+          } else {
+            applyEnemyLineDamage(enemy, skill, line);
+          }
+        },
+      });
+      return true;
+    }
+
+    function startEnemyLineArea(enemy, skill, line) {
+      const duration = Math.max(0, Number.isFinite(skill.duration) ? skill.duration : 0);
+      const tickRate = Math.max(0.1, Number.isFinite(skill.tickRate) ? skill.tickRate : 1);
+      ctx.areas.push({
+        type: "enemy_line",
+        x: line.x,
+        y: line.y,
+        x2: line.x2,
+        y2: line.y2,
+        width: skill.radius,
+        time: duration,
+        total: duration,
+        tick: 0,
+        tickRate,
+        apply: () => {
+          if (enemy.dead) return;
+          applyEnemyLineDamage(enemy, skill, line);
+        },
+      });
+    }
+
+    function applyEnemyLineDamage(enemy, skill, line) {
+      const damage = getEnemySkillDamage(enemy, null, skill);
+      for (const member of ctx.getFieldPartyMembers()) {
+        if (!member.dead && ctx.distanceToSegment(member.x, member.y, line.x, line.y, line.x2, line.y2) <= skill.radius + member.radius) {
+          ctx.dealDamage(enemy, member, damage, getSkillDamageOptions(skill));
+        }
+      }
+    }
+
+    function buildEnemyLine(enemy, target, skill) {
+      const end = ctx.projectPoint(enemy, target, getEnemySkillRange(skill));
+      return { x: enemy.x, y: enemy.y, x2: end.x, y2: end.y };
+    }
+
+    function useEnemyAbsorption(enemy, key, skill, target) {
+      if (!target || target.dead) {
+        return false;
+      }
+      beginEnemySkill(enemy, key, skill);
+      const cast = getCastTime(skill.cast, enemy);
+      enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      ctx.addTelegraph({
+        type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(10), ctx.battlePx(28)), team: "enemy", time: cast,
+        getPosition: () => ({ x: target.x, y: target.y }),
+        resolve: () => {
+          if (enemy.dead || target.dead) return;
+          const duration = Math.max(0, Number.isFinite(skill.duration) ? skill.duration : 4);
+          const tickRate = Math.max(0.1, Number.isFinite(skill.tickRate) ? skill.tickRate : 1);
+          enemy.absorptionLockTimer = Math.max(enemy.absorptionLockTimer || 0, duration);
+          target.absorptionLockTimer = Math.max(target.absorptionLockTimer || 0, duration);
+          let time = duration;
+          let tick = 0;
+          ctx.areas.push({
+            type: "absorption_of_reunion", x: target.x, y: target.y, radius: target.radius + ctx.battlePx(8), time: duration, tick, tickRate,
+            apply: () => {
+              if (time <= 0 || enemy.dead || target.dead) return;
+              time -= tickRate;
+              const dealt = ctx.dealDamage(enemy, target, getEnemySkillDamage(enemy, target, skill), getSkillDamageOptions(skill, { dotDamage: true, noCrit: true, noUltGain: true }));
+              if (dealt > 0 && ctx.healUnit) {
+                ctx.healUnit(enemy, enemy, dealt * (Number.isFinite(skill.absorbHealMultiplier) ? skill.absorbHealMultiplier : 2), { noUltGain: true });
+              }
+            },
+          });
+          ctx.addFloat("吸収", target.x, target.y - 34, "#d889b9");
         },
       });
       return true;
@@ -1960,6 +2354,41 @@
         },
       };
       ctx.addTelegraph(telegraph);
+    }
+
+    function usePartyRegret(unit) {
+      const skill = getUnitSkill(unit, "regret");
+      if (!unit || unit.dead || !skill || isActionDisabled(unit) || unit.actionLock > 0) {
+        return false;
+      }
+      beginPartyAction(unit);
+      unit.aim = null;
+      unit.itemAim = null;
+      unit.itemUseRequest = null;
+      unit.itemCast = null;
+      unit.aiIntent = null;
+      clearRegret(unit);
+      speakSkill(unit, "regret");
+      const cast = getCastTime(skill.cast, unit);
+      unit.actionLock = cast + ctx.ACTION_GAP;
+      unit.actionTotal = Math.max(unit.actionTotal || 0, unit.actionLock);
+      ctx.addTelegraph({
+        type: "circle",
+        x: unit.x,
+        y: unit.y,
+        radius: unit.radius + ctx.battlePx(22),
+        team: "enemy",
+        time: cast,
+        getPosition: () => ({ x: unit.x, y: unit.y }),
+        resolve: () => {
+          finishPartyAction(unit);
+          if (unit.dead || isActionDisabled(unit)) return;
+          const ratio = Number.isFinite(skill.currentHpDamageRatio) ? skill.currentHpDamageRatio : 0.75;
+          ctx.dealDamage(unit, unit, Math.max(0, unit.hp * ratio), getSkillDamageOptions(skill, { noUltGain: true }));
+          ctx.addBurst(unit.x, unit.y, unit.radius + ctx.battlePx(28), "rgba(119,136,200,0.24)");
+        },
+      });
+      return true;
     }
 
     function usePartyHeal(unit, key, target) {

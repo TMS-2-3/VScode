@@ -689,6 +689,38 @@
       const sleepMax = Math.max(0.1, unit.sleepMax || unit.sleepTimer);
       icons.push(makeStatusIcon(unit, "debuff_sleep", { ratio: unit.sleepTimer / sleepMax, remaining: unit.sleepTimer }));
     }
+    if (unit.poisonActive) {
+      icons.push(makeStatusIcon(unit, "debuff_poison", { ratio: 1, permanent: true }));
+    }
+    if ((unit.woundStacks || 0) > 0) {
+      icons.push(makeStatusIcon(unit, "debuff_wound", { ratio: 1, stack: unit.woundStacks, permanent: true }));
+    }
+    if ((unit.plantStage || 0) > 0) {
+      icons.push(makeStatusIcon(unit, "debuff_plant", {
+        label: getPlantStatusLabel(unit),
+        name: getPlantStatusName(unit),
+        ratio: 1,
+        permanent: true,
+      }));
+    }
+    if ((unit.contemptStacks || 0) > 0 && (unit.contemptTimer || 0) > 0) {
+      const contemptMax = Math.max(0.1, unit.contemptMax || unit.contemptTimer);
+      icons.push(makeStatusIcon(unit, "buff_contempt", { ratio: unit.contemptTimer / contemptMax, remaining: unit.contemptTimer, stack: unit.contemptStacks }));
+    }
+    if ((unit.regretTimer || 0) > 0) {
+      icons.push(makeStatusIcon(unit, "debuff_regret", { ratio: 1, permanent: true }));
+    }
+    if ((unit.sorrowTimer || 0) > 0) {
+      const sorrowMax = Math.max(0.1, unit.sorrowMax || unit.sorrowTimer);
+      icons.push(makeStatusIcon(unit, "debuff_sorrow", { ratio: unit.sorrowTimer / sorrowMax, remaining: unit.sorrowTimer }));
+    }
+    if ((unit.reunionTimer || 0) > 0) {
+      const reunionMax = Math.max(0.1, unit.reunionMax || unit.reunionTimer);
+      icons.push(makeStatusIcon(unit, "reunion", { ratio: unit.reunionTimer / reunionMax, remaining: unit.reunionTimer }));
+    }
+    if ((unit.absorptionLockTimer || 0) > 0) {
+      icons.push({ label: "吸", name: "吸収中", description: "吸収により行動できない。", simpleDescription: "吸収により行動できない。", color: "#d889b9", ratio: 1, unit });
+    }
     if ((unit.injuryTimer || 0) > 0) {
       const injuryMax = Math.max(0.1, unit.injuryMax || unit.injuryTimer);
       icons.push(makeStatusIcon(unit, "debuff_Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
@@ -714,6 +746,26 @@
       icons.push(makeStatusIcon(unit, "buff_itaminasi", { ratio: unit.rihasPassiveTimer / RIHAS_PASSIVE_STACK_DURATION, stack: unit.rihasPassiveStacks, remaining: unit.rihasPassiveTimer }));
     }
     return icons;
+  }
+
+  function getPlantStatusLabel(unit) {
+    const stage = Math.max(1, Math.min(4, Math.floor(unit && unit.plantStage || 1)));
+    if (stage === 1) return "種";
+    if (stage === 2) return "芽";
+    if (stage === 3) return "開";
+    return "花";
+  }
+
+  function getPlantStatusName(unit) {
+    const stage = Math.max(1, Math.min(4, Math.floor(unit && unit.plantStage || 1)));
+    if (stage === 1) return "種";
+    if (stage === 2) return "発芽";
+    if (stage === 3) return "開花";
+    if (unit && unit.id === "ulpes") return "ヘンルーダ";
+    if (unit && unit.id === "rihas") return "紫のヒヤシンス";
+    if (unit && unit.id === "sushia") return "キンセンカ";
+    if (unit && unit.id === "finald") return "赤の彼岸花";
+    return "花";
   }
   function drawStatusIcon(icon, x, y, size) {
     const r = Math.max(4, size * 0.28);

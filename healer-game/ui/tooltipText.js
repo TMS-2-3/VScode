@@ -82,6 +82,9 @@
       if (formula.type === "burnTick") {
         return Math.max(0, unit.hp * 0.01);
       }
+      if (formula.type === "poisonTick") {
+        return Math.max(0, unit.maxHp * 0.01);
+      }
       const statValue = formula.stat === "attack"
         ? callStat(getEffectiveAttack, unit, unit.attack)
         : formula.stat === "magic"
