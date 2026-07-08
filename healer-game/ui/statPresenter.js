@@ -36,9 +36,10 @@
       hasPassive,
     } = context;
 
-    function getDetailedStats(unit) {
-      const outgoing = getUnitOutgoingDamageMultiplier(unit);
-      const incoming = getUnitIncomingDamageMultiplier(unit);
+    function getDetailedStats(unit, options = {}) {
+      const includeBattleState = options.includeBattleState !== false;
+      const outgoing = getUnitOutgoingDamageMultiplier(unit, includeBattleState);
+      const incoming = getUnitIncomingDamageMultiplier(unit, includeBattleState);
       const castSpeed = getUnitCastSpeed(unit);
       const skillSpeed = 1 - getMoodCooldownMultiplierSafe(unit);
       return [
@@ -60,22 +61,22 @@
         { label: "MP再生率", value: formatPercent(callNumber(getMpRegenRate, unit, 0)) },
         { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
         { label: "スキル速度", value: formatSignedPercent(skillSpeed) },
-        { label: "行動速度", value: getActionSpeedText(unit) },
+        { label: "行動速度", value: getActionSpeedText(unit, includeBattleState) },
         { breakAfter: true },
         { label: "ゲージ上昇率", value: formatPercent(getUltimateChargeRate(unit)) },
         { label: "移動速度", value: `${Math.round(getUnitMoveSpeed(unit))}` },
       ];
     }
 
-    function getActionSpeedText(unit) {
-      return formatPercent(getUnitActionSpeedRate(unit));
+    function getActionSpeedText(unit, includeBattleState = true) {
+      return formatPercent(getUnitActionSpeedRate(unit, includeBattleState));
     }
 
-    function getUnitActionSpeedRate(unit) {
+    function getUnitActionSpeedRate(unit, includeBattleState = true) {
       if (!unit) {
         return 1;
       }
-      const config = unit.id !== "finald" ? getCommandBiasConfig(unit.activeCommandBias || 0) : null;
+      const config = includeBattleState && unit.id !== "finald" ? getCommandBiasConfig(unit.activeCommandBias || 0) : null;
       const actionCdMultiplier = config && Number.isFinite(config.actionCd) && config.actionCd > 0 ? config.actionCd : 1;
       return Math.max(0, 1 + getUnitActionSpeedBonus(unit)) / actionCdMultiplier;
     }
@@ -112,9 +113,11 @@
       return Math.max(0, (unit && Number.isFinite(unit.ultimateChargeRate) ? unit.ultimateChargeRate : 1) + bonus);
     }
 
-    function getUnitOutgoingDamageMultiplier(unit) {
-      let bonus = multiplierToBonus(callNumber(getMoodOutgoingDamageMultiplier, unit, 1))
-        + multiplierToBonus(callNumber(getCommandOutgoingDamageMultiplier, unit, 1));
+    function getUnitOutgoingDamageMultiplier(unit, includeBattleState = true) {
+      let bonus = includeBattleState
+        ? multiplierToBonus(callNumber(getMoodOutgoingDamageMultiplier, unit, 1))
+          + multiplierToBonus(callNumber(getCommandOutgoingDamageMultiplier, unit, 1))
+        : 0;
       if (hasPassiveSafe(unit, "painless")) {
         bonus += multiplierToBonus(callNumber(getRihasPassiveDamageMultiplier, unit, 1));
       }
@@ -124,9 +127,11 @@
       return Math.max(0, 1 + bonus);
     }
 
-    function getUnitIncomingDamageMultiplier(unit) {
-      let bonus = multiplierToBonus(callNumber(getMoodIncomingDamageMultiplier, unit, 1))
-        + multiplierToBonus(callNumber(getCommandIncomingDamageMultiplier, unit, 1));
+    function getUnitIncomingDamageMultiplier(unit, includeBattleState = true) {
+      let bonus = includeBattleState
+        ? multiplierToBonus(callNumber(getMoodIncomingDamageMultiplier, unit, 1))
+          + multiplierToBonus(callNumber(getCommandIncomingDamageMultiplier, unit, 1))
+        : 0;
       if (hasPassiveSafe(unit, "painless")) {
         bonus += multiplierToBonus(callNumber(getRihasPassiveIncomingMultiplier, unit, 1));
       }

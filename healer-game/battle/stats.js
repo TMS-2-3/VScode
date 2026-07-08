@@ -482,6 +482,12 @@
           bonus += 0.15;
         }
       }
+      if (unit && (unit.feelTimer || 0) > 0 && statKey === "guardChance") {
+        bonus += 0.5;
+      }
+      if (unit && (unit.desteStacks || 0) > 0 && statKey === "critChance") {
+        bonus += 1;
+      }
       if (unit && (unit.magicNeutralizeTimer || 0) > 0 && statKey === "magic") {
         bonus -= Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);
       }

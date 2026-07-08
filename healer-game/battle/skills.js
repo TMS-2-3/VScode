@@ -549,6 +549,9 @@
       }
       ensureSkillQueue(unit);
       unit.usedSkillKeys[key] = true;
+      if (unit.firstSkillKey === key) {
+        unit.firstSkillPending = false;
+      }
       moveSkillToQueueBack(unit, key);
       if (!actionHasSkillCooldown(unit, key)) {
         if ((unit.cds.attack || 0) > 0) {
@@ -661,6 +664,18 @@
         return false;
       }
       const reachableCandidates = candidates.filter((candidate) => isEnemyActionReachable(enemy, candidate));
+      const fixedFirstKey = enemy.firstSkillPending && enemy.firstSkillKey;
+      if (fixedFirstKey) {
+        const fixedAction = reachableCandidates.find((candidate) => candidate.key === fixedFirstKey);
+        if (!fixedAction) {
+          if (!getUnitSkill(enemy, fixedFirstKey)) {
+            enemy.firstSkillPending = false;
+          }
+          enemy.aiTick = ctx.AI_IDLE_RECHECK;
+          return false;
+        }
+        return executeEnemyChosenAction(enemy, fixedAction);
+      }
       if (!reachableCandidates.length) {
         enemy.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
@@ -670,6 +685,10 @@
         enemy.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
       }
+      return executeEnemyChosenAction(enemy, action);
+    }
+
+    function executeEnemyChosenAction(enemy, action) {
       if (isEnemyActionInRange(enemy, action)) {
         const used = action.use();
         if (used !== false) {
@@ -812,8 +831,15 @@
     function getActionCooldown(unit) {
       const base = unit && unit.team === "enemy" ? getEnemyActionCooldownBase(unit) : (ctx.ACTION_COOLDOWN_BASE || 7);
       const cooldown = unit.team === "party" && unit.id !== "finald" ? ctx.getCommandActionCooldown(unit, base) : base;
-      const actionSpeed = (ctx.getEquipmentStatBonusSum ? ctx.getEquipmentStatBonusSum(unit, "actionSpeed") : 0) + getActionSpeedStatusBonus(unit);
+      const actionSpeed = getBaseActionSpeed(unit) + (ctx.getEquipmentStatBonusSum ? ctx.getEquipmentStatBonusSum(unit, "actionSpeed") : 0) + getActionSpeedStatusBonus(unit);
       return cooldown / Math.max(0.1, 1 + actionSpeed);
+    }
+
+    function getBaseActionSpeed(unit) {
+      if (unit && unit.baseStats && Number.isFinite(unit.baseStats.actionSpeed)) {
+        return unit.baseStats.actionSpeed;
+      }
+      return unit && Number.isFinite(unit.actionSpeed) ? unit.actionSpeed : 0;
     }
 
     function getEnemyActionCooldownBase(unit) {
@@ -896,6 +922,26 @@
       return members[Math.floor(Math.random() * members.length)];
     }
 
+    function getPartyAreaSupportPoint(unit) {
+      const members = getSupportablePartyMembers();
+      if (!members.length) {
+        return unit || null;
+      }
+      let totalX = 0;
+      let totalY = 0;
+      for (const member of members) {
+        totalX += member.x;
+        totalY += member.y;
+      }
+      return {
+        x: totalX / members.length,
+        y: totalY / members.length,
+        radius: 0,
+        team: unit && unit.team || "party",
+        areaPoint: true,
+      };
+    }
+
     function getUnitActiveSkillEntries(unit) {
       const owner = getSkillOwner(unit);
       const entries = ctx.getEquippedActiveSkills
@@ -910,6 +956,7 @@
         || Number.isFinite(skill.shieldBase)
         || skill.sleepCleanse
         || Number.isFinite(skill.actionCdSetTo)
+        || Number.isFinite(skill.feelDuration)
       ));
     }
 
@@ -957,6 +1004,9 @@
       if (skill && Number.isFinite(skill.actionCdSetTo)) {
         return getActionCdSupportTarget(unit, skill);
       }
+      if (skill && Number.isFinite(skill.feelDuration)) {
+        return getPartyAreaSupportPoint(unit);
+      }
       if (isSupportSkill(skill)) {
         return getRandomSupportTarget();
       }
@@ -969,6 +1019,7 @@
     function getPartySkillRange(skill) {
       if (skill && Number.isFinite(skill.range) && skill.range > 0) return skill.range;
       if (skill && Number.isFinite(skill.hitRange)) return skill.hitRange;
+      if (skill && Number.isFinite(skill.range) && skill.range === 0 && Number.isFinite(skill.radius)) return skill.radius * 0.5;
       if (skill && Number.isFinite(skill.radius)) return skill.radius;
       return ctx.battlePx(80);
     }
@@ -1766,6 +1817,61 @@
       return getSkillUpgradeIndexedValue(unit, key, skill, values);
     }
 
+    function getSkillActionUpgradeLevel(unit, key, skill) {
+      const skillKey = skill && skill.category === "通常攻撃" ? "attack" : (key || getSkillSourceKey(skill));
+      return getSkillUpgradeLevel(unit, skillKey, skill);
+    }
+
+    function getSkillRadius(unit, key, skill) {
+      const base = Number.isFinite(skill && skill.radius) ? skill.radius : 0;
+      const perLevel = Number.isFinite(skill && skill.radiusPerLevel) ? skill.radiusPerLevel : 0;
+      return Math.max(0, base + perLevel * getSkillActionUpgradeLevel(unit, key, skill));
+    }
+
+    function getSkillArcDeg(unit, key, skill) {
+      const base = Number.isFinite(skill && skill.arcDeg) ? skill.arcDeg : 360;
+      const perLevel = Number.isFinite(skill && skill.arcDegPerLevel) ? skill.arcDegPerLevel : 0;
+      return Math.max(0, base + perLevel * getSkillActionUpgradeLevel(unit, key, skill));
+    }
+
+    function getSkillArcRad(unit, key, skill) {
+      return ctx.deg(getSkillArcDeg(unit, key, skill));
+    }
+
+    function restoreSkillMp(unit, amount) {
+      if (!unit || unit.dead || !Number.isFinite(amount) || amount <= 0) {
+        return 0;
+      }
+      const maxMp = Math.max(0, Number.isFinite(unit.maxMp) ? unit.maxMp : 0);
+      const before = Math.max(0, Number.isFinite(unit.mp) ? unit.mp : 0);
+      unit.mp = Math.min(maxMp, before + amount);
+      const restored = unit.mp - before;
+      if (restored > 0) {
+        ctx.addFloat(`MP+${Math.round(restored)}`, unit.x, unit.y - 32, "#9ef7ff");
+      }
+      return restored;
+    }
+
+    function applyPartySkillDamageRewards(unit, target, key, skill, dealt) {
+      if (!unit || !target || !skill || !Number.isFinite(dealt) || dealt <= 0) {
+        return false;
+      }
+      let applied = false;
+      if (Number.isFinite(skill.lifeStealRatio) && skill.lifeStealRatio > 0 && ctx.healUnit) {
+        const multiplier = 1 + Math.max(0, Number.isFinite(skill.lifeStealMultiplierPerLevel) ? skill.lifeStealMultiplierPerLevel : 0) * getSkillActionUpgradeLevel(unit, key, skill);
+        const healed = ctx.healUnit(unit, unit, dealt * skill.lifeStealRatio * multiplier, { noMood: true, noUltGain: true });
+        applied = healed > 0 || applied;
+      }
+      if (target.team === "enemy" && Number.isFinite(skill.mpRestoreOnHit) && skill.mpRestoreOnHit > 0) {
+        const restored = skill.mpRestoreOnHit + Math.max(0, Number.isFinite(skill.mpRestoreOnHitPerLevel) ? skill.mpRestoreOnHitPerLevel : 0) * getSkillActionUpgradeLevel(unit, key, skill);
+        applied = restoreSkillMp(unit, restored) > 0 || applied;
+      }
+      if (target.team === "enemy" && Number.isFinite(skill.mpRestorePerEnemyHit) && skill.mpRestorePerEnemyHit > 0) {
+        applied = restoreSkillMp(unit, skill.mpRestorePerEnemyHit) > 0 || applied;
+      }
+      return applied;
+    }
+
     function getSkillDamageType(skill) {
       return skill && skill.damageType ? String(skill.damageType) : "";
     }
@@ -1797,7 +1903,13 @@
     }
 
     function dealPartySkillDamage(unit, target, skill, damage, options = {}) {
-      const damaged = ctx.dealDamage(unit, target, damage, getSkillDamageOptions(skill, options)) > 0;
+      const rewardKey = options.skillKey || options.key || null;
+      const damageOptions = Object.assign({}, options);
+      delete damageOptions.skillKey;
+      delete damageOptions.key;
+      const dealt = ctx.dealDamage(unit, target, damage, getSkillDamageOptions(skill, damageOptions));
+      const damaged = dealt > 0;
+      applyPartySkillDamageRewards(unit, target, rewardKey, skill, dealt);
       const burnDuration = getOffensiveEffectDuration(unit, target, getSkillBurnDuration(unit, skill));
       if (burnDuration > 0) {
         applyBurn(unit, target, Object.assign({}, skill, { burnDuration }));
@@ -1865,8 +1977,57 @@
       return effectApplied;
     }
 
+    function getFeelDuration(unit, key, skill) {
+      const base = Number.isFinite(skill && skill.feelDuration) ? skill.feelDuration : 0;
+      return Math.max(0, base + Math.max(0, Number.isFinite(skill && skill.feelDurationPerLevel) ? skill.feelDurationPerLevel : 0) * getSkillActionUpgradeLevel(unit, key, skill));
+    }
+
+    function applyFeelStatus(source, target, key, skill) {
+      const duration = getFeelDuration(source, key, skill);
+      if (!target || target.dead || target.team !== "party" || duration <= 0) {
+        return false;
+      }
+      if ((target.feelTimer || 0) <= 0) {
+        target.feelGuardCount = 0;
+      }
+      target.feelTimer = Math.max(target.feelTimer || 0, duration);
+      target.feelMax = Math.max(target.feelMax || 0, duration);
+      ctx.addFloat("フィール", target.x, target.y - 34, "#d8e77a");
+      if (ctx.awardSupportUltimate) {
+        ctx.awardSupportUltimate(source, target);
+      }
+      return true;
+    }
+
+    function isInFeelArea(source, target, key, skill, aimAngle) {
+      if (!target || target.dead || target.team !== "party") {
+        return false;
+      }
+      const radius = getSkillRadius(source, key, skill);
+      if (target !== source && ctx.distPoint(target.x, target.y, source.x, source.y) > radius + target.radius) {
+        return false;
+      }
+      const arcDeg = getSkillArcDeg(source, key, skill);
+      if (target === source || !Number.isFinite(arcDeg) || arcDeg >= 360) {
+        return true;
+      }
+      return ctx.inFan(target, source.x, source.y, radius, aimAngle, ctx.deg(arcDeg));
+    }
+
+    function applyFeelArea(source, key, skill, aimAngle) {
+      let affected = 0;
+      for (const member of getSupportablePartyMembers()) {
+        if (isInFeelArea(source, member, key, skill, aimAngle) && applyFeelStatus(source, member, key, skill)) {
+          affected += 1;
+        }
+      }
+      if (affected > 0) {
+        ctx.addBurst(source.x, source.y, skill.burstRadius || getSkillRadius(source, key, skill), "rgba(216,231,122,0.22)");
+      }
+      return affected;
+    }
+
     function getSleepCleanseTarget(unit, skill) {
-      const radius = skill && Number.isFinite(skill.radius) ? skill.radius : Infinity;
       let best = null;
       let bestDistance = Infinity;
       for (const member of getSupportablePartyMembers()) {
@@ -1874,7 +2035,7 @@
           continue;
         }
         const distance = ctx.dist(unit, member);
-        if (distance <= radius + member.radius && distance < bestDistance) {
+        if (distance < bestDistance) {
           best = member;
           bestDistance = distance;
         }
@@ -1981,7 +2142,7 @@
       let damaged = false;
       let effectApplied = false;
       if (Number.isFinite(skill.damageBase) || Number.isFinite(skill.attackScale) || Number.isFinite(skill.magicScale)) {
-        damaged = dealPartySkillDamage(unit, target, skill, getSkillDamageAgainst(unit, skill, target), damageOptions);
+        damaged = dealPartySkillDamage(unit, target, skill, getSkillDamageAgainst(unit, skill, target), Object.assign({}, damageOptions, { skillKey: key }));
       }
       if (Number.isFinite(skill.magicNeutralizeBase)) {
         effectApplied = applyMagicNeutralize(unit, target, key, skill) || effectApplied;
@@ -2007,6 +2168,7 @@
       if (Number.isFinite(skill.shieldBase)) return usePartyShield(unit, key, target);
       if (skill.sleepCleanse) return usePartySleepCleanse(unit, key, skill, target);
       if (Number.isFinite(skill.actionCdSetTo)) return usePartyActionCdPulse(unit, key, skill, target);
+      if (Number.isFinite(skill.feelDuration)) return usePartyFeelBuff(unit, key, skill, target);
       if (skill.approach || Number.isFinite(skill.shockRadius)) return useJumpAreaSkill(unit, key, skill, target);
       if (Number.isFinite(skill.arcDeg)) return useFanAreaSkill(unit, key, skill, target);
       if (Number.isFinite(skill.repeat) && Number.isFinite(skill.hitRange)) return useRepeatedMeleeSkill(unit, key, skill, target);
@@ -2035,7 +2197,7 @@
             if (sleepAppliedByThisAction && i > 0 && Number.isFinite(skill.sleepWakeBonusAttackScale)) {
               damage += getAttackStat(unit) * skill.sleepWakeBonusAttackScale;
             }
-            const damaged = dealPartySkillDamage(unit, target, skill, damage, { crit: true });
+            const damaged = dealPartySkillDamage(unit, target, skill, damage, { crit: true, skillKey: key });
             const canApplySleep = !skill.sleepFirstRepeatOnly || i === 0 || !sleepAppliedByThisAction;
             if (canApplySleep && damaged) {
               sleepAppliedByThisAction = applyPartySkillSleep(unit, target, key, skill) || sleepAppliedByThisAction;
@@ -2058,9 +2220,11 @@
       const cast = getCastTime(skill.cast, unit);
       unit.actionLock = cast + ctx.ACTION_GAP;
       unit.aimAngle = ctx.angleTo(unit, target);
+      const radius = getSkillRadius(unit, key, skill);
+      const arc = getSkillArcRad(unit, key, skill);
       ctx.addTelegraph({
-        type: "fan", source: unit, x: unit.x, y: unit.y, radius: skill.radius,
-        angle: unit.aimAngle, arc: ctx.deg(skill.arcDeg), team: "party", time: cast,
+        type: "fan", source: unit, x: unit.x, y: unit.y, radius,
+        angle: unit.aimAngle, arc, team: "party", time: cast,
         getPosition: () => ({ x: unit.x, y: unit.y }),
         getAngle: () => target.dead ? unit.aimAngle : ctx.angleTo(unit, target),
         resolve: () => {
@@ -2071,7 +2235,7 @@
           for (const unitHit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
-            if (ctx.inFan(unitHit, unit.x, unit.y, skill.radius, unit.aimAngle, ctx.deg(skill.arcDeg))) {
+            if (ctx.inFan(unitHit, unit.x, unit.y, radius, unit.aimAngle, arc)) {
               applyPartySkillHitEffects(unit, unitHit, key, skill, { crit: true });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
@@ -2081,7 +2245,7 @@
             const minCd = Number.isFinite(skill.minCdAfterHit) ? skill.minCdAfterHit : 0;
             trackSkillCooldown(unit, key, key, Math.max(minCd, (unit.cds[key] || 0) - hits * getCdRefundPerHit(unit, key, skill)));
           }
-          ctx.addBurst(unit.x, unit.y, skill.burstRadius || skill.radius, "rgba(244,197,79,0.22)");
+          ctx.addBurst(unit.x, unit.y, Math.max(skill.burstRadius || 0, radius), "rgba(244,197,79,0.22)");
         },
       });
       return true;
@@ -2179,6 +2343,37 @@
       return true;
     }
 
+    function usePartyFeelBuff(unit, key, skill, target) {
+      const buffTarget = target || unit;
+      speakSkill(unit, key);
+      beginPartyAction(unit);
+      paySkillCost(unit, skill);
+      const cast = getCastTime(skill.cast, unit);
+      unit.actionLock = cast + ctx.ACTION_GAP;
+      unit.aimAngle = buffTarget && buffTarget !== unit ? ctx.angleTo(unit, buffTarget) : (unit.aimAngle || 0);
+      const radius = getSkillRadius(unit, key, skill);
+      const arcDeg = getSkillArcDeg(unit, key, skill);
+      ctx.addTelegraph({
+        type: arcDeg >= 360 ? "circle" : "fan",
+        source: unit,
+        x: unit.x,
+        y: unit.y,
+        radius,
+        angle: unit.aimAngle,
+        arc: ctx.deg(arcDeg),
+        team: "support",
+        time: cast,
+        getPosition: () => ({ x: unit.x, y: unit.y }),
+        getAngle: () => unit.aimAngle,
+        resolve: () => {
+          finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+          if (unit.dead || isActionDisabled(unit)) return;
+          applyFeelArea(unit, key, skill, unit.aimAngle || 0);
+        },
+      });
+      return true;
+    }
+
     function useJumpAreaSkill(unit, key, skill, target) {
       if (!target || target.dead) return false;
       speakSkill(unit, key);
@@ -2209,11 +2404,11 @@
             if (!canOffensiveAffect(unit, unitHit)) continue;
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
             if (d <= skill.radius + unitHit.radius) {
-              dealPartySkillDamage(unit, unitHit, skill, getSkillDamageAgainst(unit, skill, unitHit));
+              dealPartySkillDamage(unit, unitHit, skill, getSkillDamageAgainst(unit, skill, unitHit), { skillKey: key });
               hits += unitHit.team === "enemy" ? 1 : 0;
             } else if (Number.isFinite(skill.shockRadius) && d <= skill.shockRadius + unitHit.radius) {
               const shockDamage = getSkillDamageAgainst(unit, skill, unitHit, "shockDamageBase", "shockAttackScale", "shockMagicScale");
-              dealPartySkillDamage(unit, unitHit, Object.assign({}, skill, { damageType: "magic" }), shockDamage, { magic: true });
+              dealPartySkillDamage(unit, unitHit, Object.assign({}, skill, { damageType: "magic" }), shockDamage, { magic: true, skillKey: key });
               hits += unitHit.team === "enemy" ? 1 : 0;
             }
           }
@@ -2264,7 +2459,10 @@
               affectsAllies: skill.affectsAllies !== false,
               healAllies: Boolean(skill.healAllies),
               heal: Number.isFinite(skill.heal) ? skill.heal : undefined,
-              onHit: (hitTarget) => applyPartySkillOnHitEffects(unit, hitTarget, key, skill),
+              onHit: (hitTarget, dealt = 0) => {
+                applyPartySkillDamageRewards(unit, hitTarget, key, skill, dealt);
+                return applyPartySkillOnHitEffects(unit, hitTarget, key, skill);
+              },
               color: skill.color || "#ffffff",
             });
           }
@@ -2279,8 +2477,9 @@
       paySkillCost(unit, skill);
       const cast = getCastTime(skill.cast, unit);
       unit.actionLock = cast + ctx.ACTION_GAP;
+      const radius = getSkillRadius(unit, key, skill);
       const telegraph = {
-        type: "circle", x: target.x, y: target.y, radius: skill.radius, team: "party", time: cast,
+        type: "circle", x: target.x, y: target.y, radius, team: "party", time: cast,
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
@@ -2292,11 +2491,11 @@
             if (unitHit.dead || unitHit === unit) continue;
             if (!canOffensiveAffect(unit, unitHit)) continue;
             const d = ctx.distPoint(unitHit.x, unitHit.y, impact.x, impact.y);
-            if (d <= skill.radius + unitHit.radius) {
-              const distanceRatio = ctx.clamp(d / Math.max(1, skill.radius), 0, 1);
+            if (d <= radius + unitHit.radius) {
+              const distanceRatio = ctx.clamp(d / Math.max(1, radius), 0, 1);
               const falloff = getDistanceFalloffMax(unit, skill, 0) * distanceRatio;
               const damage = getSkillDamageAgainst(unit, skill, unitHit) * Math.max(0, 1 - falloff);
-              const damaged = dealPartySkillDamage(unit, unitHit, skill, damage);
+              const damaged = dealPartySkillDamage(unit, unitHit, skill, damage, { skillKey: key });
               const effectApplied = applyPartySkillOnHitEffects(unit, unitHit, key, skill);
               if (effectApplied && !damaged && ctx.awardOffensiveUltimate) {
                 ctx.awardOffensiveUltimate(unit, unitHit);
@@ -2307,7 +2506,7 @@
             }
           }
           ctx.applyMultiHitMoodBonus(unit, hits);
-          ctx.addBurst(impact.x, impact.y, skill.burstRadius || skill.radius, "rgba(185,133,238,0.28)");
+          ctx.addBurst(impact.x, impact.y, Math.max(skill.burstRadius || 0, radius), "rgba(185,133,238,0.28)");
         },
       };
       ctx.addTelegraph(telegraph);
@@ -2668,8 +2867,31 @@
       return skill && Number.isFinite(skill.range) ? skill.range : Infinity;
     }
 
-    function getPlayerSkillRadius(skill) {
-      return skill && Number.isFinite(skill.radius) ? skill.radius : Infinity;
+    function getPlayerSkillRadius(skill, key = "") {
+      if (!skill || !Number.isFinite(skill.radius)) {
+        return Infinity;
+      }
+      const skillKey = key || (skill.category === "通常攻撃" ? "attack" : getSkillSourceKey(skill));
+      return getSkillRadius(ctx.player, skillKey, skill);
+    }
+
+    function getPlayerSkillArc(skill, key = "") {
+      if (!skill || !Number.isFinite(skill.arcDeg)) {
+        return ctx.TAU;
+      }
+      const skillKey = key || (skill.category === "通常攻撃" ? "attack" : getSkillSourceKey(skill));
+      if (skill.sleepCleanse) {
+        return getSleepCleanseArc(ctx.player, skillKey, skill);
+      }
+      return getSkillArcRad(ctx.player, skillKey, skill);
+    }
+
+    function getSelfCenteredPreviewAngle(target) {
+      const player = ctx.player;
+      if (target && Number.isFinite(target.x) && Number.isFinite(target.y) && ctx.distPoint(player.x, player.y, target.x, target.y) > ctx.battlePx(4)) {
+        return ctx.angleTo(player, target);
+      }
+      return Number.isFinite(player.aimAngle) ? player.aimAngle : 0;
     }
 
     function isSelfCenteredPlayerSkill(skill) {
@@ -2780,6 +3002,7 @@
         key,
         target: { x: target.x, y: target.y, selfCenteredSkillPoint: true },
         range: arrivalRange,
+        aimAngle: ctx.angleTo(ctx.player, target),
         support: true,
       };
       ctx.player.aim = null;
@@ -2808,6 +3031,9 @@
         return false;
       }
       const options = { fromMoveIntent: true };
+      if (Number.isFinite(intent.aimAngle)) {
+        player.aimAngle = intent.aimAngle;
+      }
       if (intent.key === "attack") return firePlayerShot(target, options);
       if (intent.key === "heal") return castHeal(target, options);
       if (intent.key === "shield") return castShield(target, options);
@@ -2853,6 +3079,9 @@
       if ((player.cds.attack || 0) > 0) { ctx.addFloat("再詠唱中", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", origin.x + 26, origin.y - 28, "#ffffff"); return false; }
       const castBase = Number.isFinite(skill.actionCdSetTo) ? getActionCdPulseCastTime(player, "attack", skill) : skill.cast;
+      if (!options.fromMoveIntent && Number.isFinite(skill.arcDeg) && ctx.distPoint(player.x, player.y, target.x, target.y) > ctx.battlePx(4)) {
+        player.aimAngle = ctx.angleTo(player, target);
+      }
       if (!ctx.startPlayerCast("attack", { target }, getCastTime(castBase, player))) return false;
       paySkillCost(player, skill);
       return true;
@@ -2903,21 +3132,40 @@
         }
         return;
       }
+      if (Number.isFinite(skill.feelDuration)) {
+        const radius = getSkillRadius(player, "attack", skill);
+        const aimAngle = Number.isFinite(player.aimAngle) ? player.aimAngle : 0;
+        applyFeelArea(player, "attack", skill, aimAngle);
+        ctx.addTelegraph({
+          type: getSkillArcDeg(player, "attack", skill) >= 360 ? "circle" : "fan",
+          source: player,
+          x: player.x,
+          y: player.y,
+          radius,
+          angle: aimAngle,
+          arc: getSkillArcRad(player, "attack", skill),
+          team: "support",
+          time: 0.16,
+          resolve: () => {},
+        });
+        return;
+      }
       let hits = 0;
+      const radius = getSkillRadius(player, "attack", skill);
       for (const unit of [...ctx.enemies, ...ctx.getFieldPartyMembers()]) {
         if (unit.dead || unit === player) {
           continue;
         }
         if (!canOffensiveAffect(player, unit)) continue;
-        if (ctx.distPoint(unit.x, unit.y, center.x, center.y) <= skill.radius + unit.radius) {
+        if (ctx.distPoint(unit.x, unit.y, center.x, center.y) <= radius + unit.radius) {
           if (applyPartySkillHitEffects(player, unit, "attack", skill, { magic: true })) {
             hits += 1;
           }
         }
       }
       ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: center.x, y2: center.y, color: skill.color || "rgba(158,247,255,0.78)", time: 0.18, age: 0 });
-      ctx.addTelegraph({ type: "circle", x: center.x, y: center.y, radius: skill.radius, team: "support", time: 0.16, resolve: () => {} });
-      ctx.addBurst(center.x, center.y, skill.burstRadius || skill.radius, hits > 0 ? "rgba(158,247,255,0.28)" : "rgba(158,247,255,0.14)");
+      ctx.addTelegraph({ type: "circle", x: center.x, y: center.y, radius, team: "support", time: 0.16, resolve: () => {} });
+      ctx.addBurst(center.x, center.y, Math.max(skill.burstRadius || 0, radius), hits > 0 ? "rgba(158,247,255,0.28)" : "rgba(158,247,255,0.14)");
     }
     function castHeal(lockedTarget = null, options = {}) {
       const player = ctx.player;
@@ -3535,21 +3783,22 @@
       const skill = getUnitSkill(player, player.aim.type) || get("finald", player.aim.type);
       let movePreview = null;
       draw.save();
-      if (skill && Number.isFinite(skill.range)) {
+      if (skill && Number.isFinite(skill.range) && skill.range > 0) {
         drawPlayerRangeCircle(draw, skill.range, "rgba(247,255,246,0.42)");
       }
       if (player.aim.type === "attack") {
         const target = ctx.clampBattlePoint(ctx.input.mouse.x, ctx.input.mouse.y, ctx.battlePx(12));
+        const selfCentered = isSelfCenteredPlayerSkill(skill);
         const inRange = isSelfCenteredPlayerSkill(skill)
           ? !getPlayerSelfCenteredMovePreviewPoint(target)
           : isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill));
-        movePreview = isSelfCenteredPlayerSkill(skill)
+        movePreview = selfCentered
           ? getPlayerSelfCenteredMovePreviewPoint(target)
           : getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill));
         draw.fillStyle = inRange ? "rgba(158,247,255,0.18)" : "rgba(255,255,255,0.08)";
         draw.strokeStyle = inRange ? "#9ef7ff" : "rgba(255,255,255,0.45)";
         draw.lineWidth = 3;
-        draw.beginPath(); draw.arc(target.x, target.y, skill.radius, 0, ctx.TAU); draw.fill(); draw.stroke();
+        drawPlayerSkillAreaPreview(draw, target.x, target.y, getPlayerSkillRadius(skill, "attack"), skill, "attack", selfCentered ? getSelfCenteredPreviewAngle(target) : 0);
       } else if (player.aim.type === "heal") {
         const target = ctx.game.hover;
         if (target && target.team === "party" && !target.dead) {
@@ -3584,7 +3833,7 @@
         draw.fillStyle = inRange ? "rgba(185,133,238,0.18)" : "rgba(255,255,255,0.08)";
         draw.strokeStyle = inRange ? "#b985ee" : "rgba(255,255,255,0.45)";
         draw.lineWidth = 3;
-        draw.beginPath(); draw.arc(target.x, target.y, skill.radius, 0, ctx.TAU); draw.fill(); draw.stroke();
+        drawPlayerSkillAreaPreview(draw, target.x, target.y, getPlayerSkillRadius(skill, "bomb"), skill, "bomb", 0);
       } else if (player.aim.type === "commandDefend" || player.aim.type === "commandAttack") {
         const target = ctx.game.hover;
         if (isCommandTarget(target)) {
@@ -3621,15 +3870,32 @@
         draw.fillStyle = skill.commandDelta < 0 ? "rgba(156,198,255,0.12)" : "rgba(255,213,107,0.12)";
         draw.strokeStyle = color;
         draw.lineWidth = 3;
-        draw.beginPath();
-        draw.arc(target.x, target.y, getPlayerSkillRadius(skill), 0, ctx.TAU);
-        draw.fill();
-        draw.stroke();
+        drawPlayerSkillAreaPreview(draw, target.x, target.y, getPlayerSkillRadius(skill, player.aim.type), skill, player.aim.type, getSelfCenteredPreviewAngle(target));
       }
       if (movePreview) {
         drawPlayerMovePrediction(draw, movePreview);
       }
       draw.restore();
+    }
+
+    function drawPlayerSkillAreaPreview(draw, x, y, radius, skill, key, angle = 0) {
+      if (!Number.isFinite(radius) || radius <= 0) {
+        return;
+      }
+      const arc = getPlayerSkillArc(skill, key);
+      if (skill && Number.isFinite(skill.arcDeg) && arc < ctx.TAU - 0.001) {
+        draw.beginPath();
+        draw.moveTo(x, y);
+        draw.arc(x, y, radius, angle - arc / 2, angle + arc / 2);
+        draw.closePath();
+        draw.fill();
+        draw.stroke();
+        return;
+      }
+      draw.beginPath();
+      draw.arc(x, y, radius, 0, ctx.TAU);
+      draw.fill();
+      draw.stroke();
     }
 
     function drawPlayerRangeCircle(draw, range, color) {

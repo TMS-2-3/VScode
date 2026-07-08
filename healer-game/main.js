@@ -27,6 +27,7 @@
     createLoadoutSystem: window.createHealerLoadoutSystem,
     createEquipmentSystem: window.createHealerEquipmentSystem,
     createWalletSystem: window.createHealerWalletSystem,
+    createSaveSystem: window.createHealerSaveSystem,
     createStoryData: window.createHealerStoryData,
   };
 
@@ -110,6 +111,7 @@
   systems.battleSetup = modules.createBattleSetup(contexts.createBattleSetupContext());
   systems.battleRuntime = modules.createBattleRuntime(contexts.createBattleRuntimeContext());
   systems.itemSystem = modules.createItemSystem(contexts.createItemContext());
+  systems.saveSystem = modules.createSaveSystem(contexts.createSaveContext());
 
   state.profileNameInput = systems.profileSystem.createProfileNameInput();
   systems.renderer = modules.createRenderer(contexts.createRenderContext());
@@ -136,10 +138,15 @@
         keys: {},
       },
       game: {
-        state: "town",
+        state: "title",
         time: 0,
         message: "はじまりの町",
         messageTimer: 5,
+        titleTargets: [],
+        titleLoadOpen: false,
+        titleLoadMessage: "",
+        titleLoadScroll: 0,
+        titleLoadScrollMax: 0,
         hover: null,
         priorityTarget: null,
         priorityTargetTimer: 0,
@@ -155,6 +162,7 @@
         reinforcementsSpawned: false,
         partyHpById: {},
         partyMpById: {},
+        partyDeadById: {},
         partyStatusById: {},
         partyEquipmentById: {},
         partyLoadoutById: {},
@@ -167,7 +175,11 @@
         equipmentUpgradeById: {},
         equipmentRandomStatsById: {},
         equipmentRandomSeedsById: {},
+        equipmentUpgradeRollsById: {},
         equipmentPresetsById: {},
+        saveUi: {
+          message: "",
+        },
         settings: {
           tooltipDescriptionMode: "simple",
           powerCrystalAutoUse: true,

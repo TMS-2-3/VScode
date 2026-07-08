@@ -26,7 +26,7 @@
       if (game.state === "town") {
         clampTownPlayer();
         updateTownCamera();
-      } else {
+      } else if (game.state === "playing") {
         clampAllUnits();
       }
       updateProfileNameInput();

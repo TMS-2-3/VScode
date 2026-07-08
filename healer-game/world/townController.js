@@ -57,6 +57,16 @@
     const TOWN_WALK_FRAME_INTERVAL = 0.16;
     const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
     const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury", "debuff_poison", "debuff_wound"];
+    const EQUIPMENT_SHOP_RANK_FILTERS = ["D", "C", "B", "A", "S"];
+    const EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
+    const EQUIPMENT_SHOP_UNIT_FILTERS = ["ulpes", "rihas", "sushia", "finald"];
+    const EQUIPMENT_SHOP_ARMOR_SLOT_FILTERS = ["head", "body", "legs", "feet", "hands", "accessory"];
+    const EQUIPMENT_SHOP_ARMOR_BASIC_STAT_FILTERS = ["maxHp", "maxMp", "attack", "magic", "defense", "magicDefense"];
+    const EQUIPMENT_SHOP_ARMOR_DETAIL_STAT_FILTERS = [
+      "critChance", "critDamage", "guardChance", "guardDamageReduction", "damageBoost", "damageResistance",
+      "physicalDamageBoost", "physicalDamageResistance", "magicDamageBoost", "magicDamageResistance",
+      "hpRegenRate", "mpRegenRate", "castSpeed", "cooldownReduction", "actionSpeed", "ultimateChargeRate", "moveSpeed",
+    ];
     function keyLabel(actionId, fallback) {
       return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
     }
@@ -82,17 +92,25 @@
       game.partyMpById = game.partyMpById && typeof game.partyMpById === "object"
         ? game.partyMpById
         : {};
+      game.partyDeadById = game.partyDeadById && typeof game.partyDeadById === "object"
+        ? game.partyDeadById
+        : {};
       for (const member of party) {
         if (!member || !member.id) {
           continue;
         }
+        const incapacitated = Boolean(member.dead || member.hp <= 0);
         if (Number.isFinite(member.hp)) {
           const hp = getPersistentHp(member);
           game.partyHpById[member.id] = hp;
           member.hp = hp;
-          if (hp > 0) {
-            member.dead = false;
-          }
+        }
+        if (incapacitated) {
+          member.dead = true;
+          game.partyDeadById[member.id] = true;
+        } else {
+          member.dead = false;
+          delete game.partyDeadById[member.id];
         }
         if (Number.isFinite(member.mp) || Number.isFinite(member.maxMp)) {
           const mp = getPersistentMp(member);
@@ -109,6 +127,9 @@
       game.partyMpById = game.partyMpById && typeof game.partyMpById === "object"
         ? game.partyMpById
         : {};
+      game.partyDeadById = game.partyDeadById && typeof game.partyDeadById === "object"
+        ? game.partyDeadById
+        : {};
       for (const member of party) {
         if (!member || !member.id) {
           continue;
@@ -119,6 +140,7 @@
         if (Number.isFinite(member.maxMp)) {
           game.partyMpById[member.id] = member.maxMp;
         }
+        delete game.partyDeadById[member.id];
       }
     }
 
@@ -685,6 +707,14 @@
         adjustItemShopQuantity(action.itemId, action.delta);
       } else if (action.kind === "selectEquipmentShopTab") {
         selectEquipmentShopTab(action.tab);
+      } else if (action.kind === "toggleEquipmentShopFilter") {
+        toggleEquipmentShopFilter(action.category, action.value);
+      } else if (action.kind === "setEquipmentShopFilterGroup") {
+        setEquipmentShopFilterGroup(action.category, action.mode);
+      } else if (action.kind === "setEquipmentShopSort") {
+        setEquipmentShopSort(action.sortKey, action.sortDir);
+      } else if (action.kind === "clearEquipmentShopFilters") {
+        clearEquipmentShopFilters();
       } else if (action.kind === "craftEquipment") {
         craftEquipment(action.itemId);
       } else if (action.kind === "upgradeEquipment") {
@@ -733,10 +763,16 @@
     }
 
     function recoverPartyFull() {
+      game.partyDeadById = game.partyDeadById && typeof game.partyDeadById === "object"
+        ? game.partyDeadById
+        : {};
       for (const member of getRecoveryMembers()) {
         member.hp = member.maxHp;
         member.mp = member.maxMp;
         member.dead = false;
+        if (member.id) {
+          delete game.partyDeadById[member.id];
+        }
         member.shield = 0;
         member.shieldTimer = 0;
         member.shields = [];
@@ -764,6 +800,10 @@
         member.contemptStacks = 0;
         member.contemptTimer = 0;
         member.contemptMax = 0;
+        member.feelTimer = 0;
+        member.feelMax = 0;
+        member.feelGuardCount = 0;
+        member.desteStacks = 0;
         member.regretTimer = 0;
         member.regretMax = 0;
         member.sorrowTimer = 0;
@@ -898,6 +938,7 @@
         scrollMax: 0,
         message: "",
         clickTargets: [],
+        filters: createEquipmentShopFilters(),
       };
     }
 
@@ -911,6 +952,205 @@
       town.panel.message = "";
       town.panel.upgradeResult = null;
       town.panel.confirmation = null;
+    }
+
+    function createEquipmentShopFilters() {
+      return {
+        weapon: {
+          mode: "type",
+          weaponTypes: [...EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS],
+          unitIds: [],
+          ranks: [...EQUIPMENT_SHOP_RANK_FILTERS],
+          sortKey: null,
+          sortDir: "desc",
+        },
+        armor: {
+          ranks: [...EQUIPMENT_SHOP_RANK_FILTERS],
+          slots: [...EQUIPMENT_SHOP_ARMOR_SLOT_FILTERS],
+          basicStats: [...EQUIPMENT_SHOP_ARMOR_BASIC_STAT_FILTERS],
+          detailStats: [...EQUIPMENT_SHOP_ARMOR_DETAIL_STAT_FILTERS],
+          sortKey: null,
+          sortDir: "desc",
+        },
+      };
+    }
+
+    function ensureEquipmentShopFilters() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return createEquipmentShopFilters();
+      }
+      if (!town.panel.filters || typeof town.panel.filters !== "object") {
+        town.panel.filters = createEquipmentShopFilters();
+      }
+      const filters = town.panel.filters;
+      if (!filters.weapon || typeof filters.weapon !== "object") {
+        filters.weapon = createEquipmentShopFilters().weapon;
+      }
+      if (!filters.armor || typeof filters.armor !== "object") {
+        filters.armor = createEquipmentShopFilters().armor;
+      }
+      if (!Array.isArray(filters.weapon.weaponTypes)) {
+        filters.weapon.weaponTypes = [...EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS];
+      }
+      if (!Array.isArray(filters.weapon.unitIds)) {
+        filters.weapon.unitIds = [];
+      }
+      if (!Array.isArray(filters.weapon.ranks)) {
+        filters.weapon.ranks = [...EQUIPMENT_SHOP_RANK_FILTERS];
+      }
+      if (!["type", "unit"].includes(filters.weapon.mode)) {
+        filters.weapon.mode = filters.weapon.unitIds.length ? "unit" : "type";
+      }
+      if (!["attack", "magic", "rank", null].includes(filters.weapon.sortKey)) {
+        filters.weapon.sortKey = null;
+      }
+      if (filters.weapon.sortDir !== "asc") {
+        filters.weapon.sortDir = "desc";
+      }
+      if (!Array.isArray(filters.armor.ranks)) {
+        filters.armor.ranks = [...EQUIPMENT_SHOP_RANK_FILTERS];
+      }
+      if (!Array.isArray(filters.armor.slots)) {
+        filters.armor.slots = [...EQUIPMENT_SHOP_ARMOR_SLOT_FILTERS];
+      }
+      if (!Array.isArray(filters.armor.basicStats)) {
+        filters.armor.basicStats = [...EQUIPMENT_SHOP_ARMOR_BASIC_STAT_FILTERS];
+      }
+      if (!Array.isArray(filters.armor.detailStats)) {
+        filters.armor.detailStats = [...EQUIPMENT_SHOP_ARMOR_DETAIL_STAT_FILTERS];
+      }
+      if (!["rank", null].includes(filters.armor.sortKey)) {
+        filters.armor.sortKey = null;
+      }
+      if (filters.armor.sortDir !== "asc") {
+        filters.armor.sortDir = "desc";
+      }
+      return filters;
+    }
+
+    function toggleEquipmentShopFilter(category, value) {
+      if (!town.panel || town.panel.action !== "equipmentShop" || !value) {
+        return;
+      }
+      const filters = ensureEquipmentShopFilters();
+      if (category === "weaponType") {
+        filters.weapon.mode = "type";
+        filters.weapon.unitIds = [];
+        toggleListValue(filters.weapon.weaponTypes, value);
+      } else if (category === "weaponUnit") {
+        filters.weapon.mode = "unit";
+        filters.weapon.weaponTypes = [];
+        toggleListValue(filters.weapon.unitIds, value);
+      } else if (category === "weaponRank") {
+        toggleListValue(filters.weapon.ranks, value);
+      } else if (category === "armorRank") {
+        toggleListValue(filters.armor.ranks, value);
+      } else if (category === "armorSlot") {
+        toggleListValue(filters.armor.slots, value);
+      } else if (category === "armorBasicStat") {
+        toggleListValue(filters.armor.basicStats, value);
+      } else if (category === "armorDetailStat") {
+        toggleListValue(filters.armor.detailStats, value);
+      }
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
+    }
+
+    function setEquipmentShopFilterGroup(category, mode) {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      const filters = ensureEquipmentShopFilters();
+      const values = getEquipmentShopFilterValues(category);
+      if (!values) {
+        return;
+      }
+      const next = mode === "all" ? [...values] : [];
+      if (category === "weaponType") {
+        filters.weapon.mode = "type";
+        filters.weapon.weaponTypes = next;
+        filters.weapon.unitIds = [];
+      } else if (category === "weaponUnit") {
+        filters.weapon.mode = "unit";
+        filters.weapon.unitIds = next;
+        filters.weapon.weaponTypes = [];
+      } else if (category === "weaponRank") {
+        filters.weapon.ranks = next;
+      } else if (category === "armorRank") {
+        filters.armor.ranks = next;
+      } else if (category === "armorSlot") {
+        filters.armor.slots = next;
+      } else if (category === "armorBasicStat") {
+        filters.armor.basicStats = next;
+      } else if (category === "armorDetailStat") {
+        filters.armor.detailStats = next;
+      }
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
+    }
+
+    function getEquipmentShopFilterValues(category) {
+      if (category === "weaponType") {
+        return EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS;
+      }
+      if (category === "weaponUnit") {
+        return EQUIPMENT_SHOP_UNIT_FILTERS;
+      }
+      if (category === "weaponRank" || category === "armorRank") {
+        return EQUIPMENT_SHOP_RANK_FILTERS;
+      }
+      if (category === "armorSlot") {
+        return EQUIPMENT_SHOP_ARMOR_SLOT_FILTERS;
+      }
+      if (category === "armorBasicStat") {
+        return EQUIPMENT_SHOP_ARMOR_BASIC_STAT_FILTERS;
+      }
+      if (category === "armorDetailStat") {
+        return EQUIPMENT_SHOP_ARMOR_DETAIL_STAT_FILTERS;
+      }
+      return null;
+    }
+
+    function toggleListValue(list, value) {
+      const index = list.indexOf(value);
+      if (index >= 0) {
+        list.splice(index, 1);
+      } else {
+        list.push(value);
+      }
+    }
+
+    function setEquipmentShopSort(sortKey, sortDir) {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      const filters = ensureEquipmentShopFilters();
+      const target = town.panel.shopKind === "armor" ? filters.armor : filters.weapon;
+      if (sortKey === "default") {
+        target.sortKey = null;
+        target.sortDir = "desc";
+      } else if (sortKey) {
+        target.sortKey = target.sortKey === sortKey ? null : sortKey;
+      }
+      if (sortDir) {
+        target.sortDir = sortDir === "asc" ? "asc" : "desc";
+      }
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
+    }
+
+    function clearEquipmentShopFilters() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      const filters = ensureEquipmentShopFilters();
+      if (town.panel.shopKind === "weapon") {
+        filters.weapon = createEquipmentShopFilters().weapon;
+      } else {
+        filters.armor = createEquipmentShopFilters().armor;
+      }
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
     }
 
     function craftEquipment(itemId) {

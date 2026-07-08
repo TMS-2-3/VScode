@@ -93,6 +93,7 @@
     function updateCooldownsAndTimers(dt) {
       for (const unit of [...party, ...enemies]) {
         if (unit.dead) {
+          enforceIncapacitatedState(unit);
           continue;
         }
 
@@ -125,6 +126,19 @@
           unit.contemptStacks = 0;
           unit.contemptMax = 0;
         }
+        const previousFeelTimer = unit.feelTimer || 0;
+        unit.feelTimer = Math.max(0, previousFeelTimer - dt);
+        if (previousFeelTimer > 0 && unit.feelTimer <= 0) {
+          const guarded = Math.max(0, Math.floor(unit.feelGuardCount || 0));
+          if (guarded > 0) {
+            unit.desteStacks = Math.max(0, Math.floor(unit.desteStacks || 0)) + guarded;
+            if (typeof addFloat === "function") {
+              addFloat(`ディステ+${guarded}`, unit.x, unit.y - 34, "#f2c56d");
+            }
+          }
+          unit.feelMax = 0;
+          unit.feelGuardCount = 0;
+        }
         unit.sorrowTimer = Math.max(0, (unit.sorrowTimer || 0) - dt);
         if (unit.sorrowTimer <= 0) {
           unit.sorrowMax = 0;
@@ -156,6 +170,9 @@
         }
         unit.stackCooldown = Math.max(0, unit.stackCooldown - dt);
         updateDelayedDamage(unit, dt);
+        if (enforceIncapacitatedState(unit)) {
+          continue;
+        }
         updateRihasPassiveStacks(unit, dt);
 
         if (unit.stackTimer > 0) {
@@ -174,6 +191,9 @@
 
         updateBurn(unit, dt);
         updatePoison(unit, dt);
+        if (enforceIncapacitatedState(unit)) {
+          continue;
+        }
         updateSorrow(unit, dt);
         updateShieldStacks(unit, dt);
 
@@ -187,6 +207,9 @@
         }
 
         regenerateHp(unit, dt);
+        if (enforceIncapacitatedState(unit)) {
+          continue;
+        }
         regenerateMp(unit, dt);
 
         if (unit.team === "party") {
@@ -427,9 +450,9 @@
               healUnit(shot.owner, unit, shot.heal ?? shot.damage, { noMood: unit === player });
             } else {
               const damage = typeof shot.getDamage === "function" ? shot.getDamage(unit) : shot.damage;
-              dealDamage(shot.owner, unit, damage, { magic: shot.magic, dotDamage: shot.dotDamage, damageType: shot.damageType });
+              const dealt = dealDamage(shot.owner, unit, damage, { magic: shot.magic, dotDamage: shot.dotDamage, damageType: shot.damageType });
               if (typeof shot.onHit === "function") {
-                shot.onHit(unit);
+                shot.onHit(unit, dealt);
               }
             }
             if (Number.isFinite(shot.pierceCount)) {
@@ -467,6 +490,85 @@
           }
         }
       }
+    }
+
+    function enforceIncapacitatedState(unit) {
+      if (!unit || !unit.dead) {
+        return false;
+      }
+      unit.hp = 0;
+      clearIncapacitatedStatuses(unit);
+      clearUnitActionReservation(unit);
+      unit.actionLock = 0;
+      unit.actionTotal = 0;
+      if (unit.team === "party" && unit.id !== "finald" && unit.mood !== null) {
+        unit.mood = 0;
+        unit.moodActionGain = 0;
+      }
+      return true;
+    }
+
+    function clearIncapacitatedStatuses(unit) {
+      unit.shield = 0;
+      unit.shieldTimer = 0;
+      unit.shields = [];
+      unit.frozen = 0;
+      unit.frozenMax = 0;
+      unit.burnTimer = 0;
+      unit.burnMax = 0;
+      unit.burnTick = 0;
+      unit.burnTickRate = 1;
+      unit.burnDamageHpRatio = 0;
+      unit.burnSource = null;
+      unit.sleepTimer = 0;
+      unit.sleepMax = 0;
+      unit.poisonActive = false;
+      unit.poisonTick = 0;
+      unit.poisonTickRate = 1;
+      unit.poisonDamageHpRatio = 0;
+      unit.poisonSource = null;
+      unit.woundStacks = 0;
+      unit.injuryTimer = 0;
+      unit.injuryMax = 0;
+      unit.plantStage = 0;
+      unit.plantSource = null;
+      unit.plantUpgradedBy = {};
+      unit.contemptStacks = 0;
+      unit.contemptTimer = 0;
+      unit.contemptMax = 0;
+      unit.feelTimer = 0;
+      unit.feelMax = 0;
+      unit.feelGuardCount = 0;
+      unit.desteStacks = 0;
+      unit.regretTimer = 0;
+      unit.regretMax = 0;
+      unit.sorrowTimer = 0;
+      unit.sorrowMax = 0;
+      unit.sorrowTick = 0;
+      unit.reunionTimer = 0;
+      unit.reunionMax = 0;
+      unit.reunionSource = null;
+      unit.absorptionLockTimer = 0;
+      unit.magicNeutralizeTimer = 0;
+      unit.magicNeutralizeMax = 0;
+      unit.magicNeutralizeRatio = 0;
+      unit.actionSpeedDownTimer = 0;
+      unit.actionSpeedDownMax = 0;
+      unit.actionSpeedDownRatio = 0;
+      unit.shadowDashTimer = 0;
+      unit.shadowDashMax = 0;
+      unit.rihasPassiveStacks = 0;
+      unit.rihasPassiveTimer = 0;
+      unit.rihasPassiveStackCooldown = 0;
+      unit.castStacks = 0;
+      unit.stackTimer = 0;
+      unit.stackCooldown = 0;
+      unit.forcedTarget = null;
+      unit.tauntTimer = 0;
+      unit.delayedDamageQueue = [];
+      unit.goukenHitCounts = {};
+      unit.chocolateLilyCharging = false;
+      unit.chocolateLilyDamageTaken = 0;
     }
 
     function updateTelegraphDynamic(telegraph) {
@@ -534,11 +636,13 @@
     }
 
     function checkBattleState(dt) {
-      if (getFieldPartyMembers().some((member) => member.dead)) {
+      const fieldPartyMembers = getFieldPartyMembers();
+      if (fieldPartyMembers.length > 0 && fieldPartyMembers.every((member) => member.dead)) {
         clearBattleActionReservations();
         game.state = "lost";
-        game.message = "戦闘不能者が出た";
+        game.message = "全滅した";
         game.messageTimer = 999;
+        game.defeatUi = { mode: "main", message: "" };
         return;
       }
       if (enemies.every((enemy) => enemy.dead)) {
@@ -576,6 +680,7 @@
       unit.channel = null;
       unit.pendingActionQueueKey = null;
       unit.skillQueue = [];
+      unit.firstSkillPending = Boolean(unit.firstSkillKey);
       unit.forcedEnemySkillKey = null;
       unit.forcedEnemySkillTarget = null;
       unit.absorptionLockTimer = 0;

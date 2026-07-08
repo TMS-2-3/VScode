@@ -69,6 +69,34 @@
         simpleDescription: "強靭なシャドウウルフの牙",
         description: "強靭なシャドウウルフの牙",
       },
+      flostiny_vine: {
+        key: "flostiny_vine",
+        name: "フロスティーニのツル",
+        sellPrice: 100,
+        simpleDescription: "毒針があるフロスティーニのツル",
+        description: "毒針があるフロスティーニのツル",
+      },
+      flostiny_flower: {
+        key: "flostiny_flower",
+        name: "フロスティーニの花",
+        sellPrice: 130,
+        simpleDescription: "フロスティーニの頭に咲いていた\nたくさんの花の一つ",
+        description: "フロスティーニの頭に咲いていた\nたくさんの花の一つ",
+      },
+      flostiny_moss: {
+        key: "flostiny_moss",
+        name: "フロスティーニの苔",
+        sellPrice: 100,
+        simpleDescription: "フロスティーニの頭についていた苔",
+        description: "フロスティーニの頭についていた苔",
+      },
+      flostiny_crystal: {
+        key: "flostiny_crystal",
+        name: "フロスティーニの石",
+        sellPrice: 300,
+        simpleDescription: "フロスティーニの苔がたくさんついていた頭",
+        description: "フロスティーニの苔がたくさんついていた頭",
+      },
     },
   };
 })();

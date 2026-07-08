@@ -8,6 +8,12 @@
       game,
       town,
       party,
+      enemies,
+      projectiles,
+      telegraphs,
+      areas,
+      effects,
+      expandedStatusUnitIds,
       player,
       playerProfile,
       CHARACTER_DEFS,
@@ -18,6 +24,11 @@
       resize,
       startGameLoop,
       startTown,
+      saveSystem,
+      getGold,
+      formatGold,
+      canAffordGold,
+      spendGold,
       handleProfileSetupKey,
       handleProfileSetupClick,
       interactTown,
@@ -68,7 +79,6 @@
     function attach() {
       window.addEventListener("resize", resize);
       resize();
-      startTown();
       startGameLoop();
       canvas.tabIndex = 0;
 
@@ -115,6 +125,8 @@
     };
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];
     const presetNameMaxLength = 16;
+    const DEFEAT_INN_RESTART_COST = 100;
+    const DEFEAT_TOWN_RESTART_HP_RATIO = 0.1;
     let presetTextInput = null;
     let syncingPresetTextInput = false;
 
@@ -136,6 +148,12 @@
       }
       if (!game.systemMenu.settings || typeof game.systemMenu.settings !== "object") {
         game.systemMenu.settings = {};
+      }
+      if (!game.saveUi || typeof game.saveUi !== "object") {
+        game.saveUi = {};
+      }
+      if (typeof game.saveUi.message !== "string") {
+        game.saveUi.message = "";
       }
       const equipment = game.systemMenu.equipment;
       if (!equipmentUnitOrder.includes(equipment.selectedUnitId)) {
@@ -236,6 +254,309 @@
       ui.controlsCapture = null;
       ui.message = "";
       clearMovementKeys();
+    }
+
+    function openSavePanelFromTarget(target) {
+      const menu = getSystemMenu();
+      menu.open = false;
+      menu.confirm = null;
+      menu.panel = { type: "save", title: target.title || "セーブ" };
+      menu.panelScroll = 0;
+      menu.panelScrollMax = 0;
+      getSystemMenu();
+      game.saveUi.message = "";
+      clearMovementKeys();
+    }
+
+    function promptForSaveName() {
+      const fallback = `セーブデータ${saveSystem && saveSystem.listSaves ? saveSystem.listSaves().length + 1 : 1}`;
+      const inputName = window.prompt("セーブデータ名を入力してください。", fallback);
+      if (inputName === null) {
+        return "";
+      }
+      return saveSystem && saveSystem.normalizeSaveName
+        ? saveSystem.normalizeSaveName(inputName)
+        : String(inputName || "").trim().slice(0, 24);
+    }
+
+    function createNewSave() {
+      if (!saveSystem || typeof saveSystem.createSave !== "function") {
+        game.saveUi.message = "セーブ機能を利用できません。";
+        return;
+      }
+      const name = promptForSaveName();
+      if (!name) {
+        game.saveUi.message = "セーブデータ名を入力してください。";
+        return;
+      }
+      const result = saveSystem.createSave(name);
+      game.saveUi.message = result && result.message ? result.message : "セーブしました。";
+    }
+
+    function overwriteExistingSave(saveId) {
+      if (!saveSystem || typeof saveSystem.overwriteSave !== "function") {
+        game.saveUi.message = "セーブ機能を利用できません。";
+        return;
+      }
+      const save = saveSystem.listSaves().find((entry) => entry.id === saveId);
+      if (!save) {
+        game.saveUi.message = "上書き先が見つかりません。";
+        return;
+      }
+      if (!window.confirm(`${save.name} に上書きしますか？`)) {
+        game.saveUi.message = "上書きをキャンセルしました。";
+        return;
+      }
+      const result = saveSystem.overwriteSave(saveId);
+      game.saveUi.message = result && result.message ? result.message : "上書きしました。";
+    }
+
+    function loadTitleSave(saveId) {
+      if (!saveSystem || typeof saveSystem.loadSave !== "function") {
+        game.titleLoadMessage = "ロード機能を利用できません。";
+        return;
+      }
+      const result = saveSystem.loadSave(saveId);
+      if (!result || !result.ok) {
+        game.titleLoadMessage = result && result.message ? result.message : "ロードに失敗しました。";
+        return;
+      }
+      game.titleTargets = [];
+      startTown();
+      game.message = result.message || "ロードしました。";
+      game.messageTimer = 4;
+      clearMovementKeys();
+    }
+
+    function getDefeatUi() {
+      if (!game.defeatUi || typeof game.defeatUi !== "object") {
+        game.defeatUi = { mode: "main", message: "" };
+      }
+      return game.defeatUi;
+    }
+
+    function hasCurrentSavePoint() {
+      const saveId = game.currentSaveId;
+      if (!saveId || !saveSystem || typeof saveSystem.listSaves !== "function") {
+        return false;
+      }
+      return saveSystem.listSaves().some((entry) => entry && entry.id === saveId);
+    }
+
+    function restartFromCurrentSavePoint() {
+      if (game.state !== "lost") {
+        return;
+      }
+      const ui = getDefeatUi();
+      if (!hasCurrentSavePoint() || !saveSystem || typeof saveSystem.loadSave !== "function") {
+        ui.mode = "main";
+        ui.message = "利用できるセーブ地点がありません。";
+        clearMovementKeys();
+        return;
+      }
+      const result = saveSystem.loadSave(game.currentSaveId);
+      if (!result || !result.ok) {
+        ui.mode = "main";
+        ui.message = result && result.message ? result.message : "セーブ地点から再開できませんでした。";
+        clearMovementKeys();
+        return;
+      }
+      game.state = "title";
+      game.defeatUi = null;
+      startTown();
+      game.message = result.message || "セーブ地点から再開しました。";
+      game.messageTimer = 4;
+      clearMovementKeys();
+    }
+
+    function openDefeatTownRestartChoice() {
+      if (game.state !== "lost") {
+        return;
+      }
+      const ui = getDefeatUi();
+      ui.mode = "town";
+      ui.message = "";
+      clearMovementKeys();
+    }
+
+    function backToDefeatMainChoice() {
+      const ui = getDefeatUi();
+      ui.mode = "main";
+      ui.message = "";
+      clearMovementKeys();
+    }
+
+    function canAffordDefeatInnRestart() {
+      if (typeof canAffordGold === "function") {
+        return canAffordGold(DEFEAT_INN_RESTART_COST);
+      }
+      const gold = typeof getGold === "function"
+        ? getGold()
+        : Number.isFinite(game.gold)
+          ? game.gold
+          : 0;
+      return gold >= DEFEAT_INN_RESTART_COST;
+    }
+
+    function spendDefeatInnRestartCost() {
+      if (typeof spendGold === "function") {
+        return spendGold(DEFEAT_INN_RESTART_COST);
+      }
+      if (!canAffordDefeatInnRestart()) {
+        return false;
+      }
+      game.gold = Math.max(0, Math.floor((Number.isFinite(game.gold) ? game.gold : 0) - DEFEAT_INN_RESTART_COST));
+      return true;
+    }
+
+    function restartFromTown(useInn) {
+      if (game.state !== "lost") {
+        return;
+      }
+      const ui = getDefeatUi();
+      if (useInn) {
+        if (!spendDefeatInnRestartCost()) {
+          ui.mode = "town";
+          ui.message = "所持金が足りません。";
+          clearMovementKeys();
+          return;
+        }
+        recoverBattlePartyFullForDefeatRestart();
+        game.innRestUsedUntilBattle = true;
+      } else {
+        recoverBattlePartyLowForDefeatRestart();
+      }
+      const message = useInn ? "宿屋から再開しました。" : "町から再開しました。";
+      game.defeatUi = null;
+      game.battleRewards = null;
+      startTown();
+      game.message = message;
+      game.messageTimer = 4;
+      clearMovementKeys();
+    }
+
+    function recoverBattlePartyFullForDefeatRestart() {
+      if (!game.partyHpById || typeof game.partyHpById !== "object") {
+        game.partyHpById = {};
+      }
+      if (!game.partyMpById || typeof game.partyMpById !== "object") {
+        game.partyMpById = {};
+      }
+      if (!game.partyDeadById || typeof game.partyDeadById !== "object") {
+        game.partyDeadById = {};
+      }
+      game.partyStatusById = {};
+      const seen = new Set();
+      for (const member of [player, ...(Array.isArray(party) ? party : [])]) {
+        if (!member || !member.id || seen.has(member.id)) {
+          continue;
+        }
+        seen.add(member.id);
+        const maxHp = Math.max(1, Number.isFinite(member.maxHp) ? member.maxHp : member.hp || 1);
+        const maxMp = Math.max(0, Number.isFinite(member.maxMp) ? member.maxMp : member.mp || 0);
+        member.hp = maxHp;
+        member.mp = maxMp;
+        member.dead = false;
+        clearMemberBattleStatuses(member);
+        game.partyHpById[member.id] = maxHp;
+        game.partyMpById[member.id] = maxMp;
+        delete game.partyDeadById[member.id];
+      }
+    }
+
+    function recoverBattlePartyLowForDefeatRestart() {
+      if (!game.partyHpById || typeof game.partyHpById !== "object") {
+        game.partyHpById = {};
+      }
+      if (!game.partyMpById || typeof game.partyMpById !== "object") {
+        game.partyMpById = {};
+      }
+      if (!game.partyDeadById || typeof game.partyDeadById !== "object") {
+        game.partyDeadById = {};
+      }
+      game.partyStatusById = {};
+      const seen = new Set();
+      for (const member of [player, ...(Array.isArray(party) ? party : [])]) {
+        if (!member || !member.id || seen.has(member.id)) {
+          continue;
+        }
+        seen.add(member.id);
+        const maxHp = Math.max(1, Number.isFinite(member.maxHp) ? member.maxHp : member.hp || 1);
+        const hp = Math.max(1, Math.ceil(maxHp * DEFEAT_TOWN_RESTART_HP_RATIO));
+        member.hp = hp;
+        member.dead = false;
+        clearMemberBattleStatuses(member);
+        game.partyHpById[member.id] = hp;
+        delete game.partyDeadById[member.id];
+      }
+    }
+
+    function clearMemberBattleStatuses(member) {
+      member.shield = 0;
+      member.shieldTimer = 0;
+      member.shields = [];
+      member.frozen = 0;
+      member.frozenMax = 0;
+      member.burnTimer = 0;
+      member.burnMax = 0;
+      member.burnTick = 0;
+      member.burnTickRate = 1;
+      member.burnDamageHpRatio = 0;
+      member.burnSource = null;
+      member.sleepTimer = 0;
+      member.sleepMax = 0;
+      member.poisonActive = false;
+      member.poisonTick = 0;
+      member.poisonTickRate = 1;
+      member.poisonDamageHpRatio = 0;
+      member.poisonSource = null;
+      member.woundStacks = 0;
+      member.injuryTimer = 0;
+      member.injuryMax = 0;
+      member.plantStage = 0;
+      member.plantSource = null;
+      member.plantUpgradedBy = {};
+      member.contemptStacks = 0;
+      member.contemptTimer = 0;
+      member.contemptMax = 0;
+      member.feelTimer = 0;
+      member.feelMax = 0;
+      member.feelGuardCount = 0;
+      member.desteStacks = 0;
+      member.regretTimer = 0;
+      member.regretMax = 0;
+      member.sorrowTimer = 0;
+      member.sorrowMax = 0;
+      member.sorrowTick = 0;
+      member.reunionTimer = 0;
+      member.reunionMax = 0;
+      member.reunionSource = null;
+      member.absorptionLockTimer = 0;
+      member.magicNeutralizeTimer = 0;
+      member.magicNeutralizeMax = 0;
+      member.magicNeutralizeRatio = 0;
+      member.actionSpeedDownTimer = 0;
+      member.actionSpeedDownMax = 0;
+      member.actionSpeedDownRatio = 0;
+      member.shadowDashTimer = 0;
+      member.shadowDashMax = 0;
+      member.rihasPassiveStacks = 0;
+      member.rihasPassiveTimer = 0;
+      member.rihasPassiveStackCooldown = 0;
+      member.castStacks = 0;
+      member.stackTimer = 0;
+      member.stackCooldown = 0;
+      member.forcedTarget = null;
+      member.tauntTimer = 0;
+      member.delayedDamageQueue = [];
+      member.aiIntent = null;
+      member.aiMoveTarget = null;
+      member.aim = null;
+      member.itemAim = null;
+      member.itemUseRequest = null;
+      member.itemCast = null;
+      member.cast = null;
+      member.channel = null;
     }
 
     function selectSettingsTab(tab) {
@@ -1892,6 +2213,57 @@
       clearMovementKeys();
     }
 
+    function returnToTitle() {
+      const menu = getSystemMenu();
+      menu.open = false;
+      menu.panel = null;
+      menu.confirm = null;
+      menu.targets.length = 0;
+      menu.panelScroll = 0;
+      menu.panelScrollMax = 0;
+      game.state = "title";
+      game.time = 0;
+      game.message = "";
+      game.messageTimer = 0;
+      game.titleLoadOpen = false;
+      game.titleLoadMessage = "";
+      game.titleLoadScroll = 0;
+      game.titleLoadScrollMax = 0;
+      game.currentQuest = null;
+      game.battleRewards = null;
+      game.defeatUi = null;
+      game.stageClearTimer = 0;
+      game.reinforcementsSpawned = false;
+      game.priorityTarget = null;
+      game.priorityTargetTimer = 0;
+      game.priorityTargetIgnoredUnitIds = {};
+      game.avoidTarget = null;
+      game.avoidTargetTimer = 0;
+      if (town) {
+        town.panel = null;
+        town.selectedQuest = null;
+        town.story = null;
+        town.interaction = null;
+      }
+      if (player) {
+        player.aim = null;
+        player.itemAim = null;
+        player.cast = null;
+        player.channel = null;
+      }
+      [enemies, projectiles, telegraphs, areas, effects].forEach((list) => {
+        if (Array.isArray(list)) {
+          list.length = 0;
+        }
+      });
+      if (expandedStatusUnitIds && typeof expandedStatusUnitIds.clear === "function") {
+        expandedStatusUnitIds.clear();
+      }
+      cancelPlayerAim();
+      cancelItemAim();
+      clearMovementKeys();
+    }
+
     function clearInventoryMessage() {
       game.inventoryMessage = null;
       game.inventoryMessageResult = null;
@@ -2303,6 +2675,8 @@
             openEquipmentPanelFromTarget(target);
           } else if (target.panelType === "settings") {
             openSettingsPanelFromTarget(target);
+          } else if (target.panelType === "save") {
+            openSavePanelFromTarget(target);
           } else {
             menu.open = false;
             menu.confirm = null;
@@ -2326,19 +2700,34 @@
           openNextBattleRewardCrystal();
         } else if (target.action === "finishBattleRewardCrystalAutoUse") {
           finishBattleRewardCrystalAutoUse();
+        } else if (target.action === "restartFromSavePoint") {
+          restartFromCurrentSavePoint();
+        } else if (target.action === "openDefeatTownRestartChoice") {
+          openDefeatTownRestartChoice();
+        } else if (target.action === "restartFromTownNormal") {
+          restartFromTown(false);
+        } else if (target.action === "restartFromTownInn") {
+          restartFromTown(true);
+        } else if (target.action === "backToDefeatMainChoice") {
+          backToDefeatMainChoice();
         } else if (target.action === "clearInventoryMessage") {
           clearInventoryMessage();
         } else if (target.action === "openSystemConfirm") {
           menu.open = false;
           menu.panel = null;
-          menu.confirm = { title: target.title, lines: target.lines || [] };
+          menu.confirm = { title: target.title, lines: target.lines || [], confirmAction: target.confirmAction || null };
           clearMovementKeys();
         } else if (target.action === "closeSystemPanel") {
           closeSystemPanel();
         } else if (target.action === "closeSystemConfirm") {
           closeSystemConfirm();
         } else if (target.action === "confirmOnly") {
-          closeSystemConfirm();
+          const confirmAction = menu.confirm && menu.confirm.confirmAction;
+          if (confirmAction === "returnTitle") {
+            returnToTitle();
+          } else {
+            closeSystemConfirm();
+          }
         } else if (target.action === "selectEquipmentUnit") {
           const ui = getEquipmentUi();
           if (equipmentUnitOrder.includes(target.unitId)) {
@@ -2443,6 +2832,10 @@
           clearMovementKeys();
         } else if (target.action === "selectSettingsTab") {
           selectSettingsTab(target.tab);
+        } else if (target.action === "createSaveData") {
+          createNewSave();
+        } else if (target.action === "overwriteSaveData") {
+          overwriteExistingSave(target.saveId);
         } else if (target.action === "startKeybindCapture") {
           startKeybindCapture(target.actionId);
         } else if (target.action === "saveKeybindDraft") {
@@ -2473,6 +2866,17 @@
         event.preventDefault();
       }
       if (event.repeat && !isEquipmentPresetNameFocused() && !(keybindTools && getSettingsUi().controlsCapture)) {
+        return;
+      }
+      if (game.state === "title") {
+        if (!game.titleLoadOpen && (key === "enter" || key === "space")) {
+          beginTitleStart();
+          event.preventDefault();
+        } else if (game.titleLoadOpen && key === "escape") {
+          game.titleLoadOpen = false;
+          game.titleLoadMessage = "";
+          event.preventDefault();
+        }
         return;
       }
       if (handleSystemMenuKey(event, key)) {
@@ -2511,7 +2915,7 @@
       }
 
       if (game.state !== "playing") {
-        if (key === "r" && !isBattleRewardPowerCrystalAutoPending()) {
+        if (game.state === "won" && key === "r" && !isBattleRewardPowerCrystalAutoPending()) {
           startTown();
         }
         return;
@@ -2654,6 +3058,12 @@
       if (canvas && typeof canvas.focus === "function") {
         canvas.focus({ preventScroll: true });
       }
+      if (game.state === "title") {
+        if (event.button === 0) {
+          handleTitleClick(input.mouse.x, input.mouse.y);
+        }
+        return;
+      }
       if (handleControlCaptureMouse(event)) {
         return;
       }
@@ -2731,6 +3141,45 @@
       }
     }
 
+    function handleTitleClick(x, y) {
+      const targets = Array.isArray(game.titleTargets) ? game.titleTargets : [];
+      for (let i = targets.length - 1; i >= 0; i -= 1) {
+        const target = targets[i];
+        if (!target) {
+          continue;
+        }
+        if (x >= target.x && x <= target.x + target.w && y >= target.y && y <= target.y + target.h) {
+          if (target.action === "startGame") {
+            beginTitleStart();
+          } else if (target.action === "openTitleLoad") {
+            game.titleLoadOpen = true;
+            game.titleLoadMessage = "";
+            game.titleLoadScroll = 0;
+          } else if (target.action === "closeTitleLoad") {
+            game.titleLoadOpen = false;
+            game.titleLoadMessage = "";
+          } else if (target.action === "loadTitleSave") {
+            loadTitleSave(target.saveId);
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function beginTitleStart() {
+      if (game.state !== "title") {
+        return;
+      }
+      game.titleTargets = [];
+      game.titleLoadOpen = false;
+      game.titleLoadMessage = "";
+      if (saveSystem && typeof saveSystem.resetForNewGame === "function") {
+        saveSystem.resetForNewGame();
+      }
+      startTown();
+    }
+
     function isLockedBattleControlEvent(event) {
       if (!isPlayerControlLocked || !isPlayerControlLocked()) {
         return false;
@@ -2765,6 +3214,12 @@
 
     function handleWheel(event) {
       setMouseFromEvent(event);
+      if (game.state === "title" && game.titleLoadOpen) {
+        if (scrollNumericState(game, "titleLoadScroll", "titleLoadScrollMax", event.deltaY)) {
+          event.preventDefault();
+        }
+        return;
+      }
       if (game.state === "town" && town.panel) {
         if (town.panel.upgradeResult) {
           if (scrollNumericState(town.panel, "resultScroll", "resultScrollMax", event.deltaY)) {

@@ -29,6 +29,7 @@
       LOADOUT_CONFIG,
       skillSystem,
       itemSystem,
+      saveSystem,
       getGold,
       formatGold,
       getBattleBounds,
@@ -251,6 +252,10 @@
 
   function draw() {
     ctx.clearRect(0, 0, view.w, view.h);
+    if (game.state === "title") {
+      drawTitleScreen();
+      return;
+    }
     if (game.state === "town") {
       townRenderer.drawTown();
       drawEffects();
@@ -274,6 +279,204 @@
     statusRenderer.drawHud();
     drawSystemMenu();
     drawResultOverlay();
+  }
+
+  function drawTitleScreen() {
+    game.titleTargets = [];
+    getSystemMenu().targets.length = 0;
+    ctx.save();
+    const sky = ctx.createLinearGradient(0, 0, 0, view.h);
+    sky.addColorStop(0, "#101f2a");
+    sky.addColorStop(0.54, "#234537");
+    sky.addColorStop(1, "#17261d");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    drawTitleForestLayer(view.h * 0.56, "#13271b", 46, 0.6);
+    drawTitleForestLayer(view.h * 0.64, "#0f1f16", 62, 0.9);
+    drawTitleGround();
+
+    const centerX = view.w / 2;
+    const titleY = Math.max(118, view.h * 0.28);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(8, 12, 10, 0.32)";
+    ctx.font = "900 58px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("Healer Game", centerX + 3, titleY + 4);
+    ctx.fillStyle = "#f7fff6";
+    ctx.fillText("Healer Game", centerX, titleY);
+
+    ctx.font = "800 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(247,255,246,0.82)";
+    ctx.fillText("まだ名もない旅の、最初の一歩", centerX, titleY + 48);
+
+    const buttonW = Math.min(260, Math.max(180, view.w * 0.28));
+    const buttonH = 58;
+    const buttonX = centerX - buttonW / 2;
+    const buttonY = Math.min(view.h - 120, Math.max(titleY + 112, view.h * 0.58));
+    drawTitleButton(buttonX, buttonY, buttonW, buttonH, "始める", "startGame", true);
+    drawTitleButton(buttonX, buttonY + buttonH + 16, buttonW, 48, "ロード", "openTitleLoad", false);
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(247,255,246,0.72)";
+    ctx.fillText("Enter / Space でも開始", centerX, buttonY + buttonH + 88);
+    if (game.titleLoadOpen) {
+      drawTitleLoadPanel();
+    }
+    ctx.restore();
+  }
+
+  function drawTitleButton(x, y, w, h, label, action, primary) {
+    const hovered = input.mouse.x >= x && input.mouse.x <= x + w
+      && input.mouse.y >= y && input.mouse.y <= y + h;
+    ctx.save();
+    ctx.fillStyle = primary
+      ? hovered ? "#fff2b7" : "#ffd66b"
+      : hovered ? "rgba(247,255,246,0.96)" : "rgba(247,255,246,0.84)";
+    ctx.strokeStyle = primary
+      ? hovered ? "#fff8d8" : "rgba(255,255,255,0.45)"
+      : hovered ? "rgba(255,213,107,0.9)" : "rgba(255,255,255,0.36)";
+    ctx.lineWidth = primary ? 2 : 1.5;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.font = `${primary ? "900 22px" : "850 18px"} 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2);
+    ctx.restore();
+    game.titleTargets.push({ action, x, y, w, h });
+  }
+
+  function drawTitleLoadPanel() {
+    const saves = saveSystem && typeof saveSystem.listSaves === "function" ? saveSystem.listSaves() : [];
+    const w = Math.min(560, view.w - 42);
+    const rowH = 54;
+    const gap = 8;
+    const visibleRows = Math.min(5, Math.max(1, saves.length));
+    const h = 112 + visibleRows * rowH + Math.max(0, visibleRows - 1) * gap;
+    const x = (view.w - w) / 2;
+    const y = Math.max(36, (view.h - h) / 2);
+    const listRect = { x: x + 24, y: y + 80, w: w - 48, h: h - 104 };
+    const contentH = saves.length ? saves.length * rowH + Math.max(0, saves.length - 1) * gap : 0;
+    game.titleLoadScrollMax = Math.max(0, contentH - listRect.h);
+    game.titleLoadScroll = Math.max(0, Math.min(game.titleLoadScrollMax, Number.isFinite(game.titleLoadScroll) ? game.titleLoadScroll : 0));
+    ctx.save();
+    ctx.fillStyle = "rgba(10,16,13,0.88)";
+    ctx.fillRect(0, 0, view.w, view.h);
+    ctx.fillStyle = "rgba(247,255,246,0.97)";
+    ctx.strokeStyle = "rgba(255,213,107,0.55)";
+    ctx.lineWidth = 1.4;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#102018";
+    ctx.font = "900 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("ロード", x + 24, y + 22);
+    drawTitleCloseButton(x + w - 46, y + 18);
+
+    if (game.titleLoadMessage) {
+      drawFittedSystemText(game.titleLoadMessage, x + 24, y + 64, w - 48, 800, 13, 10, "#315340", "left", "middle");
+    }
+
+    if (!saves.length) {
+      ctx.fillStyle = "#63706a";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("セーブデータはまだありません。", listRect.x, listRect.y + 10);
+      ctx.restore();
+      return;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
+    ctx.clip();
+    for (let i = 0; i < saves.length; i += 1) {
+      const rowY = listRect.y + i * (rowH + gap) - game.titleLoadScroll;
+      if (rowY + rowH < listRect.y || rowY > listRect.y + listRect.h) {
+        continue;
+      }
+      drawTitleLoadRow(listRect.x, rowY, listRect.w, rowH, saves[i]);
+    }
+    ctx.restore();
+    drawSettingsScrollbar(listRect, game.titleLoadScroll, game.titleLoadScrollMax, {
+      scrollState: game,
+      valueKey: "titleLoadScroll",
+      maxKey: "titleLoadScrollMax",
+    });
+    ctx.restore();
+  }
+
+  function drawTitleLoadRow(x, y, w, h, save) {
+    const hovered = input.mouse.x >= x && input.mouse.x <= x + w
+      && input.mouse.y >= y && input.mouse.y <= y + h;
+    ctx.save();
+    ctx.fillStyle = hovered ? "rgba(255,246,207,0.96)" : "rgba(255,255,255,0.86)";
+    ctx.strokeStyle = hovered ? "rgba(180,129,32,0.48)" : "rgba(16,32,24,0.14)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    drawFittedSystemText(save.name || "セーブデータ", x + 16, y + 18, w - 32, 900, 15, 10, "#102018", "left", "middle");
+    drawFittedSystemText(save.savedAtText || "", x + 16, y + 38, w - 32, 700, 11, 9, "#63706a", "left", "middle");
+    ctx.restore();
+    game.titleTargets.push({ action: "loadTitleSave", saveId: save.id, x, y, w, h });
+  }
+
+  function drawTitleCloseButton(x, y) {
+    const size = 28;
+    const hovered = input.mouse.x >= x && input.mouse.x <= x + size
+      && input.mouse.y >= y && input.mouse.y <= y + size;
+    ctx.save();
+    ctx.fillStyle = hovered ? "rgba(141,63,54,0.18)" : "rgba(16,32,24,0.08)";
+    ctx.strokeStyle = "rgba(16,32,24,0.22)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, size, size, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "#102018";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x + 9, y + 9);
+    ctx.lineTo(x + size - 9, y + size - 9);
+    ctx.moveTo(x + size - 9, y + 9);
+    ctx.lineTo(x + 9, y + size - 9);
+    ctx.stroke();
+    ctx.restore();
+    game.titleTargets.push({ action: "closeTitleLoad", x, y, w: size, h: size });
+  }
+
+  function drawTitleForestLayer(baseY, color, step, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, view.h);
+    ctx.lineTo(0, baseY);
+    for (let x = 0; x <= view.w + step; x += step) {
+      const peak = baseY - 40 - ((x / step) % 3) * 18;
+      ctx.lineTo(x + step * 0.5, peak);
+      ctx.lineTo(x + step, baseY);
+    }
+    ctx.lineTo(view.w, view.h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawTitleGround() {
+    const y = view.h * 0.72;
+    ctx.fillStyle = "#203b27";
+    ctx.fillRect(0, y, view.w, view.h - y);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    for (let i = 0; i < 18; i += 1) {
+      const x = (i * 97) % Math.max(1, view.w);
+      const gy = y + 24 + (i % 5) * 22;
+      ctx.fillRect(x, gy, 34 + (i % 4) * 12, 2);
+    }
   }
 
   function drawFloor() {
@@ -1374,17 +1577,148 @@
     const titleY = won ? Math.max(76, view.h * 0.25) : view.h / 2 - 24;
     ctx.fillText(won ? "依頼達成" : "依頼失敗", view.w / 2, titleY);
     const autoCrystalPending = won && isBattleRewardPowerCrystalAutoPending();
-    let guideY = won ? drawBattleRewardSummary(view.w / 2, titleY + 56) + 36 : view.h / 2 + 28;
+    let guideY = won ? drawBattleRewardSummary(view.w / 2, titleY + 56) + 36 : drawDefeatRestartPanel(view.w / 2, titleY + 48);
     if (!autoCrystalPending) {
       ctx.font = "18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       guideY = Math.min(view.h - 42, Math.max(guideY, titleY + 54));
-      ctx.fillText("R で町へ戻る", view.w / 2, guideY);
+      if (won) {
+        ctx.fillText("R で町へ戻る", view.w / 2, guideY);
+      }
     }
     if (won && game.inventoryMessage && isBattleRewardPowerCrystalAutoPending()) {
       drawInventoryMessage(game.inventoryMessage, getResultMessageContentRect());
     }
     ctx.restore();
     drawTopRightGoldBadge(getSystemMenuButtonRect());
+  }
+
+  function drawDefeatRestartPanel(centerX, y) {
+    const ui = getDefeatUi();
+    return ui.mode === "town"
+      ? drawDefeatTownRestartPanel(centerX, y)
+      : drawDefeatMainRestartPanel(centerX, y);
+  }
+
+  function getDefeatUi() {
+    if (!game.defeatUi || typeof game.defeatUi !== "object") {
+      game.defeatUi = { mode: "main", message: "" };
+    }
+    return game.defeatUi;
+  }
+
+  function drawDefeatMainRestartPanel(centerX, y) {
+    const ui = getDefeatUi();
+    const w = Math.min(620, view.w - 44);
+    const h = 236;
+    const x = centerX - w / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(247,255,246,0.96)";
+    ctx.strokeStyle = "rgba(255,213,107,0.42)";
+    ctx.lineWidth = 1.2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#102018";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("再開方法を選択", centerX, y + 18);
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#4c6758";
+    ctx.fillText("セーブ地点から再開すると、セーブ後の出来事は破棄されます。", centerX, y + 52);
+    ctx.fillText("町から再開すると、現在の所持品などを保持して最寄りの町へ戻ります。", centerX, y + 76);
+
+    const hasSave = hasCurrentSavePoint();
+    const saveLabel = hasSave ? "セーブ地点から再開" : "セーブ地点なし";
+    const buttonY = y + 120;
+    drawSystemSmallButton(centerX - 222, buttonY, 204, 40, saveLabel, hasSave ? "restartFromSavePoint" : "noop");
+    drawSystemSmallButton(centerX + 18, buttonY, 204, 40, "町から再開", "openDefeatTownRestartChoice");
+
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = hasSave ? "#8a6a2a" : "#9a4d42";
+    ctx.fillText(hasSave ? `現在のセーブ地点: ${getCurrentSavePointName()}` : "まだセーブされていないため使用できません。", centerX, y + 174);
+    if (ui.message) {
+      ctx.fillStyle = "#9a4d42";
+      ctx.fillText(ui.message, centerX, y + 198);
+    }
+    ctx.restore();
+    return y + h;
+  }
+
+  function drawDefeatTownRestartPanel(centerX, y) {
+    const ui = getDefeatUi();
+    const cost = 100;
+    const canInn = getCurrentGoldAmount() >= cost;
+    const w = Math.min(620, view.w - 44);
+    const h = 254;
+    const x = centerX - w / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(247,255,246,0.96)";
+    ctx.strokeStyle = "rgba(255,213,107,0.42)";
+    ctx.lineWidth = 1.2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#102018";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("町から再開", centerX, y + 18);
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#4c6758";
+    ctx.fillText("再開する前に宿屋から再開しますか？ 全員が全回復します。", centerX, y + 52);
+    ctx.fillText(`所持金: ${getGoldText()} / 宿屋: ${formatGoldAmount(cost)}`, centerX, y + 78);
+    if (!canInn) {
+      ctx.fillStyle = "#9a4d42";
+      ctx.fillText("所持金が足りないため、宿屋から再開はできません。", centerX, y + 104);
+    }
+    if (ui.message) {
+      ctx.fillStyle = "#9a4d42";
+      ctx.fillText(ui.message, centerX, y + 126);
+    }
+
+    const buttonY = y + 166;
+    drawSystemSmallButton(centerX - 254, buttonY, 152, 40, "戻る", "backToDefeatMainChoice");
+    drawSystemSmallButton(centerX - 76, buttonY, 152, 40, "通常再開", "restartFromTownNormal");
+    drawSystemSmallButton(centerX + 102, buttonY, 152, 40, canInn ? "宿屋から再開" : "所持金不足", canInn ? "restartFromTownInn" : "noop");
+
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#8a6a2a";
+    ctx.fillText("通常再開では全員が最大HP10%で再開します。", centerX, y + 220);
+    ctx.restore();
+    return y + h;
+  }
+
+  function hasCurrentSavePoint() {
+    const saveId = game.currentSaveId;
+    if (!saveId || !saveSystem || typeof saveSystem.listSaves !== "function") {
+      return false;
+    }
+    return saveSystem.listSaves().some((entry) => entry && entry.id === saveId);
+  }
+
+  function getCurrentSavePointName() {
+    const saveId = game.currentSaveId;
+    if (!saveId || !saveSystem || typeof saveSystem.listSaves !== "function") {
+      return "なし";
+    }
+    const found = saveSystem.listSaves().find((entry) => entry && entry.id === saveId);
+    return found && found.name ? found.name : "セーブデータ";
+  }
+
+  function getCurrentGoldAmount() {
+    const value = typeof getGold === "function"
+      ? getGold()
+      : Number.isFinite(game.gold)
+        ? game.gold
+        : 0;
+    return Math.max(0, Math.floor(value));
+  }
+
+  function formatGoldAmount(amount) {
+    return typeof formatGold === "function" ? formatGold(amount) : `${Math.max(0, Math.floor(amount || 0))}G`;
   }
 
   function drawBattleRewardSummary(centerX, y) {
@@ -1539,6 +1873,12 @@
     }
     if (!game.systemMenu.settings || typeof game.systemMenu.settings !== "object") {
       game.systemMenu.settings = {};
+    }
+    if (!game.saveUi || typeof game.saveUi !== "object") {
+      game.saveUi = {};
+    }
+    if (typeof game.saveUi.message !== "string") {
+      game.saveUi.message = "";
     }
     const equipment = game.systemMenu.equipment;
     if (!equipmentUnitOrder.includes(equipment.selectedUnitId)) {
@@ -1790,15 +2130,15 @@
       return [
         { label: "装備確認", action: "openSystemPanel", panelType: "equipment", readOnly: true, title: "装備確認", lines: [] },
         { label: "設定", action: "openSystemPanel", panelType: "settings", title: "設定", lines: [] },
-        { label: "降参", action: "openSystemConfirm", title: "降参", lines: ["この戦闘を降参しますか？", "降参処理はまだ未実装です。"] },
+        { label: "逃走", action: "openSystemConfirm", title: "逃走", lines: ["この戦闘から逃走しますか？", "逃走処理はまだ未実装です。"] },
       ];
     }
     return [
       { label: "装備変更", action: "openSystemPanel", panelType: "equipment", readOnly: false, title: "装備変更", lines: [] },
       { label: "持ち物確認", action: "openSystemPanel", panelType: "inventory", title: "持ち物確認", lines: [] },
       { label: "設定", action: "openSystemPanel", panelType: "settings", title: "設定", lines: [] },
-      { label: "セーブ", action: "openSystemPanel", title: "セーブ", lines: ["セーブ機能は準備中です。"] },
-      { label: "タイトルへ戻る", action: "openSystemConfirm", title: "タイトルへ戻る", lines: ["タイトル画面へ戻りますか？", "タイトルへ戻る処理はまだ未実装です。"] },
+      { label: "セーブ", action: "openSystemPanel", panelType: "save", title: "セーブ", lines: [] },
+      { label: "タイトルへ戻る", action: "openSystemConfirm", title: "タイトルへ戻る", lines: ["タイトル画面へ戻りますか？"], confirmAction: "returnTitle" },
     ];
   }
 
@@ -1835,6 +2175,7 @@
         action: item.action,
         panelType: item.panelType || null,
         readOnly: Boolean(item.readOnly),
+        confirmAction: item.confirmAction || null,
         title: item.title,
         lines: item.lines,
         x,
@@ -1871,6 +2212,10 @@
     }
     if (panel && panel.type === "inventory") {
       drawInventoryPanel(panel);
+      return;
+    }
+    if (panel && panel.type === "save") {
+      drawSavePanel(panel);
       return;
     }
     drawGenericSystemPanel(panel);
@@ -1920,6 +2265,91 @@
       maxKey: "panelScrollMax",
     });
     ctx.restore();
+  }
+
+  function drawSavePanel(panel) {
+    const menu = getSystemMenu();
+    drawSystemMenuBackdrop(0.28);
+    const w = Math.min(820, view.w - 40);
+    const h = Math.min(560, view.h - 40);
+    const x = (view.w - w) / 2;
+    const y = (view.h - h) / 2;
+    const saves = saveSystem && typeof saveSystem.listSaves === "function" ? saveSystem.listSaves() : [];
+    const content = { x: x + 28, y: y + 132, w: w - 56, h: h - 164 };
+    const rowH = 62;
+    const gap = 10;
+    const contentH = saves.length ? saves.length * rowH + Math.max(0, saves.length - 1) * gap : 46;
+    menu.panelScrollMax = Math.max(0, contentH - content.h);
+    menu.panelScroll = Math.max(0, Math.min(menu.panelScrollMax, menu.panelScroll || 0));
+
+    ctx.save();
+    ctx.fillStyle = "rgba(247,255,246,0.97)";
+    ctx.strokeStyle = "rgba(16,32,24,0.36)";
+    ctx.lineWidth = 1.2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(panel.title || "セーブ", x + 28, y + 26);
+    drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
+
+    drawSystemSmallButton(x + 28, y + 78, 118, 34, "新規保存", "createSaveData", {});
+    ctx.fillStyle = "#63706a";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("既存データは右側の上書きボタンから保存できます。", x + 160, y + 88);
+    if (game.saveUi && game.saveUi.message) {
+      drawFittedSystemText(game.saveUi.message, x + 28, y + 114, w - 56, 800, 13, 10, "#315340", "left", "middle");
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(content.x, content.y, content.w, content.h);
+    ctx.clip();
+    if (!saves.length) {
+      ctx.fillStyle = "#63706a";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("セーブデータはまだありません。", content.x, content.y + 8);
+    } else {
+      for (let i = 0; i < saves.length; i += 1) {
+        const save = saves[i];
+        const rowY = content.y + i * (rowH + gap) - menu.panelScroll;
+        if (rowY + rowH < content.y || rowY > content.y + content.h) {
+          continue;
+        }
+        drawSaveRow(content.x, rowY, content.w, rowH, save);
+      }
+    }
+    ctx.restore();
+
+    drawSettingsScrollbar(content, menu.panelScroll, menu.panelScrollMax, {
+      scrollState: menu,
+      valueKey: "panelScroll",
+      maxKey: "panelScrollMax",
+    });
+    ctx.restore();
+  }
+
+  function drawSaveRow(x, y, w, h, save) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.strokeStyle = "rgba(16,32,24,0.16)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    drawFittedSystemText(save.name || "セーブデータ", x + 18, y + 16, w - 142, 900, 16, 11, "#102018", "left", "middle");
+    ctx.fillStyle = "#63706a";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(save.savedAtText || "", x + 18, y + 38);
+    ctx.restore();
+    drawSystemSmallButton(x + w - 104, y + 14, 82, 34, "上書き", "overwriteSaveData", { saveId: save.id });
   }
 
   function drawInventoryPanel(panel) {
@@ -4961,7 +5391,7 @@
 
   function getEquipmentStatRows(unit) {
     if (statPresenter && typeof statPresenter.getDetailedStats === "function") {
-      return statPresenter.getDetailedStats(unit);
+      return statPresenter.getDetailedStats(unit, { includeBattleState: false });
     }
     return [
       { label: "HP", value: formatSystemNumber(unit.maxHp) },
@@ -5176,7 +5606,7 @@
       ctx.fillText(lines[i], x + 24, y + 72 + i * 25);
     }
     drawSystemDialogButton(x + w - 214, y + h - 58, 88, 34, "キャンセル", "closeSystemConfirm", false);
-    drawSystemDialogButton(x + w - 114, y + h - 58, 88, 34, "表示のみ", "confirmOnly", true);
+    drawSystemDialogButton(x + w - 114, y + h - 58, 88, 34, confirm.confirmAction ? "決定" : "表示のみ", "confirmOnly", true);
     ctx.restore();
   }
 

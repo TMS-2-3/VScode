@@ -35,11 +35,12 @@
 
     function getCarriedHp(unit) {
       const savedHp = game.partyHpById && game.partyHpById[unit.id];
-      if (!Number.isFinite(savedHp)) {
-        return unit.maxHp;
-      }
+      const carriedDead = Boolean(game.partyDeadById && game.partyDeadById[unit.id]);
       const minRecoveredHp = unit.maxHp * INCAPACITATED_HP_RECOVERY_RATIO;
-      const hp = savedHp <= 0 ? minRecoveredHp : savedHp;
+      if (!Number.isFinite(savedHp)) {
+        return carriedDead ? minRecoveredHp : unit.maxHp;
+      }
+      const hp = savedHp <= 0 || carriedDead ? Math.max(savedHp, minRecoveredHp) : savedHp;
       return Math.max(0, Math.min(unit.maxHp, hp));
     }
 
@@ -69,7 +70,11 @@
     function applyCarriedHp(unit) {
       unit.hp = getCarriedHp(unit);
       unit.mp = getCarriedMp(unit);
-      unit.dead = unit.hp <= 0;
+      unit.dead = Boolean(game.partyDeadById && game.partyDeadById[unit.id]) || unit.hp <= 0;
+      if (unit.dead && unit.team === "party" && unit.id !== "finald" && unit.mood !== null) {
+        unit.mood = 0;
+        unit.moodActionGain = 0;
+      }
     }
 
     function applyCarriedStatuses(unit) {
@@ -175,6 +180,10 @@
       unit.contemptStacks = 0;
       unit.contemptTimer = 0;
       unit.contemptMax = 0;
+      unit.feelTimer = 0;
+      unit.feelMax = 0;
+      unit.feelGuardCount = 0;
+      unit.desteStacks = 0;
       unit.regretTimer = 0;
       unit.regretMax = 0;
       unit.sorrowTimer = 0;
@@ -214,6 +223,7 @@
       unit.pendingActionQueueKey = null;
       unit.skillQueue = [];
       unit.skillQueueInitialized = false;
+      unit.firstSkillPending = Boolean(unit.firstSkillKey);
       unit.goukenHitCounts = {};
       unit.forcedEnemySkillKey = null;
       unit.forcedEnemySkillTarget = null;
@@ -224,6 +234,10 @@
 
     function applyBattleStartUltimate(unit) {
       if (!unit || unit.team !== "party") {
+        return;
+      }
+      if (unit.dead) {
+        unit.ult = 0;
         return;
       }
       const cost = typeof getUltimateCost === "function" ? getUltimateCost(unit) : 100;
@@ -361,6 +375,10 @@
         burnTickRate: 1,
         burnDamageHpRatio: 0,
         burnSource: null,
+        feelTimer: 0,
+        feelMax: 0,
+        feelGuardCount: 0,
+        desteStacks: 0,
         noDamage: 999,
         cast: null,
         castVisual: null,
