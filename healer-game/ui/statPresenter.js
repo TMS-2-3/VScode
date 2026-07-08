@@ -40,7 +40,7 @@
       const outgoing = getUnitOutgoingDamageMultiplier(unit);
       const incoming = getUnitIncomingDamageMultiplier(unit);
       const castSpeed = getUnitCastSpeed(unit);
-      const cooldownChange = getMoodCooldownMultiplierSafe(unit) - 1;
+      const skillSpeed = 1 - getMoodCooldownMultiplierSafe(unit);
       return [
         { label: "攻撃力", value: formatNumber(callNumber(getEffectiveAttack, unit, 0)) },
         { label: "魔力", value: formatNumber(callNumber(getEffectiveMagic, unit, 0)) },
@@ -59,7 +59,7 @@
         { label: "HP再生率", value: formatPercent(callNumber(getHpRegenRate, unit, 0)) },
         { label: "MP再生率", value: formatPercent(callNumber(getMpRegenRate, unit, 0)) },
         { label: "詠唱速度", value: formatSignedPercent(castSpeed) },
-        { label: "クールタイム", value: formatSignedPercent(cooldownChange) },
+        { label: "スキル速度", value: formatSignedPercent(skillSpeed) },
         { label: "行動速度", value: getActionSpeedText(unit) },
         { breakAfter: true },
         { label: "ゲージ上昇率", value: formatPercent(getUltimateChargeRate(unit)) },
@@ -81,7 +81,9 @@
     }
 
     function getUnitActionSpeedBonus(unit) {
-      return typeof getEquipmentStatBonusSum === "function" ? getEquipmentStatBonusSum(unit, "actionSpeed") : 0;
+      const equipment = typeof getEquipmentStatBonusSum === "function" ? getEquipmentStatBonusSum(unit, "actionSpeed") : 0;
+      const passive = typeof hasPassive === "function" && hasPassive(unit, "number_of_times") ? 0.5 : 0;
+      return equipment + passive;
     }
 
     function getUnitMoveSpeed(unit) {

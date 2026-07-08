@@ -295,10 +295,16 @@
 
     function getSkillCost(unit, skill) {
       if (!skill) return 0;
+      let cost = 0;
       if (Number.isFinite(skill.costMaxMpRatio)) {
-        return Math.ceil((unit && unit.maxMp || 0) * getSkillCostMaxMpRatio(unit, skill));
+        cost = Math.ceil((unit && unit.maxMp || 0) * getSkillCostMaxMpRatio(unit, skill));
+      } else {
+        cost = Number.isFinite(skill.cost) ? skill.cost : 0;
       }
-      return Number.isFinite(skill.cost) ? skill.cost : 0;
+      if (cost > 0 && ctx.hasPassive && ctx.hasPassive(unit, "magic_add_on")) {
+        cost = Math.ceil(cost * 1.3);
+      }
+      return cost;
     }
 
     function canPaySkillCost(unit, skill) {
@@ -434,12 +440,50 @@
       return unit.skillQueue;
     }
 
+    function initializeSkillQueue(unit, entries) {
+      if (!unit || !Array.isArray(entries)) {
+        return;
+      }
+      const keys = [];
+      const seen = new Set();
+      for (const entry of entries) {
+        const key = typeof entry === "string" ? entry : entry && entry.key;
+        if (!key || seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        keys.push(key);
+      }
+      if (!keys.length) {
+        return;
+      }
+      const queue = normalizeSkillQueue(unit);
+      if (!unit.skillQueueInitialized) {
+        unit.skillQueue = keys.slice();
+        unit.skillQueueInitialized = true;
+        return;
+      }
+      for (const key of keys) {
+        if (!queue.includes(key)) {
+          queue.push(key);
+        }
+      }
+    }
+
     function removeSkillFromQueue(unit, key) {
       const queue = normalizeSkillQueue(unit);
       if (!queue.length) {
         return;
       }
       unit.skillQueue = queue.filter((queuedKey) => queuedKey !== key);
+    }
+
+    function moveSkillToQueueBack(unit, key) {
+      if (!unit || !key) {
+        return;
+      }
+      removeSkillFromQueue(unit, key);
+      normalizeSkillQueue(unit).push(key);
     }
 
     function enqueueReadySkill(unit, key) {
@@ -505,7 +549,7 @@
       }
       ensureSkillQueue(unit);
       unit.usedSkillKeys[key] = true;
-      removeSkillFromQueue(unit, key);
+      moveSkillToQueueBack(unit, key);
       if (!actionHasSkillCooldown(unit, key)) {
         if ((unit.cds.attack || 0) > 0) {
           trackSkillCooldown(unit, "attack", key, unit.cds.attack);
@@ -519,14 +563,54 @@
       if (!candidates.length) {
         return null;
       }
+      ensureSkillQueue(unit);
+      if (unit && unit.team === "enemy") {
+        const unusedCandidates = candidates.filter((candidate) => !unit.usedSkillKeys[candidate.key]);
+        if (unusedCandidates.length) {
+          return pickRandomCandidate(unusedCandidates);
+        }
+      }
+      const unusedAction = findQueuedCandidate(unit, candidates, (candidate) => !unit.usedSkillKeys[candidate.key]);
+      if (unusedAction) {
+        return unusedAction;
+      }
+      const queuedAction = findQueuedCandidate(unit, candidates);
+      if (queuedAction) {
+        return queuedAction;
+      }
+      return candidates[0];
+    }
+
+    function pickRandomCandidate(candidates) {
+      if (!candidates.length) {
+        return null;
+      }
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    function findQueuedCandidate(unit, candidates, predicate = () => true) {
       const queue = normalizeSkillQueue(unit);
       for (const queuedKey of queue) {
-        const queuedAction = candidates.find((candidate) => candidate.key === queuedKey);
+        const queuedAction = candidates.find((candidate) => candidate.key === queuedKey && predicate(candidate));
         if (queuedAction) {
           return queuedAction;
         }
       }
-      return candidates[Math.floor(Math.random() * candidates.length)];
+      return candidates.find(predicate) || null;
+    }
+
+    function getUnitMoveSpeedForAction(unit) {
+      if (!unit) {
+        return 0;
+      }
+      if (typeof ctx.getEffectiveMoveSpeed === "function") {
+        return ctx.getEffectiveMoveSpeed(unit);
+      }
+      return Number.isFinite(unit.speed) ? unit.speed : 0;
+    }
+
+    function canMoveToActionTarget(unit, action) {
+      return Boolean(action && action.target && getUnitMoveSpeedForAction(unit) > 0);
     }
 
     function useQueuedInstantAction(unit, candidates) {
@@ -549,11 +633,12 @@
         unit.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
       }
-      const inRangeCandidates = candidates.filter((candidate) => {
-        const actionTarget = candidate.target || target;
-        return actionTarget && ctx.dist(unit, actionTarget) <= candidate.range;
-      });
-      const action = chooseQueuedCandidate(unit, inRangeCandidates.length ? inRangeCandidates : candidates);
+      const reachableCandidates = candidates.filter((candidate) => isPartyActionReachable(unit, candidate, target));
+      if (!reachableCandidates.length) {
+        unit.aiTick = ctx.AI_IDLE_RECHECK;
+        return false;
+      }
+      const action = chooseQueuedCandidate(unit, reachableCandidates);
       if (!action) {
         unit.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
@@ -575,8 +660,12 @@
         enemy.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
       }
-      const inRangeCandidates = candidates.filter((candidate) => isEnemyActionInRange(enemy, candidate));
-      const action = chooseQueuedCandidate(enemy, inRangeCandidates.length ? inRangeCandidates : candidates);
+      const reachableCandidates = candidates.filter((candidate) => isEnemyActionReachable(enemy, candidate));
+      if (!reachableCandidates.length) {
+        enemy.aiTick = ctx.AI_IDLE_RECHECK;
+        return false;
+      }
+      const action = chooseQueuedCandidate(enemy, reachableCandidates);
       if (!action) {
         enemy.aiTick = ctx.AI_IDLE_RECHECK;
         return false;
@@ -598,6 +687,46 @@
         range: Math.max(0, Number.isFinite(action.range) ? action.range : 0),
       };
       return true;
+    }
+
+    function choosePriorityFullPlantSkill(enemy, activeEntries) {
+      if (!enemy || !Array.isArray(activeEntries)) {
+        return false;
+      }
+      for (const { key, skill } of activeEntries) {
+        if (!skill || !skill.requiresFullPlant || !canUseEnemySkill(enemy, key, skill)) {
+          continue;
+        }
+        const plantTarget = getFullPlantTarget(enemy);
+        if (!plantTarget) {
+          return false;
+        }
+        const range = getEnemySkillRange(skill) + plantTarget.radius;
+        const candidate = {
+          key,
+          skill,
+          target: plantTarget,
+          range,
+          use: () => useEnemySingleTargetSkill(enemy, key, skill, plantTarget),
+        };
+        return chooseEnemyAction(enemy, [candidate]);
+      }
+      return false;
+    }
+
+    function isPartyActionReachable(unit, action, fallbackTarget) {
+      if (!action) {
+        return false;
+      }
+      const actionTarget = action.target || fallbackTarget;
+      if (!actionTarget) {
+        return false;
+      }
+      return ctx.dist(unit, actionTarget) <= action.range || canMoveToActionTarget(unit, { ...action, target: actionTarget });
+    }
+
+    function isEnemyActionReachable(enemy, action) {
+      return isEnemyActionInRange(enemy, action) || canMoveToActionTarget(enemy, action);
     }
 
     function isEnemyActionInRange(enemy, action) {
@@ -699,8 +828,14 @@
 
     function getActionSpeedStatusBonus(unit) {
       let bonus = 0;
+      if (ctx.hasPassive && ctx.hasPassive(unit, "number_of_times")) {
+        bonus += 0.5;
+      }
       if (unit && (unit.shadowDashTimer || 0) > 0) {
         bonus += 0.8;
+      }
+      if (unit && (unit.actionSpeedDownTimer || 0) > 0) {
+        bonus -= Math.max(0, Number.isFinite(unit.actionSpeedDownRatio) ? unit.actionSpeedDownRatio : 0);
       }
       return bonus;
     }
@@ -884,7 +1019,9 @@
       const forcedTarget = isForcedHostileTarget(unit, unit && unit.forcedTarget) ? unit.forcedTarget : null;
       const target = forcedTarget || getPartyAttackTarget(unit);
       const candidates = [];
-      for (const { key, skill } of getUnitActiveSkillEntries(unit)) {
+      const activeEntries = getUnitActiveSkillEntries(unit);
+      initializeSkillQueue(unit, activeEntries);
+      for (const { key, skill } of activeEntries) {
         if (!canQueuePartySkill(unit, key, skill)) {
           continue;
         }
@@ -947,7 +1084,12 @@
         enemy.forcedEnemySkillKey = null;
         enemy.forcedEnemySkillTarget = null;
       }
-      for (const { key, skill } of getUnitActiveSkillEntries(enemy)) {
+      const activeEntries = getUnitActiveSkillEntries(enemy);
+      initializeSkillQueue(enemy, activeEntries);
+      if (choosePriorityFullPlantSkill(enemy, activeEntries)) {
+        return;
+      }
+      for (const { key, skill } of activeEntries) {
         if (!canUseEnemySkill(enemy, key, skill)) {
           continue;
         }
@@ -1051,7 +1193,21 @@
       }
     }
 
+    function startEnemyCastVisual(enemy, cast, color = "rgba(255, 133, 105, 0.95)") {
+      if (!enemy || !Number.isFinite(cast) || cast <= 0) {
+        return;
+      }
+      enemy.castVisual = {
+        time: cast,
+        total: cast,
+        color,
+      };
+    }
+
     function getEnemySkillDamage(enemy, target, skill) {
+      if (Number.isFinite(skill.healBase) && !Number.isFinite(skill.damageBase) && !Number.isFinite(skill.attackScale)) {
+        return 0;
+      }
       let damage = Number.isFinite(skill.damageBase) ? skill.damageBase : 0;
       if (Number.isFinite(skill.attackScale)) {
         damage += getAttackStat(enemy) * skill.attackScale;
@@ -1087,6 +1243,17 @@
       target.injuryTimer = Math.max(target.injuryTimer || 0, duration);
       target.injuryMax = Math.max(target.injuryMax || 0, duration);
       ctx.addFloat("負傷", target.x, target.y - 34, "#d96b5f");
+      return true;
+    }
+
+    function applyActionSpeedDown(source, target, ratio, duration) {
+      if (!target || target.dead || !Number.isFinite(ratio) || ratio <= 0 || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.actionSpeedDownTimer = Math.max(target.actionSpeedDownTimer || 0, duration);
+      target.actionSpeedDownMax = Math.max(target.actionSpeedDownMax || 0, duration);
+      target.actionSpeedDownRatio = Math.max(target.actionSpeedDownRatio || 0, ratio);
+      ctx.addFloat("行動速度低下", target.x, target.y - 34, "#9bb2c8");
       return true;
     }
 
@@ -1229,6 +1396,7 @@
       const cast = getCastTime(skill.cast, enemy);
       if (cast > 0) {
         enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+        startEnemyCastVisual(enemy, cast);
         const telegraph = {
           type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(8), ctx.battlePx(24)), team: "enemy", time: cast,
           hidden: true,
@@ -1282,7 +1450,6 @@
             if (flowerSkill) {
               enemy.forcedEnemySkillKey = flowerSkill;
               enemy.forcedEnemySkillTarget = null;
-              enemy.cds.attack = 0;
               enemy.aiIntent = null;
               ctx.addFloat("花獲得", enemy.x, enemy.y - 34, "#f2c56d");
             }
@@ -1305,6 +1472,7 @@
       beginEnemySkill(enemy, key, skill);
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      startEnemyCastVisual(enemy, cast, "rgba(185, 168, 255, 0.95)");
       ctx.addTelegraph({
         type: "circle", x: enemy.x, y: enemy.y, radius: skill.radius, team: "enemy", time: cast,
         getPosition: () => ({ x: enemy.x, y: enemy.y }),
@@ -1334,6 +1502,7 @@
       beginEnemySkill(enemy, key, skill);
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      startEnemyCastVisual(enemy, cast);
       const center = { x: target.x, y: target.y };
       ctx.addTelegraph({
         type: "circle", x: center.x, y: center.y, radius: skill.radius, team: "enemy", time: cast,
@@ -1358,11 +1527,20 @@
       return true;
     }
 
+    function shouldShowEnemyCastTelegraph(skill) {
+      return Boolean(skill && (
+        skill.showTelegraph === true ||
+        skill.warningTelegraph === true ||
+        skill.telegraph === true
+      ));
+    }
+
     function useEnemyAreaSkill(enemy, key, skill) {
       const speakOnCastStart = key === "chocolate_lily";
       beginEnemySkill(enemy, key, skill, { skipSpeech: speakOnCastStart });
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      startEnemyCastVisual(enemy, cast, key === "dappled_sunlight" ? "rgba(255, 232, 141, 0.95)" : "rgba(178, 213, 104, 0.95)");
       if (key === "chocolate_lily") {
         enemy.chocolateLilyCharging = true;
         enemy.chocolateLilyDamageTaken = 0;
@@ -1382,6 +1560,7 @@
       if (cast > 0) {
         ctx.addTelegraph({
           type: "circle", x: center.x, y: center.y, radius: skill.radius, team: "enemy", time: cast,
+          hidden: !shouldShowEnemyCastTelegraph(skill),
           getPosition: () => ({ x: enemy.x, y: enemy.y }),
           resolve,
         });
@@ -1421,6 +1600,9 @@
         }
       }
       for (const member of partyTargets) {
+        if (Number.isFinite(skill.actionSpeedDownRatio) && Number.isFinite(skill.actionSpeedDownDuration)) {
+          applyActionSpeedDown(enemy, member, skill.actionSpeedDownRatio, skill.actionSpeedDownDuration);
+        }
         if (skill.plantApply) {
           applyPlant(enemy, member);
         }
@@ -1440,6 +1622,7 @@
       beginEnemySkill(enemy, key, skill);
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      startEnemyCastVisual(enemy, cast);
       const line = buildEnemyLine(enemy, target, skill);
       ctx.addTelegraph({
         type: "line", x: line.x, y: line.y, x2: line.x2, y2: line.y2, width: skill.radius, team: "enemy", time: cast,
@@ -1498,6 +1681,7 @@
       beginEnemySkill(enemy, key, skill);
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+      startEnemyCastVisual(enemy, cast, "rgba(216, 137, 185, 0.95)");
       ctx.addTelegraph({
         type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(10), ctx.battlePx(28)), team: "enemy", time: cast,
         getPosition: () => ({ x: target.x, y: target.y }),
@@ -3087,7 +3271,7 @@
         return false;
       }
       if (!unit || unit.dead || isActionDisabled(unit) || !canUseUltimate(unit) || unit.actionLock > 0 || unit.cast || unit.channel) return false;
-      if (unit.id !== "finald" && unit.mood !== null && unit.mood <= 50) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
+      if (unit.id !== "finald" && unit.mood !== null && unit.mood < 40) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
       if (id !== "finald") spendUltimate(unit);
       if (id === "ulpes") ultUlpes(unit, automatic);
       else if (id === "rihas") ultRihas(unit, automatic);
@@ -3271,6 +3455,7 @@
       setActionCooldown(enemy);
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = cast + ctx.ACTION_GAP;
+      startEnemyCastVisual(enemy, cast);
       const telegraph = {
         type: "circle", x: target.x, y: target.y, radius: skill.radius, team: "enemy", time: cast,
         getPosition: () => ({ x: target.x, y: target.y }),
@@ -3292,6 +3477,7 @@
       const configuredLockBeforeFire = Number.isFinite(skill.aimLockBeforeFire) ? skill.aimLockBeforeFire : 1.3;
       const lockBeforeFire = Math.min(configuredLockBeforeFire, cast);
       enemy.actionLock = cast + ctx.ACTION_GAP;
+      startEnemyCastVisual(enemy, cast);
       let lockedLine = null;
       let telegraph = null;
       const buildLine = () => {
@@ -3327,6 +3513,7 @@
       trackSkillCooldown(enemy, "skill", "heavySlam", skill.cd);
       const cast = getCastTime(skill.cast, enemy);
       enemy.actionLock = cast + ctx.ACTION_GAP;
+      startEnemyCastVisual(enemy, cast);
       const telegraph = {
         type: "circle", x: target.x, y: target.y, radius: skill.radius, team: "enemy", time: cast,
         getPosition: () => ({ x: target.x, y: target.y }),

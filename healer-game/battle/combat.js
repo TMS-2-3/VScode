@@ -248,6 +248,7 @@
           source.stackTimer = SUSHIA_PASSIVE_STACK_DURATION;
           source.stackCooldown = SUSHIA_PASSIVE_STACK_COOLDOWN;
         }
+        applyGoukenPassive(source, target, rewardDamage + shielded, options, dotDamage);
         if (source.mood !== null && target.team === "enemy") {
           const hpDamageForMood = Math.min(hpBeforeDamage, Math.max(0, rewardDamage));
           const damageRatio = getHpRatio(hpDamageForMood, target);
@@ -313,6 +314,29 @@
       unit.sleepTimer = 0;
       unit.sleepMax = 0;
       addFloat("睡眠解除", unit.x, unit.y - 34, "#f7fff6");
+    }
+
+    function applyGoukenPassive(source, target, damageAmount, options = {}, dotDamage = false) {
+      if (!source || !target || target.team !== "enemy" || target.hp <= 0 || damageAmount <= 0) {
+        return;
+      }
+      if (!hasPassive(source, "gouken") || dotDamage || options.magic) {
+        return;
+      }
+      if (!source.goukenHitCounts || typeof source.goukenHitCounts !== "object" || Array.isArray(source.goukenHitCounts)) {
+        source.goukenHitCounts = {};
+      }
+      const key = target.id || target.name || "enemy";
+      const next = Math.max(0, Math.floor(source.goukenHitCounts[key] || 0)) + 1;
+      if (next < 3) {
+        source.goukenHitCounts[key] = next;
+        return;
+      }
+      source.goukenHitCounts[key] = 0;
+      const duration = 6;
+      target.sleepTimer = Math.max(target.sleepTimer || 0, duration);
+      target.sleepMax = Math.max(target.sleepMax || 0, duration);
+      addFloat("睡眠", target.x, target.y - 34, "#b9a8ff");
     }
 
     function awardOffensiveUltimate(source, target, options = {}) {

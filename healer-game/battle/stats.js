@@ -267,7 +267,7 @@
     }
 
     function getMoodCooldownMultiplier(unit) {
-      return Math.max(0.1, 1 - clamp(getEquipmentBonus(unit, "cooldownReduction"), -1, 0.9));
+      return Math.max(0.1, 1 - clamp(getEquipmentBonus(unit, "cooldownReduction") + getStatusStatBonus(unit, "cooldownReduction"), -1, 0.9));
     }
 
     function getMoodCooldown(unit, baseTime) {
@@ -277,7 +277,7 @@
     function getCastSpeed(unit) {
       const base = unit && Number.isFinite(unit.castSpeed) ? unit.castSpeed : 0;
       const warmup = unit && hasPassive(unit, "warmup") ? (unit.castStacks || 0) * 0.05 : 0;
-      return Math.min(1, base + warmup + getEquipmentBonus(unit, "castSpeed"));
+      return Math.min(1, base + warmup + getEquipmentBonus(unit, "castSpeed") + getStatusStatBonus(unit, "castSpeed"));
     }
 
     function getCastTimeMultiplier(unit) {
@@ -444,6 +444,29 @@
           bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_DEFENSE_BONUS, 0);
         }
       }
+      if (hasPassive(unit, "number_of_times")) {
+        if (statKey === "actionSpeed" || statKey === "cooldownReduction") {
+          bonus += 0.5;
+        } else if (statKey === "damageBoost") {
+          bonus -= 0.4;
+        }
+      }
+      if (hasPassive(unit, "magic_add_on")) {
+        if (statKey === "castSpeed") {
+          bonus -= 0.5;
+        } else if (statKey === "magicDamageBoost") {
+          bonus += 0.2;
+        }
+      }
+      if (hasPassive(unit, "lightweight_buff")) {
+        if (statKey === "moveSpeed") {
+          bonus += 0.3;
+        } else if (statKey === "castSpeed") {
+          bonus += 0.5;
+        } else if (statKey === "mpRegenRate") {
+          bonus -= 0.04;
+        }
+      }
       if (unit && (unit.injuryTimer || 0) > 0) {
         if (statKey === "defense" || statKey === "moveSpeed") {
           bonus -= 0.1;
@@ -461,6 +484,9 @@
       }
       if (unit && (unit.magicNeutralizeTimer || 0) > 0 && statKey === "magic") {
         bonus -= Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);
+      }
+      if (unit && (unit.actionSpeedDownTimer || 0) > 0 && statKey === "actionSpeed") {
+        bonus -= Math.max(0, Number.isFinite(unit.actionSpeedDownRatio) ? unit.actionSpeedDownRatio : 0);
       }
       if (unit && (unit.shadowDashTimer || 0) > 0) {
         if (statKey === "moveSpeed") {
@@ -482,7 +508,7 @@
 
     function getInternalBonus(unit, statKey) {
       const base = getBaseStat(unit, statKey, 0);
-      return base + getEquipmentBonus(unit, statKey);
+      return base + getEquipmentBonus(unit, statKey) + getStatusStatBonus(unit, statKey);
     }
 
     function getPhysicalDamageBoost(unit) {

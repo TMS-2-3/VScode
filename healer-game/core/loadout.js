@@ -58,6 +58,13 @@
       return `${sourceOwner}:${sourceKey}`;
     }
 
+    function getPassiveIdentity(owner, key, passive = null) {
+      const ownerKey = getKnownOwner(owner);
+      const sourceOwner = passive && passive.sourceOwner ? passive.sourceOwner : ownerKey;
+      const sourceKey = passive && passive.sourceKey ? passive.sourceKey : key;
+      return `passive:${sourceOwner}:${sourceKey}`;
+    }
+
     function getSkillProgressStore() {
       if (!game || typeof game !== "object") {
         return {};
@@ -120,6 +127,30 @@
       }
       const store = getSkillProgressStore();
       const progress = normalizeSkillProgress(store[getSkillIdentity(ownerKey, key, skill)]);
+      return progress.owned;
+    }
+
+    function isAlwaysOwnedPassive(owner, key, passive = null) {
+      const ownerKey = getKnownOwner(owner);
+      const data = passive || getPassive(ownerKey, key);
+      if (ownerKey === "enemy") {
+        return true;
+      }
+      const defaults = LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults[ownerKey] || {};
+      return Boolean(data && (data.alwaysOwned || defaults.passive === key));
+    }
+
+    function isPassiveOwned(owner, key) {
+      const ownerKey = getKnownOwner(owner);
+      const passive = getPassive(ownerKey, key);
+      if (!passive) {
+        return false;
+      }
+      if (isAlwaysOwnedPassive(ownerKey, key, passive)) {
+        return true;
+      }
+      const store = getSkillProgressStore();
+      const progress = normalizeSkillProgress(store[getPassiveIdentity(ownerKey, key, passive)]);
       return progress.owned;
     }
 
@@ -196,6 +227,28 @@
       return { identity, owner: ownerKey, key, skill, ...next };
     }
 
+    function setPassiveProgress(owner, key, updates) {
+      const ownerKey = getKnownOwner(owner);
+      const passive = getPassive(ownerKey, key);
+      if (!passive) {
+        return null;
+      }
+      const identity = getPassiveIdentity(ownerKey, key, passive);
+      const store = getSkillProgressStore();
+      const current = normalizeSkillProgress(store[identity]);
+      const next = {
+        owned: Object.prototype.hasOwnProperty.call(updates || {}, "owned") ? Boolean(updates.owned) : current.owned,
+        level: Object.prototype.hasOwnProperty.call(updates || {}, "level")
+          ? Math.max(0, Math.min(SKILL_MAX_LEVEL, Math.floor(Number(updates.level) || 0)))
+          : current.level,
+      };
+      if (isAlwaysOwnedPassive(ownerKey, key, passive)) {
+        next.owned = true;
+      }
+      store[identity] = next;
+      return { identity, owner: ownerKey, key, skill: passive, ...next };
+    }
+
     function isUltimateKey(owner, key) {
       const skill = getSkill(owner, key);
       return Boolean(skill && (key === "ult" || skill.category === "必殺技"));
@@ -209,11 +262,11 @@
     function getRequiredPassive(owner) {
       const ownerKey = getKnownOwner(owner);
       const defaults = LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults[ownerKey] || {};
-      if (defaults.passive && getPassive(ownerKey, defaults.passive)) {
+      if (defaults.passive && getPassive(ownerKey, defaults.passive) && isPassiveOwned(ownerKey, defaults.passive)) {
         return defaults.passive;
       }
       const keys = getPassiveKeys(ownerKey);
-      return keys.length ? keys[0] : null;
+      return keys.find((key) => isPassiveOwned(ownerKey, key)) || null;
     }
 
     function getRequiredUltimate(owner) {
@@ -234,6 +287,10 @@
       const ownerLimits = LOADOUT_CONFIG.activeSlotsByOwner || {};
       const limit = Number.isFinite(ownerLimits[ownerKey]) ? ownerLimits[ownerKey] : activeSlotLimit;
       return Math.max(1, Math.floor(limit));
+    }
+
+    function shouldEnforceActiveSlotLimit(unitOrOwner) {
+      return !(unitOrOwner && typeof unitOrOwner === "object" && unitOrOwner.team === "enemy");
     }
 
     function cleanActive(owner, keys, enforceLimit) {
@@ -263,7 +320,7 @@
       const requestedPassive = Object.prototype.hasOwnProperty.call(loadout, "passive")
         ? loadout.passive
         : defaults.passive;
-      const passive = requestedPassive && getPassive(ownerKey, requestedPassive)
+      const passive = requestedPassive && getPassive(ownerKey, requestedPassive) && isPassiveOwned(ownerKey, requestedPassive)
         ? requestedPassive
         : getRequiredPassive(ownerKey);
       const requestedUltimate = Object.prototype.hasOwnProperty.call(loadout, "ultimate")
@@ -289,7 +346,7 @@
       if (!unit) {
         return null;
       }
-      unit.loadout = normalizeLoadout(getOwnerKey(unit), loadout, { enforceLimit: true });
+      unit.loadout = normalizeLoadout(getOwnerKey(unit), loadout, { enforceLimit: shouldEnforceActiveSlotLimit(unit) });
       return unit.loadout;
     }
 
@@ -297,8 +354,9 @@
       if (!unit) {
         return { passive: null, active: [] };
       }
+      const enforceLimit = shouldEnforceActiveSlotLimit(unit);
       unit.loadout = unit.loadout
-        ? normalizeLoadout(getOwnerKey(unit), unit.loadout, { enforceLimit: true })
+        ? normalizeLoadout(getOwnerKey(unit), unit.loadout, { enforceLimit })
         : getDefaultLoadout(unit);
       return unit.loadout;
     }
@@ -377,7 +435,21 @@
         return false;
       }
       const passive = getPassive(getOwnerKey(unit), key);
-      return Boolean(passive && !passive.disabled);
+      return Boolean(passive && !passive.disabled && isPassiveOwned(getOwnerKey(unit), key) && canUsePassiveWithEquipment(unit, passive));
+    }
+
+    function canUsePassiveWithEquipment(unit, passive) {
+      if (!passive || !unit || typeof unit !== "object") {
+        return true;
+      }
+      const weapon = getEquippedWeapon(unit, getKnownOwner(getOwnerKey(unit)));
+      if (Array.isArray(passive.requiredWeaponItemIds) && passive.requiredWeaponItemIds.length) {
+        return Boolean(weapon && passive.requiredWeaponItemIds.includes(weapon.id));
+      }
+      if (Array.isArray(passive.requiredWeapons) && passive.requiredWeapons.length) {
+        return Boolean(weapon && passive.requiredWeapons.includes(weapon.weaponType));
+      }
+      return true;
     }
 
     function getEquippedPassive(unit) {
@@ -401,9 +473,9 @@
       const candidates = getCrystalSkillCandidates(rank);
       const outcomes = [];
       for (const entry of candidates) {
-        if (!isSkillOwned(entry.owner, entry.key)) {
+        if (!isCrystalEntryOwned(entry)) {
           outcomes.push({ type: "acquire", entry });
-        } else if (getSkillLevel(entry.owner, entry.key) < SKILL_MAX_LEVEL) {
+        } else if (entry.skill && entry.skill.upgradeDescription && getCrystalEntryLevel(entry) < SKILL_MAX_LEVEL) {
           outcomes.push({ type: "upgrade", entry });
         }
       }
@@ -412,12 +484,12 @@
       }
       const picked = pickRandom(outcomes);
       if (picked.type === "acquire") {
-        const progress = setSkillProgress(picked.entry.owner, picked.entry.key, { owned: true, level: 0 });
+        const progress = setCrystalEntryProgress(picked.entry, { owned: true, level: 0 });
         return buildSkillProgressResult("acquired", picked.entry, progress ? progress.level : 0);
       }
-      const previousLevel = getSkillLevel(picked.entry.owner, picked.entry.key);
+      const previousLevel = getCrystalEntryLevel(picked.entry);
       const nextLevel = Math.min(SKILL_MAX_LEVEL, previousLevel + 1);
-      setSkillProgress(picked.entry.owner, picked.entry.key, { owned: true, level: nextLevel });
+      setCrystalEntryProgress(picked.entry, { owned: true, level: nextLevel });
       return buildSkillProgressResult("upgraded", picked.entry, nextLevel, previousLevel);
     }
 
@@ -429,7 +501,7 @@
           continue;
         }
         for (const [key, skill] of Object.entries(skills || {})) {
-          if (!skill || skill.disabled || skill.crystalExcluded || skill.rank !== rank || skill.category === "通常攻撃" || !skill.upgradeDescription) {
+          if (!skill || skill.disabled || skill.crystalExcluded || skill.rank !== rank || skill.category === "通常攻撃") {
             continue;
           }
           const sourceOwner = skill.sourceOwner || owner;
@@ -439,11 +511,67 @@
           if (seen.has(identity)) {
             continue;
           }
+          const entry = { identity, kind: "skill", owner: sourceOwner, key: sourceKey, skill: canonicalSkill };
+          if (isCrystalEntryOwned(entry) && !canonicalSkill.upgradeDescription) {
+            continue;
+          }
           seen.add(identity);
-          result.push({ identity, owner: sourceOwner, key: sourceKey, skill: canonicalSkill });
+          result.push(entry);
+        }
+      }
+      for (const [owner, passives] of Object.entries(PASSIVE_DATA || {})) {
+        if (owner === "enemy") {
+          continue;
+        }
+        for (const [key, passive] of Object.entries(passives || {})) {
+          if (!passive || passive.disabled || passive.crystalExcluded || passive.rank !== rank) {
+            continue;
+          }
+          const sourceOwner = passive.sourceOwner || owner;
+          const sourceKey = passive.sourceKey || key;
+          const canonicalPassive = PASSIVE_DATA[sourceOwner] && PASSIVE_DATA[sourceOwner][sourceKey] || passive;
+          const identity = getPassiveIdentity(owner, key, passive);
+          if (seen.has(identity)) {
+            continue;
+          }
+          const entry = { identity, kind: "passive", owner: sourceOwner, key: sourceKey, skill: canonicalPassive };
+          if (isCrystalEntryOwned(entry) && !canonicalPassive.upgradeDescription) {
+            continue;
+          }
+          seen.add(identity);
+          result.push(entry);
         }
       }
       return result;
+    }
+
+    function isCrystalEntryOwned(entry) {
+      if (!entry) {
+        return false;
+      }
+      return entry.kind === "passive"
+        ? isPassiveOwned(entry.owner, entry.key)
+        : isSkillOwned(entry.owner, entry.key);
+    }
+
+    function getCrystalEntryLevel(entry) {
+      if (!entry) {
+        return 0;
+      }
+      if (entry.kind === "passive") {
+        const store = getSkillProgressStore();
+        return normalizeSkillProgress(store[entry.identity]).level;
+      }
+      return getSkillLevel(entry.owner, entry.key);
+    }
+
+    function setCrystalEntryProgress(entry, updates) {
+      if (!entry) {
+        return null;
+      }
+      return entry.kind === "passive"
+        ? setPassiveProgress(entry.owner, entry.key, updates)
+        : setSkillProgress(entry.owner, entry.key, updates);
     }
 
     function buildSkillProgressResult(type, entry, level, previousLevel = null) {
@@ -462,7 +590,7 @@
         level: normalizedLevel,
         previousLevel: normalizedPrevious,
         maxLevel: SKILL_MAX_LEVEL,
-        category: entry.skill && entry.skill.category || "",
+        category: entry.skill && entry.skill.category || (entry.kind === "passive" ? "パッシブ" : ""),
         skillType: entry.skill && entry.skill.skillType || "",
         simpleDescription: entry.skill && entry.skill.simpleDescription || "",
         description: entry.skill && entry.skill.description || "",
@@ -493,6 +621,7 @@
       getEquippedUltimateSkillKey,
       getEquippedUltimateSkill,
       isSkillOwned,
+      isPassiveOwned,
       getSkillLevel,
       acquireOrUpgradeSkill,
     };

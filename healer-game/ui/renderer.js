@@ -64,6 +64,7 @@
       getDefaultLoadout,
       normalizeLoadout,
       isSkillOwned,
+      isPassiveOwned,
       getSkillLevel,
       getPlayerFirstName,
       getPlayerFullName,
@@ -798,7 +799,7 @@
       drawAvoidTargetMark(unit);
     }
 
-    if (unit === player && (player.cast || player.channel)) {
+    if ((unit === player && (player.cast || player.channel)) || unit.castVisual) {
       drawCastOrbit(unit);
     }
 
@@ -1131,21 +1132,25 @@
     ctx.restore();
   }
   function drawCastOrbit(unit) {
-    const castProgress = player.cast
-      ? 1 - clamp(player.cast.time / player.cast.total, 0, 1)
-      : 1;
+    const visual = unit && unit.castVisual;
+    const castProgress = visual && visual.total
+      ? 1 - clamp(visual.time / visual.total, 0, 1)
+      : (player.cast ? 1 - clamp(player.cast.time / player.cast.total, 0, 1) : 1);
     const orbitRadius = unit.radius + battlePx(20);
     const pulse = 0.55 + Math.sin(game.time * 10) * 0.18;
+    const accent = visual && visual.color ? visual.color : "rgba(190, 255, 203, 0.95)";
+    const base = visual ? "rgba(255, 142, 118, 0.24)" : "rgba(124, 255, 148, 0.24)";
+    const glow = visual ? "#ff8e76" : "#86ff9a";
 
     ctx.save();
     ctx.lineCap = "round";
-    ctx.strokeStyle = "rgba(124, 255, 148, 0.24)";
+    ctx.strokeStyle = base;
     ctx.lineWidth = Math.max(4, battlePx(8));
     ctx.beginPath();
     ctx.arc(unit.x, unit.y, orbitRadius, 0, TAU);
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(190, 255, 203, 0.95)";
+    ctx.strokeStyle = accent;
     ctx.lineWidth = Math.max(2, battlePx(3));
     ctx.beginPath();
     ctx.arc(unit.x, unit.y, orbitRadius, -Math.PI / 2, -Math.PI / 2 + TAU * castProgress);
@@ -1156,8 +1161,8 @@
       const x = unit.x + Math.cos(angle) * orbitRadius;
       const y = unit.y + Math.sin(angle) * orbitRadius;
       const size = i === 0 ? battlePx(5.5) : battlePx(4);
-      ctx.fillStyle = `rgba(142, 255, 160, ${0.58 + pulse * 0.34})`;
-      ctx.shadowColor = "#86ff9a";
+      ctx.fillStyle = visual ? accent : `rgba(142, 255, 160, ${0.58 + pulse * 0.34})`;
+      ctx.shadowColor = glow;
       ctx.shadowBlur = 14;
       ctx.beginPath();
       ctx.arc(x, y, size, 0, TAU);
@@ -1316,7 +1321,8 @@
 
   function drawEffects() {
     for (const effect of effects) {
-      const life = clamp(effect.time / 0.85, 0, 1);
+      const lifeTotal = Number.isFinite(effect.total) && effect.total > 0 ? effect.total : 0.85;
+      const life = clamp(effect.time / lifeTotal, 0, 1);
       ctx.save();
       if (effect.type === "speech") {
         drawSpeechBubble(effect);
@@ -2105,7 +2111,7 @@
     for (const owner of ownerOrder) {
       const passives = PASSIVE_DATA && PASSIVE_DATA[owner] ? PASSIVE_DATA[owner] : {};
       for (const [key, passive] of Object.entries(passives)) {
-        if (!passive) {
+        if (!passive || !isOwnedPassiveForDisplay(owner, key)) {
           continue;
         }
         const identity = `passive:${passive.sourceOwner || owner}:${passive.sourceKey || key}`;
@@ -3815,6 +3821,7 @@
     const loadout = getEquipmentLoadout(unit);
     const current = getPassiveData(owner, loadout.passive);
     const candidates = Object.entries(PASSIVE_DATA && PASSIVE_DATA[owner] || {})
+      .filter(([key]) => isOwnedPassiveForDisplay(owner, key))
       .map(([key, passive]) => ({ key, passive }));
     ctx.fillStyle = "#102018";
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -3833,6 +3840,7 @@
         color: "#5b7c5f",
         selected: loadout.passive === entry.key,
         equipped: getPassiveSkillEquipState(unit, entry.key, entry.passive),
+        disabled: !canEquipSkillWithCurrentWeapon(unit, entry.passive),
         title: entry.passive.name || entry.key,
         subtitle: "パッシブ",
         tooltip: buildPassiveCandidateTooltip(entry.passive, unit),
@@ -4229,6 +4237,10 @@
       return null;
     }
     const lines = ["パッシブ"];
+    const condition = getSkillConditionLabel(passive);
+    if (condition) {
+      lines.push(`条件: ${condition}`);
+    }
     const description = formatEquipmentDescriptionText(getSystemTooltipDescription(passive), unit, passive);
     if (description) {
       lines.push(...String(description).split(/\r?\n/));
@@ -4760,6 +4772,10 @@
     return typeof isSkillOwned === "function" ? isSkillOwned(owner, key) : true;
   }
 
+  function isOwnedPassiveForDisplay(owner, key) {
+    return typeof isPassiveOwned === "function" ? isPassiveOwned(owner, key) : true;
+  }
+
   function getSkillLevelForDisplay(owner, key) {
     return typeof getSkillLevel === "function" ? getSkillLevel(owner, key) : 0;
   }
@@ -5071,7 +5087,7 @@
       hpRegenRate: "HP再生率",
       mpRegenRate: "MP再生率",
       castSpeed: "詠唱速度",
-      cooldownReduction: "クールタイム",
+      cooldownReduction: "スキル速度",
       actionSpeed: "行動速度",
       ultimateChargeRate: "ゲージ上昇率",
       moveSpeed: "移動速度",
@@ -5095,7 +5111,7 @@
   }
 
   function isReductionStatKey(key) {
-    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance", "cooldownReduction"].includes(key);
+    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance"].includes(key);
   }
 
   function formatSystemPercent(value, signed = false) {

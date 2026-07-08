@@ -27,7 +27,7 @@
       { label: "HP再生率+2%", statBonuses: { hpRegenRate: 0.02 } },
       { label: "MP再生率+3%", statBonuses: { mpRegenRate: 0.03 } },
       { label: "詠唱速度+10%", statBonuses: { castSpeed: 0.1 } },
-      { label: "クールタイム-10%", statBonuses: { cooldownReduction: 0.1 } },
+      { label: "スキル速度+10%", statBonuses: { cooldownReduction: 0.1 } },
       { label: "行動速度+5%", statBonuses: { actionSpeed: 0.05 } },
       { label: "ゲージ上昇率+10%", statBonuses: { ultimateChargeRate: 0.1 } },
       { label: "移動速度+10%", statBonuses: { moveSpeed: 0.1 } },
@@ -673,8 +673,26 @@
           : generateArmorRandomStats(item, instance);
       } else if (profile.type !== "accessory") {
         normalizeArmorRandomStats(store[key]);
+      } else {
+        normalizeAccessoryRandomStats(store[key]);
       }
       return store[key];
+    }
+
+    function normalizeAccessoryRandomStats(generated) {
+      if (!generated || !generated.statBonuses) {
+        return;
+      }
+      for (const [key, value] of Object.entries(generated.statBonuses)) {
+        generated.statBonuses[key] = roundStatValue(value);
+      }
+      if (typeof generated.description === "string") {
+        generated.description = generated.description.replace(/クールタイム-10%/g, "スキル速度+10%");
+      } else {
+        generated.description = Object.entries(generated.statBonuses)
+          .map(([key, value]) => `${getStatLabel(key)}${formatSignedPercent(value)}`)
+          .join(" / ");
+      }
     }
 
     function normalizeArmorRandomStats(generated) {
@@ -1276,7 +1294,7 @@
         hpRegenRate: "HP再生率",
         mpRegenRate: "MP再生率",
         castSpeed: "詠唱速度",
-        cooldownReduction: "クールタイム",
+        cooldownReduction: "スキル速度",
         actionSpeed: "行動速度",
         ultimateChargeRate: "ゲージ上昇率",
         moveSpeed: "移動速度",

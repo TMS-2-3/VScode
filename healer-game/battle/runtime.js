@@ -104,6 +104,12 @@
         if (unit.actionLock <= 0) {
           unit.actionTotal = 0;
         }
+        if (unit.castVisual) {
+          unit.castVisual.time = Math.max(0, (unit.castVisual.time || 0) - dt);
+          if (unit.castVisual.time <= 0) {
+            unit.castVisual = null;
+          }
+        }
         unit.hurt = Math.max(0, unit.hurt - dt);
         unit.guardFlash = Math.max(0, unit.guardFlash - dt);
         unit.frozen = Math.max(0, unit.frozen - dt);
@@ -139,6 +145,11 @@
           unit.magicNeutralizeMax = 0;
           unit.magicNeutralizeRatio = 0;
         }
+        unit.actionSpeedDownTimer = Math.max(0, (unit.actionSpeedDownTimer || 0) - dt);
+        if (unit.actionSpeedDownTimer <= 0) {
+          unit.actionSpeedDownMax = 0;
+          unit.actionSpeedDownRatio = 0;
+        }
         unit.shadowDashTimer = Math.max(0, (unit.shadowDashTimer || 0) - dt);
         if (unit.shadowDashTimer <= 0) {
           unit.shadowDashMax = 0;
@@ -167,7 +178,7 @@
         updateShieldStacks(unit, dt);
 
         for (const key of Object.keys(unit.cds)) {
-          if (key === "attack" && isActionDisabled(unit)) continue;
+          if (key === "attack" && (isActionDisabled(unit) || unit.chocolateLilyCharging)) continue;
           const before = unit.cds[key] || 0;
           unit.cds[key] = Math.max(0, before - dt);
           if (before > 0 && unit.cds[key] <= 0 && skillSystem.onCooldownReady) {
@@ -561,6 +572,7 @@
       unit.itemUseRequest = null;
       unit.itemCast = null;
       unit.cast = null;
+      unit.castVisual = null;
       unit.channel = null;
       unit.pendingActionQueueKey = null;
       unit.skillQueue = [];
@@ -948,7 +960,21 @@
     }
 
     function addFloat(text, x, y, color, outline = "#0b0d0b") {
-      effects.push({ type: "float", text, x, y, color, outline, time: 0.85, age: 0, vy: -28 });
+      const lifetime = 1.3;
+      const stackStep = battlePx(18);
+      const stackRangeX = battlePx(44);
+      const stackRangeY = battlePx(36);
+      for (const effect of effects) {
+        if (effect.type !== "float") {
+          continue;
+        }
+        const originX = Number.isFinite(effect.originX) ? effect.originX : effect.x;
+        const originY = Number.isFinite(effect.originY) ? effect.originY : effect.y;
+        if (Math.abs(originX - x) <= stackRangeX && Math.abs(originY - y) <= stackRangeY) {
+          effect.y -= stackStep;
+        }
+      }
+      effects.push({ type: "float", text, x, y, originX: x, originY: y, color, outline, time: lifetime, total: lifetime, age: 0, vy: -28 });
     }
 
     function slashEffect(from, to) {

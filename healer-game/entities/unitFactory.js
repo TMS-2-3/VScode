@@ -21,6 +21,7 @@
 
     function makeUnit(options) {
       const skillOwner = options.skillOwner || options.id;
+      const enforceLoadoutLimit = options.team !== "enemy";
       const baseMaxHp = options.maxHp || 100;
       const baseMaxMp = options.maxMp || 0;
       const baseHpRegenRate = Number.isFinite(options.hpRegenRate) ? options.hpRegenRate : 0;
@@ -102,13 +103,15 @@
         shieldTimer: 0,
         shields: [],
         cds: {},
-        loadout: options.loadout ? normalizeLoadout(skillOwner, options.loadout) : getDefaultLoadout(skillOwner),
+        loadout: options.loadout ? normalizeLoadout(skillOwner, options.loadout, { enforceLimit: enforceLoadoutLimit }) : getDefaultLoadout(skillOwner),
         equipment: getEmptyEquipment(),
         actionLock: 0,
         actionTotal: 0,
+        castVisual: null,
         aiTick: 0,
         aiIntent: null,
         skillQueue: [],
+        skillQueueInitialized: false,
         usedSkillKeys: {},
         skillCooldownKeys: {},
         pendingActionQueueKey: null,
@@ -152,6 +155,9 @@
         magicNeutralizeTimer: 0,
         magicNeutralizeMax: 0,
         magicNeutralizeRatio: 0,
+        actionSpeedDownTimer: 0,
+        actionSpeedDownMax: 0,
+        actionSpeedDownRatio: 0,
         shadowDashTimer: 0,
         shadowDashMax: 0,
         shadowOrbitDir: 0,
@@ -164,6 +170,7 @@
         itemCast: null,
         selfHealFloat: 0,
         delayedDamageQueue: [],
+        goukenHitCounts: {},
         rihasPassiveStacks: 0,
         rihasPassiveTimer: 0,
         rihasPassiveStackCooldown: 0,
@@ -241,17 +248,16 @@
       enemy.cds.attack = Math.random() * getActionCooldown(enemy);
       const skillSystem = getSkillSystem();
       if (kind === "caster") {
-        const casterLine = skillSystem.requireSkill("enemy", "casterLine");
-        enemy.cds.skill = casterLine.cdBase + Math.random() * casterLine.cdRandom;
+        enemy.cds.skill = 0;
       } else if (kind === "elite") {
-        enemy.cds.skill = skillSystem.requireSkill("enemy", "heavySlam").cd;
+        enemy.cds.skill = 0;
       } else if (Array.isArray(stats.skills)) {
         for (const skillKey of stats.skills) {
           const skill = skillSystem.getSkill ? skillSystem.getSkill("enemy", skillKey) : null;
           if (!skill || skill.category === "通常攻撃" || !Number.isFinite(skill.cd) || skill.cd <= 0) {
             continue;
           }
-          enemy.cds[skillKey] = Math.random() * skill.cd;
+          enemy.cds[skillKey] = 0;
         }
         enemy.cds.skill = 0;
       } else {

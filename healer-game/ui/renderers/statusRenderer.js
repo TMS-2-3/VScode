@@ -119,6 +119,12 @@
     return ["ウルペス", "リハス", "スシア", "アルジュナ"][index] || "";
   }
 
+  function getUltimateCost(unit) {
+    return skillSystem && typeof skillSystem.getUltimateCost === "function"
+      ? skillSystem.getUltimateCost(unit)
+      : 100;
+  }
+
   function drawHud() {
     statusUiButtons.length = 0;
     statusCardMetas.length = 0;
@@ -634,10 +640,12 @@
   }
 
   function getStatusIconSortTime(icon) {
+    const priority = Number.isFinite(icon && icon.sortPriority) ? icon.sortPriority : 0;
     if (icon.permanent) {
-      return Infinity;
+      return 100000 + priority;
     }
-    return Number.isFinite(icon.remaining) ? icon.remaining : (Number.isFinite(icon.ratio) ? icon.ratio : 0);
+    const time = Number.isFinite(icon.remaining) ? icon.remaining : (Number.isFinite(icon.ratio) ? icon.ratio : 0);
+    return time + priority;
   }
 
   function getStatusDef(statusIdOrName) {
@@ -664,7 +672,16 @@
       remaining: options.remaining,
       stack: options.stack,
       permanent: options.permanent,
+      durationless: options.durationless,
+      sortPriority: options.sortPriority,
     };
+  }
+
+  function isPoisonStatusActive(unit) {
+    return Boolean(unit && (
+      unit.poisonActive ||
+      ((unit.poisonDamageHpRatio || 0) > 0 && (unit.poisonTickRate || 0) > 0)
+    ));
   }
 
   function getStatusIcons(unit) {
@@ -689,11 +706,11 @@
       const sleepMax = Math.max(0.1, unit.sleepMax || unit.sleepTimer);
       icons.push(makeStatusIcon(unit, "debuff_sleep", { ratio: unit.sleepTimer / sleepMax, remaining: unit.sleepTimer }));
     }
-    if (unit.poisonActive) {
-      icons.push(makeStatusIcon(unit, "debuff_poison", { ratio: 1, permanent: true }));
+    if (isPoisonStatusActive(unit)) {
+      icons.push(makeStatusIcon(unit, "debuff_poison", { ratio: 1, permanent: true, durationless: true, sortPriority: 90 }));
     }
     if ((unit.woundStacks || 0) > 0) {
-      icons.push(makeStatusIcon(unit, "debuff_wound", { ratio: 1, stack: unit.woundStacks, permanent: true }));
+      icons.push(makeStatusIcon(unit, "debuff_wound", { ratio: 1, stack: unit.woundStacks, permanent: true, durationless: true, sortPriority: 80 }));
     }
     if ((unit.plantStage || 0) > 0) {
       icons.push(makeStatusIcon(unit, "debuff_plant", {
@@ -701,6 +718,8 @@
         name: getPlantStatusName(unit),
         ratio: 1,
         permanent: true,
+        durationless: true,
+        sortPriority: 70,
       }));
     }
     if ((unit.contemptStacks || 0) > 0 && (unit.contemptTimer || 0) > 0) {
@@ -708,7 +727,7 @@
       icons.push(makeStatusIcon(unit, "buff_contempt", { ratio: unit.contemptTimer / contemptMax, remaining: unit.contemptTimer, stack: unit.contemptStacks }));
     }
     if ((unit.regretTimer || 0) > 0) {
-      icons.push(makeStatusIcon(unit, "debuff_regret", { ratio: 1, permanent: true }));
+      icons.push(makeStatusIcon(unit, "debuff_regret", { ratio: 1, permanent: true, durationless: true, sortPriority: 60 }));
     }
     if ((unit.sorrowTimer || 0) > 0) {
       const sorrowMax = Math.max(0.1, unit.sorrowMax || unit.sorrowTimer);
@@ -830,7 +849,7 @@
     const description = formatDescriptionText(getTooltipDescription(icon), icon.unit, icon);
     pushTooltipText(lines, description || "説明文は未設定");
     if (icon.permanent) {
-      lines.push("常時効果");
+      lines.push(icon.durationless ? "解除まで継続" : "常時効果");
     }
     if ((icon.stack || 0) > 1) {
       lines.push(`スタック: ${icon.stack}`);
@@ -1224,20 +1243,44 @@
     const ultimateCost = unit ? getUltimateCost(unit) : 100;
     const ratio = unit && ultimateCost > 0 ? clamp(unit.ult / ultimateCost, 0, 1) : 0;
     const ready = Boolean(unit && ratio >= 1);
-    const disabled = !unit || unit.dead || unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || (unit.id !== "finald" && unit.mood !== null && unit.mood <= 50);
+    const moodLocked = Boolean(unit && unit.id !== "finald" && unit.mood !== null && unit.mood < 40);
+    const hardDisabled = !unit || unit.dead || unit.frozen > 0 || (unit.sleepTimer || 0) > 0;
+    const disabled = hardDisabled || moodLocked;
+    const available = ready && !disabled;
     const key = unit ? getBattleActionLabel(getUltimateActionId(unit.id), ULTIMATE_KEYS[unit.id]) : "";
 
-    ctx.fillStyle = ready && !disabled ? "#eaffff" : "rgba(247,255,246,0.62)";
-    ctx.strokeStyle = ready && !disabled ? "rgba(115,223,255,0.92)" : disabled ? "rgba(255,107,107,0.62)" : "rgba(115,223,255,0.52)";
-    ctx.lineWidth = ready && !disabled ? 2 : 1.4;
+    ctx.fillStyle = available
+      ? "#f2ffff"
+      : moodLocked
+        ? "rgba(74,61,66,0.78)"
+        : "rgba(247,255,246,0.62)";
+    ctx.strokeStyle = available
+      ? "rgba(115,223,255,0.98)"
+      : moodLocked
+        ? "rgba(255,107,107,0.76)"
+        : hardDisabled
+          ? "rgba(255,107,107,0.62)"
+          : "rgba(115,223,255,0.52)";
+    ctx.lineWidth = available ? 2.4 : 1.4;
     roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
     drawSkillCooldownShadow(x, y, w, h, 1 - ratio);
     drawSkillInputBadge(String(key).toUpperCase(), x + 7, y + 7, w - 14);
 
+    if (available) {
+      ctx.save();
+      ctx.shadowColor = "#73dfff";
+      ctx.shadowBlur = 13;
+      ctx.strokeStyle = "rgba(115,223,255,0.72)";
+      ctx.lineWidth = 1.6;
+      roundRect(x + 3, y + 3, w - 6, h - 6, 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const iconR = Math.min(w * 0.21, h * 0.17, 15);
-    ctx.fillStyle = ready && !disabled ? "#73dfff" : "rgba(115,223,255,0.58)";
+    ctx.fillStyle = available ? "#73dfff" : moodLocked ? "rgba(255,107,107,0.72)" : "rgba(115,223,255,0.58)";
     ctx.strokeStyle = "rgba(9,14,13,0.5)";
     ctx.lineWidth = 1.1;
     ctx.beginPath();
@@ -1250,9 +1293,12 @@
     ctx.textBaseline = "middle";
     ctx.fillText(skill ? getSkillIconLabel(skill) : "必", x + w / 2, y + h * 0.34 + 0.5);
 
-    drawFittedText(skill ? skill.name : "必殺技", x + w / 2, y + h * 0.6, w - 10, 900, 11, 8, "#102018", "center");
-    drawFittedText(skill && skill.skillType ? skill.skillType : "必殺技", x + w / 2, y + h * 0.78, w - 10, 800, 10, 7, "#4c6758", "center");
+    const mainTextColor = moodLocked ? "#ffe4e4" : "#102018";
+    const subTextColor = moodLocked ? "#ffd0d0" : "#4c6758";
+    drawFittedText(skill ? skill.name : "必殺技", x + w / 2, y + h * 0.6, w - 10, 900, 11, 8, mainTextColor, "center");
+    drawFittedText(skill && skill.skillType ? skill.skillType : "必殺技", x + w / 2, y + h * 0.78, w - 10, 800, 10, 7, subTextColor, "center");
     drawSkillLevelBadge(x + w - 5, y + h - 5, entry.level || 0);
+    drawUltimateStateBadge(x, y, w, h, available, moodLocked);
 
     if (unit) {
       statusUiButtons.push({
@@ -1268,9 +1314,46 @@
         skill,
         level: entry.level || 0,
         gauge: true,
-        text: ready ? "OK" : "準備中",
+        text: moodLocked ? "調子不足" : ready ? "OK" : "準備中",
       }, x, y, w, h);
     }
+  }
+
+  function drawUltimateStateBadge(x, y, w, h, available, moodLocked) {
+    if (!available && !moodLocked) {
+      return;
+    }
+    const label = available ? "OK" : "不調";
+    const badgeW = available ? 25 : 32;
+    const badgeH = 15;
+    ctx.save();
+    ctx.shadowColor = available ? "#73dfff" : "#ff6b6b";
+    ctx.shadowBlur = available ? 9 : 5;
+    ctx.strokeStyle = available ? "rgba(115,223,255,0.9)" : "rgba(255,107,107,0.8)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 9, y + h - 7);
+    ctx.lineTo(x + w - 9, y + h - 7);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    if (w < badgeW + 38) {
+      ctx.restore();
+      return;
+    }
+    const bx = x + w - badgeW - 6;
+    const by = y + 6;
+    ctx.fillStyle = available ? "#73dfff" : "rgba(255,107,107,0.92)";
+    ctx.strokeStyle = available ? "#f2ffff" : "rgba(255,230,230,0.9)";
+    ctx.lineWidth = 1;
+    roundRect(bx, by, badgeW, badgeH, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = available ? "#102018" : "#240b0b";
+    ctx.font = "900 9px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, bx + badgeW / 2, by + badgeH / 2 + 0.5);
+    ctx.restore();
   }
   function drawItemPanel(x, y, w, h) {
     const slots = Array.isArray(game.itemSlots) ? game.itemSlots : [];

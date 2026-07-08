@@ -12,7 +12,7 @@
       attack: {
         id: "shock", key: "attack", owner: "finald", name: "ショック", rank: "D", category: "通常攻撃", skillType: "範囲攻撃",
         requiredWeaponItemIds: ["default_a"],
-        cd: 2, cast: 1, cost: 15, range: px(200), radius: px(54), burstRadius: px(62),
+        cd: 6, cast: 1, cost: 15, range: px(200), radius: px(54), burstRadius: px(62),
         damageBase: 16, magicScale: 0.28, color: "#9ef7ff", lines: ["ショック"], damageType: "magic",
         formula: [{ text: "16 + 魔力 * 0.28", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "１秒の詠唱を行った後、指定した範囲内の敵に衝撃を与え、(式=値)の魔法ダメージを与える。",
@@ -115,7 +115,7 @@
       attack: {
         id: "speed_slash", key: "attack", owner: "ulpes", name: "ウルペスラッシュ", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
         requiredWeaponItemIds: ["default_u"],
-        cd: 2, range: px(52), hitRange: px(62), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.23, lines: ["ウルペスラッシュ"], damageType: "physical",
+        cd: 6, range: px(52), hitRange: px(62), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.23, lines: ["ウルペスラッシュ"], damageType: "physical",
         formula: [{ text: "8 + 攻撃力 * 0.23", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "指定した対象に(式=値)の切りつけ攻撃を２回行い、物理ダメージを与える。",
         simpleDescription: "指定した対象に２回の切りつけ攻撃を行い、物理ダメージを与える。",
@@ -147,7 +147,7 @@
       attack: {
         id: "huriharai", key: "attack", owner: "rihas", name: "振り払い", rank: "D", category: "通常攻撃", skillType: "範囲攻撃",
         requiredWeaponItemIds: ["default_r"],
-        cd: 2, range: px(65), radius: px(65), cast: 0, damageBase: 20, attackScale: 0.53, burstRadius: px(72), lines: ["振り払い"], damageType: "physical",
+        cd: 6, range: px(65), radius: px(65), cast: 0, damageBase: 20, attackScale: 0.53, burstRadius: px(72), lines: ["振り払い"], damageType: "physical",
         formula: [{ text: "20 + 攻撃力 * 0.53", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "周囲を振り払い、自身を中心とした一定範囲内の敵に(式=値)の物理ダメージを与える。",
         simpleDescription: "周囲を振り払い、範囲内の敵に物理ダメージを与える。",
@@ -181,7 +181,7 @@
       attack: {
         id: "masic_shot", key: "attack", owner: "sushia", name: "魔力弾", rank: "D", category: "通常攻撃", skillType: "方向指定攻撃",
         requiredWeaponItemIds: ["default_s"],
-        cd: 2, cost: 20, range: px(340), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(16), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 15, magicScale: 0.45, life: rangeLife(340, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic",
+        cd: 6, cost: 20, range: px(340), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(16), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 15, magicScale: 0.45, life: rangeLife(340, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic",
         formula: [{ text: "15 + 魔力 * 0.45", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "１秒の詠唱を行った後、魔力で生成した弾を発射する。当たった敵に(式=値)の魔法ダメージを与える。魔力弾は敵に当たるか最大射程まで飛ぶと消滅する。",
         simpleDescription: "詠唱後、魔力で生成された弾を発射する。",
@@ -224,7 +224,7 @@
     weapon: {
       hornRabbitKnife: {
         id: "horn_rabbit_attack_knife", key: "hornRabbitKnife", owner: "weapon", name: "突き刺し", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(50), damageBase: 13, attackScale: 0.5, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["突き刺し"], damageType: "physical",
+        cd: 6, range: px(50), damageBase: 13, attackScale: 0.5, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["突き刺し"], damageType: "physical",
         formula: [{ text: "13 + 攻撃力 * 0.5 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "敵に剣を突き刺し、(式=値)の物理ダメージを与える。",
         simpleDescription: "敵に剣を突き刺し、物理ダメージを与える。",
@@ -233,7 +233,7 @@
       },
       hornRabbitSword: {
         id: "horn_rabbit_attack_sword", key: "hornRabbitSword", owner: "weapon", name: "振りかざし", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["振りかざし"], damageType: "physical",
+        cd: 6, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["振りかざし"], damageType: "physical",
         formula: [{ text: "10 + 攻撃力 * 0.6 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "1秒のチャージ後、敵に剣を振りかざし、(式=値)の物理ダメージを与える。",
         simpleDescription: "少しのチャージを行い、敵に剣を振りかざし、物理ダメージを与える。",
@@ -242,7 +242,7 @@
       },
       hornRabbitFist: {
         id: "horn_rabbit_attack_fist", key: "hornRabbitFist", owner: "weapon", name: "顔面パンチ", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(40), damageBase: 14, attackScale: 0.55, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["顔面パンチ"], damageType: "physical",
+        cd: 6, range: px(40), damageBase: 14, attackScale: 0.55, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["顔面パンチ"], damageType: "physical",
         formula: [{ text: "14 + 攻撃力 * 0.55 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "敵の顔を殴り、(式=値)の物理ダメージを与える。",
         simpleDescription: "敵の顔を殴り、物理ダメージを与える。",
@@ -251,7 +251,7 @@
       },
       hornRabbitStaff: {
         id: "horn_rabbit_attack_staff", key: "hornRabbitStaff", owner: "weapon", name: "2連打撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["2連打撃"], damageType: "physical",
+        cd: 6, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], lines: ["2連打撃"], damageType: "physical",
         formula: [{ text: "8 + 攻撃力 * 0.2 * (1 + 対象の減少HP割合 / 4)", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "棒具を振り、端を2回ずつ当て、(式=値)の物理ダメージを2度与える。",
         simpleDescription: "棒具を振り、端を1回ずつ当て、物理ダメージを与える。",
@@ -260,7 +260,7 @@
       },
       hornRabbitStick: {
         id: "horn_rabbit_attack_stick", key: "hornRabbitStick", owner: "weapon", name: "魔力弾", rank: "D", category: "通常攻撃", skillType: "方向指定攻撃",
-        cd: 2, cost: 25, range: px(350), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(12), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.5, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], life: rangeLife(350, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic",
+        cd: 6, cost: 25, range: px(350), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(12), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.5, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], life: rangeLife(350, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic",
         formula: [{ text: "10 + 魔力 * 0.5 * (1 + 対象の減少HP割合 / 4)", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "１秒の詠唱を行った後、指定した方向に魔力で生成した弾を発射する。当たった敵に(式=値)の魔法ダメージを与える。魔力弾は敵に当たるか最大射程まで飛ぶと消滅する。",
         simpleDescription: "詠唱後、魔力で生成された弾を発射する。",
@@ -269,7 +269,7 @@
       },
       hornRabbitBook: {
         id: "horn_rabbit_attack_book", key: "hornRabbitBook", owner: "weapon", name: "ショック", rank: "D", category: "通常攻撃", skillType: "範囲攻撃",
-        cd: 2, cost: 20, range: px(230), radius: px(60), burstRadius: px(68), cast: 1, damageBase: 10, magicScale: 0.35, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], color: "#9ef7ff", lines: ["ショック"], damageType: "magic",
+        cd: 6, cost: 20, range: px(230), radius: px(60), burstRadius: px(68), cast: 1, damageBase: 10, magicScale: 0.35, missingHpScale: 0.25, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], color: "#9ef7ff", lines: ["ショック"], damageType: "magic",
         formula: [{ text: "10 + 魔力 * 0.35 * (1 + 対象の減少HP割合 / 4)", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "1秒の詠唱後、指定した範囲内の敵に衝撃を与え、(式=値)の魔法ダメージを与える。",
         simpleDescription: "詠唱後、指定した範囲内の敵に衝撃を与え、魔法ダメージを与える。",
@@ -278,7 +278,7 @@
       },
       hornRabbitFlute: {
         id: "horn_rabbit_attack_flute", key: "hornRabbitFlute", owner: "weapon", name: "魔力中和音", rank: "D", category: "通常攻撃", skillType: "範囲デバフ",
-        cd: 2, cost: 20, range: px(0), radius: px(200), burstRadius: px(208), cast: 0.5, center: "self", magicNeutralizeBase: 0.05, magicNeutralizePerLevel: 0.01, magicNeutralizeDuration: 4, lines: ["魔力中和音"], statusIds: ["debuff_magic_neutralize"],
+        cd: 6, cost: 20, range: px(0), radius: px(200), burstRadius: px(208), cast: 0.5, center: "self", magicNeutralizeBase: 0.05, magicNeutralizePerLevel: 0.01, magicNeutralizeDuration: 4, lines: ["魔力中和音"], statusIds: ["debuff_magic_neutralize"],
         description: "詠唱後、周囲の敵の魔力を中和し、4秒間対象の魔力を5%減少させる。",
         simpleDescription: "詠唱後、周囲の敵の魔力を中和し、4秒間魔力を減少させる。",
         upgradeSimpleDescription: "レベルが上がるごとに魔力の中和効果が上昇する",
@@ -286,7 +286,7 @@
       },
       budAlrauneKnife: {
         id: "bud_alraune_attack_knife", key: "budAlrauneKnife", owner: "weapon", name: "突き刺し", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(50), damageBase: 13, attackScale: 0.5, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, lines: ["突き刺し"], damageType: "physical", statusIds: ["debuff_sleep"],
+        cd: 6, range: px(50), damageBase: 13, attackScale: 0.5, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, lines: ["突き刺し"], damageType: "physical", statusIds: ["debuff_sleep"],
         formula: [{ text: "13 + 攻撃力 * 0.5", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "敵に剣を突き刺し、(式=値)の物理ダメージを与える。20%の確率で敵に3秒の\"睡眠\"を付与する。",
         simpleDescription: "敵に剣を突き刺し、物理ダメージを与える。まれに敵に\"睡眠\"を付与する。",
@@ -295,7 +295,7 @@
       },
       budAlrauneSword: {
         id: "bud_alraune_attack_sword", key: "budAlrauneSword", owner: "weapon", name: "振りかざし", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, lines: ["振りかざし"], damageType: "physical", statusIds: ["debuff_sleep"],
+        cd: 6, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, lines: ["振りかざし"], damageType: "physical", statusIds: ["debuff_sleep"],
         formula: [{ text: "10 + 攻撃力 * 0.6", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "1秒のチャージ後、敵に剣を振りかざし、(式=値)の物理ダメージを与える。20%の確率で敵に3秒の\"睡眠\"を付与する。",
         simpleDescription: "少しのチャージを行い、敵に剣を振りかざし、物理ダメージを与える。まれに\"睡眠\"を付与する。",
@@ -304,7 +304,7 @@
       },
       budAlrauneFist: {
         id: "bud_alraune_attack_fist", key: "budAlrauneFist", owner: "weapon", name: "顔面パンチ", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(40), damageBase: 14, attackScale: 0.55, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, lines: ["顔面パンチ"], damageType: "physical", statusIds: ["debuff_sleep"],
+        cd: 6, range: px(40), damageBase: 14, attackScale: 0.55, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, lines: ["顔面パンチ"], damageType: "physical", statusIds: ["debuff_sleep"],
         formula: [{ text: "14 + 攻撃力 * 0.55", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "敵の顔を殴り、(式=値)の物理ダメージを与える。20%の確率で敵に3秒の\"睡眠\"を付与する。",
         simpleDescription: "敵の顔を殴り、物理ダメージを与える。まれに\"睡眠\"を付与する。",
@@ -313,7 +313,7 @@
       },
       budAlrauneStaff: {
         id: "bud_alraune_attack_staff", key: "budAlrauneStaff", owner: "weapon", name: "2連打撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, sleepFirstRepeatOnly: true, sleepWakeBonusAttackScale: 0.15, lines: ["2連打撃"], damageType: "physical", statusIds: ["debuff_sleep"],
+        cd: 6, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, sleepFirstRepeatOnly: true, sleepWakeBonusAttackScale: 0.15, lines: ["2連打撃"], damageType: "physical", statusIds: ["debuff_sleep"],
         formula: [{ text: "8 + 攻撃力 * 0.2", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "棒具を振り、端を2回ずつ当て、(式=値)の物理ダメージを2度与える。20%ずつの確率で敵に3秒の\"睡眠\"を付与する。1回目で\"睡眠\"を付与した場合、2回目のダメージが攻撃力 * 0.15分上昇し、この2回目では\"睡眠\"を付与しない。",
         simpleDescription: "棒具を振り、端を1回ずつ当て、物理ダメージを与える。まれに\"睡眠\"を付与する。",
@@ -322,7 +322,7 @@
       },
       budAlrauneStick: {
         id: "bud_alraune_attack_stick", key: "budAlrauneStick", owner: "weapon", name: "魔力弾", rank: "D", category: "通常攻撃", skillType: "方向指定攻撃",
-        cd: 2, cost: 25, range: px(350), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(12), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.5, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, life: rangeLife(350, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic", statusIds: ["debuff_sleep"],
+        cd: 6, cost: 25, range: px(350), cast: 1, projectileCount: 1, spread: 0, lineWidth: px(12), projectileSpeed: px(360), projectileRadius: px(5), damageBase: 10, magicScale: 0.5, sleepChanceBase: 0.2, sleepChancePerLevel: 0.05, sleepDuration: 3, life: rangeLife(350, 360), color: "#d9afff", lines: ["魔力弾"], damageType: "magic", statusIds: ["debuff_sleep"],
         formula: [{ text: "10 + 魔力 * 0.5", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "1秒の詠唱を行った後、指定した方向に魔力で生成した弾を発射する。当たった敵に(式=値)の魔法ダメージを与える。魔力弾は敵に当たるか最大射程まで飛ぶと消滅する。20%の確率で敵に3秒の\"睡眠\"を付与する。",
         simpleDescription: "詠唱後、魔力で生成された弾を発射する。まれに\"睡眠\"を付与する。",
@@ -331,7 +331,7 @@
       },
       budAlrauneBook: {
         id: "bud_alraune_attack_book", key: "budAlrauneBook", owner: "weapon", name: "ショック", rank: "D", category: "通常攻撃", skillType: "範囲攻撃",
-        cd: 2, cost: 20, range: px(230), radius: px(60), burstRadius: px(68), cast: 1, damageBase: 10, magicScale: 0.35, sleepChanceBase: 0.15, sleepChancePerLevel: 0.05, sleepDuration: 2, color: "#9ef7ff", lines: ["ショック"], damageType: "magic", statusIds: ["debuff_sleep"],
+        cd: 6, cost: 20, range: px(230), radius: px(60), burstRadius: px(68), cast: 1, damageBase: 10, magicScale: 0.35, sleepChanceBase: 0.15, sleepChancePerLevel: 0.05, sleepDuration: 2, color: "#9ef7ff", lines: ["ショック"], damageType: "magic", statusIds: ["debuff_sleep"],
         formula: [{ text: "10 + 魔力 * 0.35", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "1秒の詠唱後、指定した範囲内の敵に衝撃を与え、(式=値)の魔法ダメージを与える。15%の確率で敵に2秒の\"睡眠\"を付与する。",
         simpleDescription: "詠唱後、指定した範囲内の敵に衝撃を与え、魔法ダメージを与える。まれに\"睡眠\"を付与する。",
@@ -340,7 +340,7 @@
       },
       budAlrauneFlute: {
         id: "bud_alraune_attack_flute", key: "budAlrauneFlute", owner: "weapon", name: "目覚まし", rank: "D", category: "通常攻撃", skillType: "範囲バフ",
-        cd: 2, cost: 20, range: px(0), radius: px(220), burstRadius: px(228), cast: 0.2, center: "self", arcDeg: 90, sleepCleanse: true, sleepCleanseArcBonusPerLevel: 6, lines: ["目覚まし"], statusIds: ["debuff_sleep"],
+        cd: 8, cost: 20, range: px(0), radius: px(220), burstRadius: px(228), cast: 0.2, center: "self", arcDeg: 90, sleepCleanse: true, sleepCleanseArcBonusPerLevel: 6, lines: ["目覚まし"], statusIds: ["debuff_sleep"],
         description: "詠唱後、周囲の味方に大きな音を出し、\"睡眠\"が付与されている場合、即座に解除する。",
         simpleDescription: "詠唱後、周囲の味方に大きな音を出し、味方に付与されている\"睡眠\"を解除する。",
         upgradeSimpleDescription: "レベルが上がるごとにスキルの範囲が拡大する",
@@ -348,7 +348,7 @@
       },
       shadowWolfKnife: {
         id: "shadow_wolf_attack_knife", key: "shadowWolfKnife", owner: "weapon", name: "突き刺し", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(50), damageBase: 13, attackScale: 0.5, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["突き刺し"], damageType: "physical", statusIds: ["debuff_Injury"],
+        cd: 6, range: px(50), damageBase: 13, attackScale: 0.5, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["突き刺し"], damageType: "physical", statusIds: ["debuff_Injury"],
         formula: [{ text: "13 + 攻撃力 * 0.5", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "敵に剣を突き刺し、(式=値)の物理ダメージを与え、3秒の\"負傷\"を付与する。",
         simpleDescription: "敵に剣を突き刺し、物理ダメージを与え、\"負傷\"を付与する。",
@@ -357,7 +357,7 @@
       },
       shadowWolfSword: {
         id: "shadow_wolf_attack_sword", key: "shadowWolfSword", owner: "weapon", name: "振りかざし", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["振りかざし"], damageType: "physical", statusIds: ["debuff_Injury"],
+        cd: 6, cast: 1, range: px(65), damageBase: 10, attackScale: 0.6, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["振りかざし"], damageType: "physical", statusIds: ["debuff_Injury"],
         formula: [{ text: "10 + 攻撃力 * 0.6", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "1秒のチャージ後、敵に剣を振りかざし、(式=値)の物理ダメージを与え、3秒の\"負傷\"を付与する。",
         simpleDescription: "少しのチャージを行い、敵に剣を振りかざし、物理ダメージを与え、\"負傷\"を付与する。",
@@ -366,7 +366,7 @@
       },
       shadowWolfFist: {
         id: "shadow_wolf_attack_fist", key: "shadowWolfFist", owner: "weapon", name: "顔面パンチ", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(40), damageBase: 14, attackScale: 0.55, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["顔面パンチ"], damageType: "physical", statusIds: ["debuff_Injury"],
+        cd: 6, range: px(40), damageBase: 14, attackScale: 0.55, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["顔面パンチ"], damageType: "physical", statusIds: ["debuff_Injury"],
         formula: [{ text: "14 + 攻撃力 * 0.55", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "敵の顔を殴り、(式=値)の物理ダメージを与え、3秒の\"負傷\"を付与する。",
         simpleDescription: "敵の顔を殴り、物理ダメージを与え、\"負傷\"を付与する。",
@@ -375,7 +375,7 @@
       },
       shadowWolfStaff: {
         id: "shadow_wolf_attack_staff", key: "shadowWolfStaff", owner: "weapon", name: "2連打撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 2, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["2連打撃"], damageType: "physical", statusIds: ["debuff_Injury"],
+        cd: 6, range: px(55), hitRange: px(65), repeat: 2, repeatDelayMs: 120, damageBase: 8, attackScale: 0.2, injuryDuration: 3, injuryDurationPerLevel: 1, lines: ["2連打撃"], damageType: "physical", statusIds: ["debuff_Injury"],
         formula: [{ text: "8 + 攻撃力 * 0.2", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
         description: "棒具を振り、端を2回ずつ当て、(式=値)の物理ダメージを2度与える。命中した敵に3秒の\"負傷\"を付与する。",
         simpleDescription: "棒具を振り、端を1回ずつ当て、物理ダメージを与え、\"負傷\"を付与する。",
@@ -384,7 +384,7 @@
       },
       shadowWolfFlute: {
         id: "shadow_wolf_attack_flute", key: "shadowWolfFlute", owner: "weapon", name: "遠吠え", rank: "D", category: "通常攻撃", skillType: "範囲バフ",
-        cd: 2, cost: 60, range: px(0), radius: px(150), burstRadius: px(158), cast: 3, center: "self", actionCdSetTo: 0.3, castReductionPerLevel: 0.5, lines: ["遠吠え"],
+        cd: 10, cost: 60, range: px(0), radius: px(150), burstRadius: px(158), cast: 3, center: "self", actionCdSetTo: 0.3, castReductionPerLevel: 0.5, lines: ["遠吠え"],
         description: "3秒の詠唱後、範囲内の味方の行動CDが残り0.3秒以上の場合、即座に残り0.3秒にまで短縮する。",
         simpleDescription: "詠唱後、範囲内の味方の行動CDを短縮する。",
         upgradeSimpleDescription: "レベルが上がるごとに詠唱時間が短縮される",
@@ -433,7 +433,7 @@
       },
       vine_whip: {
         id: "vine_whip", key: "vine_whip", owner: "enemy", name: "ツル鞭", rank: "D", category: "スキル", skillType: "単体攻撃",
-        cd: 8, range: px(150), damageBase: 15, attackScale: 0.3, damageType: "physical", lines: ["ツル鞭"],
+        cd: 10, range: px(150), damageBase: 15, attackScale: 0.4, damageType: "physical", lines: ["ツル鞭"],
       },
       poisonous_stinger: {
         id: "poisonous_stinger", key: "poisonous_stinger", owner: "enemy", name: "毒針", rank: "D", category: "スキル", skillType: "単体攻撃",
@@ -445,23 +445,23 @@
       },
       sowing_seeds: {
         id: "sowing_seeds", key: "sowing_seeds", owner: "enemy", name: "種まき", rank: "D", category: "スキル", skillType: "範囲攻撃",
-        cd: 25, range: px(0), radius: px(500), damageBase: 5, attackScale: 0.05, enemyArea: true, plantApply: true, plantNoOverwrite: true, damageType: "physical", lines: ["種まき"], statusIds: ["debuff_plant"],
+        cd: 40, range: px(0), radius: px(500), damageBase: 5, attackScale: 0.1, enemyArea: true, plantApply: true, plantNoOverwrite: true, damageType: "physical", lines: ["種まき"], statusIds: ["debuff_plant"],
       },
       welcome_rain: {
         id: "welcome_rain", key: "welcome_rain", owner: "enemy", name: "恵みの雨", rank: "D", category: "スキル", skillType: "範囲攻撃",
-        cd: 15, cast: 1, range: px(0), radius: px(400), damageBase: 10, magicScale: 0.2, enemyArea: true, plantUpgrade: true, damageType: "magic", lines: ["恵みの雨"], statusIds: ["debuff_plant"],
+        cd: 13, cast: 1, range: px(0), radius: px(400), damageBase: 10, magicScale: 0.2, enemyArea: true, plantUpgrade: true, damageType: "magic", lines: ["恵みの雨"],
       },
       dappled_sunlight: {
         id: "dappled_sunlight", key: "dappled_sunlight", owner: "enemy", name: "木漏れ日", rank: "D", category: "スキル", skillType: "範囲回復",
-        cd: 15, cast: 1, range: px(0), radius: px(600), healBase: 10, magicScale: 0.3, selfHealMultiplier: 3, enemyArea: true, affectsEveryone: true, plantUpgrade: true, lines: ["木漏れ日"], statusIds: ["debuff_plant"],
+        cd: 10, cast: 1, range: px(0), radius: px(600), healBase: 10, magicScale: 0.3, selfHealMultiplier: 5, enemyArea: true, affectsEveryone: true, plantUpgrade: true, lines: ["木漏れ日"],
       },
       intertwined_roots: {
         id: "intertwined_roots", key: "intertwined_roots", owner: "enemy", name: "絡み合う根", rank: "D", category: "スキル", skillType: "範囲攻撃",
-        cd: 15, cast: 1, range: px(0), radius: px(350), damageBase: 10, attackScale: 0.2, enemyArea: true, plantUpgrade: true, damageType: "physical", lines: ["絡み合う根"], statusIds: ["debuff_plant"],
+        cd: 16, cast: 1, range: px(0), radius: px(350), damageBase: 10, attackScale: 0.2, enemyArea: true, plantUpgrade: true, actionSpeedDownRatio: 0.15, actionSpeedDownDuration: 5, damageType: "physical", lines: ["絡み合う根"],
       },
       picking_flowers: {
         id: "picking_flowers", key: "picking_flowers", owner: "enemy", name: "お花摘み", rank: "D", category: "スキル", skillType: "単体攻撃",
-        cd: 10, range: px(700), damageBase: 10, attackScale: 0.1, requiresFullPlant: true, removePlantOnHit: true, woundStacks: 1, forcedFlowerSkill: true, damageType: "physical", lines: ["お花摘み"], statusIds: ["debuff_wound"],
+        cd: 1, range: px(700), damageBase: 10, attackScale: 0.1, requiresFullPlant: true, removePlantOnHit: true, woundStacks: 1, forcedFlowerSkill: true, damageType: "physical", lines: ["お花摘み"], statusIds: ["debuff_wound"],
       },
       rue: {
         id: "rue", key: "rue", owner: "enemy", name: "ヘンルーダ", rank: "D", category: "スキル", skillType: "単体攻撃",
@@ -528,15 +528,35 @@
   window.HEALER_PASSIVE_DATA = {
     finald: {
       hilment: { id: "hilment_passive", key: "hilment", owner: "finald", name: "ヒルメント", selfHealRatio: 0.3, description: "味方に与えた回復効果の30%分、自身の体力を回復する。味方の体力を超過した回復効果はこの効果に含まれない。", simpleDescription: "味方に与えた回復効果の一部を自身の体力を回復する。" },
+      lightweight_buff: {
+        id: "lightweight_buff", key: "lightweight_buff", owner: "finald", name: "身軽援助", rank: "D", category: "パッシブ", skillType: "自己強化",
+        description: "MP再生率-4%で移動速度+30%、詠唱速度+50%のバフを自身に与える。",
+        simpleDescription: "MPを消費し続け、移動速度と詠唱速度を上昇させる。",
+      },
     },
     ulpes: {
       swordwork: { id: "hero_critical_passive", key: "swordwork", owner: "ulpes", name: "慣れた剣捌き", description: "会心率が2倍になる。代わりに会心ダメージが半分減少する。", simpleDescription: "会心率が増加する。代わりに会心ダメージが低下する" },
+      number_of_times: {
+        id: "number_of_times", key: "number_of_times", owner: "ulpes", name: "手数勝負", rank: "D", category: "パッシブ", skillType: "自己強化",
+        description: "行動速度+50%、スキル速度+50%上昇する。代わりに与ダメージ率-40%。",
+        simpleDescription: "行動回数が増える代わりに1回あたりのダメージが低下する。",
+      },
     },
     rihas: {
       painless: { id: "damage_dot_passive", key: "painless", owner: "rihas", name: "痛みなし", statusIds: ["buff_itaminasi"], description: "受けるダメージの1/3を5分割にし、1秒ごとの遅延ダメージで受ける。遅延ダメージは最低1ダメージ。HPが減るたびに３秒間持続する\"逆境\"を１スタック獲得する。", simpleDescription: "受けるダメージの一部を分割して受ける\nHPが減るたびに\"逆境\"を獲得する" },
+      gouken: {
+        id: "gouken", key: "gouken", owner: "rihas", name: "剛拳", rank: "D", category: "パッシブ", skillType: "状態付与", requiredWeapons: ["拳具"], statusIds: ["debuff_sleep"],
+        description: "敵に3回物理ダメージを与えるたびに6秒の\"睡眠\"を付与する。",
+        simpleDescription: "敵に物理ダメージを与え続けると\"睡眠\"を付与する。",
+      },
     },
     sushia: {
       warmup: { id: "warmup_passive", key: "warmup", owner: "sushia", name: "あったまってきたよ！", statusIds: ["buff_warmup"], description: "敵に魔法ダメージを与えるたびに８秒間持続する\"ウォームアップ\"を１スタック獲得する。", simpleDescription: "敵に魔法ダメージを与えるたびに\"ウォームアップ\"を獲得する。" },
+      magic_add_on: {
+        id: "magic_add_on", key: "magic_add_on", owner: "sushia", name: "魔力上乗せ", rank: "D", category: "パッシブ", skillType: "自己強化",
+        description: "魔法与ダメージ率が20%上昇する。代わりに詠唱速度-50%、消費MP量+30%。",
+        simpleDescription: "詠唱にかかる時間と消費MPが増加する代わりに与える魔法ダメージが増加する。",
+      },
     },
   };
 

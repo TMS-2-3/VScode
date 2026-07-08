@@ -189,8 +189,12 @@
       unit.magicNeutralizeTimer = 0;
       unit.magicNeutralizeMax = 0;
       unit.magicNeutralizeRatio = 0;
+      unit.actionSpeedDownTimer = 0;
+      unit.actionSpeedDownMax = 0;
+      unit.actionSpeedDownRatio = 0;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
+      unit.goukenHitCounts = {};
     }
 
     function resetUnitBattleActionState(unit) {
@@ -205,9 +209,12 @@
       unit.itemUseRequest = null;
       unit.itemCast = null;
       unit.cast = null;
+      unit.castVisual = null;
       unit.channel = null;
       unit.pendingActionQueueKey = null;
       unit.skillQueue = [];
+      unit.skillQueueInitialized = false;
+      unit.goukenHitCounts = {};
       unit.forcedEnemySkillKey = null;
       unit.forcedEnemySkillTarget = null;
       unit.absorptionLockTimer = 0;
@@ -356,6 +363,7 @@
         burnSource: null,
         noDamage: 999,
         cast: null,
+        castVisual: null,
         aim: null,
         aiIntent: null,
         aiMoveTarget: null,
@@ -365,6 +373,7 @@
         itemCast: null,
         pendingActionQueueKey: null,
         skillQueue: [],
+        skillQueueInitialized: false,
         selfHealFloat: 0,
         delayedDamageQueue: [],
         field: true,
