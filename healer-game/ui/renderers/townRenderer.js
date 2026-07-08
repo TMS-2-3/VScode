@@ -1021,7 +1021,7 @@
     const items = itemSystem && typeof itemSystem.getItemCandidates === "function"
       ? itemSystem.getItemCandidates()
       : [];
-    return items.filter((item) => item && Number.isFinite(item.price));
+    return items.filter((item) => item && !item.shopHidden && Number.isFinite(item.price));
   }
 
   function getItemShopBuyQuantity(itemId) {
@@ -1294,7 +1294,7 @@
       hpRegenRate: "HP再生率",
       mpRegenRate: "MP再生率",
       castSpeed: "詠唱速度",
-      cooldownReduction: "クールタイム",
+      cooldownReduction: "スキル速度",
       actionSpeed: "行動速度",
       ultimateChargeRate: "ゲージ上昇率",
       moveSpeed: "移動速度",
@@ -1315,7 +1315,7 @@
   }
 
   function isReductionStatKey(key) {
-    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance", "cooldownReduction"].includes(key);
+    return ["damageResistance", "physicalDamageResistance", "magicDamageResistance"].includes(key);
   }
 
   function formatSignedTownPercent(value) {

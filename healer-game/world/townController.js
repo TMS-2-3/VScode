@@ -56,7 +56,7 @@
     const TOWN_WALK_ANIMATION_SEQUENCE = [2, 1, 3, 1];
     const TOWN_WALK_FRAME_INTERVAL = 0.16;
     const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
-    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "Injury"];
+    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury", "debuff_poison", "debuff_wound"];
     function keyLabel(actionId, fallback) {
       return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
     }
@@ -184,10 +184,23 @@
           max: Math.max(member.sleepTimer || 0, member.sleepMax || 0),
         };
       }
-      if (isStatusCarryover("Injury") && (member.injuryTimer || 0) > 0) {
-        statuses.Injury = {
+      if (isStatusCarryover("debuff_Injury") && (member.injuryTimer || 0) > 0) {
+        statuses.debuff_Injury = {
           timer: Math.max(0, member.injuryTimer || 0),
           max: Math.max(member.injuryTimer || 0, member.injuryMax || 0),
+        };
+      }
+      if (isStatusCarryover("debuff_poison") && member.poisonActive) {
+        statuses.debuff_poison = {
+          active: true,
+          tick: Math.max(0, member.poisonTick || 0),
+          tickRate: Math.max(0, member.poisonTickRate || 1),
+          damageHpRatio: Math.max(0, member.poisonDamageHpRatio || 0.01),
+        };
+      }
+      if (isStatusCarryover("debuff_wound") && (member.woundStacks || 0) > 0) {
+        statuses.debuff_wound = {
+          stacks: Math.max(0, Math.floor(member.woundStacks || 0)),
         };
       }
       return statuses;
@@ -737,8 +750,31 @@
         member.burnSource = null;
         member.sleepTimer = 0;
         member.sleepMax = 0;
+        member.poisonActive = false;
+        member.poisonTick = 0;
+        member.poisonTickRate = 1;
+        member.poisonDamageHpRatio = 0;
+        member.poisonSource = null;
+        member.woundStacks = 0;
         member.injuryTimer = 0;
         member.injuryMax = 0;
+        member.plantStage = 0;
+        member.plantSource = null;
+        member.plantUpgradedBy = {};
+        member.contemptStacks = 0;
+        member.contemptTimer = 0;
+        member.contemptMax = 0;
+        member.regretTimer = 0;
+        member.regretMax = 0;
+        member.sorrowTimer = 0;
+        member.sorrowMax = 0;
+        member.sorrowTick = 0;
+        member.reunionTimer = 0;
+        member.reunionMax = 0;
+        member.reunionSource = null;
+        member.absorptionLockTimer = 0;
+        member.forcedEnemySkillKey = null;
+        member.forcedEnemySkillTarget = null;
         member.shadowDashTimer = 0;
         member.shadowDashMax = 0;
         member.rihasPassiveStacks = 0;

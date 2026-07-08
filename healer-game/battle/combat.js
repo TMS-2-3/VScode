@@ -124,6 +124,12 @@
       return options.dotDamage === true || options.dot === true || type.includes("dot") || rawType.includes("ドット");
     }
 
+    function isFixedDamageOptions(options = {}) {
+      const rawType = String(options.damageType || "");
+      const type = rawType.toLowerCase();
+      return options.fixedDamage === true || type.includes("fixed") || rawType.includes("不変");
+    }
+
     function dealDamage(source, target, amount, options = {}) {
       if (!target || target.dead) {
         return 0;
@@ -136,18 +142,26 @@
       const wasTargetAlive = target.hp > 0;
       let finalAmount = amount;
       let criticalHit = false;
+      const dotDamage = isDotDamageOptions(options);
+      const fixedDamage = isFixedDamageOptions(options);
 
       if (shouldRollCritical(source, target, options)) {
         finalAmount *= getCritDamageMultiplier(source);
         criticalHit = true;
       }
 
-      finalAmount = reduceByDefense(target, finalAmount, options.magic);
+      if (!fixedDamage) {
+        finalAmount = reduceByDefense(target, finalAmount, options.magic);
+      }
       finalAmount = applyDamageModifierSum(source, target, finalAmount, options);
       finalAmount *= getElementDamageMultiplier(source, target, options);
       finalAmount *= getFriendlyFireDamageMultiplier(source, target);
 
-      const dotDamage = isDotDamageOptions(options);
+      if (!dotDamage && finalAmount > 0 && (target.woundStacks || 0) > 0) {
+        finalAmount *= 1.5;
+        target.woundStacks = Math.max(0, Math.floor(target.woundStacks || 0) - 1);
+        addFloat("傷口", target.x, target.y - 38, "#e07266");
+      }
       let guarded = false;
       if (!dotDamage && target.team === "party" && target.id !== "finald") {
         guarded = tryGuard(target);
@@ -222,6 +236,9 @@
       }
 
       const rewardDamage = finalAmount + delayedAmount;
+      if (target.chocolateLilyCharging && rewardDamage + shielded > 0) {
+        target.chocolateLilyDamageTaken = Math.max(0, target.chocolateLilyDamageTaken || 0) + rewardDamage + shielded;
+      }
       if (source && source.team === "party") {
         if (target.team === "enemy" && rewardDamage + shielded > 0) {
           awardOffensiveUltimate(source, target, options);
@@ -231,6 +248,7 @@
           source.stackTimer = SUSHIA_PASSIVE_STACK_DURATION;
           source.stackCooldown = SUSHIA_PASSIVE_STACK_COOLDOWN;
         }
+        applyGoukenPassive(source, target, rewardDamage + shielded, options, dotDamage);
         if (source.mood !== null && target.team === "enemy") {
           const hpDamageForMood = Math.min(hpBeforeDamage, Math.max(0, rewardDamage));
           const damageRatio = getHpRatio(hpDamageForMood, target);
@@ -239,6 +257,28 @@
           const hitCap = Math.max(0, Number.isFinite(MOOD_DAMAGE_HIT_CAP) ? MOOD_DAMAGE_HIT_CAP : 2);
           const moodGain = Math.min(hitCap, damageRatio * ratioGain * distanceMult);
           addMoodActionGain(source, moodGain);
+        }
+        if (!dotDamage && target.team === "enemy" && rewardDamage + shielded > 0) {
+          if ((source.contemptStacks || 0) > 0 && (source.contemptTimer || 0) > 0) {
+            source.contemptStacks = Math.max(0, Math.floor(source.contemptStacks || 0) - 1);
+            if (source.contemptStacks <= 0) {
+              source.contemptTimer = 0;
+              source.contemptMax = 0;
+              source.regretTimer = 1;
+              source.regretMax = 1;
+              addFloat("悔恨", source.x, source.y - 34, "#7788c8");
+            }
+          }
+          if ((source.reunionTimer || 0) > 0 && source.reunionSource === target) {
+            target.forcedEnemySkillKey = "absorption_of_reunion";
+            target.forcedEnemySkillTarget = source;
+            target.cds.attack = 0;
+            target.aiIntent = null;
+            source.reunionTimer = 0;
+            source.reunionMax = 0;
+            source.reunionSource = null;
+            addFloat("再会", target.x, target.y - 36, "#d889b9");
+          }
         }
       }
 
@@ -274,6 +314,29 @@
       unit.sleepTimer = 0;
       unit.sleepMax = 0;
       addFloat("睡眠解除", unit.x, unit.y - 34, "#f7fff6");
+    }
+
+    function applyGoukenPassive(source, target, damageAmount, options = {}, dotDamage = false) {
+      if (!source || !target || target.team !== "enemy" || target.hp <= 0 || damageAmount <= 0) {
+        return;
+      }
+      if (!hasPassive(source, "gouken") || dotDamage || options.magic) {
+        return;
+      }
+      if (!source.goukenHitCounts || typeof source.goukenHitCounts !== "object" || Array.isArray(source.goukenHitCounts)) {
+        source.goukenHitCounts = {};
+      }
+      const key = target.id || target.name || "enemy";
+      const next = Math.max(0, Math.floor(source.goukenHitCounts[key] || 0)) + 1;
+      if (next < 3) {
+        source.goukenHitCounts[key] = next;
+        return;
+      }
+      source.goukenHitCounts[key] = 0;
+      const duration = 6;
+      target.sleepTimer = Math.max(target.sleepTimer || 0, duration);
+      target.sleepMax = Math.max(target.sleepMax || 0, duration);
+      addFloat("睡眠", target.x, target.y - 34, "#b9a8ff");
     }
 
     function awardOffensiveUltimate(source, target, options = {}) {

@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   "use strict";
 
   window.createHealerItemSystem = function createHealerItemSystem(context) {
@@ -55,10 +55,95 @@
         reuseCd: 15,
         healFlat: 250,
         price: 50,
+        shopHidden: true,
         cd: 0,
         maxCd: 15,
         simpleDescription: "飲むと体力が回復する。",
         description: "飲むとHPが250回復する。",
+      },
+      wound_medicine: {
+        id: "wound_medicine",
+        name: "傷薬",
+        shortName: "傷",
+        rank: "D",
+        kind: "消耗品",
+        useTiming: "どこでも",
+        target: "self",
+        consumeCount: 1,
+        maxCount: 2,
+        battleMaxCount: 2,
+        cast: 2,
+        reuseCd: 15,
+        healFlat: 150,
+        price: 30,
+        sellPrice: 15,
+        cd: 0,
+        maxCd: 15,
+        simpleDescription: "HPが150回復する。",
+        description: "HPが150回復する。",
+      },
+      magic_herb: {
+        id: "magic_herb",
+        name: "魔力草",
+        shortName: "魔",
+        rank: "D",
+        kind: "消耗品",
+        useTiming: "どこでも",
+        target: "self",
+        consumeCount: 1,
+        maxCount: 2,
+        battleMaxCount: 2,
+        cast: 2,
+        reuseCd: 15,
+        mpFlat: 70,
+        price: 80,
+        sellPrice: 40,
+        cd: 0,
+        maxCd: 15,
+        simpleDescription: "MPが70回復する。",
+        description: "MPが70回復する。",
+      },
+      relax_herb: {
+        id: "relax_herb",
+        name: "リラックス草",
+        shortName: "リ",
+        rank: "D",
+        kind: "消耗品",
+        useTiming: "戦闘中",
+        target: "self",
+        consumeCount: 1,
+        maxCount: 1,
+        battleMaxCount: 1,
+        cast: 3,
+        reuseCd: 0,
+        moodDelta: -15,
+        price: 300,
+        sellPrice: 150,
+        cd: 0,
+        maxCd: 0,
+        simpleDescription: "調子が15減る。",
+        description: "調子が15減る。",
+      },
+      angry_herb: {
+        id: "angry_herb",
+        name: "アングリ草",
+        shortName: "怒",
+        rank: "D",
+        kind: "消耗品",
+        useTiming: "戦闘中",
+        target: "self",
+        consumeCount: 1,
+        maxCount: 1,
+        battleMaxCount: 1,
+        cast: 3,
+        reuseCd: 0,
+        moodDelta: 15,
+        price: 300,
+        sellPrice: 150,
+        cd: 0,
+        maxCd: 0,
+        simpleDescription: "調子が15増える。",
+        description: "調子が15増える。",
       },
       horn_rabbit_corner: {
         id: "horn_rabbit_corner",
@@ -169,7 +254,7 @@
         }
         return;
       }
-      store.ulpes = createItemInstance("kari_potion");
+      store.ulpes = null;
       store.rihas = null;
       store.sushia = null;
       store.finald = null;
@@ -472,7 +557,7 @@
     }
 
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
     }
 
     function requestItemUse(index) {
@@ -706,6 +791,43 @@
         if (healed > 0) {
           if (addBurst) {
             addBurst(unit.x, unit.y, unit.radius + battlePx(18), "rgba(141,226,161,0.22)");
+          }
+        } else {
+          addFloat("効果なし", unit.x, unit.y - 30, "#ffffff");
+        }
+        return true;
+      }
+      if (Number.isFinite(item.mpFlat) || Number.isFinite(item.mpRatio)) {
+        const amount = Number.isFinite(item.mpFlat)
+          ? item.mpFlat
+          : unit.maxMp * (Number.isFinite(item.mpRatio) ? item.mpRatio : 0.25);
+        const before = Number.isFinite(unit.mp) ? unit.mp : 0;
+        const maxMp = Math.max(0, Number.isFinite(unit.maxMp) ? unit.maxMp : 0);
+        unit.mp = Math.max(0, Math.min(maxMp, before + amount));
+        const restored = unit.mp - before;
+        if (restored > 0) {
+          addFloat(`MP+${Math.round(restored)}`, unit.x, unit.y - 30, "#82c8ff");
+          if (addBurst) {
+            addBurst(unit.x, unit.y, unit.radius + battlePx(18), "rgba(130,200,255,0.22)");
+          }
+        } else {
+          addFloat("効果なし", unit.x, unit.y - 30, "#ffffff");
+        }
+        return true;
+      }
+      if (Number.isFinite(item.moodDelta)) {
+        const before = Number.isFinite(unit.mood) ? unit.mood : null;
+        if (before === null) {
+          addFloat("効果なし", unit.x, unit.y - 30, "#ffffff");
+          return true;
+        }
+        unit.mood = Math.max(0, Math.min(100, before + item.moodDelta));
+        const delta = unit.mood - before;
+        if (delta !== 0) {
+          const sign = delta > 0 ? "+" : "";
+          addFloat(`調子${sign}${Math.round(delta)}`, unit.x, unit.y - 30, delta > 0 ? "#ffd36a" : "#b7d7ff");
+          if (addBurst) {
+            addBurst(unit.x, unit.y, unit.radius + battlePx(18), delta > 0 ? "rgba(255,211,106,0.22)" : "rgba(183,215,255,0.20)");
           }
         } else {
           addFloat("効果なし", unit.x, unit.y - 30, "#ffffff");

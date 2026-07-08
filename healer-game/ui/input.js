@@ -62,6 +62,7 @@
       setUnitLoadout,
       getActiveSlotLimit,
       isSkillOwned,
+      isPassiveOwned,
     } = context;
 
     function attach() {
@@ -1574,6 +1575,14 @@
       const passive = PASSIVE_DATA && PASSIVE_DATA[owner] && PASSIVE_DATA[owner][passiveKey];
       if (!passive) {
         setEquipmentMessage("このパッシブは装備できません。");
+        return;
+      }
+      if (typeof isPassiveOwned === "function" && !isPassiveOwned(owner, passiveKey)) {
+        setEquipmentMessage("このパッシブは未所持です。");
+        return;
+      }
+      if (!canEquipSkillWithCurrentWeapon(unit, passive)) {
+        setEquipmentMessage("必要武器を満たしていません。");
         return;
       }
       const current = copyLoadout(unit.loadout || (typeof getDefaultLoadout === "function" ? getDefaultLoadout(owner) : null));

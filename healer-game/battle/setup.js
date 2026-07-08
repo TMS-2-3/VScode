@@ -31,7 +31,7 @@
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const BATTLE_START_ULTIMATE_RATIO = 0.5;
-    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury"];
+    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury", "debuff_poison", "debuff_wound"];
 
     function getCarriedHp(unit) {
       const savedHp = game.partyHpById && game.partyHpById[unit.id];
@@ -125,6 +125,18 @@
         unit.injuryTimer = Math.max(0, injury.timer || 0);
         unit.injuryMax = Math.max(unit.injuryTimer, injury.max || 0);
       }
+      const poison = statuses.debuff_poison;
+      if (isStatusCarryover("debuff_poison") && poison && poison.active) {
+        unit.poisonActive = true;
+        unit.poisonTick = Math.max(0, poison.tick || 0);
+        unit.poisonTickRate = Math.max(0.1, poison.tickRate || 1);
+        unit.poisonDamageHpRatio = Math.max(0, poison.damageHpRatio || 0.01);
+        unit.poisonSource = null;
+      }
+      const wound = statuses.debuff_wound;
+      if (isStatusCarryover("debuff_wound") && wound && wound.stacks > 0) {
+        unit.woundStacks = Math.max(0, Math.floor(wound.stacks || 0));
+      }
     }
 
     function resetUnitCarryoverStatusFields(unit) {
@@ -149,13 +161,40 @@
       unit.burnSource = null;
       unit.sleepTimer = 0;
       unit.sleepMax = 0;
+      unit.poisonActive = false;
+      unit.poisonTick = 0;
+      unit.poisonTickRate = 1;
+      unit.poisonDamageHpRatio = 0;
+      unit.poisonSource = null;
+      unit.woundStacks = 0;
       unit.injuryTimer = 0;
       unit.injuryMax = 0;
+      unit.plantStage = 0;
+      unit.plantSource = null;
+      unit.plantUpgradedBy = {};
+      unit.contemptStacks = 0;
+      unit.contemptTimer = 0;
+      unit.contemptMax = 0;
+      unit.regretTimer = 0;
+      unit.regretMax = 0;
+      unit.sorrowTimer = 0;
+      unit.sorrowMax = 0;
+      unit.sorrowTick = 0;
+      unit.reunionTimer = 0;
+      unit.reunionMax = 0;
+      unit.reunionSource = null;
+      unit.absorptionLockTimer = 0;
+      unit.forcedEnemySkillKey = null;
+      unit.forcedEnemySkillTarget = null;
       unit.magicNeutralizeTimer = 0;
       unit.magicNeutralizeMax = 0;
       unit.magicNeutralizeRatio = 0;
+      unit.actionSpeedDownTimer = 0;
+      unit.actionSpeedDownMax = 0;
+      unit.actionSpeedDownRatio = 0;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
+      unit.goukenHitCounts = {};
     }
 
     function resetUnitBattleActionState(unit) {
@@ -170,9 +209,17 @@
       unit.itemUseRequest = null;
       unit.itemCast = null;
       unit.cast = null;
+      unit.castVisual = null;
       unit.channel = null;
       unit.pendingActionQueueKey = null;
       unit.skillQueue = [];
+      unit.skillQueueInitialized = false;
+      unit.goukenHitCounts = {};
+      unit.forcedEnemySkillKey = null;
+      unit.forcedEnemySkillTarget = null;
+      unit.absorptionLockTimer = 0;
+      unit.chocolateLilyCharging = false;
+      unit.chocolateLilyDamageTaken = 0;
     }
 
     function applyBattleStartUltimate(unit) {
@@ -316,6 +363,7 @@
         burnSource: null,
         noDamage: 999,
         cast: null,
+        castVisual: null,
         aim: null,
         aiIntent: null,
         aiMoveTarget: null,
@@ -325,6 +373,7 @@
         itemCast: null,
         pendingActionQueueKey: null,
         skillQueue: [],
+        skillQueueInitialized: false,
         selfHealFloat: 0,
         delayedDamageQueue: [],
         field: true,

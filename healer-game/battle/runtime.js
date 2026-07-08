@@ -48,7 +48,7 @@
     }
 
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
     }
 
     function update(dt) {
@@ -104,6 +104,12 @@
         if (unit.actionLock <= 0) {
           unit.actionTotal = 0;
         }
+        if (unit.castVisual) {
+          unit.castVisual.time = Math.max(0, (unit.castVisual.time || 0) - dt);
+          if (unit.castVisual.time <= 0) {
+            unit.castVisual = null;
+          }
+        }
         unit.hurt = Math.max(0, unit.hurt - dt);
         unit.guardFlash = Math.max(0, unit.guardFlash - dt);
         unit.frozen = Math.max(0, unit.frozen - dt);
@@ -114,6 +120,22 @@
         if (unit.sleepTimer <= 0) {
           unit.sleepMax = 0;
         }
+        unit.contemptTimer = Math.max(0, (unit.contemptTimer || 0) - dt);
+        if (unit.contemptTimer <= 0) {
+          unit.contemptStacks = 0;
+          unit.contemptMax = 0;
+        }
+        unit.sorrowTimer = Math.max(0, (unit.sorrowTimer || 0) - dt);
+        if (unit.sorrowTimer <= 0) {
+          unit.sorrowMax = 0;
+          unit.sorrowTick = 0;
+        }
+        unit.reunionTimer = Math.max(0, (unit.reunionTimer || 0) - dt);
+        if (unit.reunionTimer <= 0) {
+          unit.reunionMax = 0;
+          unit.reunionSource = null;
+        }
+        unit.absorptionLockTimer = Math.max(0, (unit.absorptionLockTimer || 0) - dt);
         unit.injuryTimer = Math.max(0, (unit.injuryTimer || 0) - dt);
         if (unit.injuryTimer <= 0) {
           unit.injuryMax = 0;
@@ -122,6 +144,11 @@
         if (unit.magicNeutralizeTimer <= 0) {
           unit.magicNeutralizeMax = 0;
           unit.magicNeutralizeRatio = 0;
+        }
+        unit.actionSpeedDownTimer = Math.max(0, (unit.actionSpeedDownTimer || 0) - dt);
+        if (unit.actionSpeedDownTimer <= 0) {
+          unit.actionSpeedDownMax = 0;
+          unit.actionSpeedDownRatio = 0;
         }
         unit.shadowDashTimer = Math.max(0, (unit.shadowDashTimer || 0) - dt);
         if (unit.shadowDashTimer <= 0) {
@@ -146,10 +173,12 @@
         }
 
         updateBurn(unit, dt);
+        updatePoison(unit, dt);
+        updateSorrow(unit, dt);
         updateShieldStacks(unit, dt);
 
         for (const key of Object.keys(unit.cds)) {
-          if (key === "attack" && isActionDisabled(unit)) continue;
+          if (key === "attack" && (isActionDisabled(unit) || unit.chocolateLilyCharging)) continue;
           const before = unit.cds[key] || 0;
           unit.cds[key] = Math.max(0, before - dt);
           if (before > 0 && unit.cds[key] <= 0 && skillSystem.onCooldownReady) {
@@ -249,6 +278,41 @@
       unit.burnTickRate = 1;
       unit.burnDamageHpRatio = 0;
       unit.burnSource = null;
+    }
+
+    function updatePoison(unit, dt) {
+      if (!unit || unit.dead || !unit.poisonActive) {
+        return;
+      }
+      const tickRate = Number.isFinite(unit.poisonTickRate) && unit.poisonTickRate > 0 ? unit.poisonTickRate : 1;
+      unit.poisonTick = (Number.isFinite(unit.poisonTick) && unit.poisonTick > 0 ? unit.poisonTick : tickRate) - dt;
+      while (unit.poisonTick <= 0 && !unit.dead && unit.poisonActive) {
+        const ratio = Number.isFinite(unit.poisonDamageHpRatio) ? unit.poisonDamageHpRatio : 0.01;
+        const damage = Math.max(0, (unit.maxHp || 0) * ratio);
+        if (damage > 0) {
+          const poisonSource = unit.poisonSource && !unit.poisonSource.dead ? unit.poisonSource : null;
+          dealDamage(poisonSource, unit, damage, { magic: true, dotDamage: true, damageType: "ドット魔法", noUltGain: true });
+        }
+        unit.poisonTick += tickRate;
+      }
+    }
+
+    function updateSorrow(unit, dt) {
+      if (!unit || unit.dead || (unit.sorrowTimer || 0) <= 0 || unit.team !== "party") {
+        return;
+      }
+      unit.sorrowTick = (Number.isFinite(unit.sorrowTick) && unit.sorrowTick > 0 ? unit.sorrowTick : 1) - dt;
+      if (unit.sorrowTick > 0) {
+        return;
+      }
+      unit.sorrowTick = 1;
+      for (const member of party) {
+        if (!member || member.dead || member === unit) {
+          continue;
+        }
+        member.forcedTarget = unit;
+        member.tauntTimer = Math.max(member.tauntTimer || 0, 1.5);
+      }
     }
 
     function updateShieldStacks(unit, dt) {
@@ -508,9 +572,15 @@
       unit.itemUseRequest = null;
       unit.itemCast = null;
       unit.cast = null;
+      unit.castVisual = null;
       unit.channel = null;
       unit.pendingActionQueueKey = null;
       unit.skillQueue = [];
+      unit.forcedEnemySkillKey = null;
+      unit.forcedEnemySkillTarget = null;
+      unit.absorptionLockTimer = 0;
+      unit.chocolateLilyCharging = false;
+      unit.chocolateLilyDamageTaken = 0;
     }
 
     function ensureBattleRewards() {
@@ -890,7 +960,21 @@
     }
 
     function addFloat(text, x, y, color, outline = "#0b0d0b") {
-      effects.push({ type: "float", text, x, y, color, outline, time: 0.85, age: 0, vy: -28 });
+      const lifetime = 1.3;
+      const stackStep = battlePx(18);
+      const stackRangeX = battlePx(44);
+      const stackRangeY = battlePx(36);
+      for (const effect of effects) {
+        if (effect.type !== "float") {
+          continue;
+        }
+        const originX = Number.isFinite(effect.originX) ? effect.originX : effect.x;
+        const originY = Number.isFinite(effect.originY) ? effect.originY : effect.y;
+        if (Math.abs(originX - x) <= stackRangeX && Math.abs(originY - y) <= stackRangeY) {
+          effect.y -= stackStep;
+        }
+      }
+      effects.push({ type: "float", text, x, y, originX: x, originY: y, color, outline, time: lifetime, total: lifetime, age: 0, vy: -28 });
     }
 
     function slashEffect(from, to) {
