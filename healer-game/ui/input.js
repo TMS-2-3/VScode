@@ -311,6 +311,178 @@
       game.saveUi.message = result && result.message ? result.message : "上書きしました。";
     }
 
+    function getFileSaveName() {
+      const fallback = `セーブデータ${saveSystem && saveSystem.listSaves ? saveSystem.listSaves().length + 1 : 1}`;
+      const inputName = window.prompt("セーブファイル名を入力してください。", fallback);
+      if (inputName === null) {
+        return "";
+      }
+      return saveSystem && saveSystem.normalizeSaveName
+        ? saveSystem.normalizeSaveName(inputName)
+        : String(inputName || "").trim().slice(0, 24);
+    }
+
+    async function writeSaveTextFile(fileName, text) {
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{
+              description: "Healer Game Save",
+              accept: { "application/json": [".json"] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          return { ok: true };
+        } catch (error) {
+          if (error && error.name === "AbortError") {
+            return { ok: false, canceled: true, message: "ファイル保存をキャンセルしました。" };
+          }
+        }
+      }
+      const blob = new Blob([text], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      return { ok: true };
+    }
+
+    async function exportSaveFile() {
+      const restoreState = captureFileSaveUiState();
+      if (!saveSystem || typeof saveSystem.createFileSave !== "function") {
+        game.saveUi.message = "ファイル保存機能を利用できません。";
+        restoreFileSaveUiState(restoreState);
+        return;
+      }
+      const name = getFileSaveName();
+      if (!name) {
+        game.saveUi.message = "セーブデータ名を入力してください。";
+        restoreFileSaveUiState(restoreState);
+        return;
+      }
+      const result = saveSystem.createFileSave(name);
+      if (!result || !result.ok) {
+        game.saveUi.message = result && result.message ? result.message : "ファイル保存に失敗しました。";
+        restoreFileSaveUiState(restoreState);
+        return;
+      }
+      game.saveUi.message = result.message || "セーブファイルを作成しました。";
+      const written = await writeSaveTextFile(result.fileName || `${name}.json`, result.text || "");
+      if (!written || !written.ok) {
+        game.saveUi.message = written && written.message ? written.message : "ファイル保存に失敗しました。";
+        restoreFileSaveUiState(restoreState);
+        return;
+      }
+      restoreFileSaveUiState(restoreState);
+      game.saveUi.message = `${result.name || name} をファイルに保存しました。`;
+    }
+
+    function captureFileSaveUiState() {
+      const menu = getSystemMenu();
+      return {
+        state: game.state,
+        titleLoadOpen: game.titleLoadOpen,
+        titleLoadMessage: game.titleLoadMessage,
+        systemMenuOpen: menu.open,
+        systemMenuPanel: menu.panel && typeof menu.panel === "object" ? { ...menu.panel } : menu.panel,
+        systemMenuConfirm: menu.confirm,
+        panelScroll: menu.panelScroll,
+        panelScrollMax: menu.panelScrollMax,
+      };
+    }
+
+    function restoreFileSaveUiState(snapshot) {
+      if (!snapshot) {
+        return;
+      }
+      const menu = getSystemMenu();
+      game.state = snapshot.state;
+      game.titleLoadOpen = snapshot.titleLoadOpen;
+      game.titleLoadMessage = snapshot.titleLoadMessage;
+      menu.open = snapshot.systemMenuOpen;
+      menu.panel = snapshot.systemMenuPanel && typeof snapshot.systemMenuPanel === "object" ? { ...snapshot.systemMenuPanel } : snapshot.systemMenuPanel;
+      menu.confirm = snapshot.systemMenuConfirm;
+      menu.panelScroll = snapshot.panelScroll;
+      menu.panelScrollMax = snapshot.panelScrollMax;
+      clearMovementKeys();
+    }
+
+    function readSelectedFileAsText(file) {
+      if (file && typeof file.text === "function") {
+        return file.text();
+      }
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("read failed"));
+        reader.readAsText(file);
+      });
+    }
+
+    function setFileLoadMessage(fromTitle, message) {
+      if (fromTitle) {
+        game.titleLoadMessage = message || "";
+      } else {
+        game.saveUi.message = message || "";
+      }
+    }
+
+    function finishFileLoad(result, fromTitle) {
+      if (fromTitle) {
+        game.titleTargets = [];
+        game.titleLoadOpen = false;
+        game.titleLoadMessage = "";
+      } else {
+        const menu = getSystemMenu();
+        menu.panel = null;
+        menu.confirm = null;
+        menu.open = false;
+      }
+      startTown();
+      game.message = result && result.message ? result.message : "セーブファイルをロードしました。";
+      game.messageTimer = 4;
+      clearMovementKeys();
+    }
+
+    function importSaveFile(fromTitle = false) {
+      if (!saveSystem || typeof saveSystem.importFileText !== "function") {
+        setFileLoadMessage(fromTitle, "ファイル読込機能を利用できません。");
+        return;
+      }
+      const inputEl = document.createElement("input");
+      inputEl.type = "file";
+      inputEl.accept = ".json,application/json";
+      inputEl.hidden = true;
+      inputEl.addEventListener("change", async () => {
+        const file = inputEl.files && inputEl.files[0];
+        inputEl.remove();
+        if (!file) {
+          setFileLoadMessage(fromTitle, "ファイル読込をキャンセルしました。");
+          return;
+        }
+        try {
+          const text = await readSelectedFileAsText(file);
+          const result = saveSystem.importFileText(text);
+          if (!result || !result.ok) {
+            setFileLoadMessage(fromTitle, result && result.message ? result.message : "ファイル読込に失敗しました。");
+            return;
+          }
+          finishFileLoad(result, fromTitle);
+        } catch (error) {
+          setFileLoadMessage(fromTitle, "ファイル読込に失敗しました。");
+        }
+      }, { once: true });
+      document.body.appendChild(inputEl);
+      inputEl.click();
+    }
+
     function loadTitleSave(saveId) {
       if (!saveSystem || typeof saveSystem.loadSave !== "function") {
         game.titleLoadMessage = "ロード機能を利用できません。";
@@ -325,6 +497,26 @@
       startTown();
       game.message = result.message || "ロードしました。";
       game.messageTimer = 4;
+      clearMovementKeys();
+    }
+
+    function deleteTitleSave(saveId) {
+      if (!saveSystem || typeof saveSystem.deleteSave !== "function" || typeof saveSystem.listSaves !== "function") {
+        game.titleLoadMessage = "削除機能を利用できません。";
+        return;
+      }
+      const save = saveSystem.listSaves().find((entry) => entry && entry.id === saveId);
+      if (!save) {
+        game.titleLoadMessage = "削除するセーブデータが見つかりません。";
+        return;
+      }
+      if (!window.confirm(`${save.name || "セーブデータ"} を削除しますか？`)) {
+        game.titleLoadMessage = "削除をキャンセルしました。";
+        return;
+      }
+      const result = saveSystem.deleteSave(saveId);
+      game.titleLoadMessage = result && result.message ? result.message : "セーブデータを削除しました。";
+      game.titleLoadScroll = Math.max(0, Math.min(game.titleLoadScrollMax || 0, game.titleLoadScroll || 0));
       clearMovementKeys();
     }
 
@@ -2836,6 +3028,8 @@
           createNewSave();
         } else if (target.action === "overwriteSaveData") {
           overwriteExistingSave(target.saveId);
+        } else if (target.action === "exportSaveFile") {
+          void exportSaveFile();
         } else if (target.action === "startKeybindCapture") {
           startKeybindCapture(target.actionId);
         } else if (target.action === "saveKeybindDraft") {
@@ -3160,6 +3354,10 @@
             game.titleLoadMessage = "";
           } else if (target.action === "loadTitleSave") {
             loadTitleSave(target.saveId);
+          } else if (target.action === "deleteTitleSave") {
+            deleteTitleSave(target.saveId);
+          } else if (target.action === "importTitleSaveFile") {
+            importSaveFile(true);
           }
           return true;
         }

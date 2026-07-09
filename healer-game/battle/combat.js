@@ -460,8 +460,9 @@
     }
 
     function formatDamageFloat(amount, options = {}) {
-      const prefix = `${options.guarded ? "B!" : ""}${options.critical ? "C!" : ""}`;
-      return `${prefix}${Math.round(amount)}`;
+      const prefix = options.critical ? "C!" : "";
+      const suffix = options.guarded ? "/B" : "";
+      return `${prefix}${Math.round(amount)}${suffix}`;
     }
 
     function shouldRollCritical(source, target, options = {}) {

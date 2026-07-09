@@ -1734,7 +1734,7 @@
       enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
       startEnemyCastVisual(enemy, cast, "rgba(216, 137, 185, 0.95)");
       ctx.addTelegraph({
-        type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(10), ctx.battlePx(28)), team: "enemy", time: cast,
+        type: "circle", hidden: true, x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(10), ctx.battlePx(28)), team: "enemy", time: cast,
         getPosition: () => ({ x: target.x, y: target.y }),
         resolve: () => {
           if (enemy.dead || target.dead) return;

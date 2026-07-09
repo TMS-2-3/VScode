@@ -704,6 +704,7 @@
         player: state.player,
         enemies: state.enemies,
         telegraphs: state.telegraphs,
+        areas: state.areas,
         skillSystem: systems.skillSystem,
         getItemSystem: () => systems.itemSystem,
         MOOD_BASELINE: balance.moodBaseline,

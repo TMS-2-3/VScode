@@ -354,10 +354,10 @@
     const rowH = 54;
     const gap = 8;
     const visibleRows = Math.min(5, Math.max(1, saves.length));
-    const h = 112 + visibleRows * rowH + Math.max(0, visibleRows - 1) * gap;
+    const h = 154 + visibleRows * rowH + Math.max(0, visibleRows - 1) * gap;
     const x = (view.w - w) / 2;
     const y = Math.max(36, (view.h - h) / 2);
-    const listRect = { x: x + 24, y: y + 80, w: w - 48, h: h - 104 };
+    const listRect = { x: x + 24, y: y + 122, w: w - 48, h: h - 146 };
     const contentH = saves.length ? saves.length * rowH + Math.max(0, saves.length - 1) * gap : 0;
     game.titleLoadScrollMax = Math.max(0, contentH - listRect.h);
     game.titleLoadScroll = Math.max(0, Math.min(game.titleLoadScrollMax, Number.isFinite(game.titleLoadScroll) ? game.titleLoadScroll : 0));
@@ -377,9 +377,10 @@
     ctx.textBaseline = "top";
     ctx.fillText("ロード", x + 24, y + 22);
     drawTitleCloseButton(x + w - 46, y + 18);
+    drawTitleLoadSmallButton(x + 24, y + 60, 118, 32, "ファイル読込", "importTitleSaveFile");
 
     if (game.titleLoadMessage) {
-      drawFittedSystemText(game.titleLoadMessage, x + 24, y + 64, w - 48, 800, 13, 10, "#315340", "left", "middle");
+      drawFittedSystemText(game.titleLoadMessage, x + 156, y + 76, w - 180, 800, 13, 10, "#315340", "left", "middle");
     }
 
     if (!saves.length) {
@@ -419,10 +420,65 @@
     roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
-    drawFittedSystemText(save.name || "セーブデータ", x + 16, y + 18, w - 32, 900, 15, 10, "#102018", "left", "middle");
-    drawFittedSystemText(save.savedAtText || "", x + 16, y + 38, w - 32, 700, 11, 9, "#63706a", "left", "middle");
+    const deleteSize = 34;
+    const deleteX = x + w - deleteSize - 10;
+    const deleteY = y + (h - deleteSize) / 2;
+    drawFittedSystemText(save.name || "セーブデータ", x + 16, y + 18, w - 76, 900, 15, 10, "#102018", "left", "middle");
+    drawFittedSystemText(save.savedAtText || "", x + 16, y + 38, w - 76, 700, 11, 9, "#63706a", "left", "middle");
     ctx.restore();
     game.titleTargets.push({ action: "loadTitleSave", saveId: save.id, x, y, w, h });
+    drawTitleDeleteSaveButton(deleteX, deleteY, deleteSize, save.id);
+  }
+
+  function drawTitleDeleteSaveButton(x, y, size, saveId) {
+    const hovered = input.mouse.x >= x && input.mouse.x <= x + size
+      && input.mouse.y >= y && input.mouse.y <= y + size;
+    ctx.save();
+    ctx.fillStyle = hovered ? "rgba(214,53,44,0.2)" : "rgba(214,53,44,0.08)";
+    ctx.strokeStyle = hovered ? "rgba(214,53,44,0.9)" : "rgba(214,53,44,0.52)";
+    ctx.lineWidth = hovered ? 1.6 : 1.2;
+    roundRect(x, y, size, size, 7);
+    ctx.fill();
+    ctx.stroke();
+
+    const cx = x + size / 2;
+    const cy = y + size / 2 + 1;
+    ctx.strokeStyle = "#d6352c";
+    ctx.fillStyle = "#d6352c";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy - 8);
+    ctx.lineTo(cx + 8, cy - 8);
+    ctx.moveTo(cx - 3, cy - 11);
+    ctx.lineTo(cx + 3, cy - 11);
+    ctx.stroke();
+    roundRect(cx - 6, cy - 5, 12, 14, 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - 2, cy - 2);
+    ctx.lineTo(cx - 2, cy + 6);
+    ctx.moveTo(cx + 2, cy - 2);
+    ctx.lineTo(cx + 2, cy + 6);
+    ctx.stroke();
+    ctx.restore();
+    game.titleTargets.push({ action: "deleteTitleSave", saveId, x, y, w: size, h: size });
+  }
+
+  function drawTitleLoadSmallButton(x, y, w, h, label, action) {
+    const hovered = input.mouse.x >= x && input.mouse.x <= x + w
+      && input.mouse.y >= y && input.mouse.y <= y + h;
+    ctx.save();
+    ctx.fillStyle = hovered ? "#26352e" : "#102018";
+    ctx.strokeStyle = hovered ? "rgba(255,213,107,0.85)" : "rgba(16,32,24,0.28)";
+    ctx.lineWidth = hovered ? 1.5 : 1;
+    roundRect(x, y, w, h, 6);
+    ctx.fill();
+    ctx.stroke();
+    drawFittedSystemText(label, x + w / 2, y + h / 2, w - 10, 800, 12, 8, "#f7fff6", "center", "middle");
+    ctx.restore();
+    game.titleTargets.push({ action, x, y, w, h });
   }
 
   function drawTitleCloseButton(x, y) {
@@ -2275,7 +2331,7 @@
     const x = (view.w - w) / 2;
     const y = (view.h - h) / 2;
     const saves = saveSystem && typeof saveSystem.listSaves === "function" ? saveSystem.listSaves() : [];
-    const content = { x: x + 28, y: y + 132, w: w - 56, h: h - 164 };
+    const content = { x: x + 28, y: y + 154, w: w - 56, h: h - 186 };
     const rowH = 62;
     const gap = 10;
     const contentH = saves.length ? saves.length * rowH + Math.max(0, saves.length - 1) * gap : 46;
@@ -2297,11 +2353,12 @@
     drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
 
     drawSystemSmallButton(x + 28, y + 78, 118, 34, "新規保存", "createSaveData", {});
+    drawSystemSmallButton(x + 154, y + 78, 118, 34, "ファイル保存", "exportSaveFile", {});
     ctx.fillStyle = "#63706a";
     ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText("既存データは右側の上書きボタンから保存できます。", x + 160, y + 88);
+    drawFittedSystemText("ファイル保存はJSONを書き出すだけで、ブラウザ内セーブには追加しません。", x + 28, y + 122, w - 56, 700, 12, 9, "#63706a", "left", "middle");
     if (game.saveUi && game.saveUi.message) {
-      drawFittedSystemText(game.saveUi.message, x + 28, y + 114, w - 56, 800, 13, 10, "#315340", "left", "middle");
+      drawFittedSystemText(game.saveUi.message, x + 28, y + 142, w - 56, 800, 13, 10, "#315340", "left", "middle");
     }
 
     ctx.save();

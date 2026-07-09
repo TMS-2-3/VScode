@@ -14,6 +14,7 @@
 
     const INDEX_KEY = "healer-game.save.index.v1";
     const DATA_KEY_PREFIX = "healer-game.save.data.v1.";
+    const FILE_SAVE_TYPE = "healer-game.save-file.v1";
     const SAVE_VERSION = 1;
     const SAVE_NAME_MAX_LENGTH = 24;
     let storageAvailable = null;
@@ -81,6 +82,13 @@
       const date = new Date(timestamp || Date.now());
       const pad = (value) => String(value).padStart(2, "0");
       return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function makeSafeFileName(name) {
+      const base = normalizeSaveName(name) || "healer-save";
+      const safe = base.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "_");
+      return `${safe}_${stamp}.json`;
     }
 
     function getLivePartyMembers() {
@@ -224,6 +232,26 @@
       return saveToStorage(saveId, entry.name);
     }
 
+    function deleteSave(saveId) {
+      if (!canUseStorage() || !saveId) {
+        return { ok: false, message: "削除するセーブデータが見つかりません。" };
+      }
+      const entry = listSaves().find((item) => item.id === saveId);
+      if (!entry) {
+        return { ok: false, message: "削除するセーブデータが見つかりません。" };
+      }
+      try {
+        window.localStorage.removeItem(getDataKey(saveId));
+        writeIndex(readIndex().filter((item) => item.id !== saveId));
+        if (game.currentSaveId === saveId) {
+          game.currentSaveId = null;
+        }
+        return { ok: true, message: `${entry.name || "セーブデータ"} を削除しました。` };
+      } catch (error) {
+        return { ok: false, message: "セーブデータの削除に失敗しました。" };
+      }
+    }
+
     function readSave(saveId) {
       if (!canUseStorage() || !saveId) {
         return null;
@@ -232,6 +260,73 @@
         return JSON.parse(window.localStorage.getItem(getDataKey(saveId)) || "null");
       } catch (error) {
         return null;
+      }
+    }
+
+    function wrapFileSnapshot(snapshot) {
+      return {
+        fileType: FILE_SAVE_TYPE,
+        exportedAt: Date.now(),
+        snapshot,
+      };
+    }
+
+    function serializeFileSnapshot(snapshot) {
+      return JSON.stringify(wrapFileSnapshot(snapshot), null, 2);
+    }
+
+    function createFileSave(name) {
+      const saveName = normalizeSaveName(name);
+      if (!saveName) {
+        return { ok: false, message: "セーブデータ名を入力してください。" };
+      }
+      const snapshot = buildSnapshot(saveName);
+      snapshot.id = makeSaveId();
+      const fileName = makeSafeFileName(snapshot.name || saveName);
+      return {
+        ok: true,
+        id: snapshot.id,
+        name: snapshot.name || saveName,
+        fileName,
+        text: serializeFileSnapshot(snapshot),
+        message: `${snapshot.name || saveName} をファイルに書き出します。`,
+      };
+    }
+
+    function normalizeImportedSnapshot(value) {
+      const snapshot = value && value.fileType === FILE_SAVE_TYPE ? value.snapshot : value;
+      if (!snapshot || typeof snapshot !== "object" || snapshot.version !== SAVE_VERSION) {
+        return null;
+      }
+      if (!snapshot.game || !snapshot.town || !snapshot.playerProfile) {
+        return null;
+      }
+      const copy = clonePlain(snapshot, null);
+      if (!copy) {
+        return null;
+      }
+      copy.id = copy.id || makeSaveId();
+      copy.name = normalizeSaveName(copy.name) || "ファイルセーブ";
+      copy.savedAt = Number.isFinite(copy.savedAt) ? copy.savedAt : Date.now();
+      return copy;
+    }
+
+    function storeImportedSnapshot(snapshot) {
+      if (!canUseStorage()) {
+        return { ok: false, message: "ブラウザ保存領域を利用できません。" };
+      }
+      try {
+        window.localStorage.setItem(getDataKey(snapshot.id), JSON.stringify(snapshot));
+        const index = readIndex().filter((entry) => entry.id !== snapshot.id);
+        index.unshift({
+          id: snapshot.id,
+          name: snapshot.name,
+          savedAt: snapshot.savedAt,
+        });
+        writeIndex(index);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, message: "セーブファイルの登録に失敗しました。保存容量を確認してください。" };
       }
     }
 
@@ -421,11 +516,7 @@
       }
     }
 
-    function loadSave(saveId) {
-      const snapshot = readSave(saveId);
-      if (!snapshot || snapshot.version !== SAVE_VERSION) {
-        return { ok: false, message: "セーブデータを読み込めませんでした。" };
-      }
+    function applySnapshot(snapshot, saveId) {
       restoreProfile(snapshot.playerProfile);
       restoreGameStores(snapshot.game);
       restoreTown(snapshot.town);
@@ -438,6 +529,39 @@
       game.titleLoadOpen = false;
       game.titleLoadMessage = "";
       return { ok: true, name: snapshot.name || "セーブデータ", message: `${snapshot.name || "セーブデータ"} をロードしました。` };
+    }
+
+    function loadSave(saveId) {
+      const snapshot = readSave(saveId);
+      if (!snapshot || snapshot.version !== SAVE_VERSION) {
+        return { ok: false, message: "セーブデータを読み込めませんでした。" };
+      }
+      return applySnapshot(snapshot, saveId);
+    }
+
+    function importFileText(text) {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(String(text || ""));
+      } catch (error) {
+        return { ok: false, message: "セーブファイルを読み込めませんでした。" };
+      }
+      const snapshot = normalizeImportedSnapshot(parsed);
+      if (!snapshot) {
+        return { ok: false, message: "このセーブファイルは利用できません。" };
+      }
+      const stored = storeImportedSnapshot(snapshot);
+      const result = applySnapshot(snapshot, stored.ok ? snapshot.id : null);
+      if (!result.ok) {
+        return result;
+      }
+      return {
+        ...result,
+        id: stored.ok ? snapshot.id : null,
+        message: stored.ok
+          ? `${snapshot.name} をファイルから読み込みました。`
+          : `${snapshot.name} をファイルから読み込みました。ブラウザ保存には登録できませんでした。`,
+      };
     }
 
     function clearTransientArrays() {
@@ -455,7 +579,10 @@
     return {
       createSave,
       overwriteSave,
+      deleteSave,
       loadSave,
+      createFileSave,
+      importFileText,
       listSaves,
       normalizeSaveName,
       formatTimestamp,
