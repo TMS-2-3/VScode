@@ -2,6 +2,16 @@
   "use strict";
 
   window.HEALER_STATUS_DATA = {
+    incapacitated: {
+      id: "incapacitated",
+      name: "戦闘不能",
+      type: "特殊状態",
+      label: "不",
+      color: "#9aa1a1",
+      carryover: true,
+      description: "戦闘不能。調子メーターが0で固定され、必殺ゲージなどもチャージされない。攻撃や回復などの対象にならず、ダメージも当たらない。",
+      simpleDescription: "戦闘不能になり、行動や対象指定を受けなくなる。",
+    },
     buff_itaminasi: {
       id: "buff_itaminasi",
       name: "逆境",
@@ -144,6 +154,36 @@
       description: "移動速度と防御力が10%ずつ低下する。",
       simpleDescription: "移動速度と防御力が低下する。",
     },
+    debuff_leakage: {
+      id: "debuff_leakage",
+      name: "漏水",
+      type: "ステータスデバフ",
+      label: "漏",
+      color: "#5eb6ff",
+      carryover: false,
+      description: "魔力と魔法防御が10%ずつ低下する。",
+      simpleDescription: "魔力と魔法防御が低下する。",
+    },
+    debuff_tingle: {
+      id: "debuff_tingle",
+      name: "痺れ感",
+      type: "ステータスデバフ",
+      label: "痺",
+      color: "#f2d56b",
+      carryover: false,
+      description: "攻撃力と防御力が10%ずつ低下する。",
+      simpleDescription: "攻撃力と防御力が低下する。",
+    },
+    debuff_freezing: {
+      id: "debuff_freezing",
+      name: "凍え",
+      type: "ステータスデバフ",
+      label: "冷",
+      color: "#9edbff",
+      carryover: false,
+      description: "行動速度が10%、移動速度が20%低下する。",
+      simpleDescription: "行動速度と移動速度が低下する。",
+    },
     debuff_magic_neutralize: {
       id: "debuff_magic_neutralize",
       name: "魔力中和",
@@ -153,6 +193,26 @@
       carryover: false,
       description: "魔力が低下する。",
       simpleDescription: "魔力が低下する。",
+    },
+    buff_feel: {
+      id: "buff_feel",
+      name: "フィール",
+      type: "ステータスバフ",
+      label: "感",
+      color: "#d8e77a",
+      carryover: false,
+      description: "ガード率が50%上昇する。また効果終了時に効果時間中にガードした回数だけ\"ディステ\"を獲得する。",
+      simpleDescription: "ガード率が上昇し、ガードした回数だけ\"ディステ\"を獲得する。",
+    },
+    buff_deste: {
+      id: "buff_deste",
+      name: "ディステ",
+      type: "ステータスバフ",
+      label: "運",
+      color: "#f2c56d",
+      carryover: false,
+      description: "会心率が100%上昇する。会心ダメージを与えた時に1スタック消費する。",
+      simpleDescription: "会心率が上昇する。",
     },
   };
 })();

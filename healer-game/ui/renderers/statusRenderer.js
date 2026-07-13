@@ -181,6 +181,7 @@
     const statusIconSize = compact ? 14 : 16;
     const statusIconY = gaugeY - statusIconSize - 2;
     const statusIconMaxWidth = Math.max(0, statusRight - barX);
+    const incapacitated = Boolean(unit.dead);
     statusCardMetas.push({ unitId: unit.id, x, y, w, h, statusIconMaxWidth, statusIconSize });
 
     drawPanel(x, y, w, h);
@@ -229,7 +230,9 @@
       ctx.textBaseline = "alphabetic";
     }
 
-    drawStatusIcons(unit, barX, statusIconY, statusIconMaxWidth, statusIconSize);
+    if (!incapacitated) {
+      drawStatusIcons(unit, barX, statusIconY, statusIconMaxWidth, statusIconSize);
+    }
 
     drawLabeledBar("HP", barX, hpY, barW, barH, unit.hp / unit.maxHp, "#132115", COLORS.hp, {
       text: `${Math.ceil(unit.hp)}/${unit.maxHp}${unit.shield > 0 ? ` +${Math.ceil(unit.shield)}` : ""}`,
@@ -256,6 +259,37 @@
     const by = y - buttonOutset;
     statusUiButtons.push({ action: "toggle", unitId: unit.id, x: bx, y: by, w: buttonSize + buttonOutset, h: buttonSize + buttonOutset });
     drawCornerTriangleButton(x + w - triangleSize, y, triangleSize, expandedStatusUnitIds.has(unit.id) ? "close" : "expand", "topRight");
+    if (incapacitated) {
+      drawIncapacitatedCardOverlay(x, y, w, h);
+      drawStatusIcons(unit, barX, statusIconY, statusIconMaxWidth, statusIconSize);
+    }
+  }
+
+  function drawIncapacitatedCardOverlay(x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = "rgba(30,34,34,0.62)";
+    ctx.strokeStyle = "rgba(214,222,220,0.48)";
+    ctx.lineWidth = 1.2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const badgeW = Math.min(w - 32, 92);
+    const badgeH = 24;
+    const badgeX = x + w / 2 - badgeW / 2;
+    const badgeY = y + h / 2 - badgeH / 2;
+    ctx.fillStyle = "rgba(222,228,226,0.9)";
+    ctx.strokeStyle = "rgba(8,12,12,0.48)";
+    ctx.lineWidth = 1;
+    roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#242828";
+    ctx.font = "900 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("戦闘不能", x + w / 2, badgeY + badgeH / 2 + 0.5);
+    ctx.restore();
   }
 
   function drawExpandedStatusPanels() {
@@ -685,6 +719,14 @@
   }
 
   function getStatusIcons(unit) {
+    if (unit && unit.dead) {
+      return [makeStatusIcon(unit, "incapacitated", {
+        ratio: 1,
+        permanent: true,
+        durationless: true,
+        sortPriority: 1000,
+      })];
+    }
     const icons = [];
     const passive = getEquippedPassive ? getEquippedPassive(unit) : null;
     if (passive && passive.key === "hilment" && unit.id === "finald") {
@@ -726,6 +768,13 @@
       const contemptMax = Math.max(0.1, unit.contemptMax || unit.contemptTimer);
       icons.push(makeStatusIcon(unit, "buff_contempt", { ratio: unit.contemptTimer / contemptMax, remaining: unit.contemptTimer, stack: unit.contemptStacks }));
     }
+    if ((unit.feelTimer || 0) > 0) {
+      const feelMax = Math.max(0.1, unit.feelMax || unit.feelTimer);
+      icons.push(makeStatusIcon(unit, "buff_feel", { ratio: unit.feelTimer / feelMax, remaining: unit.feelTimer, stack: unit.feelGuardCount || undefined }));
+    }
+    if ((unit.desteStacks || 0) > 0) {
+      icons.push(makeStatusIcon(unit, "buff_deste", { ratio: 1, stack: unit.desteStacks, permanent: true, durationless: true, sortPriority: 65 }));
+    }
     if ((unit.regretTimer || 0) > 0) {
       icons.push(makeStatusIcon(unit, "debuff_regret", { ratio: 1, permanent: true, durationless: true, sortPriority: 60 }));
     }
@@ -743,6 +792,18 @@
     if ((unit.injuryTimer || 0) > 0) {
       const injuryMax = Math.max(0.1, unit.injuryMax || unit.injuryTimer);
       icons.push(makeStatusIcon(unit, "debuff_Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
+    }
+    if ((unit.leakageTimer || 0) > 0) {
+      const leakageMax = Math.max(0.1, unit.leakageMax || unit.leakageTimer);
+      icons.push(makeStatusIcon(unit, "debuff_leakage", { ratio: unit.leakageTimer / leakageMax, remaining: unit.leakageTimer }));
+    }
+    if ((unit.tingleTimer || 0) > 0) {
+      const tingleMax = Math.max(0.1, unit.tingleMax || unit.tingleTimer);
+      icons.push(makeStatusIcon(unit, "debuff_tingle", { ratio: unit.tingleTimer / tingleMax, remaining: unit.tingleTimer }));
+    }
+    if ((unit.freezingTimer || 0) > 0) {
+      const freezingMax = Math.max(0.1, unit.freezingMax || unit.freezingTimer);
+      icons.push(makeStatusIcon(unit, "debuff_freezing", { ratio: unit.freezingTimer / freezingMax, remaining: unit.freezingTimer }));
     }
     if ((unit.magicNeutralizeTimer || 0) > 0) {
       const neutralizeMax = Math.max(0.1, unit.magicNeutralizeMax || unit.magicNeutralizeTimer);

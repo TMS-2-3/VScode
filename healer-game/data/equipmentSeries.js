@@ -76,6 +76,24 @@
           },
         },
       },
+      flostiny: {
+        key: "flostiny",
+        name: "フロスティーニ",
+        setEffects: {
+          2: {
+            name: "生命力",
+            statBonuses: { hpRegenRate: 0.03 },
+            simpleDescription: "HP再生率が上昇する",
+            description: "HP再生率が3%上昇する",
+          },
+          5: {
+            name: "運命",
+            statBonuses: { guardChance: 0.3 },
+            simpleDescription: "ガード率が上昇する",
+            description: "ガード率が30%上昇する",
+          },
+        },
+      },
     },
   };
 })();

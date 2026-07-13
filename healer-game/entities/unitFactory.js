@@ -34,6 +34,7 @@
       const baseCritChance = Number.isFinite(options.critChance) ? options.critChance : BASE_CRIT_CHANCE;
       const baseCritDamage = Number.isFinite(options.critDamage) ? options.critDamage : BASE_CRIT_DAMAGE_RATE;
       const baseCastSpeed = Number.isFinite(options.castSpeed) ? options.castSpeed : 0;
+      const baseActionSpeed = Number.isFinite(options.actionSpeed) ? options.actionSpeed : 0;
       const baseGuardChance = options.guardChance || 0;
       const baseGuardDamageReduction = Number.isFinite(options.guardDamageReduction) ? options.guardDamageReduction : 0;
       const unit = {
@@ -67,6 +68,7 @@
           critChance: baseCritChance,
           critDamage: baseCritDamage,
           castSpeed: baseCastSpeed,
+          actionSpeed: baseActionSpeed,
           guardChance: baseGuardChance,
           guardDamageReduction: baseGuardDamageReduction,
         },
@@ -89,6 +91,7 @@
         critChance: baseCritChance,
         critDamage: baseCritDamage,
         castSpeed: baseCastSpeed,
+        actionSpeed: baseActionSpeed,
         guardChance: baseGuardChance,
         guardDamageReduction: baseGuardDamageReduction,
         commandBias: 0,
@@ -117,6 +120,8 @@
         pendingActionQueueKey: null,
         hurt: 0,
         guardFlash: 0,
+        hpRegenTickTimer: 0,
+        mpRegenTickTimer: 0,
         frozen: 0,
         frozenMax: 0,
         burnTimer: 0,
@@ -135,12 +140,22 @@
         woundStacks: 0,
         injuryTimer: 0,
         injuryMax: 0,
+        leakageTimer: 0,
+        leakageMax: 0,
+        tingleTimer: 0,
+        tingleMax: 0,
+        freezingTimer: 0,
+        freezingMax: 0,
         plantStage: 0,
         plantSource: null,
         plantUpgradedBy: {},
         contemptStacks: 0,
         contemptTimer: 0,
         contemptMax: 0,
+        feelTimer: 0,
+        feelMax: 0,
+        feelGuardCount: 0,
+        desteStacks: 0,
         regretTimer: 0,
         regretMax: 0,
         sorrowTimer: 0,
@@ -231,6 +246,7 @@
         critChance: stats.critChance,
         critDamage: stats.critDamage,
         castSpeed: stats.castSpeed,
+        actionSpeed: Number.isFinite(stats.actionSpeed) ? stats.actionSpeed : 0,
         guardChance: stats.guardChance,
         guardDamageReduction: stats.guardDamageReduction,
         hpRegenRate: stats.hpRegenRate,
@@ -245,6 +261,8 @@
       enemy.x = x;
       enemy.y = y;
       enemy.usesCustomSkillSet = Array.isArray(stats.skills);
+      enemy.firstSkillKey = typeof stats.firstSkill === "string" ? stats.firstSkill : null;
+      enemy.firstSkillPending = Boolean(enemy.firstSkillKey);
       enemy.cds.attack = Math.random() * getActionCooldown(enemy);
       const skillSystem = getSkillSystem();
       if (kind === "caster") {

@@ -259,6 +259,10 @@
           addMoodActionGain(source, moodGain);
         }
         if (!dotDamage && target.team === "enemy" && rewardDamage + shielded > 0) {
+          if (criticalHit && (source.desteStacks || 0) > 0) {
+            source.desteStacks = Math.max(0, Math.floor(source.desteStacks || 0) - 1);
+            addFloat("ディステ", source.x, source.y - 34, "#f2c56d");
+          }
           if ((source.contemptStacks || 0) > 0 && (source.contemptTimer || 0) > 0) {
             source.contemptStacks = Math.max(0, Math.floor(source.contemptStacks || 0) - 1);
             if (source.contemptStacks <= 0) {
@@ -290,11 +294,107 @@
         if (wasTargetAlive && target.team === "enemy" && source && source.team === "party" && source.mood !== null) {
           addMoodActionGain(source, MOOD_KILL_BONUS);
         }
-        target.dead = true;
-        target.hp = 0;
+        markUnitDefeated(target);
         addBurst(target.x, target.y, target.radius * 2.2, "rgba(255,255,255,0.2)");
       }
       return rewardDamage + shielded;
+    }
+
+    function markUnitDefeated(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.dead = true;
+      unit.hp = 0;
+      clearUnitStatusesOnDefeat(unit);
+      unit.aiIntent = null;
+      unit.aiMoveTarget = null;
+      unit.battleFacingIntent = null;
+      unit.aim = null;
+      unit.itemAim = null;
+      unit.itemUseRequest = null;
+      unit.itemCast = null;
+      unit.cast = null;
+      unit.castVisual = null;
+      unit.channel = null;
+      unit.pendingActionQueueKey = null;
+      unit.actionLock = 0;
+      unit.actionTotal = 0;
+      if (unit.team === "party" && unit.id !== "finald" && unit.mood !== null) {
+        unit.mood = 0;
+        unit.moodActionGain = 0;
+      }
+    }
+
+    function clearUnitStatusesOnDefeat(unit) {
+      unit.shield = 0;
+      unit.shieldTimer = 0;
+      unit.shields = [];
+      unit.hpRegenTickTimer = 0;
+      unit.mpRegenTickTimer = 0;
+      unit.frozen = 0;
+      unit.frozenMax = 0;
+      unit.burnTimer = 0;
+      unit.burnMax = 0;
+      unit.burnTick = 0;
+      unit.burnTickRate = 1;
+      unit.burnDamageHpRatio = 0;
+      unit.burnSource = null;
+      unit.sleepTimer = 0;
+      unit.sleepMax = 0;
+      unit.poisonActive = false;
+      unit.poisonTick = 0;
+      unit.poisonTickRate = 1;
+      unit.poisonDamageHpRatio = 0;
+      unit.poisonSource = null;
+      unit.woundStacks = 0;
+      unit.injuryTimer = 0;
+      unit.injuryMax = 0;
+      unit.leakageTimer = 0;
+      unit.leakageMax = 0;
+      unit.tingleTimer = 0;
+      unit.tingleMax = 0;
+      unit.freezingTimer = 0;
+      unit.freezingMax = 0;
+      unit.plantStage = 0;
+      unit.plantSource = null;
+      unit.plantUpgradedBy = {};
+      unit.contemptStacks = 0;
+      unit.contemptTimer = 0;
+      unit.contemptMax = 0;
+      unit.feelTimer = 0;
+      unit.feelMax = 0;
+      unit.feelGuardCount = 0;
+      unit.desteStacks = 0;
+      unit.regretTimer = 0;
+      unit.regretMax = 0;
+      unit.sorrowTimer = 0;
+      unit.sorrowMax = 0;
+      unit.sorrowTick = 0;
+      unit.reunionTimer = 0;
+      unit.reunionMax = 0;
+      unit.reunionSource = null;
+      unit.absorptionLockTimer = 0;
+      unit.magicNeutralizeTimer = 0;
+      unit.magicNeutralizeMax = 0;
+      unit.magicNeutralizeRatio = 0;
+      unit.actionSpeedDownTimer = 0;
+      unit.actionSpeedDownMax = 0;
+      unit.actionSpeedDownRatio = 0;
+      unit.shadowDashTimer = 0;
+      unit.shadowDashMax = 0;
+      unit.rihasPassiveStacks = 0;
+      unit.rihasPassiveTimer = 0;
+      unit.rihasPassiveStackCooldown = 0;
+      unit.castStacks = 0;
+      unit.stackTimer = 0;
+      unit.stackCooldown = 0;
+      unit.forcedTarget = null;
+      unit.tauntTimer = 0;
+      unit.delayedDamageQueue = [];
+      unit.goukenHitCounts = {};
+      unit.chocolateLilyCharging = false;
+      unit.chocolateLilyDamageTaken = 0;
     }
 
     function applyDamageMoodLoss(target, hpDamage) {
@@ -368,8 +468,9 @@
     }
 
     function formatDamageFloat(amount, options = {}) {
-      const prefix = `${options.guarded ? "B!" : ""}${options.critical ? "C!" : ""}`;
-      return `${prefix}${Math.round(amount)}`;
+      const prefix = options.critical ? "C!" : "";
+      const suffix = options.guarded ? "/B" : "";
+      return `${prefix}${Math.round(amount)}${suffix}`;
     }
 
     function shouldRollCritical(source, target, options = {}) {
@@ -637,8 +738,7 @@
       unit.hurt = 0.18;
       addFloat(`${Math.round(damage)}`, unit.x, unit.y - 24, color);
       if (unit.hp <= 0) {
-        unit.dead = true;
-        unit.hp = 0;
+        markUnitDefeated(unit);
         addBurst(unit.x, unit.y, unit.radius * 2.2, "rgba(255,255,255,0.2)");
       }
     }
@@ -654,6 +754,9 @@
       if (Math.random() < chance) {
         unit.guardFlash = 0.28;
         unit.actionLock = ACTION_GAP;
+        if ((unit.feelTimer || 0) > 0) {
+          unit.feelGuardCount = Math.max(0, Math.floor(unit.feelGuardCount || 0)) + 1;
+        }
         return true;
       }
       return false;

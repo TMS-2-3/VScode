@@ -122,6 +122,18 @@
       };
     }
 
+    function createSaveContext() {
+      return {
+        state,
+        game: state.game,
+        town: state.town,
+        player: state.player,
+        party: state.party,
+        playerProfile: state.playerProfile,
+        updateProfileNameInput: callLater("profileSystem", "updateProfileNameInput"),
+      };
+    }
+
     function createLoadoutContext() {
       return {
         SKILL_DATA,
@@ -296,6 +308,7 @@
         SUSHIA_PASSIVE_STACK_DURATION: balance.sushiaPassiveStackDuration,
         skillSystem: systems.skillSystem,
         itemSystem: systems.itemSystem,
+        saveSystem: systems.saveSystem,
         getGold: callLater("walletSystem", "getGold"),
         formatGold: callLater("walletSystem", "formatGold"),
         getItemCandidates: callLater("itemSystem", "getItemCandidates"),
@@ -430,6 +443,12 @@
         game: state.game,
         town: state.town,
         party: state.party,
+        enemies: state.enemies,
+        projectiles: state.projectiles,
+        telegraphs: state.telegraphs,
+        areas: state.areas,
+        effects: state.effects,
+        expandedStatusUnitIds: state.expandedStatusUnitIds,
         player: state.player,
         playerProfile: state.playerProfile,
         CHARACTER_DEFS,
@@ -440,6 +459,11 @@
         resize: systems.screenSystem.resize,
         startGameLoop: systems.gameLoop.start,
         startTown: callLater("townController", "startTown"),
+        saveSystem: systems.saveSystem,
+        getGold: callLater("walletSystem", "getGold"),
+        formatGold: callLater("walletSystem", "formatGold"),
+        canAffordGold: callLater("walletSystem", "canAffordGold"),
+        spendGold: callLater("walletSystem", "spendGold"),
         handleProfileSetupKey: callLater("profileSystem", "handleProfileSetupKey"),
         handleProfileSetupClick: callLater("profileSystem", "handleProfileSetupClick"),
         interactTown: callLater("townController", "interactTown"),
@@ -680,6 +704,7 @@
         player: state.player,
         enemies: state.enemies,
         telegraphs: state.telegraphs,
+        areas: state.areas,
         skillSystem: systems.skillSystem,
         getItemSystem: () => systems.itemSystem,
         MOOD_BASELINE: balance.moodBaseline,
@@ -790,6 +815,7 @@
       createStoryContext,
       createProfileContext,
       createWalletContext,
+      createSaveContext,
       createLoadoutContext,
       createEquipmentContext,
       createUnitFactoryContext,

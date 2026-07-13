@@ -51,6 +51,59 @@
     return getActionLabel("common.menuBack", "Esc");
   }
 
+  const EQUIPMENT_RANK_FILTERS = ["D", "C", "B", "A", "S"];
+  const EQUIPMENT_SHOP_WEAPON_TYPES = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
+  const EQUIPMENT_SHOP_UNITS = [
+    { id: "ulpes", label: "ウルペス" },
+    { id: "rihas", label: "リハス" },
+    { id: "sushia", label: "スシア" },
+    { id: "finald", label: "アルジュナ" },
+  ];
+  const WEAPON_ALLOWED_UNIT_FALLBACK = {
+    "片手剣": ["ulpes", "rihas"],
+    "両手剣": ["ulpes"],
+    "拳具": ["rihas"],
+    "棒具": ["rihas", "sushia"],
+    "杖": ["sushia"],
+    "魔導書": ["finald", "sushia"],
+    "楽器": ["finald"],
+  };
+  const ARMOR_SLOT_FILTERS = [
+    { key: "head", label: "頭" },
+    { key: "body", label: "胴" },
+    { key: "legs", label: "脚" },
+    { key: "feet", label: "靴" },
+    { key: "hands", label: "手" },
+    { key: "accessory", label: "アクセサリ" },
+  ];
+  const ARMOR_BASIC_STAT_FILTERS = [
+    { key: "maxHp", label: "HP" },
+    { key: "maxMp", label: "MP" },
+    { key: "attack", label: "攻撃力" },
+    { key: "magic", label: "魔力" },
+    { key: "defense", label: "防御力" },
+    { key: "magicDefense", label: "魔法防御力" },
+  ];
+  const ARMOR_DETAIL_STAT_FILTERS = [
+    { key: "critChance", label: "会心率" },
+    { key: "critDamage", label: "会心ダメージ" },
+    { key: "guardChance", label: "ガード率" },
+    { key: "guardDamageReduction", label: "ガード軽減率" },
+    { key: "damageBoost", label: "与ダメージ率" },
+    { key: "damageResistance", label: "被ダメージ率" },
+    { key: "physicalDamageBoost", label: "物理与ダメージ率" },
+    { key: "physicalDamageResistance", label: "物理被ダメージ率" },
+    { key: "magicDamageBoost", label: "魔法与ダメージ率" },
+    { key: "magicDamageResistance", label: "魔法被ダメージ率" },
+    { key: "hpRegenRate", label: "HP再生率" },
+    { key: "mpRegenRate", label: "MP再生率" },
+    { key: "castSpeed", label: "詠唱速度" },
+    { key: "cooldownReduction", label: "スキル速度" },
+    { key: "actionSpeed", label: "行動速度" },
+    { key: "ultimateChargeRate", label: "ゲージ上昇率" },
+    { key: "moveSpeed", label: "移動速度" },
+  ];
+
   const TOWN_CHARACTER_SPRITE_PATHS = {
     sushia: "sushia_img",
     ulpes: "ulpes_img",
@@ -678,6 +731,9 @@
     drawTextButton(x + 26, y + 66, 112, 34, craftLabel, { kind: "selectEquipmentShopTab", tab: "craft" }, tab === "craft");
     drawTextButton(x + 148, y + 66, 112, 34, "強化", { kind: "selectEquipmentShopTab", tab: "upgrade" }, tab === "upgrade");
     drawTextButton(x + 270, y + 66, 138, 34, "強化リセット", { kind: "selectEquipmentShopTab", tab: "reset" }, tab === "reset");
+    const filterY = y + 110;
+    const filterH = drawEquipmentShopFilters(x + 26, filterY, w - 52, shopKind);
+    const listTop = filterY + filterH + 10;
 
     if (!rows.length) {
       town.panel.scroll = 0;
@@ -687,17 +743,17 @@
       const label = shopKind === "weapon" ? "武器" : "防具・アクセサリ";
       const action = tab === "craft" ? craftLabel : tab === "reset" ? "強化リセット" : "強化";
       if (tab === "upgrade") {
-        ctx.fillText(`強化できる所持${label}はありません。`, x + 26, y + 138);
-        ctx.fillText(`${shopKind === "weapon" ? "生成" : "製作"}した装備がある場合、同じ装備でも個体ごとにここへ表示されます。`, x + 26, y + 166);
+        ctx.fillText(`強化できる所持${label}はありません。`, x + 26, listTop + 28);
+        ctx.fillText(`${shopKind === "weapon" ? "生成" : "製作"}した装備がある場合、同じ装備でも個体ごとにここへ表示されます。`, x + 26, listTop + 56);
       } else if (tab === "reset") {
-        ctx.fillText(`強化リセットできる所持${label}はありません。`, x + 26, y + 138);
-        ctx.fillText(`強化済みの${label}がある場合、同じ装備でも個体ごとにここへ表示されます。`, x + 26, y + 166);
+        ctx.fillText(`強化リセットできる所持${label}はありません。`, x + 26, listTop + 28);
+        ctx.fillText(`強化済みの${label}がある場合、同じ装備でも個体ごとにここへ表示されます。`, x + 26, listTop + 56);
       } else {
-        ctx.fillText(`${label}の${action}データはまだありません。`, x + 26, y + 138);
-        ctx.fillText("装備データにレシピを追加すると、ここに候補が表示されます。", x + 26, y + 166);
+        ctx.fillText(`${label}の${action}データはまだありません。`, x + 26, listTop + 28);
+        ctx.fillText("装備データにレシピを追加すると、ここに候補が表示されます。", x + 26, listTop + 56);
       }
     } else {
-      const listRect = { x: x + 24, y: y + 118, w: w - 48, h: Math.max(120, h - 210) };
+      const listRect = { x: x + 24, y: listTop, w: w - 48, h: Math.max(96, y + h - 78 - listTop) };
       const rowH = getEquipmentShopRowHeight(tab);
       const gap = 10;
       const contentH = rows.length * rowH + Math.max(0, rows.length - 1) * gap;
@@ -733,6 +789,147 @@
     if (town.panel.confirmation) {
       drawEquipmentResetConfirmationOverlay();
     }
+  }
+
+  function drawEquipmentShopFilters(x, y, w, shopKind) {
+    const filters = ensureEquipmentShopFiltersForTown();
+    const startY = y;
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    roundRect(x - 2, y - 8, w + 4, 10, 8);
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("絞り込み", x, y + 8);
+    ctx.restore();
+    drawFilterChip(x + w - 86, y - 8, 86, 24, "条件クリア", false, { kind: "clearEquipmentShopFilters" });
+    y += 22;
+
+    if (shopKind === "weapon") {
+      const weapon = filters.weapon;
+      y += drawFilterChipRow("種類", createBulkFilterChips("weaponType", EQUIPMENT_SHOP_WEAPON_TYPES.map((type) => ({
+        label: type,
+        selected: weapon.mode === "type" && weapon.weaponTypes.includes(type),
+        action: { kind: "toggleEquipmentShopFilter", category: "weaponType", value: type },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("装備可能者", createBulkFilterChips("weaponUnit", EQUIPMENT_SHOP_UNITS.map((unit) => ({
+        label: unit.label,
+        selected: weapon.mode === "unit" && weapon.unitIds.includes(unit.id),
+        action: { kind: "toggleEquipmentShopFilter", category: "weaponUnit", value: unit.id },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("ランク", createBulkFilterChips("weaponRank", EQUIPMENT_RANK_FILTERS.map((rank) => ({
+        label: rank,
+        selected: weapon.ranks.includes(rank),
+        action: { kind: "toggleEquipmentShopFilter", category: "weaponRank", value: rank },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("並び替え", [
+        { label: "デフォルト", selected: !weapon.sortKey, action: { kind: "setEquipmentShopSort", sortKey: "default" } },
+        { label: "攻撃力順", selected: weapon.sortKey === "attack", action: { kind: "setEquipmentShopSort", sortKey: "attack" } },
+        { label: "魔力順", selected: weapon.sortKey === "magic", action: { kind: "setEquipmentShopSort", sortKey: "magic" } },
+        { label: "ランク順", selected: weapon.sortKey === "rank", action: { kind: "setEquipmentShopSort", sortKey: "rank" } },
+        { label: "降順", selected: weapon.sortDir !== "asc", action: { kind: "setEquipmentShopSort", sortDir: "desc" } },
+        { label: "昇順", selected: weapon.sortDir === "asc", action: { kind: "setEquipmentShopSort", sortDir: "asc" } },
+      ], x, y, w);
+    } else {
+      const armor = filters.armor;
+      y += drawFilterChipRow("ランク", createBulkFilterChips("armorRank", EQUIPMENT_RANK_FILTERS.map((rank) => ({
+        label: rank,
+        selected: armor.ranks.includes(rank),
+        action: { kind: "toggleEquipmentShopFilter", category: "armorRank", value: rank },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("装備部位", createBulkFilterChips("armorSlot", ARMOR_SLOT_FILTERS.map((entry) => ({
+        label: entry.label,
+        selected: armor.slots.includes(entry.key),
+        action: { kind: "toggleEquipmentShopFilter", category: "armorSlot", value: entry.key },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("上昇ステータス", createBulkFilterChips("armorBasicStat", ARMOR_BASIC_STAT_FILTERS.map((entry) => ({
+        label: entry.label,
+        selected: armor.basicStats.includes(entry.key),
+        action: { kind: "toggleEquipmentShopFilter", category: "armorBasicStat", value: entry.key },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("その他", createBulkFilterChips("armorDetailStat", ARMOR_DETAIL_STAT_FILTERS.map((entry) => ({
+        label: entry.label,
+        selected: armor.detailStats.includes(entry.key),
+        action: { kind: "toggleEquipmentShopFilter", category: "armorDetailStat", value: entry.key },
+      }))), x, y, w) + 4;
+      y += drawFilterChipRow("並び替え", [
+        { label: "デフォルト", selected: !armor.sortKey, action: { kind: "setEquipmentShopSort", sortKey: "default" } },
+        { label: "ランク順", selected: armor.sortKey === "rank", action: { kind: "setEquipmentShopSort", sortKey: "rank" } },
+        { label: "降順", selected: armor.sortDir !== "asc", action: { kind: "setEquipmentShopSort", sortDir: "desc" } },
+        { label: "昇順", selected: armor.sortDir === "asc", action: { kind: "setEquipmentShopSort", sortDir: "asc" } },
+      ], x, y, w);
+    }
+    return Math.max(82, y - startY);
+  }
+
+  function createBulkFilterChips(category, chips) {
+    return [
+      { label: "全部外す", selected: false, action: { kind: "setEquipmentShopFilterGroup", category, mode: "none" } },
+      { label: "全部つける", selected: false, action: { kind: "setEquipmentShopFilterGroup", category, mode: "all" } },
+      ...chips,
+    ];
+  }
+
+  function drawFilterChipRow(label, chips, x, y, w) {
+    const labelW = 96;
+    const gap = 6;
+    const rowH = 26;
+    let cursorX = x + labelW;
+    let cursorY = y;
+    ctx.save();
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x, y + 12);
+    ctx.restore();
+    ctx.save();
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    for (const chip of chips) {
+      const chipW = Math.min(138, Math.max(48, Math.ceil(ctx.measureText(chip.label).width) + 22));
+      if (cursorX + chipW > x + w && cursorX > x + labelW) {
+        cursorX = x + labelW;
+        cursorY += rowH;
+      }
+      drawFilterChip(cursorX, cursorY, chipW, 22, chip.label, chip.selected, chip.action);
+      cursorX += chipW + gap;
+    }
+    ctx.restore();
+    return cursorY + rowH - y;
+  }
+
+  function drawFilterChip(x, y, w, h, label, selected, action) {
+    const hovered = inputPointInRect(x, y, w, h);
+    ctx.save();
+    ctx.fillStyle = selected
+      ? hovered ? "rgba(255,226,124,0.95)" : "rgba(255,216,107,0.82)"
+      : hovered ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.10)";
+    ctx.strokeStyle = selected ? "rgba(255,245,190,0.86)" : "rgba(255,255,255,0.18)";
+    ctx.lineWidth = selected ? 1.4 : 1;
+    roundRect(x, y, w, h, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = selected ? "#102018" : "#f7fff6";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2 + 0.5);
+    ctx.restore();
+    town.panel.clickTargets.push({ x, y, w, h, action });
+  }
+
+  function inputPointInRect(x, y, w, h) {
+    return context.input && context.input.mouse
+      && context.input.mouse.x >= x
+      && context.input.mouse.x <= x + w
+      && context.input.mouse.y >= y
+      && context.input.mouse.y <= y + h;
   }
 
   function drawEquipmentShopRow(item, tab, x, y, w, h) {
@@ -1060,7 +1257,212 @@
         rows.push(item);
       }
     }
-    return rows;
+    return applyEquipmentShopFilters(rows, shopKind);
+  }
+
+  function createDefaultEquipmentShopFiltersForTown() {
+    return {
+      weapon: {
+        mode: "type",
+        weaponTypes: [...EQUIPMENT_SHOP_WEAPON_TYPES],
+        unitIds: [],
+        ranks: [...EQUIPMENT_RANK_FILTERS],
+        sortKey: null,
+        sortDir: "desc",
+      },
+      armor: {
+        ranks: [...EQUIPMENT_RANK_FILTERS],
+        slots: ARMOR_SLOT_FILTERS.map((entry) => entry.key),
+        basicStats: ARMOR_BASIC_STAT_FILTERS.map((entry) => entry.key),
+        detailStats: ARMOR_DETAIL_STAT_FILTERS.map((entry) => entry.key),
+        sortKey: null,
+        sortDir: "desc",
+      },
+    };
+  }
+
+  function ensureEquipmentShopFiltersForTown() {
+    if (!town.panel || town.panel.action !== "equipmentShop") {
+      return createDefaultEquipmentShopFiltersForTown();
+    }
+    if (!town.panel.filters || typeof town.panel.filters !== "object") {
+      town.panel.filters = createDefaultEquipmentShopFiltersForTown();
+    }
+    const defaults = createDefaultEquipmentShopFiltersForTown();
+    const filters = town.panel.filters;
+    if (!filters.weapon || typeof filters.weapon !== "object") {
+      filters.weapon = defaults.weapon;
+    }
+    if (!filters.armor || typeof filters.armor !== "object") {
+      filters.armor = defaults.armor;
+    }
+    if (!Array.isArray(filters.weapon.weaponTypes)) {
+      filters.weapon.weaponTypes = [...EQUIPMENT_SHOP_WEAPON_TYPES];
+    }
+    if (!Array.isArray(filters.weapon.unitIds)) {
+      filters.weapon.unitIds = [];
+    }
+    if (!Array.isArray(filters.weapon.ranks)) {
+      filters.weapon.ranks = [...EQUIPMENT_RANK_FILTERS];
+    }
+    if (!["type", "unit"].includes(filters.weapon.mode)) {
+      filters.weapon.mode = filters.weapon.unitIds.length ? "unit" : "type";
+    }
+    if (!["attack", "magic", "rank", null].includes(filters.weapon.sortKey)) {
+      filters.weapon.sortKey = null;
+    }
+    if (filters.weapon.sortDir !== "asc") {
+      filters.weapon.sortDir = "desc";
+    }
+    if (!Array.isArray(filters.armor.ranks)) {
+      filters.armor.ranks = [...EQUIPMENT_RANK_FILTERS];
+    }
+    if (!Array.isArray(filters.armor.slots)) {
+      filters.armor.slots = ARMOR_SLOT_FILTERS.map((entry) => entry.key);
+    }
+    if (!Array.isArray(filters.armor.basicStats)) {
+      filters.armor.basicStats = ARMOR_BASIC_STAT_FILTERS.map((entry) => entry.key);
+    }
+    if (!Array.isArray(filters.armor.detailStats)) {
+      filters.armor.detailStats = ARMOR_DETAIL_STAT_FILTERS.map((entry) => entry.key);
+    }
+    if (!["rank", null].includes(filters.armor.sortKey)) {
+      filters.armor.sortKey = null;
+    }
+    if (filters.armor.sortDir !== "asc") {
+      filters.armor.sortDir = "desc";
+    }
+    return filters;
+  }
+
+  function applyEquipmentShopFilters(rows, shopKind) {
+    const filters = ensureEquipmentShopFiltersForTown();
+    const shopFilters = shopKind === "weapon" ? filters.weapon : filters.armor;
+    const filtered = shopKind === "weapon"
+      ? rows.filter((item) => matchWeaponShopFilters(item, shopFilters))
+      : rows.filter((item) => matchArmorShopFilters(item, shopFilters));
+    if (shopFilters.sortKey) {
+      const sortKey = shopFilters.sortKey;
+      const dir = shopFilters.sortDir === "asc" ? 1 : -1;
+      filtered.sort((a, b) => {
+        const diff = getEquipmentSortStatValue(a, sortKey) - getEquipmentSortStatValue(b, sortKey);
+        if (diff !== 0) {
+          return diff * dir;
+        }
+        return String(a && a.name || a && a.id || "").localeCompare(String(b && b.name || b && b.id || ""), "ja");
+      });
+    }
+    return filtered;
+  }
+
+  function matchWeaponShopFilters(item, filters) {
+    if (!item) {
+      return false;
+    }
+    if (!matchesEquipmentFilterValue(item.rank, filters.ranks, EQUIPMENT_RANK_FILTERS)) {
+      return false;
+    }
+    if (filters.mode === "unit") {
+      const allUnitIds = EQUIPMENT_SHOP_UNITS.map((unit) => unit.id);
+      if (isEquipmentFilterEmpty(filters.unitIds, allUnitIds)) {
+        return false;
+      }
+      if (!isEquipmentFilterActive(filters.unitIds, allUnitIds)) {
+        return true;
+      }
+      const allowed = getWeaponAllowedUnitIdsForTown(item);
+      return filters.unitIds.some((unitId) => allowed.includes(unitId));
+    }
+    return matchesEquipmentFilterValue(item.weaponType, filters.weaponTypes, EQUIPMENT_SHOP_WEAPON_TYPES);
+  }
+
+  function getWeaponAllowedUnitIdsForTown(item) {
+    if (Array.isArray(item && item.allowedUnitIds)) {
+      return item.allowedUnitIds;
+    }
+    return WEAPON_ALLOWED_UNIT_FALLBACK[item && item.weaponType] || [];
+  }
+
+  function matchArmorShopFilters(item, filters) {
+    if (!item) {
+      return false;
+    }
+    if (!matchesEquipmentFilterValue(item.rank, filters.ranks, EQUIPMENT_RANK_FILTERS)) {
+      return false;
+    }
+    const armorSlots = ARMOR_SLOT_FILTERS.map((entry) => entry.key);
+    const armorBasicStats = ARMOR_BASIC_STAT_FILTERS.map((entry) => entry.key);
+    const armorDetailStats = ARMOR_DETAIL_STAT_FILTERS.map((entry) => entry.key);
+    if (!matchesEquipmentFilterValue(item.slot, filters.slots, armorSlots)) {
+      return false;
+    }
+    if (isEquipmentFilterEmpty(filters.basicStats, armorBasicStats)) {
+      return false;
+    }
+    if (isEquipmentFilterActive(filters.basicStats, armorBasicStats) && !filters.basicStats.some((key) => hasEquipmentShopStat(item, key))) {
+      return false;
+    }
+    if (isEquipmentFilterEmpty(filters.detailStats, armorDetailStats)) {
+      return false;
+    }
+    if (isEquipmentFilterActive(filters.detailStats, armorDetailStats) && !filters.detailStats.some((key) => hasEquipmentShopStat(item, key))) {
+      return false;
+    }
+    return true;
+  }
+
+  function matchesEquipmentFilterValue(value, selectedValues, allValues) {
+    if (isEquipmentFilterEmpty(selectedValues, allValues)) {
+      return false;
+    }
+    return !isEquipmentFilterActive(selectedValues, allValues) || selectedValues.includes(value);
+  }
+
+  function isEquipmentFilterActive(selectedValues, allValues) {
+    return getEquipmentFilterState(selectedValues, allValues) === "partial";
+  }
+
+  function isEquipmentFilterEmpty(selectedValues, allValues) {
+    return getEquipmentFilterState(selectedValues, allValues) === "none";
+  }
+
+  function getEquipmentFilterState(selectedValues, allValues) {
+    if (!Array.isArray(selectedValues) || !Array.isArray(allValues)) {
+      return "all";
+    }
+    if (!selectedValues.length) {
+      return "none";
+    }
+    const allSelected = allValues.length > 0 && allValues.every((value) => selectedValues.includes(value));
+    return allSelected ? "all" : "partial";
+  }
+
+  function hasEquipmentShopStat(item, key) {
+    return getEquipmentShopStatRawValue(item, key) !== 0;
+  }
+
+  function getEquipmentSortStatValue(item, key) {
+    if (key === "rank") {
+      return getEquipmentRankSortValue(item);
+    }
+    return getEquipmentShopStatRawValue(item, key);
+  }
+
+  function getEquipmentRankSortValue(item) {
+    const order = typeof HEALER_RANK_DATA !== "undefined" && Array.isArray(HEALER_RANK_DATA.order)
+      ? HEALER_RANK_DATA.order
+      : EQUIPMENT_RANK_FILTERS;
+    const index = order.indexOf(item && item.rank);
+    return index >= 0 ? index : -1;
+  }
+
+  function getEquipmentShopStatRawValue(item, key) {
+    if (!item || !key) {
+      return 0;
+    }
+    const flat = item.flatStatBonuses && Number(item.flatStatBonuses[key]);
+    const percent = item.statBonuses && Number(item.statBonuses[key]);
+    return (Number.isFinite(flat) ? flat : 0) + (Number.isFinite(percent) ? percent * 100 : 0);
   }
 
   function getEquipmentRefForTown(itemOrRef) {

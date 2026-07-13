@@ -294,6 +294,59 @@
     };
   }
 
+  function makeFlostinyWeapon(id, name, weaponType, statKey, statValue, normalAttackSkillId, craftMaterials, upgradeMaterials) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "weapon",
+      weaponType,
+      series: "flostiny",
+      material: "フロスティーニ素材",
+      allowedUnitIds: (weaponAllowedUnitIds[weaponType] || []).slice(),
+      craft: makeCost(300, craftMaterials),
+      flatStatBonuses: { [statKey]: statValue },
+      upgrade: makeFixedUpgrade("flatStatMultiplier", makeCost(150, upgradeMaterials)),
+      normalAttackSkillId,
+      effect: null,
+      simpleDescription: "フロスティーニ素材で作れる武器。",
+      description: "フロスティーニ素材で作れる武器。強化すると主ステータスが伸びる。",
+    };
+  }
+
+  function makeFlostinyArmor(id, name, slot, statBonuses, craftMaterials, upgradeMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot,
+      series: "flostiny",
+      material: "フロスティーニ素材",
+      craft: makeCost(300, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      upgrade: makeFixedUpgrade("randomStatMultiplier", makeCost(150, upgradeMaterials)),
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
+  function makeFlostinyAccessory(id, name, statBonuses, craftGold, craftMaterials, description) {
+    return {
+      id,
+      name,
+      rank: "D",
+      slot: "accessory",
+      series: "flostiny",
+      material: "フロスティーニ素材",
+      craft: makeCost(craftGold, craftMaterials),
+      statBonuses: { ...(statBonuses || {}) },
+      effect: null,
+      simpleDescription: description,
+      description,
+    };
+  }
+
   window.HEALER_EQUIPMENT_DATA = {
     defaultElement: elementData.defaultElement,
     slots: [
@@ -731,6 +784,129 @@
         200,
         { shadow_wolf_nail: 5 },
         "シャドウウルフの爪を元に作られたペンダント"
+      ),
+      flostiny_knife: makeFlostinyWeapon(
+        "flostiny_knife",
+        "ディスティニナイフ",
+        "片手剣",
+        "attack",
+        25,
+        "flostiny_attack_knife",
+        { flostiny_vine: 2, flostiny_flower: 2 },
+        { flostiny_vine: 1 }
+      ),
+      flostiny_sword: makeFlostinyWeapon(
+        "flostiny_sword",
+        "ディスティニソード",
+        "両手剣",
+        "attack",
+        35,
+        "flostiny_attack_sword",
+        { flostiny_vine: 3, flostiny_flower: 2 },
+        { flostiny_vine: 1 }
+      ),
+      flostiny_fist: makeFlostinyWeapon(
+        "flostiny_fist",
+        "ディスティニフィスト",
+        "拳具",
+        "attack",
+        25,
+        "flostiny_attack_fist",
+        { flostiny_moss: 3, flostiny_flower: 2 },
+        { flostiny_flower: 1 }
+      ),
+      flostiny_staff: makeFlostinyWeapon(
+        "flostiny_staff",
+        "ディスティニスタッフ",
+        "棒具",
+        "attack",
+        20,
+        "flostiny_attack_staff",
+        { flostiny_vine: 1, flostiny_flower: 1, flostiny_moss: 2 },
+        { flostiny_moss: 2 }
+      ),
+      flostiny_stick: makeFlostinyWeapon(
+        "flostiny_stick",
+        "ディスティニステッキ",
+        "杖",
+        "magic",
+        25,
+        "flostiny_attack_stick",
+        { flostiny_moss: 2, flostiny_flower: 1, flostiny_crystal: 1 },
+        { flostiny_flower: 1 }
+      ),
+      flostiny_book: makeFlostinyWeapon(
+        "flostiny_book",
+        "魔導書・ディスティニ",
+        "魔導書",
+        "magic",
+        22,
+        "flostiny_attack_book",
+        { flostiny_moss: 4, flostiny_flower: 3 },
+        { flostiny_flower: 1 }
+      ),
+      flostiny_flute: makeFlostinyWeapon(
+        "flostiny_flute",
+        "ディスティニフルート",
+        "楽器",
+        "magic",
+        18,
+        "flostiny_attack_flute",
+        { flostiny_crystal: 2, flostiny_flower: 2, flostiny_moss: 1 },
+        { flostiny_moss: 2 }
+      ),
+      flostiny_helm: makeFlostinyArmor(
+        "flostiny_helm",
+        "ディスティニヘルム",
+        "head",
+        { maxHp: 0.1, defense: 0.1, magicDefense: 0.1 },
+        { flostiny_moss: 4, flostiny_flower: 3 },
+        { flostiny_moss: 1, flostiny_flower: 1 },
+        "フロスティーニ素材で作られた頭装備"
+      ),
+      flostiny_armor: makeFlostinyArmor(
+        "flostiny_armor",
+        "ディスティニアーマー",
+        "body",
+        { maxHp: 0.2 },
+        { flostiny_moss: 5, flostiny_flower: 3 },
+        { flostiny_moss: 1, flostiny_flower: 1 },
+        "フロスティーニ素材で作られた胴装備"
+      ),
+      flostiny_leggings: makeFlostinyArmor(
+        "flostiny_leggings",
+        "ディスティニレギンス",
+        "legs",
+        { maxHp: 0.05, attack: 0.1, magic: 0.1 },
+        { flostiny_moss: 2, flostiny_flower: 1, flostiny_vine: 2 },
+        { flostiny_moss: 1, flostiny_vine: 1 },
+        "フロスティーニ素材で作られた足装備"
+      ),
+      flostiny_boots: makeFlostinyArmor(
+        "flostiny_boots",
+        "ディスティニブーツ",
+        "feet",
+        { maxHp: 0.05, attack: 0.1, magic: 0.1 },
+        { flostiny_moss: 2, flostiny_flower: 1, flostiny_vine: 2 },
+        { flostiny_moss: 1, flostiny_vine: 1 },
+        "フロスティーニ素材で作られた靴装備"
+      ),
+      flostiny_glove: makeFlostinyArmor(
+        "flostiny_glove",
+        "ディスティニグローブ",
+        "hands",
+        { attack: 0.15, magic: 0.15 },
+        { flostiny_moss: 1, flostiny_vine: 5 },
+        { flostiny_vine: 2 },
+        "フロスティーニ素材で作られた手装備"
+      ),
+      flostiny_pendant: makeFlostinyAccessory(
+        "flostiny_pendant",
+        "ディスティニペンダント",
+        { hpRegenRate: 0.02 },
+        500,
+        { flostiny_crystal: 3 },
+        "フロスティーニの石を元に作られたペンダント"
       ),
     },
     series: seriesData.series,

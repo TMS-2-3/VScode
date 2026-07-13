@@ -7,6 +7,7 @@
       player,
       enemies,
       telegraphs,
+      areas,
       skillSystem,
       getItemSystem,
       MOOD_BASELINE,
@@ -109,8 +110,10 @@
       const moodSpeed = 1 + Math.max(0, unit.mood - MOOD_BASELINE) * 0.003;
       const speed = getUnitMoveSpeed(unit);
       if (avoidDir) {
-        unit.battleFacingIntent = "move";
-        moveUnitWithWallSlide(unit, avoidDir, speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt);
+        const moved = moveUnitAwayFromDanger(unit, avoidDir, speed * moodSpeed * TELEGRAPH_AVOID_SPEED_MULT * dt);
+        if (moved) {
+          unit.battleFacingIntent = "move";
+        }
         return true;
       }
 
@@ -135,6 +138,54 @@
       unit.battleFacingIntent = "target";
       moveUnitWithWallSlide(unit, dir, speed * moodSpeed * dt);
       return false;
+    }
+
+    function moveUnitAwayFromDanger(unit, avoidDir, distance) {
+      if (!unit || !avoidDir || !Number.isFinite(distance) || distance <= 0) {
+        return false;
+      }
+      const currentScore = getDangerScoreAt(unit, unit.x, unit.y);
+      if (currentScore <= 0) {
+        return false;
+      }
+
+      let best = null;
+      const candidates = getAvoidanceMoveCandidates(avoidDir);
+      for (const dir of candidates) {
+        const projected = moveUnitWithWallSlide(unit, dir, distance, { detailed: true, dryRun: true });
+        if (!projected || !projected.moved) {
+          continue;
+        }
+        const nextScore = getDangerScoreAt(unit, projected.x, projected.y);
+        if (nextScore > 0 && nextScore >= currentScore - 0.001) {
+          continue;
+        }
+        const progress = (projected.x - unit.x) * dir.x + (projected.y - unit.y) * dir.y;
+        if (!best || nextScore < best.score - 0.001 || (Math.abs(nextScore - best.score) <= 0.001 && progress > best.progress)) {
+          best = { dir, score: nextScore, progress };
+        }
+      }
+
+      if (!best) {
+        return false;
+      }
+      const movement = moveUnitWithWallSlide(unit, best.dir, distance, { detailed: true });
+      return Boolean(movement && movement.moved);
+    }
+
+    function getAvoidanceMoveCandidates(dir) {
+      const base = dir && dir.len === 0 ? dir : normalize(dir.x, dir.y);
+      if (!base || base.len <= 0) {
+        return [];
+      }
+      const angles = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, Math.PI];
+      return angles.map((angle) => rotateDirection(base, angle));
+    }
+
+    function rotateDirection(dir, angle) {
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return normalize(dir.x * cos - dir.y * sin, dir.x * sin + dir.y * cos);
     }
 
     function getPreferredRangeMoveDir(unit, target, targetDistance, desired) {
@@ -182,6 +233,7 @@
 
     function moveUnitWithWallSlide(unit, dir, distance, options = {}) {
       const detailed = Boolean(options && options.detailed);
+      const dryRun = Boolean(options && options.dryRun);
       if (!unit || !dir || !Number.isFinite(distance) || distance <= 0) {
         return detailed ? { moved: false, blockedByWall: false, wallRejected: false } : false;
       }
@@ -194,10 +246,14 @@
       let dy = moveDir.y * distance;
       const bounds = typeof getBattleBounds === "function" ? getBattleBounds() : null;
       if (!bounds) {
-        unit.x += dx;
-        unit.y += dy;
-        clampUnit(unit);
-        return detailed ? { moved: true, blockedByWall: false, wallRejected: false } : true;
+        const nextX = unit.x + dx;
+        const nextY = unit.y + dy;
+        if (!dryRun) {
+          unit.x = nextX;
+          unit.y = nextY;
+          clampUnit(unit);
+        }
+        return detailed ? { moved: true, blockedByWall: false, wallRejected: false, x: dryRun ? nextX : unit.x, y: dryRun ? nextY : unit.y } : true;
       }
 
       const radius = Number.isFinite(unit.radius) ? unit.radius : 0;
@@ -218,10 +274,10 @@
 
       const slideDistance = distance * 0.55;
       if (blockedX && Math.abs(dy) < 0.01 && minY < maxY) {
-        dy = getWallSlideSign(unit, "y", minX, maxX, minY, maxY) * slideDistance;
+        dy = getWallSlideSign(unit, "y", minX, maxX, minY, maxY, dryRun) * slideDistance;
       }
       if (blockedY && Math.abs(dx) < 0.01 && minX < maxX) {
-        dx = getWallSlideSign(unit, "x", minX, maxX, minY, maxY) * slideDistance;
+        dx = getWallSlideSign(unit, "x", minX, maxX, minY, maxY, dryRun) * slideDistance;
       }
 
       const unclampedX = unit.x + dx;
@@ -232,16 +288,18 @@
       const actualDy = nextY - unit.y;
       const moved = Math.abs(actualDx) > 0.01 || Math.abs(actualDy) > 0.01;
       const clampedByWall = Math.abs(nextX - unclampedX) > 0.01 || Math.abs(nextY - unclampedY) > 0.01;
-      unit.x = nextX;
-      unit.y = nextY;
+      if (!dryRun) {
+        unit.x = nextX;
+        unit.y = nextY;
+      }
       const blockedByWall = blockedX || blockedY || clampedByWall;
       const intendedProgress = distance;
       const actualProgress = actualDx * moveDir.x + actualDy * moveDir.y;
       const wallRejected = blockedByWall && actualProgress < intendedProgress * 0.35;
-      return detailed ? { moved, blockedByWall, wallRejected } : moved;
+      return detailed ? { moved, blockedByWall, wallRejected, x: nextX, y: nextY } : moved;
     }
 
-    function getWallSlideSign(unit, axis, minX, maxX, minY, maxY) {
+    function getWallSlideSign(unit, axis, minX, maxX, minY, maxY, dryRun = false) {
       const key = axis === "x" ? "aiWallSlideX" : "aiWallSlideY";
       let sign = Number.isFinite(unit[key]) && unit[key] !== 0 ? Math.sign(unit[key]) : 0;
       if (!sign) {
@@ -257,7 +315,9 @@
         if (unit.y <= minY + edge && sign < 0) sign = 1;
         if (unit.y >= maxY - edge && sign > 0) sign = -1;
       }
-      unit[key] = sign;
+      if (!dryRun) {
+        unit[key] = sign;
+      }
       return sign;
     }
 
@@ -383,9 +443,61 @@
         x += escape.x * escape.weight;
         y += escape.y * escape.weight;
       }
+      for (const area of areas || []) {
+        const escape = getAreaEscapeVector(unit, area);
+        if (!escape) {
+          continue;
+        }
+        x += escape.x * escape.weight;
+        y += escape.y * escape.weight;
+      }
 
       const dir = normalize(x, y);
       return dir.len > 0 ? dir : null;
+    }
+
+    function getDangerScoreAt(unit, x, y) {
+      if (!unit || !Number.isFinite(x) || !Number.isFinite(y)) {
+        return 0;
+      }
+      const probe = { x, y, radius: Number.isFinite(unit.radius) ? unit.radius : 0 };
+      let score = 0;
+      for (const telegraph of telegraphs || []) {
+        if (telegraph.hidden || telegraph.team !== "enemy") {
+          continue;
+        }
+        updateTelegraphDynamic(telegraph);
+        const escape = getTelegraphEscapeVector(probe, telegraph);
+        if (escape) {
+          score += escape.weight;
+        }
+      }
+      for (const area of areas || []) {
+        const escape = getAreaEscapeVector(probe, area);
+        if (escape) {
+          score += escape.weight;
+        }
+      }
+      return score;
+    }
+
+    function getAreaEscapeVector(unit, area) {
+      if (!area || area.hidden) {
+        return null;
+      }
+      if (area.type === "enemy_line") {
+        return getLineTelegraphEscape(unit, {
+          type: "line",
+          x: area.x,
+          y: area.y,
+          x2: area.x2,
+          y2: area.y2,
+          width: area.width || battlePx(24),
+          time: Number.isFinite(area.time) ? area.time : 0,
+          total: Number.isFinite(area.total) ? area.total : 0,
+        });
+      }
+      return null;
     }
 
     function getTelegraphEscapeVector(unit, telegraph) {
