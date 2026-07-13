@@ -177,6 +177,12 @@
         gap: 6px;
       }
 
+      .rotate-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+
       .palette {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -369,6 +375,13 @@
           <button data-tool="fill">塗潰</button>
         </div>
 
+        <h2>向き</h2>
+        <div class="rotate-row">
+          <button id="rotate-left-button">左回転</button>
+          <button id="rotate-reset-button">0度</button>
+          <button id="rotate-right-button">右回転</button>
+        </div>
+
         <h2>選択</h2>
         <div id="selected-info" class="selected-info"></div>
 
@@ -421,6 +434,7 @@
         map: null,
         activeLayer: "ground",
         selectedTile: "grass",
+        selectedRotation: 0,
         tool: "paint",
         isPointerDown: false,
         lastPaintKey: "",
@@ -448,6 +462,42 @@
         return JSON.parse(JSON.stringify(value));
       }
 
+      function normalizeRotation(value) {
+        const rotation = Number(value) || 0;
+        const snapped = Math.round(rotation / 90) * 90;
+        return ((snapped % 360) + 360) % 360;
+      }
+
+      function isTileEntryObject(value) {
+        return !!value && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function normalizeTileEntry(value, fill) {
+        if (value == null) return fill;
+        if (!isTileEntryObject(value)) return value;
+        const tileId = value.tileId || value.id || null;
+        if (!tileId) return fill;
+        const rotation = normalizeRotation(value.rotate);
+        if (!rotation) return tileId;
+        return { tileId, rotate: rotation };
+      }
+
+      function getTileIdFromEntry(value) {
+        if (value == null) return null;
+        return isTileEntryObject(value) ? value.tileId || value.id || null : value;
+      }
+
+      function getTileRotationFromEntry(value) {
+        return isTileEntryObject(value) ? normalizeRotation(value.rotate) : 0;
+      }
+
+      function createTileEntry(tileId, rotation = state.selectedRotation) {
+        if (!tileId) return null;
+        const normalizedRotation = normalizeRotation(rotation);
+        if (!normalizedRotation) return tileId;
+        return { tileId, rotate: normalizedRotation };
+      }
+
       function sanitizeId(value) {
         return String(value || "map01").trim().replace(/[^A-Za-z0-9_]/g, "_") || "map01";
       }
@@ -461,7 +511,9 @@
       }
 
       function normalizeLayer(layer, width, height, fill) {
-        const tiles = Array.isArray(layer.tiles) ? layer.tiles.slice(0, width * height) : [];
+        const tiles = Array.isArray(layer.tiles)
+          ? layer.tiles.slice(0, width * height).map((tile) => normalizeTileEntry(tile, fill))
+          : [];
         while (tiles.length < width * height) tiles.push(fill);
         return { id: layer.id, name: layer.name || layer.id, tiles };
       }
@@ -550,19 +602,25 @@
       }
 
       function drawTileImage(tileId, x, y, layerIndex) {
-        const def = getTileDef(tileId);
+        const placedTileId = getTileIdFromEntry(tileId);
+        const rotation = getTileRotationFromEntry(tileId);
+        const def = getTileDef(placedTileId);
         if (!def) return;
         const tileSize = state.map.tileSize;
         const img = document.createElement("img");
         img.className = "map-image";
         img.src = resolveEditorImagePath(def.image || "");
-        img.alt = def.name || tileId;
-        img.title = `${def.name || tileId} (${tileId})`;
+        img.alt = def.name || placedTileId;
+        img.title = `${def.name || placedTileId} (${placedTileId})`;
         img.style.left = `${x * tileSize + (def.drawOffsetX || 0)}px`;
         img.style.top = `${y * tileSize + (def.drawOffsetY || 0)}px`;
         img.style.width = `${def.drawWidth || tileSize}px`;
         img.style.height = `${def.drawHeight || tileSize}px`;
         img.style.zIndex = String(10 + layerIndex * 1000 + y * state.map.width + x);
+        if (rotation) {
+          img.style.transform = `rotate(${rotation}deg)`;
+          img.style.transformOrigin = "center center";
+        }
         if (!def.image) {
           img.style.background = "#d7cbb6";
         }
@@ -578,11 +636,11 @@
         [...surface.querySelectorAll(".map-image")].forEach((node) => node.remove());
 
         state.map.layers.forEach((layer, layerIndex) => {
-          layer.tiles.forEach((tileId, index) => {
-            if (!tileId) return;
+          layer.tiles.forEach((tileEntry, index) => {
+            if (!getTileIdFromEntry(tileEntry)) return;
             const x = index % state.map.width;
             const y = Math.floor(index / state.map.width);
-            drawTileImage(tileId, x, y, layerIndex);
+            drawTileImage(tileEntry, x, y, layerIndex);
           });
         });
 
@@ -655,9 +713,11 @@
         id.textContent = def ? state.selectedTile : "-";
         const layer = document.createElement("div");
         layer.textContent = `layer: ${state.activeLayer}`;
+        const rotation = document.createElement("div");
+        rotation.textContent = `rotate: ${state.selectedRotation}deg`;
         const pass = document.createElement("div");
         pass.textContent = def ? `passable: ${def.passable ? "true" : "false"}` : "passable: -";
-        selectedInfo.append(name, id, layer, pass);
+        selectedInfo.append(name, id, layer, rotation, pass);
       }
 
       function renderMapSelect() {
@@ -701,7 +761,7 @@
 
       function paintCell(cell) {
         if (!cell) return;
-        const key = `${cell.index}:${state.activeLayer}:${state.tool}:${state.selectedTile}`;
+        const key = `${cell.index}:${state.activeLayer}:${state.tool}:${state.selectedTile}:${state.selectedRotation}`;
         if (state.lastPaintKey === key && state.tool !== "fill") return;
         state.lastPaintKey = key;
 
@@ -709,11 +769,13 @@
         if (!layer) return;
         if (state.tool === "paint") {
           if (state.activeLayer !== "ground" && !state.selectedTile) return;
-          layer.tiles[cell.index] = state.selectedTile;
+          layer.tiles[cell.index] = createTileEntry(state.selectedTile);
         } else if (state.tool === "erase") {
           layer.tiles[cell.index] = state.activeLayer === "ground" ? state.map.defaultTile : null;
         } else if (state.tool === "fill") {
-          const fillValue = state.activeLayer === "ground" ? state.selectedTile : state.selectedTile || null;
+          const fillValue = state.activeLayer === "ground"
+            ? createTileEntry(state.selectedTile)
+            : createTileEntry(state.selectedTile) || null;
           layer.tiles = layer.tiles.map(() => fillValue);
         }
         renderSurface();
@@ -741,14 +803,29 @@
       }
 
       function formatTileRows(tiles, width) {
+        function formatTile(tile) {
+          if (!tile) return "null";
+          if (!isTileEntryObject(tile)) return `"${tile}"`;
+          const tileId = tile.tileId || tile.id;
+          const rotation = normalizeRotation(tile.rotate);
+          if (!rotation) return `"${tileId}"`;
+          return `{ tileId: "${tileId}", rotate: ${rotation} }`;
+        }
+
         const rows = [];
         for (let y = 0; y < tiles.length / width; y += 1) {
           const row = tiles.slice(y * width, y * width + width)
-            .map((tile) => (tile ? `"${tile}"` : "null"))
+            .map((tile) => formatTile(tile))
             .join(", ");
           rows.push(`            ${row},`);
         }
         return rows.join("\n");
+      }
+
+      function rotateSelection(delta) {
+        state.selectedRotation = normalizeRotation(state.selectedRotation + delta);
+        renderSelectedInfo();
+        setStatus(`向きを ${state.selectedRotation}度 にしました。`);
       }
 
       function buildMapSource() {
@@ -863,6 +940,13 @@ ${layers}
             state.tool = button.dataset.tool;
             document.querySelectorAll("[data-tool]").forEach((node) => node.classList.toggle("active", node === button));
           });
+        });
+        document.getElementById("rotate-left-button").addEventListener("click", () => rotateSelection(-90));
+        document.getElementById("rotate-right-button").addEventListener("click", () => rotateSelection(90));
+        document.getElementById("rotate-reset-button").addEventListener("click", () => {
+          state.selectedRotation = 0;
+          renderSelectedInfo();
+          setStatus("向きを 0度 にしました。");
         });
 
         surface.addEventListener("pointerdown", (event) => {
