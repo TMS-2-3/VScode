@@ -1297,6 +1297,36 @@
       return true;
     }
 
+    function applyLeakage(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.leakageTimer = Math.max(target.leakageTimer || 0, duration);
+      target.leakageMax = Math.max(target.leakageMax || 0, duration);
+      ctx.addFloat("漏水", target.x, target.y - 34, "#5eb6ff");
+      return true;
+    }
+
+    function applyTingle(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.tingleTimer = Math.max(target.tingleTimer || 0, duration);
+      target.tingleMax = Math.max(target.tingleMax || 0, duration);
+      ctx.addFloat("痺れ感", target.x, target.y - 34, "#f2d56b");
+      return true;
+    }
+
+    function applyFreezing(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.freezingTimer = Math.max(target.freezingTimer || 0, duration);
+      target.freezingMax = Math.max(target.freezingMax || 0, duration);
+      ctx.addFloat("凍え", target.x, target.y - 34, "#9edbff");
+      return true;
+    }
+
     function applyActionSpeedDown(source, target, ratio, duration) {
       if (!target || target.dead || !Number.isFinite(ratio) || ratio <= 0 || !Number.isFinite(duration) || duration <= 0) {
         return false;
@@ -1966,6 +1996,13 @@
       return applyInjury(unit, target, duration);
     }
 
+    function getSkillTimedStatusDuration(unit, key, skill, baseProp, perLevelProp) {
+      const base = Number.isFinite(skill && skill[baseProp]) ? skill[baseProp] : 0;
+      const perLevel = Number.isFinite(skill && skill[perLevelProp]) ? skill[perLevelProp] : 0;
+      const level = getSkillUpgradeLevel(unit, key || getSkillSourceKey(skill), skill);
+      return Math.max(0, base + perLevel * level);
+    }
+
     function applyPartySkillOnHitEffects(unit, target, key, skill, options = {}) {
       let effectApplied = false;
       if (options.sleep !== false && Number.isFinite(skill && skill.sleepChanceBase)) {
@@ -1973,6 +2010,18 @@
       }
       if (options.injury !== false && Number.isFinite(skill && skill.injuryDuration)) {
         effectApplied = applyPartySkillInjury(unit, target, key, skill) || effectApplied;
+      }
+      if (Number.isFinite(skill && skill.leakageDuration)) {
+        const duration = getOffensiveEffectDuration(unit, target, getSkillTimedStatusDuration(unit, key, skill, "leakageDuration", "leakageDurationPerLevel"));
+        effectApplied = applyLeakage(unit, target, duration) || effectApplied;
+      }
+      if (Number.isFinite(skill && skill.tingleDuration)) {
+        const duration = getOffensiveEffectDuration(unit, target, getSkillTimedStatusDuration(unit, key, skill, "tingleDuration", "tingleDurationPerLevel"));
+        effectApplied = applyTingle(unit, target, duration) || effectApplied;
+      }
+      if (Number.isFinite(skill && skill.freezingDuration)) {
+        const duration = getOffensiveEffectDuration(unit, target, getSkillTimedStatusDuration(unit, key, skill, "freezingDuration", "freezingDurationPerLevel"));
+        effectApplied = applyFreezing(unit, target, duration) || effectApplied;
       }
       return effectApplied;
     }
@@ -3040,6 +3089,8 @@
       if (intent.key === "fire") return castPlayerFire(target, options);
       if (intent.key === "bomb") return castPlayerBomb(target, options);
       if (isCommandSkill(intent.key)) return usePlayerCommand(intent.key, target, options);
+      const skill = getUnitSkill(player, intent.key) || get("finald", intent.key);
+      if (isPlayerGenericSingleTargetSkill(intent.key, skill)) return castPlayerGenericSingleTargetSkill(intent.key, target, options);
       return false;
     }
 
@@ -3058,6 +3109,8 @@
       if (player.aim.type === "fire") return castPlayerFire();
       if (player.aim.type === "bomb") return castPlayerBomb();
       if (isCommandSkill(player.aim.type)) return usePlayerCommand(player.aim.type);
+      const skill = getUnitSkill(player, player.aim.type) || get("finald", player.aim.type);
+      if (isPlayerGenericSingleTargetSkill(player.aim.type, skill)) return castPlayerGenericSingleTargetSkill(player.aim.type);
       return false;
     }
 
@@ -3275,6 +3328,55 @@
       const origin = ctx.getSupportOrigin(target);
       ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: target.x, y2: target.y, color: skill.beamColor, time: 0.22, age: 0 });
       ctx.addBurst(target.x, target.y, skill.burstRadius, "rgba(255,139,67,0.24)");
+    }
+
+    function isPlayerGenericSingleTargetSkill(key, skill) {
+      if (!skill || isCommandSkill(key) || key === "attack" || key === "heal" || key === "shield" || key === "fire" || key === "bomb") {
+        return false;
+      }
+      return Boolean(
+        Number.isFinite(skill.damageBase) &&
+        !Number.isFinite(skill.radius) &&
+        !Number.isFinite(skill.projectileCount) &&
+        !Number.isFinite(skill.repeat) &&
+        !Number.isFinite(skill.arcDeg) &&
+        !skill.approach
+      );
+    }
+
+    function castPlayerGenericSingleTargetSkill(key, lockedTarget = null, options = {}) {
+      const player = ctx.player;
+      const skill = getUnitSkill(player, key) || get("finald", key);
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (!isPlayerGenericSingleTargetSkill(key, skill) || player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
+      const target = lockedTarget || getHoveredEnemy();
+      if (!target) { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
+      const rangeState = ensurePlayerSkillRange(key, target, skill, target.radius, options);
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
+      if ((player.cds[key] || 0) > 0) { ctx.addFloat("再詠唱中", target.x, target.y - 28, "#ffffff"); return false; }
+      if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", target.x, target.y - 28, "#ffffff"); return false; }
+      if (!ctx.startPlayerCast(key, { target }, getCastTime(skill.cast, player))) return false;
+      paySkillCost(player, skill);
+      return true;
+    }
+
+    function completePlayerGenericSingleTargetSkill(key, target) {
+      const player = ctx.player;
+      const skill = getUnitSkill(player, key) || get("finald", key);
+      if (!isPlayerGenericSingleTargetSkill(key, skill) || !target || target.dead || !canOffensiveAffect(player, target)) {
+        const origin = ctx.getSupportOrigin();
+        ctx.addFloat("対象なし", origin.x + 26, origin.y - 28, "#ffffff");
+        return;
+      }
+      speakSkill(player, key);
+      applyPartySkillHitEffects(player, target, key, skill);
+      const origin = ctx.getSupportOrigin(target);
+      ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: target.x, y2: target.y, color: skill.beamColor || "rgba(255,255,255,0.72)", time: 0.22, age: 0 });
+      ctx.addBurst(target.x, target.y, skill.burstRadius || ctx.battlePx(44), skill.burstColor || "rgba(255,255,255,0.2)");
     }
 
     function castPlayerBomb(lockedTarget = null, options = {}) {
@@ -3504,6 +3606,7 @@
       else if (cast.type === "fire") completePlayerFire(cast.target);
       else if (cast.type === "bomb") completePlayerBomb(cast.target);
       else if (cast.type === "ult") completeFinaldUlt();
+      else completePlayerGenericSingleTargetSkill(cast.type, cast.target);
     }
 
     function getPlayerCastCooldown(type) {
@@ -3862,6 +3965,15 @@
           draw.strokeStyle = inRange ? "#9cc6ff" : "rgba(255,255,255,0.45)";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 18, 0, ctx.TAU); draw.stroke();
+        }
+      } else if (isPlayerGenericSingleTargetSkill(player.aim.type, skill)) {
+        const target = getHoveredEnemy();
+        if (target) {
+          const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
+          draw.strokeStyle = inRange ? (skill.beamColor || "#f7fff6") : "rgba(255,255,255,0.45)";
+          draw.lineWidth = 3;
+          draw.beginPath(); draw.arc(target.x, target.y, target.radius + 15, 0, ctx.TAU); draw.stroke();
         }
       } else if (isSelfCenteredPlayerSkill(skill)) {
         const target = getPlayerSelfCenteredAimPoint();

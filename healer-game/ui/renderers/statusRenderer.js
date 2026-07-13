@@ -793,6 +793,18 @@
       const injuryMax = Math.max(0.1, unit.injuryMax || unit.injuryTimer);
       icons.push(makeStatusIcon(unit, "debuff_Injury", { ratio: unit.injuryTimer / injuryMax, remaining: unit.injuryTimer }));
     }
+    if ((unit.leakageTimer || 0) > 0) {
+      const leakageMax = Math.max(0.1, unit.leakageMax || unit.leakageTimer);
+      icons.push(makeStatusIcon(unit, "debuff_leakage", { ratio: unit.leakageTimer / leakageMax, remaining: unit.leakageTimer }));
+    }
+    if ((unit.tingleTimer || 0) > 0) {
+      const tingleMax = Math.max(0.1, unit.tingleMax || unit.tingleTimer);
+      icons.push(makeStatusIcon(unit, "debuff_tingle", { ratio: unit.tingleTimer / tingleMax, remaining: unit.tingleTimer }));
+    }
+    if ((unit.freezingTimer || 0) > 0) {
+      const freezingMax = Math.max(0.1, unit.freezingMax || unit.freezingTimer);
+      icons.push(makeStatusIcon(unit, "debuff_freezing", { ratio: unit.freezingTimer / freezingMax, remaining: unit.freezingTimer }));
+    }
     if ((unit.magicNeutralizeTimer || 0) > 0) {
       const neutralizeMax = Math.max(0.1, unit.magicNeutralizeMax || unit.magicNeutralizeTimer);
       const ratio = Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);

@@ -903,7 +903,7 @@
       flostiny_pendant: makeFlostinyAccessory(
         "flostiny_pendant",
         "ディスティニペンダント",
-        { hpRegenRate: 0.1 },
+        { hpRegenRate: 0.02 },
         500,
         { flostiny_crystal: 3 },
         "フロスティーニの石を元に作られたペンダント"

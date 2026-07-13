@@ -228,6 +228,8 @@
       unit.forcedEnemySkillKey = null;
       unit.forcedEnemySkillTarget = null;
       unit.absorptionLockTimer = 0;
+      unit.hpRegenTickTimer = 0;
+      unit.mpRegenTickTimer = 0;
       unit.chocolateLilyCharging = false;
       unit.chocolateLilyDamageTaken = 0;
     }

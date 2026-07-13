@@ -82,9 +82,9 @@
         setEffects: {
           2: {
             name: "生命力",
-            statBonuses: { hpRegenRate: 0.05 },
+            statBonuses: { hpRegenRate: 0.03 },
             simpleDescription: "HP再生率が上昇する",
-            description: "HP再生率が5%上昇する",
+            description: "HP再生率が3%上昇する",
           },
           5: {
             name: "運命",

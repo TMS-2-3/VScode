@@ -18,7 +18,7 @@
     guardDamageMultiplier: 0.5,
     guardOverflowReductionRate: 1 / 3,
     guardMaxDamageReduction: 0.85,
-    defaultMpRegenRate: 0.05,
+    defaultMpRegenRate: 0.01,
 
     commandBiasConfigs: [
       { value: -2, guard: 3, actionCd: 2.5, moodGain: 0.6, moodLoss: 1.5, damageOut: 0.8, damageIn: 0.8 },

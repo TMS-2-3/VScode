@@ -330,6 +330,8 @@
       unit.shield = 0;
       unit.shieldTimer = 0;
       unit.shields = [];
+      unit.hpRegenTickTimer = 0;
+      unit.mpRegenTickTimer = 0;
       unit.frozen = 0;
       unit.frozenMax = 0;
       unit.burnTimer = 0;
@@ -348,6 +350,12 @@
       unit.woundStacks = 0;
       unit.injuryTimer = 0;
       unit.injuryMax = 0;
+      unit.leakageTimer = 0;
+      unit.leakageMax = 0;
+      unit.tingleTimer = 0;
+      unit.tingleMax = 0;
+      unit.freezingTimer = 0;
+      unit.freezingMax = 0;
       unit.plantStage = 0;
       unit.plantSource = null;
       unit.plantUpgradedBy = {};

@@ -154,6 +154,18 @@
         if (unit.injuryTimer <= 0) {
           unit.injuryMax = 0;
         }
+        unit.leakageTimer = Math.max(0, (unit.leakageTimer || 0) - dt);
+        if (unit.leakageTimer <= 0) {
+          unit.leakageMax = 0;
+        }
+        unit.tingleTimer = Math.max(0, (unit.tingleTimer || 0) - dt);
+        if (unit.tingleTimer <= 0) {
+          unit.tingleMax = 0;
+        }
+        unit.freezingTimer = Math.max(0, (unit.freezingTimer || 0) - dt);
+        if (unit.freezingTimer <= 0) {
+          unit.freezingMax = 0;
+        }
         unit.magicNeutralizeTimer = Math.max(0, (unit.magicNeutralizeTimer || 0) - dt);
         if (unit.magicNeutralizeTimer <= 0) {
           unit.magicNeutralizeMax = 0;
@@ -530,6 +542,12 @@
       unit.woundStacks = 0;
       unit.injuryTimer = 0;
       unit.injuryMax = 0;
+      unit.leakageTimer = 0;
+      unit.leakageMax = 0;
+      unit.tingleTimer = 0;
+      unit.tingleMax = 0;
+      unit.freezingTimer = 0;
+      unit.freezingMax = 0;
       unit.plantStage = 0;
       unit.plantSource = null;
       unit.plantUpgradedBy = {};

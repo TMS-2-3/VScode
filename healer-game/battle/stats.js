@@ -38,6 +38,8 @@
       getEquipmentFlatStatBonusSum,
     } = context;
 
+    const REGEN_TICK_INTERVAL = 1;
+
     const STAT_MINIMUMS = {
       maxHp: 1,
       hp: 0,
@@ -134,17 +136,43 @@
       if (!unit || unit.maxMp <= 0) {
         return;
       }
-      unit.mp = clamp(unit.mp + unit.maxMp * getMpRegenRate(unit) * dt, 0, unit.maxMp);
+      const rate = getMpRegenRate(unit);
+      const ticks = consumeRegenTicks(unit, "mpRegenTickTimer", dt, rate);
+      if (ticks <= 0) {
+        return;
+      }
+      unit.mp = clamp(unit.mp + unit.maxMp * rate * ticks, 0, unit.maxMp);
     }
 
     function regenerateHp(unit, dt) {
       if (!unit || unit.dead || unit.maxHp <= 0) {
         return;
       }
-      unit.hp = clamp(unit.hp + unit.maxHp * getHpRegenRate(unit) * dt, 0, unit.maxHp);
+      const rate = getHpRegenRate(unit);
+      const ticks = consumeRegenTicks(unit, "hpRegenTickTimer", dt, rate);
+      if (ticks <= 0) {
+        return;
+      }
+      unit.hp = clamp(unit.hp + unit.maxHp * rate * ticks, 0, unit.maxHp);
       if (unit.hp <= 0) {
         unit.dead = true;
       }
+    }
+
+    function consumeRegenTicks(unit, timerKey, dt, rate) {
+      if (!unit || !Number.isFinite(dt) || dt <= 0 || !Number.isFinite(rate) || rate === 0) {
+        if (unit) {
+          unit[timerKey] = 0;
+        }
+        return 0;
+      }
+      unit[timerKey] = Math.max(0, Number.isFinite(unit[timerKey]) ? unit[timerKey] : 0) + dt;
+      if (unit[timerKey] < REGEN_TICK_INTERVAL) {
+        return 0;
+      }
+      const ticks = Math.floor(unit[timerKey] / REGEN_TICK_INTERVAL);
+      unit[timerKey] -= ticks * REGEN_TICK_INTERVAL;
+      return ticks;
     }
 
     function applyMoodHighGainDamping(unit, amount) {
@@ -470,6 +498,23 @@
       if (unit && (unit.injuryTimer || 0) > 0) {
         if (statKey === "defense" || statKey === "moveSpeed") {
           bonus -= 0.1;
+        }
+      }
+      if (unit && (unit.leakageTimer || 0) > 0) {
+        if (statKey === "magic" || statKey === "magicDefense") {
+          bonus -= 0.1;
+        }
+      }
+      if (unit && (unit.tingleTimer || 0) > 0) {
+        if (statKey === "attack" || statKey === "defense") {
+          bonus -= 0.1;
+        }
+      }
+      if (unit && (unit.freezingTimer || 0) > 0) {
+        if (statKey === "actionSpeed") {
+          bonus -= 0.1;
+        } else if (statKey === "moveSpeed") {
+          bonus -= 0.2;
         }
       }
       if (unit && (unit.plantStage || 0) > 0 && statKey === "hpRegenRate") {
