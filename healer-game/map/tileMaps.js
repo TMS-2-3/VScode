@@ -8,7 +8,7 @@
     test_grass: {
       id: "test_grass",
       name: "テスト",
-      image: "map/img_tile/base_seamless/grass.png",
+      image: "map/img_tile/rpg_village/grass_base_01.png",
       passable: true,
       tags: ["ground"],
     },
