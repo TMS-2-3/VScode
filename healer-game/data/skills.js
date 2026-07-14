@@ -229,9 +229,9 @@
         upgradeDescription: "レベルが上がるごとに付与する\"痺れ感\"の効果時間が+(1/2/3/4/5)秒増加する",
       },
       ice: {
-        id: "ice", key: "ice", owner: "sushia", name: "アイス", rank: "D", category: "スキル", skillType: "単体攻撃",
+        id: "ice", key: "ice", owner: "sushia", name: "コルド", rank: "D", category: "スキル", skillType: "単体攻撃",
         requiredWeapons: ["杖", "魔導書", "楽器"],
-        cd: 14, cost: 40, range: px(400), cast: 1, damageBase: 30, magicScale: 0.45, freezingDuration: 3, freezingDurationPerLevel: 1, beamColor: "rgba(158,219,255,0.74)", burstRadius: px(44), lines: ["アイス"], damageType: "magic", statusIds: ["debuff_freezing"],
+        cd: 14, cost: 40, range: px(400), cast: 1, damageBase: 30, magicScale: 0.45, freezingDuration: 3, freezingDurationPerLevel: 1, beamColor: "rgba(158,219,255,0.74)", burstRadius: px(44), lines: ["コルド"], damageType: "magic", statusIds: ["debuff_freezing"],
         formula: [{ text: "30 + 魔力 * 0.45", stat: "magic", baseProp: "damageBase", scaleProp: "magicScale" }],
         description: "１秒の詠唱を行った後、対象の敵１体に氷を放ち、(式=値)の魔法ダメージを与え、3秒の\"凍え\"を付与する。",
         simpleDescription: "詠唱後、対象の敵１体に氷を放ち、魔法ダメージを与え、\"凍え\"を付与する。",
