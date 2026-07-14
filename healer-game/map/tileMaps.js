@@ -8,9 +8,16 @@
     grass: {
       id: "grass",
       name: "草地",
-      image: "map/img_tile/rpg_village/grass_base_01.png",
+      image: "map/img_tile/base_seamless/grass_plain_01.png",
       passable: true,
       tags: ["ground"],
+    },
+    grassPlain2: {
+      id: "grassPlain2",
+      name: "Grass plain 2",
+      image: "map/img_tile/base_seamless/grass_plain_02.png",
+      passable: true,
+      tags: ["ground", "grass", "plain"],
     },
     grassFlower: {
       id: "grassFlower",
@@ -22,7 +29,7 @@
     grassDeep: {
       id: "grassDeep",
       name: "濃い草地",
-      image: "map/img_tile/rpg_village/grass_deep_01.png",
+      image: "map/img_tile/base_seamless/grass_dark_plain_01.png",
       passable: true,
       tags: ["ground", "deepGrass"],
     },
@@ -36,7 +43,7 @@
     road: {
       id: "road",
       name: "道",
-      image: "map/img_tile/rpg_village/dirt_path_center_01.png",
+      image: "map/img_tile/base_seamless/road_plain_01.png",
       passable: true,
       tags: ["ground", "road"],
     },
@@ -57,7 +64,7 @@
     soil: {
       id: "soil",
       name: "土",
-      image: "map/img_tile/rpg_village/dirt_path_detail_01.png",
+      image: "map/img_tile/base_seamless/soil_plain_01.png",
       passable: true,
       tags: ["ground"],
     },
@@ -187,7 +194,7 @@
     water: {
       id: "water",
       name: "水辺",
-      image: "map/img_tile/rpg_village/water_deep_01.png",
+      image: "map/img_tile/base_seamless/water_plain_01.png",
       passable: false,
       tags: ["water", "block"],
     },
@@ -246,6 +253,13 @@
       image: "map/img_tile/rpg_village_extra/cracked_stone_path_01.png",
       passable: true,
       tags: ["ground", "road", "stone"],
+    },
+    stonePlain: {
+      id: "stonePlain",
+      name: "Stone plain",
+      image: "map/img_tile/base_seamless/stone_plain_01.png",
+      passable: true,
+      tags: ["ground", "road", "stone", "plain"],
     },
     stonePath: {
       id: "stonePath",
@@ -460,6 +474,61 @@
       drawOffsetX: -24,
       drawOffsetY: -48,
     },
+    armorShopFront: {
+      id: "armorShopFront",
+      name: "防具屋",
+      image: "map/img_tile/town_objects_front/armor_shop_front_3x2.png",
+      passable: false,
+      tags: ["object", "building", "shop", "armor", "block"],
+      drawWidth: 144,
+      drawHeight: 96,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    weaponShopFront: {
+      id: "weaponShopFront",
+      name: "武器屋",
+      image: "map/img_tile/town_objects_front/weapon_shop_front_3x2.png",
+      passable: false,
+      tags: ["object", "building", "shop", "weapon", "block"],
+      drawWidth: 144,
+      drawHeight: 96,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    innFront: {
+      id: "innFront",
+      name: "宿屋",
+      image: "map/img_tile/town_objects_front/inn_front_3x2.png",
+      passable: false,
+      tags: ["object", "building", "inn", "block"],
+      drawWidth: 144,
+      drawHeight: 96,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    requestOfficeFront: {
+      id: "requestOfficeFront",
+      name: "依頼所",
+      image: "map/img_tile/town_objects_front/request_office_front_3x2.png",
+      passable: false,
+      tags: ["object", "building", "requestOffice", "block"],
+      drawWidth: 144,
+      drawHeight: 96,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    itemShopFront: {
+      id: "itemShopFront",
+      name: "アイテム屋",
+      image: "map/img_tile/town_objects_front/item_shop_front_3x2.png",
+      passable: false,
+      tags: ["object", "building", "shop", "item", "block"],
+      drawWidth: 144,
+      drawHeight: 96,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
   };
 
   window.HEALER_TILE_MAPS = {
@@ -599,6 +668,290 @@
       ],
       events: [],
     },
+  };
+
+  const TEXT_GROUND_SYMBOLS = {
+    G: "grass",
+    g: "grassPlain2",
+    D: "grassDeep",
+    R: "road",
+    S: "soil",
+    W: "water",
+    K: "stonePlain",
+    C: "cobblestonePath",
+    M: "mudGround",
+    ".": "grass",
+    " ": "grass",
+  };
+
+  const TEXT_LAYER_SYMBOLS = {
+    F: "forestWallLeaf",
+    P: "forestWallPine",
+    C: "wall",
+    T: "tree",
+    p: "pineTree",
+    B: "shrubCluster",
+    O: "rock",
+    f: "flowerPatchObject",
+    s: "sign",
+    L: "fallenLog",
+    w: "well",
+    l: "lampPost",
+    ".": null,
+    " ": null,
+  };
+
+  function getMaxTextWidth(rowGroups) {
+    let width = 0;
+    rowGroups.forEach((rows) => {
+      (rows || []).forEach((row) => {
+        width = Math.max(width, String(row).length);
+      });
+    });
+    return width;
+  }
+
+  function getMaxTextHeight(rowGroups) {
+    return rowGroups.reduce((height, rows) => Math.max(height, (rows || []).length), 0);
+  }
+
+  function rowsToTiles(rows, symbols, width, height, fallbackTile) {
+    const tiles = [];
+
+    for (let y = 0; y < height; y += 1) {
+      const row = String((rows || [])[y] || "");
+
+      for (let x = 0; x < width; x += 1) {
+        const mark = row[x] || " ";
+        const hasSymbol = Object.prototype.hasOwnProperty.call(symbols, mark);
+        tiles.push(hasSymbol ? symbols[mark] : fallbackTile);
+      }
+    }
+
+    return tiles;
+  }
+
+  function createTextLayoutMap(spec) {
+    const groundRows = spec.groundRows || [];
+    const terrainRows = spec.terrainRows || [];
+    const objectRows = spec.objectRows || [];
+    const rowGroups = [groundRows, terrainRows, objectRows];
+    const width = spec.width || getMaxTextWidth(rowGroups);
+    const height = spec.height || getMaxTextHeight(rowGroups);
+    const defaultTile = spec.defaultTile || "grass";
+    const groundSymbols = Object.assign({}, TEXT_GROUND_SYMBOLS, spec.groundSymbols || {});
+    const layerSymbols = Object.assign({}, TEXT_LAYER_SYMBOLS, spec.layerSymbols || {});
+
+    return {
+      id: spec.id,
+      name: spec.name,
+      tileSize: spec.tileSize || 48,
+      width,
+      height,
+      defaultTile,
+      layers: [
+        {
+          id: "ground",
+          name: "Ground",
+          tiles: rowsToTiles(groundRows, groundSymbols, width, height, defaultTile),
+        },
+        {
+          id: "terrain",
+          name: "Terrain",
+          tiles: rowsToTiles(terrainRows, layerSymbols, width, height, null),
+        },
+        {
+          id: "object",
+          name: "Object",
+          tiles: rowsToTiles(objectRows, layerSymbols, width, height, null),
+        },
+      ],
+      events: spec.events || [],
+    };
+  }
+
+  window.HEALER_TEXT_TILE_SYMBOLS = {
+    ground: TEXT_GROUND_SYMBOLS,
+    layer: TEXT_LAYER_SYMBOLS,
+  };
+  window.HEALER_CREATE_TEXT_LAYOUT_MAP = createTextLayoutMap;
+
+  window.HEALER_TILE_MAPS.textLayoutSample01 = createTextLayoutMap({
+    id: "textLayoutSample01",
+    name: "Text layout sample 01",
+    width: 8,
+    height: 15,
+    defaultTile: "grass",
+    groundRows: [
+      "GGgRGGGg",
+      "GGGRRGGG",
+      "gGGGGRGG",
+      "GGGGGRGg",
+      "GGSSGRGG",
+      "gGSSRRRG",
+      "GGGGGGRG",
+      "WWGGGGRG",
+      "WWgGRRRG",
+      "GGGGRGGg",
+      "gGGRRGGG",
+      "GGGRGGSS",
+      "GGGRGGSS",
+      "GGGRRGGG",
+      "gGGGRGGG",
+    ],
+    terrainRows: [
+      "FF....FF",
+      "F......F",
+      "........",
+      "........",
+      "........",
+      "........",
+      ".......F",
+      ".......F",
+      ".......F",
+      "........",
+      "........",
+      "........",
+      "........",
+      "F......F",
+      "FF....FF",
+    ],
+    objectRows: [
+      "T......p",
+      "........",
+      "..B.....",
+      "......O.",
+      "........",
+      "....f...",
+      "T.......",
+      "........",
+      ".....L..",
+      "..O.....",
+      ".......s",
+      "........",
+      "....B...",
+      "........",
+      "p......T",
+    ],
+  });
+
+  window.HEALER_TILE_MAPS.startTown01 = {
+    id: "startTown01",
+    name: "始まりの町01",
+    tileSize: 48,
+    width: 15,
+    height: 8,
+    defaultTile: "grass",
+    layers: [
+      {
+        id: "ground",
+        name: "Ground",
+        tiles: [
+          "cobblestonePath", "cobblestonePath", "grass", "grass", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "grass", "grass", "cobblestonePath", "cobblestonePath",
+          "cobblestonePath", "cobblestonePath", "cobblestonePath", "grass", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "grass", "cobblestonePath", "cobblestonePath", "cobblestonePath",
+          "grass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "grassPlain2",
+          "grass", "grass", "cobblestonePath", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "cobblestonePath", "grass", "grass",
+          "grass", "grass", "cobblestonePath", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "plazaEarth", "cobblestonePath", "grass", "grass",
+          "grass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "grass",
+          "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "grass", "grass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "grass", "grass", "grass", "cobblestonePath", "cobblestonePath", "cobblestonePath",
+          "cobblestonePath", "cobblestonePath", "grass", "grass", "grass", "grass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "grass", "grass", "grass", "grass", "cobblestonePath", "cobblestonePath",
+        ],
+      },
+      {
+        id: "terrain",
+        name: "Terrain",
+        tiles: [
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      },
+      {
+        id: "object",
+        name: "Object",
+        tiles: [
+          null, null, null, null, "armorShopFront", null, null, null, "weaponShopFront", null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, "innFront", null, null, "requestOfficeFront", null, null, "itemShopFront", null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      },
+      {
+        id: "event",
+        name: "イベント",
+        tiles: [
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      },
+    ],
+    events: [
+      {
+        id: "start_town_armor_shop_area",
+        name: "防具屋",
+        type: "buildingArea",
+        x: 4,
+        y: 0,
+        width: 3,
+        height: 2,
+        tileId: "armorShopFront",
+      },
+      {
+        id: "start_town_weapon_shop_area",
+        name: "武器屋",
+        type: "buildingArea",
+        x: 8,
+        y: 0,
+        width: 3,
+        height: 2,
+        tileId: "weaponShopFront",
+      },
+      {
+        id: "start_town_inn_area",
+        name: "宿屋",
+        type: "buildingArea",
+        x: 3,
+        y: 3,
+        width: 3,
+        height: 2,
+        tileId: "innFront",
+      },
+      {
+        id: "start_town_request_office_area",
+        name: "依頼所",
+        type: "buildingArea",
+        x: 6,
+        y: 3,
+        width: 3,
+        height: 2,
+        tileId: "requestOfficeFront",
+      },
+      {
+        id: "start_town_item_shop_area",
+        name: "アイテム屋",
+        type: "buildingArea",
+        x: 9,
+        y: 3,
+        width: 3,
+        height: 2,
+        tileId: "itemShopFront",
+      },
+    ],
   };
 })();
 

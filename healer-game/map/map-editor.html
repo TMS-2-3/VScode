@@ -1,0 +1,998 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Editor</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #eef3ea;
+        --panel: #fbfaf3;
+        --panel-2: #f3efe2;
+        --ink: #252b23;
+        --muted: #66705f;
+        --line: #c9d0be;
+        --accent: #2f7d5f;
+        --accent-2: #c9893d;
+        --danger: #b74c42;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 292px minmax(420px, 1fr) 340px;
+      }
+
+      .side,
+      .export {
+        min-height: 100vh;
+        padding: 16px;
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        overflow-y: auto;
+      }
+
+      .export {
+        border-right: 0;
+        border-left: 1px solid var(--line);
+      }
+
+      .stage {
+        padding: 16px;
+        overflow: auto;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 18px 0 10px;
+        font-size: 14px;
+        letter-spacing: 0;
+      }
+
+      label {
+        display: block;
+        margin: 9px 0 5px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        min-height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--ink);
+        padding: 7px 8px;
+      }
+
+      textarea {
+        min-height: 360px;
+        resize: vertical;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .button-row button,
+      .wide-button {
+        min-height: 34px;
+        padding: 7px 10px;
+      }
+
+      .wide-button {
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      .warning {
+        border-color: #dfbd86;
+        background: #fff7e9;
+      }
+
+      .danger {
+        border-color: #e5b5af;
+        background: #fff1ef;
+        color: var(--danger);
+      }
+
+      .layer-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+
+      .layer-tabs button {
+        min-height: 34px;
+      }
+
+      .layer-tabs .active,
+      .tool-row .active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      .tool-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+
+      .rotate-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .tile-pick {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1;
+        padding: 0;
+        overflow: hidden;
+        background: #d8decf;
+      }
+
+      .tile-pick.active {
+        outline: 3px solid var(--accent-2);
+        outline-offset: 1px;
+      }
+
+      .tile-pick img {
+        position: absolute;
+        object-fit: cover;
+        pointer-events: none;
+      }
+
+      .tile-pick span {
+        position: absolute;
+        left: 2px;
+        right: 2px;
+        bottom: 2px;
+        padding: 1px 2px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.82);
+        color: #1f251e;
+        font-size: 10px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .map-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .map-header h1 {
+        margin: 0;
+      }
+
+      .status {
+        min-height: 22px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .surface-wrap {
+        width: max-content;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+      }
+
+      .map-surface {
+        position: relative;
+        background: #8bbd62;
+        box-shadow: 0 0 0 1px rgba(37, 43, 35, 0.4);
+        overflow: visible;
+        cursor: crosshair;
+      }
+
+      .map-image {
+        position: absolute;
+        object-fit: cover;
+        pointer-events: none;
+        image-rendering: auto;
+      }
+
+      .map-grid {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(to right, rgba(20, 24, 18, 0.2) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(20, 24, 18, 0.2) 1px, transparent 1px);
+      }
+
+      .cursor-cell {
+        position: absolute;
+        pointer-events: none;
+        border: 2px solid #f7e27b;
+        box-shadow: inset 0 0 0 1px rgba(20, 24, 18, 0.45);
+      }
+
+      .selected-info {
+        display: grid;
+        gap: 6px;
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        font-size: 13px;
+      }
+
+      .selected-info strong {
+        color: var(--accent);
+      }
+
+      .small-note {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 1080px) {
+        .app {
+          grid-template-columns: 280px 1fr;
+        }
+
+        .export {
+          grid-column: 1 / -1;
+          min-height: auto;
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="side">
+        <h1>Map Editor</h1>
+
+        <label for="map-select">マップ</label>
+        <select id="map-select"></select>
+
+        <div class="row">
+          <div>
+            <label for="map-id">ID</label>
+            <input id="map-id" value="smallMap01" />
+          </div>
+          <div>
+            <label for="map-name-input">名前</label>
+            <input id="map-name-input" value="小マップ01" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="map-width">幅</label>
+            <input id="map-width" type="number" min="1" max="80" value="8" />
+          </div>
+          <div>
+            <label for="map-height">高さ</label>
+            <input id="map-height" type="number" min="1" max="80" value="15" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="tile-size">タイル</label>
+            <input id="tile-size" type="number" min="16" max="96" value="48" />
+          </div>
+          <div>
+            <label for="default-tile">標準</label>
+            <select id="default-tile"></select>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="new-map-button" class="primary">新規</button>
+          <button id="resize-button">反映</button>
+        </div>
+
+        <h2>レイヤー</h2>
+        <div id="layer-tabs" class="layer-tabs"></div>
+
+        <h2>ツール</h2>
+        <div class="tool-row">
+          <button data-tool="paint" class="active">配置</button>
+          <button data-tool="erase">消去</button>
+          <button data-tool="fill">塗潰</button>
+        </div>
+
+        <h2>向き</h2>
+        <div class="rotate-row">
+          <button id="rotate-left-button">左回転</button>
+          <button id="rotate-reset-button">0度</button>
+          <button id="rotate-right-button">右回転</button>
+        </div>
+
+        <h2>選択</h2>
+        <div id="selected-info" class="selected-info"></div>
+
+        <h2>タイル</h2>
+        <div id="palette" class="palette"></div>
+      </aside>
+
+      <main class="stage">
+        <div class="map-header">
+          <div>
+            <h1 id="map-title">小マップ01</h1>
+            <div id="status" class="status"></div>
+          </div>
+          <div class="status" id="map-size-label"></div>
+        </div>
+        <div class="surface-wrap">
+          <div id="map-surface" class="map-surface">
+            <div id="cursor-cell" class="cursor-cell hidden"></div>
+            <div id="map-grid" class="map-grid"></div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="export">
+        <h1>Export</h1>
+        <button id="save-local-button" class="wide-button primary">一時保存</button>
+        <button id="load-local-button" class="wide-button">一時読込</button>
+        <button id="copy-button" class="wide-button">コピー</button>
+        <button id="download-button" class="wide-button">JS保存</button>
+        <button id="clear-layer-button" class="wide-button danger">レイヤー消去</button>
+
+        <h2>マップ定義</h2>
+        <textarea id="export-text" spellcheck="false"></textarea>
+        <p class="small-note">出力した定義は `tileMaps.js` の `window.HEALER_TILE_MAPS` 内へ追加できます。</p>
+      </aside>
+    </div>
+
+    <script src="tileMaps.js"></script>
+    <script>
+      const defs = window.HEALER_TILE_DEFS || {};
+      const sourceMaps = window.HEALER_TILE_MAPS || {};
+      const layerConfigs = [
+        { id: "ground", name: "地面" },
+        { id: "terrain", name: "地形" },
+        { id: "object", name: "配置物" },
+        { id: "event", name: "イベント" },
+      ];
+
+      const state = {
+        map: null,
+        activeLayer: "ground",
+        selectedTile: "grass",
+        selectedRotation: 0,
+        tool: "paint",
+        isPointerDown: false,
+        lastPaintKey: "",
+      };
+
+      const mapSelect = document.getElementById("map-select");
+      const mapIdInput = document.getElementById("map-id");
+      const mapNameInput = document.getElementById("map-name-input");
+      const mapWidthInput = document.getElementById("map-width");
+      const mapHeightInput = document.getElementById("map-height");
+      const tileSizeInput = document.getElementById("tile-size");
+      const defaultTileSelect = document.getElementById("default-tile");
+      const layerTabs = document.getElementById("layer-tabs");
+      const palette = document.getElementById("palette");
+      const selectedInfo = document.getElementById("selected-info");
+      const surface = document.getElementById("map-surface");
+      const grid = document.getElementById("map-grid");
+      const cursorCell = document.getElementById("cursor-cell");
+      const statusLine = document.getElementById("status");
+      const mapTitle = document.getElementById("map-title");
+      const mapSizeLabel = document.getElementById("map-size-label");
+      const exportText = document.getElementById("export-text");
+
+      function clone(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function normalizeRotation(value) {
+        const rotation = Number(value) || 0;
+        const snapped = Math.round(rotation / 90) * 90;
+        return ((snapped % 360) + 360) % 360;
+      }
+
+      function isTileEntryObject(value) {
+        return !!value && typeof value === "object" && !Array.isArray(value);
+      }
+
+      function normalizeTileEntry(value, fill) {
+        if (value == null) return fill;
+        if (!isTileEntryObject(value)) return value;
+        const tileId = value.tileId || value.id || null;
+        if (!tileId) return fill;
+        const rotation = normalizeRotation(value.rotate);
+        if (!rotation) return tileId;
+        return { tileId, rotate: rotation };
+      }
+
+      function getTileIdFromEntry(value) {
+        if (value == null) return null;
+        return isTileEntryObject(value) ? value.tileId || value.id || null : value;
+      }
+
+      function getTileRotationFromEntry(value) {
+        return isTileEntryObject(value) ? normalizeRotation(value.rotate) : 0;
+      }
+
+      function createTileEntry(tileId, rotation = state.selectedRotation) {
+        if (!tileId) return null;
+        const normalizedRotation = normalizeRotation(rotation);
+        if (!normalizedRotation) return tileId;
+        return { tileId, rotate: normalizedRotation };
+      }
+
+      function sanitizeId(value) {
+        return String(value || "map01").trim().replace(/[^A-Za-z0-9_]/g, "_") || "map01";
+      }
+
+      function makeBlankLayer(id, name, width, height, fill) {
+        return {
+          id,
+          name,
+          tiles: Array.from({ length: width * height }, () => fill),
+        };
+      }
+
+      function normalizeLayer(layer, width, height, fill) {
+        const tiles = Array.isArray(layer.tiles)
+          ? layer.tiles.slice(0, width * height).map((tile) => normalizeTileEntry(tile, fill))
+          : [];
+        while (tiles.length < width * height) tiles.push(fill);
+        return { id: layer.id, name: layer.name || layer.id, tiles };
+      }
+
+      function normalizeMap(map) {
+        const width = Math.max(1, Number(map.width) || 8);
+        const height = Math.max(1, Number(map.height) || 15);
+        const defaultTile = defs[map.defaultTile] ? map.defaultTile : "grass";
+        const sourceLayers = Array.isArray(map.layers) ? map.layers : [];
+        const layers = layerConfigs.map((config) => {
+          const existing = sourceLayers.find((layer) => layer.id === config.id);
+          const fill = config.id === "ground" ? defaultTile : null;
+          return existing
+            ? normalizeLayer({ ...existing, name: existing.name || config.name }, width, height, fill)
+            : makeBlankLayer(config.id, config.name, width, height, fill);
+        });
+        return {
+          id: sanitizeId(map.id || "smallMap01"),
+          name: map.name || "小マップ01",
+          tileSize: Number(map.tileSize) || 48,
+          width,
+          height,
+          defaultTile,
+          layers,
+          events: Array.isArray(map.events) ? clone(map.events) : [],
+        };
+      }
+
+      function createNewMap() {
+        return normalizeMap({
+          id: sanitizeId(mapIdInput.value || "smallMap01"),
+          name: mapNameInput.value || "小マップ01",
+          tileSize: Number(tileSizeInput.value) || 48,
+          width: Number(mapWidthInput.value) || 8,
+          height: Number(mapHeightInput.value) || 15,
+          defaultTile: defaultTileSelect.value || "grass",
+          layers: [],
+          events: [],
+        });
+      }
+
+      function getLayer(id = state.activeLayer) {
+        return state.map.layers.find((layer) => layer.id === id);
+      }
+
+      function getTileDef(tileId) {
+        return tileId ? defs[tileId] : null;
+      }
+
+      function resolveEditorImagePath(src) {
+        if (!src) return "";
+        return src.startsWith("map/") ? `../${src}` : src;
+      }
+
+      function hasTag(def, tag) {
+        return def && Array.isArray(def.tags) && def.tags.includes(tag);
+      }
+
+      function tileFitsLayer(tileId, layerId) {
+        const def = getTileDef(tileId);
+        if (!def) return false;
+        if (layerId === "ground") return hasTag(def, "ground") && !hasTag(def, "object") && !hasTag(def, "terrainBlock");
+        if (layerId === "terrain") return hasTag(def, "terrainBlock") || (hasTag(def, "block") && !hasTag(def, "object") && !hasTag(def, "event"));
+        if (layerId === "object") return hasTag(def, "object");
+        if (layerId === "event") return hasTag(def, "event") || tileId === "door";
+        return true;
+      }
+
+      function getPaletteTiles() {
+        return Object.keys(defs)
+          .filter((tileId) => tileFitsLayer(tileId, state.activeLayer))
+          .sort((a, b) => {
+            const an = defs[a].name || a;
+            const bn = defs[b].name || b;
+            return an.localeCompare(bn, "ja");
+          });
+      }
+
+      function getCellFromEvent(event) {
+        const rect = surface.getBoundingClientRect();
+        const tileSize = state.map.tileSize;
+        const x = Math.floor((event.clientX - rect.left) / tileSize);
+        const y = Math.floor((event.clientY - rect.top) / tileSize);
+        if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height) return null;
+        return { x, y, index: y * state.map.width + x };
+      }
+
+      function drawTileImage(tileId, x, y, layerIndex) {
+        const placedTileId = getTileIdFromEntry(tileId);
+        const rotation = getTileRotationFromEntry(tileId);
+        const def = getTileDef(placedTileId);
+        if (!def) return;
+        const tileSize = state.map.tileSize;
+        const img = document.createElement("img");
+        img.className = "map-image";
+        img.src = resolveEditorImagePath(def.image || "");
+        img.alt = def.name || placedTileId;
+        img.title = `${def.name || placedTileId} (${placedTileId})`;
+        img.style.left = `${x * tileSize + (def.drawOffsetX || 0)}px`;
+        img.style.top = `${y * tileSize + (def.drawOffsetY || 0)}px`;
+        img.style.width = `${def.drawWidth || tileSize}px`;
+        img.style.height = `${def.drawHeight || tileSize}px`;
+        img.style.zIndex = String(10 + layerIndex * 1000 + y * state.map.width + x);
+        if (rotation) {
+          img.style.transform = `rotate(${rotation}deg)`;
+          img.style.transformOrigin = "center center";
+        }
+        if (!def.image) {
+          img.style.background = "#d7cbb6";
+        }
+        surface.appendChild(img);
+      }
+
+      function renderSurface() {
+        const tileSize = state.map.tileSize;
+        surface.style.width = `${state.map.width * tileSize}px`;
+        surface.style.height = `${state.map.height * tileSize}px`;
+        grid.style.backgroundSize = `${tileSize}px ${tileSize}px`;
+
+        [...surface.querySelectorAll(".map-image")].forEach((node) => node.remove());
+
+        state.map.layers.forEach((layer, layerIndex) => {
+          layer.tiles.forEach((tileEntry, index) => {
+            if (!getTileIdFromEntry(tileEntry)) return;
+            const x = index % state.map.width;
+            const y = Math.floor(index / state.map.width);
+            drawTileImage(tileEntry, x, y, layerIndex);
+          });
+        });
+
+        cursorCell.style.width = `${tileSize}px`;
+        cursorCell.style.height = `${tileSize}px`;
+        mapTitle.textContent = state.map.name;
+        mapSizeLabel.textContent = `${state.map.width * tileSize} x ${state.map.height * tileSize}px`;
+        updateExport();
+      }
+
+      function renderLayerTabs() {
+        layerTabs.innerHTML = "";
+        layerConfigs.forEach((config) => {
+          const button = document.createElement("button");
+          button.textContent = config.name;
+          button.classList.toggle("active", state.activeLayer === config.id);
+          button.addEventListener("click", () => {
+            state.activeLayer = config.id;
+            const choices = getPaletteTiles();
+            if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
+            renderLayerTabs();
+            renderPalette();
+            renderSelectedInfo();
+          });
+          layerTabs.appendChild(button);
+        });
+      }
+
+      function renderPalette() {
+        palette.innerHTML = "";
+        const choices = getPaletteTiles();
+        choices.forEach((tileId) => {
+          const def = defs[tileId];
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "tile-pick";
+          button.classList.toggle("active", state.selectedTile === tileId);
+          button.title = `${def.name || tileId} (${tileId})`;
+
+          if (def.image) {
+            const img = document.createElement("img");
+            img.src = resolveEditorImagePath(def.image);
+            img.alt = def.name || tileId;
+            const scale = 48 / (def.drawWidth || state.map.tileSize || 48);
+            img.style.width = `${(def.drawWidth || 48) * scale}px`;
+            img.style.height = `${(def.drawHeight || 48) * scale}px`;
+            img.style.left = `${(def.drawOffsetX || 0) * scale}px`;
+            img.style.top = `${(def.drawOffsetY || 0) * scale}px`;
+            button.appendChild(img);
+          }
+
+          const label = document.createElement("span");
+          label.textContent = def.name || tileId;
+          button.appendChild(label);
+          button.addEventListener("click", () => {
+            state.selectedTile = tileId;
+            renderPalette();
+            renderSelectedInfo();
+          });
+          palette.appendChild(button);
+        });
+      }
+
+      function renderSelectedInfo() {
+        const def = getTileDef(state.selectedTile);
+        selectedInfo.innerHTML = "";
+        const name = document.createElement("div");
+        name.innerHTML = def ? `<strong>${def.name || state.selectedTile}</strong>` : "<strong>未選択</strong>";
+        const id = document.createElement("div");
+        id.textContent = def ? state.selectedTile : "-";
+        const layer = document.createElement("div");
+        layer.textContent = `layer: ${state.activeLayer}`;
+        const rotation = document.createElement("div");
+        rotation.textContent = `rotate: ${state.selectedRotation}deg`;
+        const pass = document.createElement("div");
+        pass.textContent = def ? `passable: ${def.passable ? "true" : "false"}` : "passable: -";
+        selectedInfo.append(name, id, layer, rotation, pass);
+      }
+
+      function renderMapSelect() {
+        mapSelect.innerHTML = "";
+        const newOption = document.createElement("option");
+        newOption.value = "__new";
+        newOption.textContent = "新規 8x15";
+        mapSelect.appendChild(newOption);
+        Object.values(sourceMaps).forEach((map) => {
+          const option = document.createElement("option");
+          option.value = map.id;
+          option.textContent = map.name || map.id;
+          mapSelect.appendChild(option);
+        });
+      }
+
+      function renderDefaultTiles() {
+        defaultTileSelect.innerHTML = "";
+        Object.keys(defs)
+          .filter((tileId) => tileFitsLayer(tileId, "ground"))
+          .forEach((tileId) => {
+            const option = document.createElement("option");
+            option.value = tileId;
+            option.textContent = defs[tileId].name || tileId;
+            defaultTileSelect.appendChild(option);
+          });
+      }
+
+      function syncInputsFromMap() {
+        mapIdInput.value = state.map.id;
+        mapNameInput.value = state.map.name;
+        mapWidthInput.value = state.map.width;
+        mapHeightInput.value = state.map.height;
+        tileSizeInput.value = state.map.tileSize;
+        defaultTileSelect.value = state.map.defaultTile;
+      }
+
+      function setStatus(text) {
+        statusLine.textContent = text;
+      }
+
+      function paintCell(cell) {
+        if (!cell) return;
+        const key = `${cell.index}:${state.activeLayer}:${state.tool}:${state.selectedTile}:${state.selectedRotation}`;
+        if (state.lastPaintKey === key && state.tool !== "fill") return;
+        state.lastPaintKey = key;
+
+        const layer = getLayer();
+        if (!layer) return;
+        if (state.tool === "paint") {
+          if (state.activeLayer !== "ground" && !state.selectedTile) return;
+          layer.tiles[cell.index] = createTileEntry(state.selectedTile);
+        } else if (state.tool === "erase") {
+          layer.tiles[cell.index] = state.activeLayer === "ground" ? state.map.defaultTile : null;
+        } else if (state.tool === "fill") {
+          const fillValue = state.activeLayer === "ground"
+            ? createTileEntry(state.selectedTile)
+            : createTileEntry(state.selectedTile) || null;
+          layer.tiles = layer.tiles.map(() => fillValue);
+        }
+        renderSurface();
+      }
+
+      function resizeMapFromInputs() {
+        const width = Math.max(1, Math.min(80, Number(mapWidthInput.value) || state.map.width));
+        const height = Math.max(1, Math.min(80, Number(mapHeightInput.value) || state.map.height));
+        const tileSize = Math.max(16, Math.min(96, Number(tileSizeInput.value) || 48));
+        const defaultTile = defaultTileSelect.value || "grass";
+
+        state.map.id = sanitizeId(mapIdInput.value);
+        state.map.name = mapNameInput.value || state.map.id;
+        state.map.tileSize = tileSize;
+        state.map.width = width;
+        state.map.height = height;
+        state.map.defaultTile = defaultTile;
+        state.map.layers = state.map.layers.map((layer) => {
+          const fill = layer.id === "ground" ? defaultTile : null;
+          return normalizeLayer(layer, width, height, fill);
+        });
+        syncInputsFromMap();
+        renderAll();
+        setStatus("マップ設定を反映しました。");
+      }
+
+      function formatTileRows(tiles, width) {
+        function formatTile(tile) {
+          if (!tile) return "null";
+          if (!isTileEntryObject(tile)) return `"${tile}"`;
+          const tileId = tile.tileId || tile.id;
+          const rotation = normalizeRotation(tile.rotate);
+          if (!rotation) return `"${tileId}"`;
+          return `{ tileId: "${tileId}", rotate: ${rotation} }`;
+        }
+
+        const rows = [];
+        for (let y = 0; y < tiles.length / width; y += 1) {
+          const row = tiles.slice(y * width, y * width + width)
+            .map((tile) => formatTile(tile))
+            .join(", ");
+          rows.push(`            ${row},`);
+        }
+        return rows.join("\n");
+      }
+
+      function rotateSelection(delta) {
+        state.selectedRotation = normalizeRotation(state.selectedRotation + delta);
+        renderSelectedInfo();
+        setStatus(`向きを ${state.selectedRotation}度 にしました。`);
+      }
+
+      function buildMapSource() {
+        const safeId = sanitizeId(state.map.id);
+        const layers = state.map.layers.map((layer) => `        {
+          id: "${layer.id}",
+          name: "${layer.name}",
+          tiles: [
+${formatTileRows(layer.tiles, state.map.width)}
+          ],
+        }`).join(",\n");
+
+        return `    ${safeId}: {
+      id: "${safeId}",
+      name: "${state.map.name}",
+      tileSize: ${state.map.tileSize},
+      width: ${state.map.width},
+      height: ${state.map.height},
+      defaultTile: "${state.map.defaultTile}",
+      layers: [
+${layers}
+      ],
+      events: ${JSON.stringify(state.map.events || [], null, 8).replace(/\n/g, "\n      ")},
+    },`;
+      }
+
+      function updateExport() {
+        exportText.value = buildMapSource();
+      }
+
+      function renderAll() {
+        renderLayerTabs();
+        renderPalette();
+        renderSelectedInfo();
+        renderSurface();
+      }
+
+      function loadMapById(mapId) {
+        if (mapId === "__new") {
+          state.map = createNewMap();
+        } else {
+          state.map = normalizeMap(sourceMaps[mapId]);
+        }
+        const choices = getPaletteTiles();
+        if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
+        syncInputsFromMap();
+        renderAll();
+        setStatus(`${state.map.name} を読み込みました。`);
+      }
+
+      function saveLocal() {
+        localStorage.setItem("healerMapEditorDraft", JSON.stringify(state.map));
+        setStatus("一時保存しました。");
+      }
+
+      function loadLocal() {
+        const raw = localStorage.getItem("healerMapEditorDraft");
+        if (!raw) {
+          setStatus("一時保存がありません。");
+          return;
+        }
+        state.map = normalizeMap(JSON.parse(raw));
+        syncInputsFromMap();
+        renderAll();
+        setStatus("一時保存を読み込みました。");
+      }
+
+      async function copyExport() {
+        updateExport();
+        try {
+          await navigator.clipboard.writeText(exportText.value);
+          setStatus("コピーしました。");
+        } catch (error) {
+          exportText.focus();
+          exportText.select();
+          setStatus("テキストを選択しました。");
+        }
+      }
+
+      function downloadExport() {
+        updateExport();
+        const blob = new Blob([exportText.value], { type: "text/javascript;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${sanitizeId(state.map.id)}.map.js`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        setStatus("JSファイルを書き出しました。");
+      }
+
+      function clearActiveLayer() {
+        const layer = getLayer();
+        if (!layer) return;
+        const fill = layer.id === "ground" ? state.map.defaultTile : null;
+        layer.tiles = layer.tiles.map(() => fill);
+        renderSurface();
+        setStatus(`${layer.name} を消去しました。`);
+      }
+
+      function initEvents() {
+        mapSelect.addEventListener("change", () => loadMapById(mapSelect.value));
+        document.getElementById("new-map-button").addEventListener("click", () => {
+          state.map = createNewMap();
+          syncInputsFromMap();
+          renderAll();
+          setStatus("新規マップを作成しました。");
+        });
+        document.getElementById("resize-button").addEventListener("click", resizeMapFromInputs);
+        document.querySelectorAll("[data-tool]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.tool = button.dataset.tool;
+            document.querySelectorAll("[data-tool]").forEach((node) => node.classList.toggle("active", node === button));
+          });
+        });
+        document.getElementById("rotate-left-button").addEventListener("click", () => rotateSelection(-90));
+        document.getElementById("rotate-right-button").addEventListener("click", () => rotateSelection(90));
+        document.getElementById("rotate-reset-button").addEventListener("click", () => {
+          state.selectedRotation = 0;
+          renderSelectedInfo();
+          setStatus("向きを 0度 にしました。");
+        });
+
+        surface.addEventListener("pointerdown", (event) => {
+          state.isPointerDown = true;
+          state.lastPaintKey = "";
+          surface.setPointerCapture(event.pointerId);
+          paintCell(getCellFromEvent(event));
+        });
+        surface.addEventListener("pointermove", (event) => {
+          const cell = getCellFromEvent(event);
+          if (cell) {
+            cursorCell.classList.remove("hidden");
+            cursorCell.style.left = `${cell.x * state.map.tileSize}px`;
+            cursorCell.style.top = `${cell.y * state.map.tileSize}px`;
+          } else {
+            cursorCell.classList.add("hidden");
+          }
+          if (state.isPointerDown && state.tool !== "fill") paintCell(cell);
+        });
+        surface.addEventListener("pointerup", () => {
+          state.isPointerDown = false;
+          state.lastPaintKey = "";
+        });
+        surface.addEventListener("pointerleave", () => {
+          cursorCell.classList.add("hidden");
+          state.isPointerDown = false;
+          state.lastPaintKey = "";
+        });
+
+        document.getElementById("save-local-button").addEventListener("click", saveLocal);
+        document.getElementById("load-local-button").addEventListener("click", loadLocal);
+        document.getElementById("copy-button").addEventListener("click", copyExport);
+        document.getElementById("download-button").addEventListener("click", downloadExport);
+        document.getElementById("clear-layer-button").addEventListener("click", clearActiveLayer);
+      }
+
+      function init() {
+        renderDefaultTiles();
+        renderMapSelect();
+        initEvents();
+        loadMapById("__new");
+      }
+
+      init();
+    </script>
+  </body>
+</html>
+
+
