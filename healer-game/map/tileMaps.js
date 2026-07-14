@@ -5,6 +5,13 @@
   // Tile images are optional for now. When assets are ready, set image to a path
   // such as "map/img_tile/forest/grass.png".
   window.HEALER_TILE_DEFS = {
+    test_grass: {
+      id: "test_grass",
+      name: "テスト",
+      image: "map/img_tile/rpg_village/grass_base_01.png",
+      passable: true,
+      tags: ["ground"],
+    },
     grass: {
       id: "grass",
       name: "草地",
