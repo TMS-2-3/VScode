@@ -2967,6 +2967,17 @@
 
   function getInventoryResultSkillUnit(result, skill) {
     const owner = result && result.owner || skill && (skill.owner || skill.sourceOwner);
+    if (owner === "common" && skill) {
+      const identity = getSkillIdentity("common", result && result.key || skill.key, skill);
+      for (const unitId of equipmentUnitOrder) {
+        const aliasKey = skill.originalKey || skill.key;
+        const aliasSkill = SKILL_DATA && SKILL_DATA[unitId] && SKILL_DATA[unitId][aliasKey];
+        if (aliasSkill && getSkillIdentity(unitId, aliasKey, aliasSkill) === identity) {
+          return getEquipmentDisplayUnit(unitId) || player;
+        }
+      }
+      return player;
+    }
     return owner ? getEquipmentDisplayUnit(owner) : player;
   }
 
@@ -4269,9 +4280,12 @@
     const configurableActive = Array.isArray(loadout.active) ? loadout.active.filter((key) => key && key !== "attack") : [];
     const currentKey = configurableActive[slotIndex] || null;
     const current = currentKey && SKILL_DATA && SKILL_DATA[owner] ? SKILL_DATA[owner][currentKey] : null;
-    const candidates = Object.entries(SKILL_DATA && SKILL_DATA[owner] || {})
-      .filter(([key]) => key !== "attack" && !isUltimateSkill(owner, key) && isOwnedSkillForDisplay(owner, key))
-      .map(([key, skill]) => ({ key, skill }));
+    const candidates = sortPickerCandidatesByAvailability(
+      Object.entries(SKILL_DATA && SKILL_DATA[owner] || {})
+        .filter(([key]) => key !== "attack" && !isUltimateSkill(owner, key) && isOwnedSkillForDisplay(owner, key))
+        .map(([key, skill]) => ({ key, skill })),
+      (entry) => canEquipSkillWithCurrentWeapon(unit, entry.skill)
+    );
     ctx.fillStyle = "#102018";
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
@@ -4307,9 +4321,12 @@
     const owner = unit.skillOwner || unit.id;
     const loadout = getEquipmentLoadout(unit);
     const current = getPassiveData(owner, loadout.passive);
-    const candidates = Object.entries(PASSIVE_DATA && PASSIVE_DATA[owner] || {})
-      .filter(([key]) => isOwnedPassiveForDisplay(owner, key))
-      .map(([key, passive]) => ({ key, passive }));
+    const candidates = sortPickerCandidatesByAvailability(
+      Object.entries(PASSIVE_DATA && PASSIVE_DATA[owner] || {})
+        .filter(([key]) => isOwnedPassiveForDisplay(owner, key))
+        .map(([key, passive]) => ({ key, passive })),
+      (entry) => canEquipSkillWithCurrentWeapon(unit, entry.passive)
+    );
     ctx.fillStyle = "#102018";
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
@@ -4340,7 +4357,10 @@
   function drawUltimateSkillPicker(rect, unit, readOnly) {
     const owner = unit.skillOwner || unit.id;
     const currentEntry = getEquipmentUltimateSkillEntry(unit);
-    const candidates = getUltimateSkillCandidates(owner);
+    const candidates = sortPickerCandidatesByAvailability(
+      getUltimateSkillCandidates(owner),
+      (entry) => canEquipSkillWithCurrentWeapon(unit, entry.skill)
+    );
     ctx.fillStyle = "#102018";
     ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
@@ -5279,6 +5299,22 @@
       return Boolean(weapon && skill.requiredWeapons.includes(weapon.weaponType));
     }
     return true;
+  }
+
+  function sortPickerCandidatesByAvailability(candidates, isAvailable) {
+    return (Array.isArray(candidates) ? candidates : [])
+      .map((entry, index) => ({
+        entry,
+        index,
+        available: Boolean(isAvailable && isAvailable(entry)),
+      }))
+      .sort((a, b) => {
+        if (a.available !== b.available) {
+          return a.available ? -1 : 1;
+        }
+        return a.index - b.index;
+      })
+      .map((wrapped) => wrapped.entry);
   }
 
   function getSkillConditionLabel(skill) {

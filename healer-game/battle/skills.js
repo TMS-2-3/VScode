@@ -89,7 +89,13 @@
     }
 
     function isSkillSource(skill, owner, key) {
-      return getSkillSourceOwner(skill) === owner && getSkillSourceKey(skill) === key;
+      if (!skill) {
+        return false;
+      }
+      if (getSkillSourceOwner(skill) === owner && getSkillSourceKey(skill) === key) {
+        return true;
+      }
+      return skill.originalOwner === owner && skill.originalKey === key;
     }
 
     function getSkillUpgradeLevel(unitOrOwner, key, skill = null) {
@@ -115,6 +121,10 @@
 
     function getUpgradedBaseValue(unit, key, skill, prop) {
       const value = Number.isFinite(skill && skill[prop]) ? skill[prop] : 0;
+      const perLevelProp = `${prop}PerLevel`;
+      if (Number.isFinite(skill && skill[perLevelProp])) {
+        return value + skill[perLevelProp] * getSkillActionUpgradeLevel(unit, key, skill);
+      }
       if (prop === "damageBase") {
         if (isSkillSource(skill, "finald", "attack") || isSkillSource(skill, "rihas", "attack")) {
           return value * getSkillUpgradeIndexedValue(unit, key, skill, SKILL_BASE_MULTIPLIERS);
@@ -2233,12 +2243,27 @@
       speakSkill(unit, key);
       beginPartyAction(unit);
       paySkillCost(unit, skill);
-      unit.actionLock = ctx.ACTION_GAP;
-      finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-      unit.aimAngle = ctx.angleTo(unit, target);
+      const cast = getCastTime(skill.cast, unit);
       const repeats = Math.max(1, Math.floor(Number.isFinite(skill.repeat) ? skill.repeat : 1));
       const delayMs = Math.max(0, Number.isFinite(skill.repeatDelayMs) ? skill.repeatDelayMs : 0);
+      const sequenceTime = delayMs * Math.max(0, repeats - 1) / 1000;
+      unit.actionLock = cast + sequenceTime + ctx.ACTION_GAP;
+      unit.aimAngle = ctx.angleTo(unit, target);
+      if (cast > 0) {
+        unit.castVisual = {
+          time: cast,
+          total: cast,
+          color: "rgba(244, 197, 79, 0.95)",
+        };
+      }
       let sleepAppliedByThisAction = false;
+      if (cast > 0) {
+        setTimeout(() => {
+          finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+        }, cast * 1000);
+      } else {
+        finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+      }
       for (let i = 0; i < repeats; i += 1) {
         setTimeout(() => {
           if (!unit.dead && !target.dead && canOffensiveAffect(unit, target) && ctx.dist(unit, target) <= skill.hitRange) {
@@ -2256,7 +2281,7 @@
             }
             ctx.slashEffect(unit, target);
           }
-        }, i * delayMs);
+        }, cast * 1000 + i * delayMs);
       }
       return true;
     }

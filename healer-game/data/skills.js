@@ -167,6 +167,16 @@
         upgradeSimpleDescription: "レベルが上がるごとに衝撃波のダメージが上昇する",
         upgradeDescription: "レベルが上がるごとに衝撃波のダメージが発動キャラの攻撃力の(8/16/24/32/40)%分の追加ダメージを与える",
       },
+      ten_hit_combo: {
+        id: "ten_hit_combo", key: "ten_hit_combo", owner: "rihas", name: "10連撃", rank: "D", category: "スキル", skillType: "単体攻撃",
+        requiredWeapons: ["棒具"],
+        cd: 16, range: px(100), hitRange: px(110), cast: 2, repeat: 10, repeatDelayMs: 120, damageBase: 5, damageBasePerLevel: 2, attackScale: 0.15, lines: ["10連撃"], damageType: "physical",
+        formula: [{ text: "5 + 攻撃力 * 0.15", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "2秒の詠唱を行った後、敵1体に10連撃をお見舞いし、(式=値)の物理ダメージを10回与える。",
+        simpleDescription: "詠唱後、敵1体に10連撃をお見舞いし物理ダメージを与える",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
+        upgradeDescription: "レベルが上がるごとに基礎ダメージが+(2/4/6/8/10)増加する",
+      },
       ult: {
         id: "taunt_shield", key: "ult", owner: "rihas", name: "まとめてかかってこい", rank: "D", category: "必殺技", skillType: "範囲デバフ", ultimateCost: 100, radius: px(380), duration: 5.5, targetLimit: 8, shieldHpRatio: 0.05, burstExtraRadius: px(10), lines: ["まとめてかかってこい"], statusIds: ["debuff_taunt"],
         requiredWeapons: ["拳具"],
@@ -591,31 +601,104 @@
   };
   window.HEALER_SKILL_WEAPON_TYPES_BY_OWNER = skillWeaponTypesByOwner;
 
-  function addSkillAlias(targetOwner, aliasKey, sourceOwner, sourceKey) {
-    if (!skillData[targetOwner] || !skillData[sourceOwner] || !skillData[sourceOwner][sourceKey] || skillData[targetOwner][aliasKey]) {
+  const partySkillOwners = Object.keys(skillWeaponTypesByOwner);
+  const commonSkillData = {};
+  window.HEALER_COMMON_SKILL_DATA = commonSkillData;
+
+  function createCommonSkillKey(owner, key) {
+    const base = key === "ult" ? `${owner}_${key}` : key;
+    if (!commonSkillData[base]) {
+      return base;
+    }
+    return `${owner}_${key}`;
+  }
+
+  function getCommonSkillRequiredOwners(owner, key, skill) {
+    if (Array.isArray(skill.requiredOwners)) {
+      return skill.requiredOwners.slice();
+    }
+    if (skill.category === "必殺技" || key === "ult" || !Array.isArray(skill.requiredWeapons) || skill.requiredWeapons.length === 0) {
+      return [owner];
+    }
+    return null;
+  }
+
+  function hoistCommonSkills() {
+    for (const owner of partySkillOwners) {
+      const skills = skillData[owner] || {};
+      for (const [key, skill] of Object.entries({ ...skills })) {
+        if (!skill || skill.category === "通常攻撃") {
+          continue;
+        }
+        const commonKey = createCommonSkillKey(owner, key);
+        const requiredOwners = getCommonSkillRequiredOwners(owner, key, skill);
+        commonSkillData[commonKey] = {
+          ...skill,
+          key: commonKey,
+          owner: "common",
+          originalOwner: owner,
+          originalKey: key,
+          legacyIdentities: [`${owner}:${key}`],
+          ...(requiredOwners ? { requiredOwners } : {}),
+        };
+        delete skills[key];
+      }
+    }
+    skillData.common = commonSkillData;
+  }
+
+  function ownerMatchesRequiredWeapons(owner, skill) {
+    if (!Array.isArray(skill.requiredWeapons) || skill.requiredWeapons.length === 0) {
+      return true;
+    }
+    const weaponTypes = skillWeaponTypesByOwner[owner] || [];
+    return skill.requiredWeapons.some((weaponType) => weaponTypes.includes(weaponType));
+  }
+
+  function ownerCanViewCommonSkill(owner, skill) {
+    if (!skill) {
+      return false;
+    }
+    if (Array.isArray(skill.requiredOwners) && skill.requiredOwners.length > 0 && !skill.requiredOwners.includes(owner)) {
+      return false;
+    }
+    if (!ownerMatchesRequiredWeapons(owner, skill)) {
+      return false;
+    }
+    if (!Array.isArray(skill.requiredOwners) && (!Array.isArray(skill.requiredWeapons) || skill.requiredWeapons.length === 0)) {
+      return skill.originalOwner === owner;
+    }
+    return true;
+  }
+
+  function addCommonSkillView(targetOwner, aliasKey, commonKey) {
+    if (!skillData[targetOwner] || !commonSkillData[commonKey] || skillData[targetOwner][aliasKey]) {
       return;
     }
+    const commonSkill = commonSkillData[commonKey];
     skillData[targetOwner][aliasKey] = {
-      ...skillData[sourceOwner][sourceKey],
+      ...commonSkill,
       key: aliasKey,
       owner: targetOwner,
-      sourceOwner,
-      sourceKey,
+      sourceOwner: "common",
+      sourceKey: commonKey,
+      originalOwner: commonSkill.originalOwner,
+      originalKey: commonSkill.originalKey,
     };
   }
 
-  for (const [targetOwner, weaponTypes] of Object.entries(skillWeaponTypesByOwner)) {
-    for (const [sourceOwner, skills] of Object.entries(skillData)) {
-      for (const [sourceKey, skill] of Object.entries(skills || {})) {
-        if (!skill || skill.category !== "スキル" || !Array.isArray(skill.requiredWeapons)) {
-          continue;
-        }
-        if (skill.requiredWeapons.some((weaponType) => weaponTypes.includes(weaponType))) {
-          addSkillAlias(targetOwner, sourceKey, sourceOwner, sourceKey);
+  function addCommonSkillViews() {
+    for (const owner of partySkillOwners) {
+      for (const [commonKey, skill] of Object.entries(commonSkillData)) {
+        if (ownerCanViewCommonSkill(owner, skill)) {
+          addCommonSkillView(owner, skill.originalKey || commonKey, commonKey);
         }
       }
     }
   }
+
+  hoistCommonSkills();
+  addCommonSkillViews();
 
   window.HEALER_PASSIVE_DATA = {
     finald: {
@@ -651,6 +734,78 @@
       },
     },
   };
+
+  const passiveData = window.HEALER_PASSIVE_DATA;
+  const commonPassiveData = {};
+  window.HEALER_COMMON_PASSIVE_DATA = commonPassiveData;
+
+  function getCommonPassiveRequiredOwners(owner, passive) {
+    if (Array.isArray(passive.requiredOwners)) {
+      return passive.requiredOwners.slice();
+    }
+    return [owner];
+  }
+
+  function hoistCommonPassives() {
+    for (const owner of partySkillOwners) {
+      const passives = passiveData[owner] || {};
+      for (const [key, passive] of Object.entries({ ...passives })) {
+        if (!passive) {
+          continue;
+        }
+        commonPassiveData[key] = {
+          ...passive,
+          key,
+          owner: "common",
+          originalOwner: owner,
+          originalKey: key,
+          requiredOwners: getCommonPassiveRequiredOwners(owner, passive),
+          legacyIdentities: [`passive:${owner}:${key}`],
+        };
+        delete passives[key];
+      }
+    }
+    passiveData.common = commonPassiveData;
+  }
+
+  function ownerCanViewCommonPassive(owner, passive) {
+    if (!passive) {
+      return false;
+    }
+    if (Array.isArray(passive.requiredOwners) && passive.requiredOwners.length > 0 && !passive.requiredOwners.includes(owner)) {
+      return false;
+    }
+    return ownerMatchesRequiredWeapons(owner, passive);
+  }
+
+  function addCommonPassiveView(targetOwner, aliasKey, commonKey) {
+    if (!passiveData[targetOwner] || !commonPassiveData[commonKey] || passiveData[targetOwner][aliasKey]) {
+      return;
+    }
+    const commonPassive = commonPassiveData[commonKey];
+    passiveData[targetOwner][aliasKey] = {
+      ...commonPassive,
+      key: aliasKey,
+      owner: targetOwner,
+      sourceOwner: "common",
+      sourceKey: commonKey,
+      originalOwner: commonPassive.originalOwner,
+      originalKey: commonPassive.originalKey,
+    };
+  }
+
+  function addCommonPassiveViews() {
+    for (const owner of partySkillOwners) {
+      for (const [commonKey, passive] of Object.entries(commonPassiveData)) {
+        if (ownerCanViewCommonPassive(owner, passive)) {
+          addCommonPassiveView(owner, passive.originalKey || commonKey, commonKey);
+        }
+      }
+    }
+  }
+
+  hoistCommonPassives();
+  addCommonPassiveViews();
 
   window.HEALER_LOADOUT_CONFIG = {
     passiveSlots: 1,
