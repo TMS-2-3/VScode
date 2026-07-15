@@ -132,6 +132,15 @@
         upgradeSimpleDescription: "レベルが上がるごとにこのスキルが敵に命中した際のクールタイムの短縮時間が増加する",
         upgradeDescription: "レベルが上がるごとにこのスキルが敵に命中した際のクールタイム短縮時間が+(0.3/0.6/0.9/1.2/1.5)秒増加する",
       },
+      sharpen_blade: {
+        id: "sharpen_blade", key: "sharpen_blade", owner: "ulpes", name: "研磨", rank: "D", category: "スキル", skillType: "自己バフ",
+        requiredWeapons: ["片手剣", "両手剣"],
+        cd: 20, cost: 10, cast: 5, target: "self", sharpenDuration: 14, sharpenAttackBonus: 0.2, castReductionPerLevel: 1, lines: ["研磨"], statusIds: ["buff_sharpen_blade"],
+        description: "５秒の詠唱後、自身に14秒持続する\"鋭刃\"を付与する。",
+        simpleDescription: "詠唱後、自身に\"鋭刃\"を付与する",
+        upgradeSimpleDescription: "レベルが上がるごとに詠唱時間が短くなる",
+        upgradeDescription: "レベルが上がるごとに詠唱時間が(1/2/3/4/5)秒短縮される",
+      },
       ult: {
         id: "hero_one_slash", key: "ult", owner: "ulpes", name: "真っ二つ", rank: "D", category: "必殺技", skillType: "単体攻撃",
         requiredWeapons: ["両手剣"],
@@ -157,7 +166,7 @@
       lan_wave: {
         id: "lan_wave", key: "lan_wave", owner: "rihas", name: "ランウェーブ", rank: "D", category: "スキル", skillType: "範囲攻撃",
         requiredWeapons: ["拳具", "棒具"],
-        cd: 13, cost: 15, range: px(260), radius: px(90), shockRadius: px(180), cast: 1, landingOffset: px(18), damageBase: 22, attackScale: 0.8, shockDamageBase: 10, shockMagicScale: 0.2, burstRadius: px(170), approach: true, lines: ["ランウェーブ"], damageType: "mixed",
+        cd: 13, cost: 15, range: px(260), radius: px(90), shockRadius: px(180), cast: 1, landingOffset: px(18), damageBase: 22, attackScale: 0.8, shockDamageBase: 10, shockMagicScale: 0.2, burstRadius: px(170), approach: true, lines: ["ランウェーブ"], damageType: "physical",
         formula: [
           { text: "22 + 攻撃力 * 0.8", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" },
           { text: "10 + 魔力 * 0.2", stat: "magic", baseProp: "shockDamageBase", scaleProp: "shockMagicScale" },
@@ -176,6 +185,25 @@
         simpleDescription: "詠唱後、敵1体に10連撃をお見舞いし物理ダメージを与える",
         upgradeSimpleDescription: "レベルが上がるごとにダメージが上昇する",
         upgradeDescription: "レベルが上がるごとに基礎ダメージが+(2/4/6/8/10)増加する",
+      },
+      counterattack_stance: {
+        id: "counterattack_stance", key: "counterattack_stance", owner: "rihas", name: "反撃", rank: "D", category: "スキル", skillType: "自己バフ",
+        requiredWeapons: ["片手剣", "両手剣", "拳具", "棒具"],
+        cd: 25, cost: 20, target: "self", counterattackDuration: 6, counterattackBaseStacks: 1, counterattackStacksPerLevel: 1, counterattackRange: px(200), lines: ["反撃"], statusIds: ["buff_counterattack_stance"],
+        description: "自身に6秒間持続する\"反撃の構え\"を1スタック付与する。",
+        simpleDescription: "自身に1スタックの\"反撃の構え\"を付与する",
+        upgradeSimpleDescription: "レベルが上がるごとに自身に付与するスタック数が増加する",
+        upgradeDescription: "レベルが上がるごとに自身に付与するスタック数が+(1/2/3/4/5)増加する",
+      },
+      mizootoshi: {
+        id: "mizootoshi", key: "mizootoshi", owner: "rihas", name: "溝落", rank: "D", category: "スキル", skillType: "単体攻撃",
+        requiredWeapons: ["拳具", "棒具"],
+        cd: 25, cost: 30, cast: 1, range: px(70), damageBase: 10, attackScale: 0.7, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], flinchingDuration: 3, lines: ["溝落"], damageType: "physical", statusIds: ["debuff_flinching"],
+        formula: [{ text: "10 + 攻撃力 * 0.7", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "1秒のチャージを行った後、敵の溝落を突き、(式=値)の物理ダメージを与え、3秒間の\"怯み\"を付与する。",
+        simpleDescription: "チャージ後、敵の溝落を突き、\"怯み\"を付与する",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが増加する",
+        upgradeDescription: "レベルが上がるごとにこのスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
       },
       ult: {
         id: "taunt_shield", key: "ult", owner: "rihas", name: "まとめてかかってこい", rank: "D", category: "必殺技", skillType: "範囲デバフ", ultimateCost: 100, radius: px(380), duration: 5.5, targetLimit: 8, shieldHpRatio: 0.05, burstExtraRadius: px(10), lines: ["まとめてかかってこい"], statusIds: ["debuff_taunt"],

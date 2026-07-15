@@ -768,6 +768,18 @@
       const contemptMax = Math.max(0.1, unit.contemptMax || unit.contemptTimer);
       icons.push(makeStatusIcon(unit, "buff_contempt", { ratio: unit.contemptTimer / contemptMax, remaining: unit.contemptTimer, stack: unit.contemptStacks }));
     }
+    if ((unit.sharpenBladeTimer || 0) > 0) {
+      const sharpenMax = Math.max(0.1, unit.sharpenBladeMax || unit.sharpenBladeTimer);
+      icons.push(makeStatusIcon(unit, "buff_sharpen_blade", { ratio: unit.sharpenBladeTimer / sharpenMax, remaining: unit.sharpenBladeTimer }));
+    }
+    if ((unit.counterattackStanceTimer || 0) > 0) {
+      const stanceMax = Math.max(0.1, unit.counterattackStanceMax || unit.counterattackStanceTimer);
+      icons.push(makeStatusIcon(unit, "buff_counterattack_stance", {
+        ratio: unit.counterattackStanceTimer / stanceMax,
+        remaining: unit.counterattackStanceTimer,
+        stack: Math.max(1, Math.floor(unit.counterattackStanceStacks || 1)),
+      }));
+    }
     if ((unit.feelTimer || 0) > 0) {
       const feelMax = Math.max(0.1, unit.feelMax || unit.feelTimer);
       icons.push(makeStatusIcon(unit, "buff_feel", { ratio: unit.feelTimer / feelMax, remaining: unit.feelTimer, stack: unit.feelGuardCount || undefined }));
@@ -804,6 +816,10 @@
     if ((unit.freezingTimer || 0) > 0) {
       const freezingMax = Math.max(0.1, unit.freezingMax || unit.freezingTimer);
       icons.push(makeStatusIcon(unit, "debuff_freezing", { ratio: unit.freezingTimer / freezingMax, remaining: unit.freezingTimer }));
+    }
+    if ((unit.flinchingTimer || 0) > 0) {
+      const flinchingMax = Math.max(0.1, unit.flinchingMax || unit.flinchingTimer);
+      icons.push(makeStatusIcon(unit, "debuff_flinching", { ratio: unit.flinchingTimer / flinchingMax, remaining: unit.flinchingTimer }));
     }
     if ((unit.magicNeutralizeTimer || 0) > 0) {
       const neutralizeMax = Math.max(0.1, unit.magicNeutralizeMax || unit.magicNeutralizeTimer);

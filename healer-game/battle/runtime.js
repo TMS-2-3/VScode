@@ -180,6 +180,20 @@
         if (unit.shadowDashTimer <= 0) {
           unit.shadowDashMax = 0;
         }
+        unit.sharpenBladeTimer = Math.max(0, (unit.sharpenBladeTimer || 0) - dt);
+        if (unit.sharpenBladeTimer <= 0) {
+          unit.sharpenBladeMax = 0;
+        }
+        unit.counterattackStanceTimer = Math.max(0, (unit.counterattackStanceTimer || 0) - dt);
+        if (unit.counterattackStanceTimer <= 0) {
+          unit.counterattackStanceMax = 0;
+          unit.counterattackStanceStacks = 0;
+          unit.counterattackRange = 0;
+        }
+        unit.flinchingTimer = Math.max(0, (unit.flinchingTimer || 0) - dt);
+        if (unit.flinchingTimer <= 0) {
+          unit.flinchingMax = 0;
+        }
         unit.stackCooldown = Math.max(0, unit.stackCooldown - dt);
         updateDelayedDamage(unit, dt);
         if (enforceIncapacitatedState(unit)) {
@@ -575,6 +589,14 @@
       unit.actionSpeedDownRatio = 0;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
+      unit.sharpenBladeTimer = 0;
+      unit.sharpenBladeMax = 0;
+      unit.counterattackStanceTimer = 0;
+      unit.counterattackStanceMax = 0;
+      unit.counterattackStanceStacks = 0;
+      unit.counterattackRange = 0;
+      unit.flinchingTimer = 0;
+      unit.flinchingMax = 0;
       unit.rihasPassiveStacks = 0;
       unit.rihasPassiveTimer = 0;
       unit.rihasPassiveStackCooldown = 0;

@@ -389,6 +389,9 @@
     }
 
     function getEffectiveMoveSpeed(unit) {
+      if (unit && (unit.counterattackStanceTimer || 0) > 0) {
+        return 0;
+      }
       const base = getBaseStat(unit, "speed", 0) + getEquipmentFlatBonus(unit, "speed") + getEquipmentFlatBonus(unit, "moveSpeed");
       const bonus = getMoveSpeedBonus(unit);
       return Math.max(0, base + base * bonus);
@@ -465,6 +468,12 @@
 
     function getStatusStatBonus(unit, statKey) {
       let bonus = 0;
+      if (unit && (unit.sharpenBladeTimer || 0) > 0 && statKey === "attack") {
+        bonus += 0.2;
+      }
+      if (unit && (unit.counterattackStanceTimer || 0) > 0 && statKey === "guardChance") {
+        bonus += 2;
+      }
       if (hasPassive(unit, "painless")) {
         if (statKey === "attack") {
           bonus += getRihasPassiveRatio(unit) * getSafeNumber(RIHAS_PASSIVE_MAX_ATTACK_BONUS, 0);
@@ -515,6 +524,13 @@
           bonus -= 0.1;
         } else if (statKey === "moveSpeed") {
           bonus -= 0.2;
+        }
+      }
+      if (unit && (unit.flinchingTimer || 0) > 0) {
+        if (statKey === "actionSpeed") {
+          bonus -= 0.5;
+        } else if (statKey === "moveSpeed") {
+          bonus -= 0.1;
         }
       }
       if (unit && (unit.plantStage || 0) > 0 && statKey === "hpRegenRate") {
