@@ -242,6 +242,13 @@
         font-size: 13px;
       }
 
+      .editor-mode {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
       .surface-wrap {
         width: max-content;
         padding: 18px;
@@ -361,9 +368,10 @@
         </div>
 
         <div class="button-row">
-          <button id="new-map-button" class="primary">新規</button>
+          <button id="new-map-button" class="primary">新規作成</button>
           <button id="resize-button">反映</button>
         </div>
+        <p class="small-note">`新規作成` はブラウザ上の編集用マップを作ります。`tileMaps.js` へは自動保存されません。</p>
 
         <h2>レイヤー</h2>
         <div id="layer-tabs" class="layer-tabs"></div>
@@ -407,15 +415,20 @@
 
       <aside class="export">
         <h1>Export</h1>
-        <button id="save-local-button" class="wide-button primary">一時保存</button>
-        <button id="load-local-button" class="wide-button">一時読込</button>
+        <button id="save-record-button" class="wide-button primary">作業記録JSON保存</button>
+        <button id="load-record-button" class="wide-button">作業記録JSON読込</button>
+        <button id="save-local-button" class="wide-button hidden">一時保存</button>
+        <button id="load-local-button" class="wide-button hidden">一時読込</button>
+        <button id="reload-map-button" class="wide-button hidden">現在マップを戻す</button>
+        <button id="reload-page-button" class="wide-button">tileMaps再読込</button>
+        <button id="delete-map-button" class="wide-button danger hidden">マップ削除</button>
         <button id="copy-button" class="wide-button">コピー</button>
-        <button id="download-button" class="wide-button">JS保存</button>
+        <button id="download-button" class="wide-button">JS書き出し</button>
         <button id="clear-layer-button" class="wide-button danger">レイヤー消去</button>
 
         <h2>マップ定義</h2>
         <textarea id="export-text" spellcheck="false"></textarea>
-        <p class="small-note">出力した定義は `tileMaps.js` の `window.HEALER_TILE_MAPS` 内へ追加できます。</p>
+        <p class="small-note">安全に同期する場合は、`JS書き出し` で定義を書き出し、`tileMaps.js` に反映したあとで `tileMaps再読込` を押してください。</p>
       </aside>
     </div>
 
@@ -457,6 +470,12 @@
       const mapTitle = document.getElementById("map-title");
       const mapSizeLabel = document.getElementById("map-size-label");
       const exportText = document.getElementById("export-text");
+      const draftFileInput = document.createElement("input");
+      draftFileInput.type = "file";
+      draftFileInput.accept = ".json,application/json";
+      const editorMode = document.createElement("div");
+      editorMode.className = "editor-mode";
+      statusLine.insertAdjacentElement("afterend", editorMode);
 
       function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -759,6 +778,18 @@
         statusLine.textContent = text;
       }
 
+      function updateEditorMode() {
+        if (!state.map) {
+          editorMode.textContent = "";
+          return;
+        }
+
+        const isSourceMap = !!sourceMaps[state.map.id];
+        editorMode.textContent = isSourceMap
+          ? "現在の表示: tileMaps.js にある既存マップを編集中です。反映には JS書き出し後の差し替えが必要です。"
+          : "現在の表示: ブラウザ上の新規マップです。まだ tileMaps.js には登録されていません。";
+      }
+
       function paintCell(cell) {
         if (!cell) return;
         const key = `${cell.index}:${state.activeLayer}:${state.tool}:${state.selectedTile}:${state.selectedRotation}`;
@@ -852,6 +883,69 @@ ${layers}
     },`;
       }
 
+      function createSerializableMap(map) {
+        return {
+          id: sanitizeId(map.id),
+          name: map.name || sanitizeId(map.id),
+          tileSize: Number(map.tileSize) || 48,
+          width: Number(map.width) || 8,
+          height: Number(map.height) || 15,
+          defaultTile: map.defaultTile || "grass",
+          layers: (map.layers || []).map((layer) => ({
+            id: layer.id,
+            name: layer.name || layer.id,
+            tiles: (layer.tiles || []).map((tile) => {
+              if (!tile) return null;
+              if (!isTileEntryObject(tile)) return tile;
+              const tileId = tile.tileId || tile.id || null;
+              if (!tileId) return null;
+              const rotation = normalizeRotation(tile.rotate);
+              return rotation ? { tileId, rotate: rotation } : tileId;
+            }),
+          })),
+          events: Array.isArray(map.events) ? clone(map.events) : [],
+        };
+      }
+
+      function createRecordPayload(map) {
+        return {
+          type: "healer-map-editor-record",
+          version: 1,
+          savedAt: new Date().toISOString(),
+          map: createSerializableMap(map),
+        };
+      }
+
+      function downloadDraftFile(serializableMap) {
+        const blob = new Blob([JSON.stringify(serializableMap, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${sanitizeId(serializableMap.id)}.draft.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function downloadRecordFile(record) {
+        const savedAt = String(record.savedAt || "").replace(/[:.]/g, "-");
+        const fileName = `${sanitizeId(record.map.id)}_${savedAt || "record"}.record.json`;
+        const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function parseRecordPayload(raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.type === "healer-map-editor-record" && parsed.map) {
+          return parsed.map;
+        }
+        return parsed;
+      }
+
       function updateExport() {
         exportText.value = buildMapSource();
       }
@@ -861,36 +955,117 @@ ${layers}
         renderPalette();
         renderSelectedInfo();
         renderSurface();
+        updateEditorMode();
       }
 
       function loadMapById(mapId) {
         if (mapId === "__new") {
           state.map = createNewMap();
+          mapSelect.value = "__new";
         } else {
           state.map = normalizeMap(sourceMaps[mapId]);
+          mapSelect.value = mapId;
         }
         const choices = getPaletteTiles();
         if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
         syncInputsFromMap();
         renderAll();
-        setStatus(`${state.map.name} を読み込みました。`);
+        setStatus(mapId === "__new" ? "新規編集マップを開きました。" : `${state.map.name} を読み込みました。`);
+      }
+
+      function saveRecord() {
+        try {
+          const record = createRecordPayload(state.map);
+          downloadRecordFile(record);
+          setStatus("作業記録JSONを保存しました。");
+        } catch (error) {
+          console.error(error);
+          setStatus("作業記録の保存に失敗しました。");
+        }
       }
 
       function saveLocal() {
-        localStorage.setItem("healerMapEditorDraft", JSON.stringify(state.map));
-        setStatus("一時保存しました。");
+        const serializableMap = createSerializableMap(state.map);
+        try {
+          localStorage.setItem("healerMapEditorDraft", JSON.stringify(serializableMap));
+          setStatus("ブラウザ内に一時保存しました。");
+        } catch (error) {
+          console.error(error);
+          downloadDraftFile(serializableMap);
+          setStatus("ブラウザ保存が使えなかったため、JSONファイルとして保存しました。");
+        }
+      }
+
+      function loadRecord() {
+        draftFileInput.click();
+      }
+
+      function reloadCurrentMapFromSource() {
+        if (!state.map || !state.map.id || !sourceMaps[state.map.id]) {
+          setStatus("このマップは tileMaps.js 内に見つかりません。");
+          return;
+        }
+        const ok = window.confirm("編集中の内容を破棄して、tileMaps.js にある同名マップを読み込み直します。よろしいですか？");
+        if (!ok) {
+          setStatus("現在マップの戻しをキャンセルしました。");
+          return;
+        }
+        loadMapById(state.map.id);
+      }
+
+      function reloadTileMapsPage() {
+        const ok = window.confirm("tileMaps.js を再読込します。未保存の編集内容は失われる可能性があります。必要なら先に作業記録保存をしてください。続けますか？");
+        if (!ok) {
+          setStatus("tileMaps再読込をキャンセルしました。");
+          return;
+        }
+        window.location.reload();
+      }
+
+      function deleteCurrentMap() {
+        if (!state.map) return;
+        const mapName = state.map.name || state.map.id || "このマップ";
+        const ok = window.confirm(`${mapName} を削除します。編集中の内容は消えます。よろしいですか？`);
+        if (!ok) {
+          setStatus("マップ削除をキャンセルしました。");
+          return;
+        }
+
+        try {
+          const raw = localStorage.getItem("healerMapEditorDraft");
+          if (raw) {
+            const draft = JSON.parse(raw);
+            if (draft && sanitizeId(draft.id) === sanitizeId(state.map.id)) {
+              localStorage.removeItem("healerMapEditorDraft");
+            }
+          }
+        } catch (error) {
+          console.error(error);
+        }
+
+        state.map = createNewMap();
+        mapSelect.value = "__new";
+        syncInputsFromMap();
+        renderAll();
+        setStatus(`${mapName} を削除して、新規マップへ戻しました。`);
       }
 
       function loadLocal() {
-        const raw = localStorage.getItem("healerMapEditorDraft");
-        if (!raw) {
-          setStatus("一時保存がありません。");
-          return;
+        try {
+          const raw = localStorage.getItem("healerMapEditorDraft");
+          if (!raw) {
+            draftFileInput.click();
+            return;
+          }
+          state.map = normalizeMap(JSON.parse(raw));
+          syncInputsFromMap();
+          renderAll();
+          setStatus("一時保存を読み込みました。");
+        } catch (error) {
+          console.error(error);
+          draftFileInput.click();
+          setStatus("ブラウザ保存を読めなかったため、JSONファイルを選択してください。");
         }
-        state.map = normalizeMap(JSON.parse(raw));
-        syncInputsFromMap();
-        renderAll();
-        setStatus("一時保存を読み込みました。");
       }
 
       async function copyExport() {
@@ -914,7 +1089,7 @@ ${layers}
         anchor.download = `${sanitizeId(state.map.id)}.map.js`;
         anchor.click();
         URL.revokeObjectURL(url);
-        setStatus("JSファイルを書き出しました。");
+        setStatus("JS定義を書き出しました。tileMaps.js へ反映してください。");
       }
 
       function clearActiveLayer() {
@@ -927,12 +1102,33 @@ ${layers}
       }
 
       function initEvents() {
+        draftFileInput.addEventListener("change", async () => {
+          const [file] = draftFileInput.files || [];
+          if (!file) {
+            setStatus("読込をキャンセルしました。");
+            return;
+          }
+          try {
+            const raw = await file.text();
+            state.map = normalizeMap(parseRecordPayload(raw));
+            syncInputsFromMap();
+            renderAll();
+            setStatus(`${file.name} を読み込みました。`);
+          } catch (error) {
+            console.error(error);
+            setStatus("JSON読込に失敗しました。ファイル内容を確認してください。");
+          } finally {
+            draftFileInput.value = "";
+          }
+        });
+
         mapSelect.addEventListener("change", () => loadMapById(mapSelect.value));
         document.getElementById("new-map-button").addEventListener("click", () => {
           state.map = createNewMap();
+          mapSelect.value = "__new";
           syncInputsFromMap();
           renderAll();
-          setStatus("新規マップを作成しました。");
+          setStatus("新規マップを作成しました。まだ tileMaps.js には保存されていません。");
         });
         document.getElementById("resize-button").addEventListener("click", resizeMapFromInputs);
         document.querySelectorAll("[data-tool]").forEach((button) => {
@@ -976,8 +1172,13 @@ ${layers}
           state.lastPaintKey = "";
         });
 
+        document.getElementById("save-record-button").addEventListener("click", saveRecord);
+        document.getElementById("load-record-button").addEventListener("click", loadRecord);
         document.getElementById("save-local-button").addEventListener("click", saveLocal);
         document.getElementById("load-local-button").addEventListener("click", loadLocal);
+        document.getElementById("reload-map-button").addEventListener("click", reloadCurrentMapFromSource);
+        document.getElementById("reload-page-button").addEventListener("click", reloadTileMapsPage);
+        document.getElementById("delete-map-button").addEventListener("click", deleteCurrentMap);
         document.getElementById("copy-button").addEventListener("click", copyExport);
         document.getElementById("download-button").addEventListener("click", downloadExport);
         document.getElementById("clear-layer-button").addEventListener("click", clearActiveLayer);
