@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
@@ -371,7 +371,7 @@
           <button id="new-map-button" class="primary">新規作成</button>
           <button id="resize-button">反映</button>
         </div>
-        <p class="small-note">`新規作成` はブラウザ上の編集用マップを作ります。`tileMaps.js` へは自動保存されません。</p>
+        <p class="small-note">`新規作成` はブラウザ上の編集用マップを作ります。`maps.js` へは自動保存されません。</p>
 
         <h2>レイヤー</h2>
         <div id="layer-tabs" class="layer-tabs"></div>
@@ -420,7 +420,7 @@
         <button id="save-local-button" class="wide-button hidden">一時保存</button>
         <button id="load-local-button" class="wide-button hidden">一時読込</button>
         <button id="reload-map-button" class="wide-button hidden">現在マップを戻す</button>
-        <button id="reload-page-button" class="wide-button">tileMaps再読込</button>
+        <button id="reload-page-button" class="wide-button">maps再読込</button>
         <button id="delete-map-button" class="wide-button danger hidden">マップ削除</button>
         <button id="copy-button" class="wide-button">コピー</button>
         <button id="download-button" class="wide-button">JS書き出し</button>
@@ -428,11 +428,12 @@
 
         <h2>マップ定義</h2>
         <textarea id="export-text" spellcheck="false"></textarea>
-        <p class="small-note">安全に同期する場合は、`JS書き出し` で定義を書き出し、`tileMaps.js` に反映したあとで `tileMaps再読込` を押してください。</p>
+        <p class="small-note">安全に同期する場合は、`JS書き出し` で定義を書き出し、`maps.js` に反映したあとで `maps再読込` を押してください。</p>
       </aside>
     </div>
 
-    <script src="tileMaps.js"></script>
+    <script src="tile.js"></script>
+    <script src="maps.js"></script>
     <script>
       const defs = window.HEALER_TILE_DEFS || {};
       const sourceMaps = window.HEALER_TILE_MAPS || {};
@@ -786,8 +787,8 @@
 
         const isSourceMap = !!sourceMaps[state.map.id];
         editorMode.textContent = isSourceMap
-          ? "現在の表示: tileMaps.js にある既存マップを編集中です。反映には JS書き出し後の差し替えが必要です。"
-          : "現在の表示: ブラウザ上の新規マップです。まだ tileMaps.js には登録されていません。";
+          ? "現在の表示: maps.js にある既存マップを編集中です。反映には JS書き出し後の差し替えが必要です。"
+          : "現在の表示: ブラウザ上の新規マップです。まだ maps.js には登録されていません。";
       }
 
       function paintCell(cell) {
@@ -1002,10 +1003,10 @@ ${layers}
 
       function reloadCurrentMapFromSource() {
         if (!state.map || !state.map.id || !sourceMaps[state.map.id]) {
-          setStatus("このマップは tileMaps.js 内に見つかりません。");
+          setStatus("このマップは maps.js 内に見つかりません。");
           return;
         }
-        const ok = window.confirm("編集中の内容を破棄して、tileMaps.js にある同名マップを読み込み直します。よろしいですか？");
+        const ok = window.confirm("編集中の内容を破棄して、maps.js にある同名マップを読み込み直します。よろしいですか？");
         if (!ok) {
           setStatus("現在マップの戻しをキャンセルしました。");
           return;
@@ -1014,9 +1015,9 @@ ${layers}
       }
 
       function reloadTileMapsPage() {
-        const ok = window.confirm("tileMaps.js を再読込します。未保存の編集内容は失われる可能性があります。必要なら先に作業記録保存をしてください。続けますか？");
+        const ok = window.confirm("maps.js を再読込します。未保存の編集内容は失われる可能性があります。必要なら先に作業記録保存をしてください。続けますか？");
         if (!ok) {
-          setStatus("tileMaps再読込をキャンセルしました。");
+          setStatus("maps再読込をキャンセルしました。");
           return;
         }
         window.location.reload();
@@ -1089,7 +1090,7 @@ ${layers}
         anchor.download = `${sanitizeId(state.map.id)}.map.js`;
         anchor.click();
         URL.revokeObjectURL(url);
-        setStatus("JS定義を書き出しました。tileMaps.js へ反映してください。");
+        setStatus("JS定義を書き出しました。maps.js へ反映してください。");
       }
 
       function clearActiveLayer() {
@@ -1128,7 +1129,7 @@ ${layers}
           mapSelect.value = "__new";
           syncInputsFromMap();
           renderAll();
-          setStatus("新規マップを作成しました。まだ tileMaps.js には保存されていません。");
+          setStatus("新規マップを作成しました。まだ maps.js には保存されていません。");
         });
         document.getElementById("resize-button").addEventListener("click", resizeMapFromInputs);
         document.querySelectorAll("[data-tool]").forEach((button) => {

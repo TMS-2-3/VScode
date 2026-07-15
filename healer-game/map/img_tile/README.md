@@ -9,7 +9,7 @@
 - `map/img_tile/wall.png`
 - `map/img_tile/water.png`
 
-画像がまだ無いタイルは、`map/tileMaps.js` 側の `image` を `null` にして仮登録できます。
+画像がまだ無いタイルは、`map/tile.js` 側の `image` を `null` にして仮登録できます。
 
 
 ## rpg_village
@@ -22,7 +22,7 @@
 - `rpg_village/forest_wall_leaf_01.png`: 森の壁
 - `rpg_village/water_deep_01.png`: 水面
 
-このフォルダーの画像は、`tileMaps.js` の基本タイルに登録済みです。
+このフォルダーの画像は、`tile.js` の基本タイルに登録済みです。
 
 ## rpg_village_extra
 
@@ -30,4 +30,4 @@
 
 ## rpg_objects
 
-配置物用の透明PNGです。96pxで切り出してあり、`tileMaps.js` 側の `drawWidth/drawHeight/drawOffset` で48pxマスに対して少し大きく表示します。
+配置物用の透明PNGです。96pxで切り出してあり、`tile.js` 側の `drawWidth/drawHeight/drawOffset` で48pxマスに対して少し大きく表示します。
