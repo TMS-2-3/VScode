@@ -32,6 +32,7 @@
       handleProfileSetupKey,
       handleProfileSetupClick,
       interactTown,
+      switchTownMap,
       closeTownPanel,
       PLAYER_SKILL_SLOT_KEYS,
       ITEM_SLOT_KEYS,
@@ -206,6 +207,32 @@
         );
       }
       return game.settings;
+    }
+
+    function getDebugTileMapEntries() {
+      const maps = window.HEALER_TILE_MAPS || {};
+      const registry = Array.isArray(window.HEALER_DEBUG_TILE_MAPS)
+        ? window.HEALER_DEBUG_TILE_MAPS
+        : [
+          { id: "startTown01", label: "始まりの町" },
+          { id: "forestTest01", label: "森テスト1" },
+          { id: "forest2", label: "森テスト2" },
+          { id: "flower", label: "花マップ" },
+        ];
+      return registry.filter((entry) => entry && entry.id && maps[entry.id]);
+    }
+
+    function switchDebugTownMap(mapId) {
+      const entry = getDebugTileMapEntries().find((candidate) => candidate.id === mapId);
+      if (!entry) {
+        game.message = "マップを読み込めませんでした。";
+        game.messageTimer = 3;
+        return;
+      }
+      const ok = typeof switchTownMap === "function" ? switchTownMap(entry.id) : false;
+      game.message = ok ? `${entry.label || entry.id} に切り替えました。` : "マップを切り替えられませんでした。";
+      game.messageTimer = 3;
+      clearMovementKeys();
     }
 
     function getActiveKeybinds() {
@@ -3022,6 +3049,8 @@
           const settings = getGameSettings();
           settings.mapDebugMode = !settings.mapDebugMode;
           clearMovementKeys();
+        } else if (target.action === "switchDebugTownMap") {
+          switchDebugTownMap(target.mapId);
         } else if (target.action === "selectSettingsTab") {
           selectSettingsTab(target.tab);
         } else if (target.action === "createSaveData") {

@@ -14,6 +14,7 @@
       telegraphs,
       areas,
       effects,
+      tileMapSystem,
       TOWN_DATA,
       STATUS_DATA,
       EQUIPMENT_DATA,
@@ -67,6 +68,128 @@
       "physicalDamageBoost", "physicalDamageResistance", "magicDamageBoost", "magicDamageResistance",
       "hpRegenRate", "mpRegenRate", "castSpeed", "cooldownReduction", "actionSpeed", "ultimateChargeRate", "moveSpeed",
     ];
+    const TOWN_TILE_MAP_BUILDING_IDS = {
+      armorShopFront: "armor",
+      weaponShopFront: "weapon",
+      innFront: "inn",
+      requestOfficeFront: "guild",
+      itemShopFront: "item",
+    };
+
+    function getTownMapId() {
+      const fallbackId = TOWN_DATA && typeof TOWN_DATA.tileMapId === "string" ? TOWN_DATA.tileMapId : null;
+      const mapId = typeof town.mapId === "string" && town.mapId ? town.mapId : fallbackId;
+      if (mapId && town.mapId !== mapId) {
+        town.mapId = mapId;
+      }
+      return mapId;
+    }
+
+    function getTownTileMap() {
+      const mapId = getTownMapId();
+      if (!mapId || !tileMapSystem || typeof tileMapSystem.getMap !== "function") {
+        return null;
+      }
+      return tileMapSystem.getMap(mapId);
+    }
+
+    function getDefaultTownMapId() {
+      return TOWN_DATA && typeof TOWN_DATA.tileMapId === "string" ? TOWN_DATA.tileMapId : null;
+    }
+
+    function getTownTileMapPixelSize(tileMap = getTownTileMap()) {
+      if (tileMap && tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function") {
+        return tileMapSystem.getMapPixelSize(tileMap);
+      }
+      const tileSize = Math.max(1, Math.floor(Number(tileMap && tileMap.tileSize) || 48));
+      return {
+        w: Math.max(0, Math.floor(Number(tileMap && tileMap.width) || 0)) * tileSize || TOWN_WIDTH,
+        h: Math.max(0, Math.floor(Number(tileMap && tileMap.height) || 0)) * tileSize || TOWN_HEIGHT,
+      };
+    }
+
+    function placeTownPlayerAtMapCenter(tileMap = getTownTileMap()) {
+      const size = getTownTileMapPixelSize(tileMap);
+      town.player.x = Math.max(1, size.w) * 0.5;
+      town.player.y = Math.max(1, size.h) * 0.5;
+      town.player.gridMove = null;
+      snapTownPlayerToGridCenter();
+      clampTownPlayer();
+    }
+
+    function switchTownMap(mapId) {
+      if (!mapId || !tileMapSystem || typeof tileMapSystem.getMap !== "function") {
+        return false;
+      }
+      const tileMap = tileMapSystem.getMap(mapId);
+      if (!tileMap) {
+        return false;
+      }
+      town.mapId = mapId;
+      town.panel = null;
+      town.selectedQuest = null;
+      town.interaction = null;
+      town.player.gridMove = null;
+      setupTown();
+      placeTownPlayerAtMapCenter(tileMap);
+      initializeTownFollowers(true);
+      resetTownTrail();
+      town.interaction = getTownInteraction();
+      updateTownCamera();
+      return true;
+    }
+
+    function getTownBuildingTemplateById(id) {
+      return Array.isArray(TOWN_DATA && TOWN_DATA.buildings)
+        ? TOWN_DATA.buildings.find((building) => building && building.id === id) || null
+        : null;
+    }
+
+    function getTownBuildingIdFromMapEvent(event) {
+      if (!event) {
+        return null;
+      }
+      const tileId = event.tileId || event.tile || event.buildingTileId || null;
+      if (tileId && TOWN_TILE_MAP_BUILDING_IDS[tileId]) {
+        return TOWN_TILE_MAP_BUILDING_IDS[tileId];
+      }
+      const eventId = String(event.id || "");
+      if (eventId.includes("armor")) return "armor";
+      if (eventId.includes("weapon")) return "weapon";
+      if (eventId.includes("inn")) return "inn";
+      if (eventId.includes("request")) return "guild";
+      if (eventId.includes("item")) return "item";
+      return null;
+    }
+
+    function buildTownBuildingsFromTileMap(map) {
+      const tileSize = Math.max(1, Math.floor(Number(map && map.tileSize) || 48));
+      const events = Array.isArray(map && map.events) ? map.events : [];
+      return events
+        .filter((event) => event && (event.type === "buildingArea" || event.action === "buildingArea"))
+        .map((event) => {
+          const id = getTownBuildingIdFromMapEvent(event) || String(event.id || "building");
+          const template = getTownBuildingTemplateById(id) || {};
+          const x = Math.floor(Number(event.x ?? event.col) || 0) * tileSize;
+          const y = Math.floor(Number(event.y ?? event.row) || 0) * tileSize;
+          const w = Math.max(1, Math.floor(Number(event.width ?? event.w) || 1)) * tileSize;
+          const h = Math.max(1, Math.floor(Number(event.height ?? event.h) || 1)) * tileSize;
+          return {
+            id,
+            name: template.name || String(event.name || id),
+            sign: template.sign || "",
+            x,
+            y,
+            w,
+            h,
+            wall: template.wall || "#d7dce2",
+            roof: template.roof || "#55616f",
+            tileId: event.tileId || null,
+            door: { x: x + w / 2, y: y + h + Math.max(10, Math.round(tileSize * 0.3)) },
+          };
+        });
+    }
+
     function keyLabel(actionId, fallback) {
       return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
     }
@@ -264,7 +387,8 @@
       town.selectedQuest = null;
       town.interaction = null;
       player.aim = null;
-      if (town.buildings.length === 0) {
+      town.player.gridMove = null;
+      if (getTownTileMap() || town.buildings.length === 0) {
         setupTown();
       }
       if (!town.introDone) {
@@ -275,6 +399,7 @@
         town.player.x = TOWN_WIDTH * 0.5;
         town.player.y = TOWN_HEIGHT - 155;
       }
+      snapTownPlayerToGridCenter();
       clampTownPlayer();
       initializeTownFollowers(true);
       resetTownTrail();
@@ -289,6 +414,18 @@
     }
 
     function setupTown() {
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        town.buildings = buildTownBuildingsFromTileMap(tileMap);
+        town.props = [];
+        if (tileMapSystem && typeof tileMapSystem.preloadTileImages === "function") {
+          tileMapSystem.preloadTileImages(tileMap);
+        }
+        if (town.buildings.length > 0 || getTownMapId() !== getDefaultTownMapId()) {
+          return;
+        }
+      }
+
       town.buildings = TOWN_DATA.buildings.map((building) => makeTownBuilding(
         building.id,
         building.name,
@@ -339,8 +476,91 @@
     }
 
     function updateTownCamera() {
-      town.camera.x = 0;
-      town.camera.y = 0;
+      const tileMap = getTownTileMap();
+      if (!tileMap) {
+        town.camera.x = 0;
+        town.camera.y = 0;
+        return;
+      }
+      town.camera.x = Number.isFinite(town.camera.x) ? town.camera.x : 0;
+      town.camera.y = Number.isFinite(town.camera.y) ? town.camera.y : 0;
+    }
+
+    function getTownTileSize(tileMap = getTownTileMap()) {
+      if (tileMap && tileMapSystem && typeof tileMapSystem.getTileSize === "function") {
+        return tileMapSystem.getTileSize(tileMap);
+      }
+      return Math.max(1, Math.floor(Number(tileMap && tileMap.tileSize) || 48));
+    }
+
+    function getTownGridCollisionRadius(tileSize) {
+      return Math.max(4, Math.min(town.player.radius || 15, tileSize * 0.18));
+    }
+
+    function getTownTileCenter(tileMap, col, row) {
+      const tileSize = getTownTileSize(tileMap);
+      return {
+        x: (Math.floor(col) + 0.5) * tileSize,
+        y: (Math.floor(row) + 0.5) * tileSize,
+      };
+    }
+
+    function getTownPlayerTile(tileMap) {
+      if (tileMap && tileMapSystem && typeof tileMapSystem.worldToTile === "function") {
+        return tileMapSystem.worldToTile(tileMap, town.player.x, town.player.y);
+      }
+      const tileSize = getTownTileSize(tileMap);
+      return {
+        col: Math.floor(town.player.x / tileSize),
+        row: Math.floor(town.player.y / tileSize),
+      };
+    }
+
+    function isTownGridTilePassable(tileMap, col, row) {
+      if (!tileMap) {
+        return false;
+      }
+      if (tileMapSystem && typeof tileMapSystem.isTileCoordPassable === "function"
+        && !tileMapSystem.isTileCoordPassable(tileMap, col, row, { outOfBoundsPassable: false })) {
+        return false;
+      }
+      const tileSize = getTownTileSize(tileMap);
+      const center = getTownTileCenter(tileMap, col, row);
+      return !isTownBlockedAt(center.x, center.y, getTownGridCollisionRadius(tileSize));
+    }
+
+    function findNearestPassableTownTile(tileMap, originCol, originRow, maxRadius = 4) {
+      for (let radius = 0; radius <= maxRadius; radius += 1) {
+        for (let row = originRow - radius; row <= originRow + radius; row += 1) {
+          for (let col = originCol - radius; col <= originCol + radius; col += 1) {
+            if (Math.max(Math.abs(col - originCol), Math.abs(row - originRow)) !== radius) {
+              continue;
+            }
+            if (isTownGridTilePassable(tileMap, col, row)) {
+              return { col, row };
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    function snapTownPlayerToGridCenter() {
+      const tileMap = getTownTileMap();
+      if (!tileMap) {
+        return;
+      }
+      const tile = getTownPlayerTile(tileMap);
+      const targetTile = isTownGridTilePassable(tileMap, tile.col, tile.row)
+        ? tile
+        : findNearestPassableTownTile(tileMap, tile.col, tile.row);
+      if (!targetTile) {
+        return;
+      }
+      const center = getTownTileCenter(tileMap, targetTile.col, targetTile.row);
+      town.player.x = center.x;
+      town.player.y = center.y;
+      town.player.gridMove = null;
     }
 
     function updateTownMovementInputOrder(keys) {
@@ -411,6 +631,11 @@
         updateTownActorWalkAnimation(town.player, dt, false);
         return;
       }
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        updateTownGridMovement(tileMap, dt, keys);
+        return;
+      }
       const dx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
       const dy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
       const len = Math.hypot(dx, dy);
@@ -432,6 +657,91 @@
         appendTownTrailPoint();
       }
     }
+
+    function updateTownGridMovement(tileMap, dt, keys) {
+      if (continueTownGridMove(tileMap, dt)) {
+        return;
+      }
+      const step = getTownGridStepFromInput(keys);
+      if (!step) {
+        updateTownActorWalkAnimation(town.player, dt, false);
+        return;
+      }
+      town.player.facing = step.facing;
+      if (!startTownGridMove(tileMap, step)) {
+        updateTownActorWalkAnimation(town.player, dt, false);
+        return;
+      }
+      continueTownGridMove(tileMap, dt);
+    }
+
+    function getTownGridStepFromInput(keys) {
+      const order = Array.isArray(town.movementKeyOrder) ? town.movementKeyOrder : [];
+      for (const key of order) {
+        if (!keys || !keys[key]) {
+          continue;
+        }
+        if (key === "a") return { x: -1, y: 0, facing: "left" };
+        if (key === "d") return { x: 1, y: 0, facing: "right" };
+        if (key === "w") return { x: 0, y: -1, facing: "up" };
+        if (key === "s") return { x: 0, y: 1, facing: "down" };
+      }
+      if (keys && keys.a) return { x: -1, y: 0, facing: "left" };
+      if (keys && keys.d) return { x: 1, y: 0, facing: "right" };
+      if (keys && keys.w) return { x: 0, y: -1, facing: "up" };
+      if (keys && keys.s) return { x: 0, y: 1, facing: "down" };
+      return null;
+    }
+
+    function startTownGridMove(tileMap, step) {
+      const current = getTownPlayerTile(tileMap);
+      const targetCol = current.col + step.x;
+      const targetRow = current.row + step.y;
+      if (!isTownGridTilePassable(tileMap, targetCol, targetRow)) {
+        town.player.gridMove = null;
+        return false;
+      }
+      const center = getTownTileCenter(tileMap, targetCol, targetRow);
+      town.player.gridMove = {
+        targetX: center.x,
+        targetY: center.y,
+        col: targetCol,
+        row: targetRow,
+        facing: step.facing,
+      };
+      return true;
+    }
+
+    function continueTownGridMove(tileMap, dt) {
+      const move = town.player.gridMove;
+      if (!move) {
+        return false;
+      }
+      const beforeX = town.player.x;
+      const beforeY = town.player.y;
+      const dx = move.targetX - town.player.x;
+      const dy = move.targetY - town.player.y;
+      const distance = Math.hypot(dx, dy);
+      const speed = Math.max(1, town.player.speed || 235);
+      const amount = speed * Math.max(0, dt || 0);
+      town.player.facing = move.facing || town.player.facing || "down";
+      if (distance <= amount || distance <= 0.001) {
+        town.player.x = move.targetX;
+        town.player.y = move.targetY;
+        town.player.gridMove = null;
+      } else {
+        town.player.x += dx / distance * amount;
+        town.player.y += dy / distance * amount;
+      }
+      clampTownPlayer();
+      const moved = distPoint(beforeX, beforeY, town.player.x, town.player.y) > 0.05;
+      updateTownActorWalkAnimation(town.player, dt, moved || Boolean(town.player.gridMove));
+      if (moved) {
+        appendTownTrailPoint();
+      }
+      updateTownCamera();
+      return true;
+    }
     function moveTownPlayerAxis(dx, dy) {
       const nextX = town.player.x + dx;
       const nextY = town.player.y + dy;
@@ -443,8 +753,19 @@
     }
 
     function isTownBlockedAt(x, y, radius) {
+      const tileMap = getTownTileMap();
+      if (tileMap && tileMapSystem && typeof tileMapSystem.isWorldCirclePassable === "function") {
+        if (!tileMapSystem.isWorldCirclePassable(tileMap, x, y, radius, { outOfBoundsPassable: false })) {
+          return true;
+        }
+      }
+      const usingTileMap = Boolean(tileMap);
       for (const building of town.buildings) {
-        if (circleRectIntersects(x, y, radius, building.x - 10, building.y - 42, building.w + 20, building.h + 46)) {
+        const rectX = usingTileMap ? building.x : building.x - 10;
+        const rectY = usingTileMap ? building.y : building.y - 42;
+        const rectW = usingTileMap ? building.w : building.w + 20;
+        const rectH = usingTileMap ? building.h : building.h + 46;
+        if (circleRectIntersects(x, y, radius, rectX, rectY, rectW, rectH)) {
           return true;
         }
       }
@@ -1807,6 +2128,7 @@
       updateTownCamera,
       getTownInteraction,
       interactTown,
+      switchTownMap,
       showBattleGuidePanel,
       closeTownPanel,
       showQuestTypePanel,

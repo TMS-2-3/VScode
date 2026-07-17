@@ -251,6 +251,7 @@
   }
 
   function draw() {
+    resetCanvasFrameState();
     ctx.clearRect(0, 0, view.w, view.h);
     if (game.state === "title") {
       drawTitleScreen();
@@ -279,6 +280,19 @@
     statusRenderer.drawHud();
     drawSystemMenu();
     drawResultOverlay();
+  }
+
+  function resetCanvasFrameState() {
+    const dpr = Math.max(1, Number.isFinite(view.dpr) ? view.dpr : 1);
+    if (typeof ctx.reset === "function") {
+      ctx.reset();
+    } else if (ctx.canvas) {
+      ctx.canvas.width = ctx.canvas.width;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.imageSmoothingEnabled = true;
   }
 
   function drawTitleScreen() {
@@ -2001,6 +2015,19 @@
     return getGameSettings().mapDebugMode === true;
   }
 
+  function getDebugTileMapEntries() {
+    const maps = window.HEALER_TILE_MAPS || {};
+    const registry = Array.isArray(window.HEALER_DEBUG_TILE_MAPS)
+      ? window.HEALER_DEBUG_TILE_MAPS
+      : [
+        { id: "startTown01", label: "始まりの町" },
+        { id: "forestTest01", label: "森テスト1" },
+        { id: "forest2", label: "森テスト2" },
+        { id: "flower", label: "花マップ" },
+      ];
+    return registry.filter((entry) => entry && entry.id && maps[entry.id]);
+  }
+
   function getSettingsUi() {
     const menu = getSystemMenu();
     const settings = menu.settings;
@@ -3069,31 +3096,34 @@
     const y = (view.h - h) / 2;
     const ui = getSettingsUi();
     ctx.save();
-    ctx.fillStyle = "rgba(247,255,246,0.98)";
-    ctx.strokeStyle = "rgba(16,32,24,0.36)";
-    ctx.lineWidth = 1.2;
-    roundRect(x, y, w, h, 8);
-    ctx.fill();
-    ctx.stroke();
+    try {
+      ctx.fillStyle = "rgba(247,255,246,0.98)";
+      ctx.strokeStyle = "rgba(16,32,24,0.36)";
+      ctx.lineWidth = 1.2;
+      roundRect(x, y, w, h, 8);
+      ctx.fill();
+      ctx.stroke();
 
-    ctx.fillStyle = "#102018";
-    ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText(panel.title || "設定", x + 28, y + 26);
-    drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
+      ctx.fillStyle = "#102018";
+      ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(panel.title || "設定", x + 28, y + 26);
+      drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
 
-    const nav = { x: x + 28, y: y + 82, w: 142, h: h - 112 };
-    const content = { x: nav.x + nav.w + 24, y: nav.y, w: w - nav.w - 80, h: nav.h };
-    drawSettingsNavItem(nav.x, nav.y, nav.w, 40, "ゲーム", "game", ui.tab === "game");
-    drawSettingsNavItem(nav.x, nav.y + 48, nav.w, 40, "操作", "controls", ui.tab === "controls");
+      const nav = { x: x + 28, y: y + 82, w: 142, h: h - 112 };
+      const content = { x: nav.x + nav.w + 24, y: nav.y, w: w - nav.w - 80, h: nav.h };
+      drawSettingsNavItem(nav.x, nav.y, nav.w, 40, "ゲーム", "game", ui.tab === "game");
+      drawSettingsNavItem(nav.x, nav.y + 48, nav.w, 40, "操作", "controls", ui.tab === "controls");
 
-    if (ui.tab === "controls") {
-      drawSettingsControlsContent(content);
-    } else {
-      drawSettingsGameContent(content);
+      if (ui.tab === "controls") {
+        drawSettingsControlsContent(content);
+      } else {
+        drawSettingsGameContent(content);
+      }
+    } finally {
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   function drawSettingsNavItem(x, y, w, h, label, tab, active) {
@@ -3122,6 +3152,9 @@
       { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用" },
       { type: "toggleMapDebugMode", label: "マップデバッグモード" },
     ];
+    if (isMapDebugModeEnabled()) {
+      rows.push({ type: "debugMapSelector", label: "マップ確認" });
+    }
     const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
     const listContentH = rows.length * rowH;
     ui.gameScrollMax = Math.max(0, listContentH - listRect.h);
@@ -3134,17 +3167,20 @@
     ctx.fillText("ゲーム", content.x, content.y + 2);
 
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
-    ctx.clip();
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = { x: listRect.x, y: listRect.y + i * rowH - ui.gameScroll, w: listRect.w, h: rowH };
-      if (row.y + row.h < listRect.y || row.y > listRect.y + listRect.h) {
-        continue;
+    try {
+      ctx.beginPath();
+      ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
+      ctx.clip();
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = { x: listRect.x, y: listRect.y + i * rowH - ui.gameScroll, w: listRect.w, h: rowH };
+        if (row.y + row.h < listRect.y || row.y > listRect.y + listRect.h) {
+          continue;
+        }
+        drawSettingsGameRow(row, rows[i]);
       }
-      drawSettingsGameRow(row, rows[i]);
+    } finally {
+      ctx.restore();
     }
-    ctx.restore();
     drawSettingsScrollbar(listRect, ui.gameScroll, ui.gameScrollMax, {
       scrollState: ui,
       valueKey: "gameScroll",
@@ -3169,6 +3205,24 @@
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isPowerCrystalAutoUseEnabled(), "togglePowerCrystalAutoUse");
     } else if (entry.type === "toggleMapDebugMode") {
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isMapDebugModeEnabled(), "toggleMapDebugMode");
+    } else if (entry.type === "debugMapSelector") {
+      drawDebugMapSelector(row);
+    }
+  }
+
+  function drawDebugMapSelector(row) {
+    const maps = getDebugTileMapEntries();
+    const gap = 8;
+    const buttonCount = Math.max(1, maps.length);
+    const labelW = Math.min(150, row.w * 0.28);
+    const startX = row.x + labelW;
+    const availableW = Math.max(120, row.w - labelW);
+    const buttonW = Math.max(76, Math.min(118, (availableW - gap * (buttonCount - 1)) / buttonCount));
+    const buttonY = row.y + 12;
+    for (let i = 0; i < maps.length; i += 1) {
+      const entry = maps[i];
+      const x = startX + i * (buttonW + gap);
+      drawSettingsMapButton(x, buttonY, buttonW, 34, entry.label || entry.id, entry.id, town && town.mapId === entry.id);
     }
   }
 
@@ -3427,6 +3481,19 @@
     ctx.fillText(enabled ? "ON" : "OFF", enabled ? x + 25 : x + w - 25, y + h / 2);
     ctx.restore();
     addSystemMenuTarget({ action, x, y, w, h });
+  }
+
+  function drawSettingsMapButton(x, y, w, h, label, mapId, active) {
+    ctx.save();
+    ctx.fillStyle = active ? "#246b4a" : "rgba(16,32,24,0.07)";
+    ctx.strokeStyle = active ? "#1c573c" : "rgba(16,32,24,0.22)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 7);
+    ctx.fill();
+    ctx.stroke();
+    drawFittedSystemText(label, x + w / 2, y + h / 2, w - 14, 900, 12, 8, active ? "#f7fff6" : "#102018", "center", "middle");
+    ctx.restore();
+    addSystemMenuTarget({ action: "switchDebugTownMap", mapId, x, y, w, h });
   }
 
   function drawEquipmentPanel(panel) {

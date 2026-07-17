@@ -29,6 +29,7 @@
     createWalletSystem: window.createHealerWalletSystem,
     createSaveSystem: window.createHealerSaveSystem,
     createStoryData: window.createHealerStoryData,
+    createTileMapSystem: window.createHealerTileMapSystem,
   };
 
   const data = {
@@ -50,6 +51,7 @@
   const CONFIG = window.HEALER_CONFIG;
   const BALANCE = window.HEALER_BALANCE;
   const THEME = window.HEALER_THEME;
+  const TILE_MAPS = window.HEALER_TILE_MAPS || {};
 
   const missingModules = Object.entries(modules)
     .filter(([, module]) => !module)
@@ -60,6 +62,19 @@
 
   if (missingModules.length || missingData.length) {
     throw new Error(`healer-game load error. modules: ${missingModules.join(", ") || "none"} / data: ${missingData.join(", ") || "none"}`);
+  }
+
+  const townTileMapId = data.TOWN_DATA.tileMapId || (TILE_MAPS.startTown01 ? "startTown01" : null);
+  if (townTileMapId && TILE_MAPS[townTileMapId]) {
+    const townTileMap = TILE_MAPS[townTileMapId];
+    const townTileSize = Math.max(1, Math.floor(Number(townTileMap.tileSize) || 48));
+    const townWidth = Math.max(0, Math.floor(Number(townTileMap.width) || 0)) * townTileSize;
+    const townHeight = Math.max(0, Math.floor(Number(townTileMap.height) || 0)) * townTileSize;
+    data.TOWN_DATA.tileMapId = townTileMapId;
+    if (townWidth > 0 && townHeight > 0) {
+      data.TOWN_DATA.width = townWidth;
+      data.TOWN_DATA.height = townHeight;
+    }
   }
 
   const battleScaler = modules.createBattleScaler(CONFIG);
@@ -90,6 +105,7 @@
     TAU,
   });
 
+  systems.tileMapSystem = modules.createTileMapSystem();
   systems.geometry = modules.createGeometrySystem(contexts.createGeometryContext());
   systems.storyData = modules.createStoryData(contexts.createStoryContext());
   systems.profileSystem = modules.createProfileSystem(contexts.createProfileContext());
@@ -219,6 +235,7 @@
       statusTooltipTargets: [],
       town: {
         player: { ...townData.player },
+        mapId: townData.tileMapId || null,
         camera: { x: 0, y: 0 },
         buildings: [],
         props: [],

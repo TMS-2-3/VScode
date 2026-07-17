@@ -105,31 +105,48 @@
     }
 
     function getLayerTileId(map, layer, col, row) {
+      return normalizeTileId(getLayerTileEntry(map, layer, col, row));
+    }
+
+    function getLayerTileEntry(map, layer, col, row) {
       if (!layer || !layer.tiles) {
         return null;
       }
       const tiles = layer.tiles;
       if (Array.isArray(tiles)) {
+        const width = Math.floor(Number(map.width) || 0);
+        const height = Math.floor(Number(map.height) || 0);
         const rowData = tiles[row];
         if (Array.isArray(rowData)) {
-          return normalizeTileId(rowData[col]);
+          return rowData[col];
         }
-        if (typeof rowData === "string") {
-          return normalizeTileId(rowData.trim().split(/\s+/)[col]);
+        if (typeof rowData === "string" && tiles.length <= height) {
+          return rowData.trim().split(/\s+/)[col];
         }
-        return normalizeTileId(tiles[row * Math.floor(Number(map.width) || 0) + col]);
+        return tiles[row * width + col];
       }
       if (typeof tiles === "object") {
-        return normalizeTileId(tiles[`${col},${row}`] || tiles[`${row}:${col}`]);
+        return tiles[`${col},${row}`] || tiles[`${row}:${col}`] || null;
       }
       return null;
     }
 
     function normalizeTileId(value) {
+      if (value && typeof value === "object") {
+        return normalizeTileId(value.tileId ?? value.id ?? value.key ?? null);
+      }
       if (value === null || value === undefined || value === "" || value === "." || value === false) {
         return null;
       }
       return String(value);
+    }
+
+    function getTileRotation(value) {
+      if (!value || typeof value !== "object") {
+        return 0;
+      }
+      const rotation = Number(value.rotate ?? value.rotation ?? value.angle ?? 0);
+      return Number.isFinite(rotation) ? rotation : 0;
     }
 
     function isTilePassable(tileId) {
@@ -320,10 +337,11 @@
       }
       const tileSize = getTileSize(map);
       const viewport = options.viewport || { x: 0, y: 0, w: getMapPixelSize(map).w, h: getMapPixelSize(map).h };
-      const minCol = Math.max(0, Math.floor((viewport.x || 0) / tileSize));
-      const minRow = Math.max(0, Math.floor((viewport.y || 0) / tileSize));
-      const maxCol = Math.min(Math.floor(Number(map.width) || 0) - 1, Math.ceil(((viewport.x || 0) + (viewport.w || 0)) / tileSize));
-      const maxRow = Math.min(Math.floor(Number(map.height) || 0) - 1, Math.ceil(((viewport.y || 0) + (viewport.h || 0)) / tileSize));
+      const drawPadding = Math.max(1, Math.floor(Number(options.drawPadding) || 3));
+      const minCol = Math.max(0, Math.floor((viewport.x || 0) / tileSize) - drawPadding);
+      const minRow = Math.max(0, Math.floor((viewport.y || 0) / tileSize) - drawPadding);
+      const maxCol = Math.min(Math.floor(Number(map.width) || 0) - 1, Math.ceil(((viewport.x || 0) + (viewport.w || 0)) / tileSize) + drawPadding);
+      const maxRow = Math.min(Math.floor(Number(map.height) || 0) - 1, Math.ceil(((viewport.y || 0) + (viewport.h || 0)) / tileSize) + drawPadding);
       const defaultTile = normalizeTileId(map.defaultTile);
       if (defaultTile) {
         for (let row = minRow; row <= maxRow; row += 1) {
@@ -338,9 +356,10 @@
         }
         for (let row = minRow; row <= maxRow; row += 1) {
           for (let col = minCol; col <= maxCol; col += 1) {
-            const tileId = getLayerTileId(map, layer, col, row);
+            const tileEntry = getLayerTileEntry(map, layer, col, row);
+            const tileId = normalizeTileId(tileEntry);
             if (tileId) {
-              drawTile(ctx, tileId, col * tileSize, row * tileSize, tileSize, options);
+              drawTile(ctx, tileEntry, col * tileSize, row * tileSize, tileSize, options);
             }
           }
         }
@@ -348,16 +367,30 @@
       return true;
     }
 
-    function drawTile(ctx, tileId, x, y, size, options = {}) {
+    function drawTile(ctx, tileEntry, x, y, size, options = {}) {
+      const tileId = normalizeTileId(tileEntry);
+      const tile = getTileDef(tileId);
       const image = getTileImage(tileId);
       if (image && image.complete && image.naturalWidth > 0) {
-        ctx.drawImage(image, x, y, size, size);
+        const drawWidth = Math.max(1, Number(tile && tile.drawWidth) || size);
+        const drawHeight = Math.max(1, Number(tile && tile.drawHeight) || size);
+        const drawOffsetX = Number.isFinite(tile && tile.drawOffsetX) ? tile.drawOffsetX : 0;
+        const drawOffsetY = Number.isFinite(tile && tile.drawOffsetY) ? tile.drawOffsetY : 0;
+        const rotation = getTileRotation(tileEntry);
+        if (rotation) {
+          ctx.save();
+          ctx.translate(x + drawOffsetX + drawWidth / 2, y + drawOffsetY + drawHeight / 2);
+          ctx.rotate(rotation * Math.PI / 180);
+          ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+          ctx.restore();
+        } else {
+          ctx.drawImage(image, x + drawOffsetX, y + drawOffsetY, drawWidth, drawHeight);
+        }
         return;
       }
       if (options.drawFallback === false) {
         return;
       }
-      const tile = getTileDef(tileId);
       ctx.fillStyle = tile && tile.passable === false ? "rgba(75,75,75,0.45)" : "rgba(130,170,105,0.45)";
       ctx.fillRect(x, y, size, size);
       ctx.strokeStyle = "rgba(255,255,255,0.08)";
