@@ -2001,6 +2001,19 @@
     return getGameSettings().mapDebugMode === true;
   }
 
+  function getDebugTileMapEntries() {
+    const maps = window.HEALER_TILE_MAPS || {};
+    const registry = Array.isArray(window.HEALER_DEBUG_TILE_MAPS)
+      ? window.HEALER_DEBUG_TILE_MAPS
+      : [
+        { id: "startTown01", label: "始まりの町" },
+        { id: "forestTest01", label: "森テスト1" },
+        { id: "forest2", label: "森テスト2" },
+        { id: "flower", label: "花マップ" },
+      ];
+    return registry.filter((entry) => entry && entry.id && maps[entry.id]);
+  }
+
   function getSettingsUi() {
     const menu = getSystemMenu();
     const settings = menu.settings;
@@ -3122,6 +3135,9 @@
       { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用" },
       { type: "toggleMapDebugMode", label: "マップデバッグモード" },
     ];
+    if (isMapDebugModeEnabled()) {
+      rows.push({ type: "debugMapSelector", label: "マップ確認" });
+    }
     const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
     const listContentH = rows.length * rowH;
     ui.gameScrollMax = Math.max(0, listContentH - listRect.h);
@@ -3169,6 +3185,24 @@
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isPowerCrystalAutoUseEnabled(), "togglePowerCrystalAutoUse");
     } else if (entry.type === "toggleMapDebugMode") {
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isMapDebugModeEnabled(), "toggleMapDebugMode");
+    } else if (entry.type === "debugMapSelector") {
+      drawDebugMapSelector(row);
+    }
+  }
+
+  function drawDebugMapSelector(row) {
+    const maps = getDebugTileMapEntries();
+    const gap = 8;
+    const buttonCount = Math.max(1, maps.length);
+    const labelW = Math.min(150, row.w * 0.28);
+    const startX = row.x + labelW;
+    const availableW = Math.max(120, row.w - labelW);
+    const buttonW = Math.max(76, Math.min(118, (availableW - gap * (buttonCount - 1)) / buttonCount));
+    const buttonY = row.y + 12;
+    for (let i = 0; i < maps.length; i += 1) {
+      const entry = maps[i];
+      const x = startX + i * (buttonW + gap);
+      drawSettingsMapButton(x, buttonY, buttonW, 34, entry.label || entry.id, entry.id, town && town.mapId === entry.id);
     }
   }
 
@@ -3427,6 +3461,19 @@
     ctx.fillText(enabled ? "ON" : "OFF", enabled ? x + 25 : x + w - 25, y + h / 2);
     ctx.restore();
     addSystemMenuTarget({ action, x, y, w, h });
+  }
+
+  function drawSettingsMapButton(x, y, w, h, label, mapId, active) {
+    ctx.save();
+    ctx.fillStyle = active ? "#246b4a" : "rgba(16,32,24,0.07)";
+    ctx.strokeStyle = active ? "#1c573c" : "rgba(16,32,24,0.22)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 7);
+    ctx.fill();
+    ctx.stroke();
+    drawFittedSystemText(label, x + w / 2, y + h / 2, w - 14, 900, 12, 8, active ? "#f7fff6" : "#102018", "center", "middle");
+    ctx.restore();
+    addSystemMenuTarget({ action: "switchDebugTownMap", mapId, x, y, w, h });
   }
 
   function drawEquipmentPanel(panel) {

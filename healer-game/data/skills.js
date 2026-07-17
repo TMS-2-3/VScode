@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   "use strict";
 
   const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
@@ -200,10 +200,20 @@
         requiredWeapons: ["拳具", "棒具"],
         cd: 25, cost: 30, cast: 1, range: px(70), damageBase: 10, attackScale: 0.7, scaleUpgradeMultipliers: [1, 1.1, 1.2, 1.3, 1.4, 1.5], flinchingDuration: 3, lines: ["溝落"], damageType: "physical", statusIds: ["debuff_flinching"],
         formula: [{ text: "10 + 攻撃力 * 0.7", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
-        description: "1秒のチャージを行った後、敵の溝落を突き、(式=値)の物理ダメージを与え、3秒間の\"怯み\"を付与する。",
+        description: "1秒のチャージを行った後、敵の溝落を突き、(式=値)の物理ダメージを与え、3秒間の\"怯み\"を付与する",
         simpleDescription: "チャージ後、敵の溝落を突き、\"怯み\"を付与する",
         upgradeSimpleDescription: "レベルが上がるごとにダメージが増加する",
         upgradeDescription: "レベルが上がるごとにこのスキルの参照式が(1.1/1.2/1.3/1.4/1.5)倍になる",
+      },
+      headbutt: {
+        id: "headbutt", key: "headbutt", owner: "rihas", name: "頭突き", rank: "D", category: "スキル", skillType: "単体攻撃",
+        requiredWeapons: ["拳具"],
+        cd: 27, cost: 15, range: px(60), damageBase: 30, attackScale: 0.5, lines: ["頭突き"], damageType: "不変",
+        formula: [{ text: "30 + 攻撃力 * 0.5", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
+        description: "敵に強力な頭突きを放ち、(式=値)の不変ダメージを与える",
+        simpleDescription: "敵に強力な頭突きを放ち、不変ダメージを与える",
+        upgradeSimpleDescription: "レベルが上がるごとにダメージが増加する",
+        upgradeDescription: "レベルが上がるごとにこのスキルの基礎ダメージが+(5/10/15/20/25)増加する",
       },
       ult: {
         id: "taunt_shield", key: "ult", owner: "rihas", name: "まとめてかかってこい", rank: "D", category: "必殺技", skillType: "範囲デバフ", ultimateCost: 100, radius: px(380), duration: 5.5, targetLimit: 8, shieldHpRatio: 0.05, burstExtraRadius: px(10), lines: ["まとめてかかってこい"], statusIds: ["debuff_taunt"],
@@ -854,3 +864,4 @@
     },
   };
 })();
+

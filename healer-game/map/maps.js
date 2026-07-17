@@ -474,6 +474,12 @@
       ],
       events: [],
     };
-})();
+  window.HEALER_DEBUG_TILE_MAPS = [
+    { id: "startTown01", label: "始まりの町" },
+    { id: "forestTest01", label: "森テスト1" },
+    { id: "forest2", label: "森テスト2" },
+    { id: "flower", label: "花マップ" },
+  ];
+})();
 
 

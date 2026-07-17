@@ -18,6 +18,7 @@
       EQUIPMENT_DATA,
       MATERIAL_DATA,
       itemSystem,
+      tileMapSystem,
       getEquipmentInstancesByItemId,
       getEquipmentItemRef,
       getEquipmentBaseItemId,
@@ -175,11 +176,18 @@
     ctx.save();
     ctx.translate(transform.x, transform.y);
     ctx.scale(transform.scale, transform.scale);
-    drawTownTerrain();
-    drawTownRoads();
-    drawTownProps();
-    drawTownBuildings();
+    ctx.translate(-(transform.cameraX || 0), -(transform.cameraY || 0));
+    const usingTileMap = drawTownTileMap(transform);
+    if (!usingTileMap) {
+      drawTownTerrain();
+      drawTownRoads();
+      drawTownProps();
+      drawTownBuildings();
+    }
     drawTownCharacters();
+    if (usingTileMap) {
+      drawTownInteractionHighlight(town.interaction || null);
+    }
     ctx.restore();
 
     drawTownHud();
@@ -187,6 +195,10 @@
   }
 
   function getTownMapTransform() {
+    const tileMap = getTownTileMap();
+    if (tileMap) {
+      return getTownTileMapTransform(tileMap);
+    }
     const marginX = 28;
     const marginTop = 112;
     const marginBottom = 34;
@@ -196,17 +208,83 @@
       scale: safeScale,
       x: (view.w - TOWN_WIDTH * safeScale) / 2,
       y: marginTop + Math.max(0, view.h - marginTop - marginBottom - TOWN_HEIGHT * safeScale) / 2,
+      cameraX: 0,
+      cameraY: 0,
+      viewportW: TOWN_WIDTH,
+      viewportH: TOWN_HEIGHT,
     };
+  }
+
+  function getTownTileMapTransform(tileMap) {
+    const mapSize = tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function"
+      ? tileMapSystem.getMapPixelSize(tileMap)
+      : { w: TOWN_WIDTH, h: TOWN_HEIGHT };
+    const mapW = Math.max(1, Number.isFinite(mapSize.w) ? mapSize.w : TOWN_WIDTH);
+    const mapH = Math.max(1, Number.isFinite(mapSize.h) ? mapSize.h : TOWN_HEIGHT);
+    const scale = 1;
+    const visibleW = Math.max(1, view.w / scale);
+    const visibleH = Math.max(1, view.h / scale);
+    const maxCameraX = Math.max(0, mapW - visibleW);
+    const maxCameraY = Math.max(0, mapH - visibleH);
+    const cameraX = clampTownView(town.player.x - visibleW / 2, 0, maxCameraX);
+    const cameraY = clampTownView(town.player.y - visibleH / 2, 0, maxCameraY);
+    if (town.camera) {
+      town.camera.x = cameraX;
+      town.camera.y = cameraY;
+    }
+    return {
+      scale,
+      x: mapW <= visibleW ? (view.w - mapW * scale) / 2 : 0,
+      y: mapH <= visibleH ? (view.h - mapH * scale) / 2 : 0,
+      cameraX,
+      cameraY,
+      viewportW: Math.min(mapW, visibleW),
+      viewportH: Math.min(mapH, visibleH),
+    };
+  }
+
+  function clampTownView(value, min, max) {
+    return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
   }
 
   function screenToTownPoint(x, y) {
     const transform = getTownMapTransform();
-    const worldX = (x - transform.x) / transform.scale;
-    const worldY = (y - transform.y) / transform.scale;
+    const worldX = (x - transform.x) / transform.scale + (transform.cameraX || 0);
+    const worldY = (y - transform.y) / transform.scale + (transform.cameraY || 0);
     if (worldX < 0 || worldY < 0 || worldX > TOWN_WIDTH || worldY > TOWN_HEIGHT) {
       return null;
     }
     return { x: worldX, y: worldY };
+  }
+
+  function getTownTileMap() {
+    const mapId = town && town.mapId
+      ? town.mapId
+      : (window.HEALER_TOWN_DATA && window.HEALER_TOWN_DATA.tileMapId) || null;
+    if (!tileMapSystem || typeof tileMapSystem.getMap !== "function" || !mapId) {
+      return null;
+    }
+    return tileMapSystem.getMap(mapId);
+  }
+
+  function drawTownTileMap(transform = getTownMapTransform()) {
+    const map = getTownTileMap();
+    if (!map || !tileMapSystem || typeof tileMapSystem.drawTileMap !== "function") {
+      return false;
+    }
+    ctx.fillStyle = "#47784f";
+    ctx.fillRect(0, 0, TOWN_WIDTH, TOWN_HEIGHT);
+    const viewport = {
+      x: transform.cameraX || 0,
+      y: transform.cameraY || 0,
+      w: transform.viewportW || TOWN_WIDTH,
+      h: transform.viewportH || TOWN_HEIGHT,
+    };
+    tileMapSystem.drawTileMap(ctx, map, { drawFallback: true, viewport });
+    if (game && game.settings && game.settings.mapDebugMode === true && typeof tileMapSystem.drawDebugGrid === "function") {
+      tileMapSystem.drawDebugGrid(ctx, map, { viewport });
+    }
+    return true;
   }
 
   function drawTownTerrain() {
@@ -343,23 +421,28 @@
     ctx.strokeText(building.name, building.x + building.w / 2, building.y + building.h + 30);
     ctx.fillText(building.name, building.x + building.w / 2, building.y + building.h + 30);
 
-    if (town.interaction === building && !town.panel) {
-      const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
-      ctx.strokeStyle = `rgba(255,255,255,${0.62 + pulse * 0.3})`;
-      ctx.lineWidth = 5;
-      roundRect(building.x - 12, building.y - 48, building.w + 24, building.h + 104, 14);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(17,23,20,0.86)";
-      ctx.strokeStyle = "#f7fff6";
-      ctx.lineWidth = 2;
-      roundRect(building.x + building.w / 2 - 50, building.y - 78, 100, 30, 8);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#f7fff6";
-      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      drawFittedTownText(getInteractLabel(), building.x + building.w / 2, building.y - 63, 86, 800, 15, 9, "#f7fff6", "center");
-    }
+        drawTownInteractionHighlight(building);
     ctx.restore();
+  }
+
+  function drawTownInteractionHighlight(building) {
+    if (!building || town.interaction !== building || town.panel) {
+      return;
+    }
+    const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
+    ctx.strokeStyle = `rgba(255,255,255,${0.62 + pulse * 0.3})`;
+    ctx.lineWidth = 5;
+    roundRect(building.x - 12, building.y - 48, building.w + 24, building.h + 104, 14);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(17,23,20,0.86)";
+    ctx.strokeStyle = "#f7fff6";
+    ctx.lineWidth = 2;
+    roundRect(building.x + building.w / 2 - 50, building.y - 78, 100, 30, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    drawFittedTownText(getInteractLabel(), building.x + building.w / 2, building.y - 63, 86, 800, 15, 9, "#f7fff6", "center");
   }
 
   function drawTownCharacters() {
@@ -414,7 +497,7 @@
     }
     const height = actor.spriteHeight || 64;
     const width = height * image.naturalWidth / image.naturalHeight;
-    const footY = actor.y + 24;
+    const footY = actor.y + (getTownTileMap() ? 0 : 24);
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.24)";
     ctx.beginPath();
@@ -428,23 +511,26 @@
     return true;
   }
   function drawTownNpc(x, y, color, label) {
+    const usingTileMap = Boolean(getTownTileMap());
+    const footY = usingTileMap ? y : y + 17;
+    const bodyY = usingTileMap ? y - 17 : y;
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.22)";
     ctx.beginPath();
-    ctx.ellipse(x, y + 17, 17, 8, 0, 0, TAU);
+    ctx.ellipse(x, footY, 17, 8, 0, 0, TAU);
     ctx.fill();
     ctx.fillStyle = color;
     ctx.strokeStyle = "#102018";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x, y, 14, 0, TAU);
+    ctx.arc(x, bodyY, 14, 0, TAU);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#101814";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, x, y + 1);
+    ctx.fillText(label, x, bodyY + 1);
     ctx.restore();
   }
 
@@ -480,7 +566,8 @@
     ctx.font = "13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffd86b";
     const interactLabel = getInteractLabel();
-    const target = town.interaction ? `${town.interaction.name}: ${interactLabel}で利用` : `WASDで移動 / 施設の近くで${interactLabel}`;
+    const moveText = getTownTileMap() ? "WASDで1マス移動" : "WASDで移動";
+    const target = town.interaction ? `${town.interaction.name}: ${interactLabel}で利用` : `${moveText} / 施設の近くで${interactLabel}`;
     ctx.fillText(target, 34, 73);
   }
 
