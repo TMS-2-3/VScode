@@ -228,6 +228,14 @@
       unit.forcedEnemySkillKey = null;
       unit.forcedEnemySkillTarget = null;
       unit.absorptionLockTimer = 0;
+      unit.sharpenBladeTimer = 0;
+      unit.sharpenBladeMax = 0;
+      unit.counterattackStanceTimer = 0;
+      unit.counterattackStanceMax = 0;
+      unit.counterattackStanceStacks = 0;
+      unit.counterattackRange = 0;
+      unit.flinchingTimer = 0;
+      unit.flinchingMax = 0;
       unit.hpRegenTickTimer = 0;
       unit.mpRegenTickTimer = 0;
       unit.chocolateLilyCharging = false;

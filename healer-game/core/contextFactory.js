@@ -683,6 +683,7 @@
         getCritDamageMultiplier: callLater("battleStats", "getCritDamageMultiplier"),
         getActiveSetEffects: callLater("equipmentSystem", "getActiveSetEffects"),
         getUltimateCost: callLater("skillSystem", "getUltimateCost"),
+        getEffectiveAttack: callLater("battleStats", "getEffectiveAttack"),
         getEffectiveDefense: callLater("battleStats", "getEffectiveDefense"),
         getEffectiveMagicDefense: callLater("battleStats", "getEffectiveMagicDefense"),
         addRihasPassiveStack: callLater("battleStats", "addRihasPassiveStack"),

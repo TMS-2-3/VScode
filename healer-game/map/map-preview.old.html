@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
@@ -192,7 +192,7 @@
     <div class="app">
       <aside>
         <h1>Map Preview</h1>
-        <p>同じフォルダー内の <code>tileMaps.js</code> を読み込んで、タイル定義とマップを確認します。</p>
+        <p>同じフォルダー内の <code>tile.js</code> と <code>maps.js</code> を読み込んで、タイル定義とマップを確認します。</p>
 
         <label for="map-select">表示マップ</label>
         <select id="map-select"></select>
@@ -222,7 +222,8 @@
       </main>
     </div>
 
-    <script src="tileMaps.js"></script>
+    <script src="tile.js"></script>
+    <script src="maps.js"></script>
     <script>
       const tileColors = {
         grass: "#79b66a",

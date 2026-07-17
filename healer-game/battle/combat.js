@@ -49,6 +49,7 @@
       getCritDamageMultiplier,
       getActiveSetEffects,
       getUltimateCost,
+      getEffectiveAttack,
       getEffectiveDefense,
       getEffectiveMagicDefense,
       addRihasPassiveStack,
@@ -130,6 +131,88 @@
       return options.fixedDamage === true || type.includes("fixed") || rawType.includes("不変");
     }
 
+    function isMixedDamageOptions(options = {}) {
+      const rawType = String(options.damageType || "");
+      const type = rawType.toLowerCase();
+      return options.mixedDamage === true || options.mixed === true || type.includes("mixed") || rawType.includes("ミックス");
+    }
+
+    function getDamageSchool(options = {}) {
+      const rawType = String(options.damageType || "");
+      const type = rawType.toLowerCase();
+      if (isMixedDamageOptions(options)) {
+        return "mixed";
+      }
+      if (options.magic === true || type.includes("magic") || rawType.includes("魔法")) {
+        return "magic";
+      }
+      if (options.magic === false || type.includes("physical") || rawType.includes("物理")) {
+        return "physical";
+      }
+      return "physical";
+    }
+
+    function clearCounterattackStance(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.counterattackStanceTimer = 0;
+      unit.counterattackStanceMax = 0;
+      unit.counterattackStanceStacks = 0;
+      unit.counterattackRange = 0;
+    }
+
+    function getCounterattackReaction(target, source, wouldBeDamage, options = {}, dotDamage = false) {
+      if (!target || target.dead || dotDamage || options.noCounterattack || wouldBeDamage <= 0) {
+        return null;
+      }
+      const timer = Number.isFinite(target.counterattackStanceTimer) ? target.counterattackStanceTimer : 0;
+      const stacks = Math.max(0, Math.floor(target.counterattackStanceStacks || 0));
+      if (timer <= 0 || stacks <= 0) {
+        return null;
+      }
+      const range = Number.isFinite(target.counterattackRange) && target.counterattackRange > 0 ? target.counterattackRange : 200;
+      const inRange = Boolean(source && !source.dead && source !== target && Math.hypot((source.x || 0) - (target.x || 0), (source.y || 0) - (target.y || 0)) <= range);
+      return {
+        source,
+        inRange,
+        range,
+        stacks,
+        baseDamage: inRange ? wouldBeDamage : 0,
+      };
+    }
+
+    function getCounterattackDamage(unit, baseDamage, stacks) {
+      const attack = typeof getEffectiveAttack === "function" ? getEffectiveAttack(unit) : (Number.isFinite(unit && unit.attack) ? unit.attack : 0);
+      return Math.max(0, baseDamage * Math.max(0, attack * (0.7 + stacks * 0.1)));
+    }
+
+    function resolveCounterattackReaction(target, reaction) {
+      if (!target || !reaction) {
+        return;
+      }
+      if (target.hp <= 0) {
+        clearCounterattackStance(target);
+        return;
+      }
+      clearCounterattackStance(target);
+      if (target.dead) {
+        return;
+      }
+      if (!reaction.inRange || !reaction.source || reaction.source.dead) {
+        addFloat("受け流し", target.x, target.y - 34, "#f0b36f");
+        return;
+      }
+      target.x = reaction.source.x;
+      target.y = reaction.source.y;
+      const counterDamage = getCounterattackDamage(target, reaction.baseDamage, reaction.stacks);
+      addFloat("反撃", target.x, target.y - 34, "#f0b36f");
+      addBurst(target.x, target.y, Math.max(target.radius * 1.8, 28), "rgba(240,179,111,0.18)");
+      if (counterDamage > 0) {
+        dealDamage(target, reaction.source, counterDamage, { damageType: "物理", noCounterattack: true });
+      }
+    }
+
     function dealDamage(source, target, amount, options = {}) {
       if (!target || target.dead) {
         return 0;
@@ -144,6 +227,7 @@
       let criticalHit = false;
       const dotDamage = isDotDamageOptions(options);
       const fixedDamage = isFixedDamageOptions(options);
+      const damageSchool = getDamageSchool(options);
 
       if (shouldRollCritical(source, target, options)) {
         finalAmount *= getCritDamageMultiplier(source);
@@ -151,7 +235,7 @@
       }
 
       if (!fixedDamage) {
-        finalAmount = reduceByDefense(target, finalAmount, options.magic);
+        finalAmount = reduceByDefense(target, finalAmount, damageSchool);
       }
       finalAmount = applyDamageModifierSum(source, target, finalAmount, options);
       finalAmount *= getElementDamageMultiplier(source, target, options);
@@ -161,6 +245,10 @@
         finalAmount *= 1.5;
         target.woundStacks = Math.max(0, Math.floor(target.woundStacks || 0) - 1);
         addFloat("傷口", target.x, target.y - 38, "#e07266");
+      }
+      const counterattackReaction = getCounterattackReaction(target, source, finalAmount, options, dotDamage);
+      if (counterattackReaction && !counterattackReaction.inRange) {
+        finalAmount = 0;
       }
       let guarded = false;
       if (!dotDamage && target.team === "party" && target.id !== "finald") {
@@ -243,7 +331,7 @@
         if (target.team === "enemy" && rewardDamage + shielded > 0) {
           awardOffensiveUltimate(source, target, options);
         }
-        if (hasPassive(source, "warmup") && target.team === "enemy" && rewardDamage > 0 && options.magic && source.stackCooldown <= 0) {
+        if (hasPassive(source, "warmup") && target.team === "enemy" && rewardDamage > 0 && damageSchool === "magic" && source.stackCooldown <= 0) {
           source.castStacks = clamp(source.castStacks + 1, 0, SUSHIA_PASSIVE_MAX_STACKS);
           source.stackTimer = SUSHIA_PASSIVE_STACK_DURATION;
           source.stackCooldown = SUSHIA_PASSIVE_STACK_COOLDOWN;
@@ -284,6 +372,10 @@
             addFloat("再会", target.x, target.y - 36, "#d889b9");
           }
         }
+      }
+
+      if (counterattackReaction) {
+        resolveCounterattackReaction(target, counterattackReaction);
       }
 
       if (target.team === "party" && target.id !== "finald") {
@@ -383,6 +475,11 @@
       unit.actionSpeedDownRatio = 0;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
+      unit.sharpenBladeTimer = 0;
+      unit.sharpenBladeMax = 0;
+      unit.flinchingTimer = 0;
+      unit.flinchingMax = 0;
+      clearCounterattackStance(unit);
       unit.rihasPassiveStacks = 0;
       unit.rihasPassiveTimer = 0;
       unit.rihasPassiveStackCooldown = 0;
@@ -420,7 +517,7 @@
       if (!source || !target || target.team !== "enemy" || target.hp <= 0 || damageAmount <= 0) {
         return;
       }
-      if (!hasPassive(source, "gouken") || dotDamage || options.magic) {
+      if (!hasPassive(source, "gouken") || dotDamage || getDamageSchool(options) !== "physical") {
         return;
       }
       if (!source.goukenHitCounts || typeof source.goukenHitCounts !== "object" || Array.isArray(source.goukenHitCounts)) {
@@ -533,7 +630,13 @@
       if (!unit) {
         return 0;
       }
-      const getter = options.magic ? getMagicDamageBoost : getPhysicalDamageBoost;
+      const school = getDamageSchool(options);
+      if (school === "mixed") {
+        const physical = typeof getPhysicalDamageBoost === "function" ? getSafeNumber(getPhysicalDamageBoost(unit), 0) : 0;
+        const magic = typeof getMagicDamageBoost === "function" ? getSafeNumber(getMagicDamageBoost(unit), 0) : 0;
+        return (physical + magic) / 2;
+      }
+      const getter = school === "magic" ? getMagicDamageBoost : getPhysicalDamageBoost;
       return typeof getter === "function" ? getSafeNumber(getter(unit), 0) : 0;
     }
 
@@ -549,7 +652,13 @@
       if (!unit) {
         return 0;
       }
-      const getter = options.magic ? getMagicDamageResistance : getPhysicalDamageResistance;
+      const school = getDamageSchool(options);
+      if (school === "mixed") {
+        const physical = typeof getPhysicalDamageResistance === "function" ? getSafeNumber(getPhysicalDamageResistance(unit), 0) : 0;
+        const magic = typeof getMagicDamageResistance === "function" ? getSafeNumber(getMagicDamageResistance(unit), 0) : 0;
+        return (physical + magic) / 2;
+      }
+      const getter = school === "magic" ? getMagicDamageResistance : getPhysicalDamageResistance;
       return typeof getter === "function" ? getSafeNumber(getter(unit), 0) : 0;
     }
 
@@ -675,18 +784,24 @@
       addFloat(`+${Math.round(selfHealed)}`, source.x, source.y - 28, getHealFloatColor(source));
     }
 
-    function reduceByDefense(target, amount, isMagic) {
-      const defense = isMagic ? getEffectiveMagicDefense(target) : getEffectiveDefense(target);
-      const scaledDefense = getDefenseValueForDamage(defense);
-      return amount * (DEFENSE_BASELINE / scaledDefense);
+    function reduceByDefense(target, amount, damageSchool = "physical") {
+      if (damageSchool === "mixed") {
+        const physicalMultiplier = getDefenseDamageMultiplier(getEffectiveDefense(target));
+        const magicMultiplier = getDefenseDamageMultiplier(getEffectiveMagicDefense(target));
+        return amount * ((physicalMultiplier + magicMultiplier) / 2);
+      }
+      const defense = damageSchool === "magic" ? getEffectiveMagicDefense(target) : getEffectiveDefense(target);
+      return amount * getDefenseDamageMultiplier(defense);
     }
 
-    function getDefenseValueForDamage(defense) {
-      const safeDefense = Math.max(1, Number.isFinite(defense) ? defense : 1);
-      if (safeDefense <= DEFENSE_BASELINE) {
-        return safeDefense;
+    function getDefenseDamageMultiplier(defense) {
+      const safeDefense = Number.isFinite(defense) ? defense : DEFENSE_BASELINE;
+      const distance = Math.abs(safeDefense - DEFENSE_BASELINE) * DEFENSE_OVER_BASE_SCALE;
+      const ratio = distance / (DEFENSE_BASELINE + distance);
+      if (safeDefense >= DEFENSE_BASELINE) {
+        return 1 - ratio;
       }
-      return DEFENSE_BASELINE + (safeDefense - DEFENSE_BASELINE) * DEFENSE_OVER_BASE_SCALE;
+      return 1 + ratio;
     }
 
     function getDamageFloatColor(source, target) {
@@ -744,7 +859,7 @@
     }
 
     function tryGuard(unit) {
-      if (unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || unit.actionLock > 0) {
+      if (unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || (unit.actionLock > 0 && (unit.counterattackStanceTimer || 0) <= 0)) {
         return false;
       }
       const chance = getEffectiveGuardChance(unit);

@@ -89,7 +89,13 @@
     }
 
     function isSkillSource(skill, owner, key) {
-      return getSkillSourceOwner(skill) === owner && getSkillSourceKey(skill) === key;
+      if (!skill) {
+        return false;
+      }
+      if (getSkillSourceOwner(skill) === owner && getSkillSourceKey(skill) === key) {
+        return true;
+      }
+      return skill.originalOwner === owner && skill.originalKey === key;
     }
 
     function getSkillUpgradeLevel(unitOrOwner, key, skill = null) {
@@ -115,6 +121,10 @@
 
     function getUpgradedBaseValue(unit, key, skill, prop) {
       const value = Number.isFinite(skill && skill[prop]) ? skill[prop] : 0;
+      const perLevelProp = `${prop}PerLevel`;
+      if (Number.isFinite(skill && skill[perLevelProp])) {
+        return value + skill[perLevelProp] * getSkillActionUpgradeLevel(unit, key, skill);
+      }
       if (prop === "damageBase") {
         if (isSkillSource(skill, "finald", "attack") || isSkillSource(skill, "rihas", "attack")) {
           return value * getSkillUpgradeIndexedValue(unit, key, skill, SKILL_BASE_MULTIPLIERS);
@@ -863,6 +873,9 @@
       if (unit && (unit.actionSpeedDownTimer || 0) > 0) {
         bonus -= Math.max(0, Number.isFinite(unit.actionSpeedDownRatio) ? unit.actionSpeedDownRatio : 0);
       }
+      if (unit && (unit.flinchingTimer || 0) > 0) {
+        bonus -= 0.5;
+      }
       return bonus;
     }
 
@@ -957,6 +970,8 @@
         || skill.sleepCleanse
         || Number.isFinite(skill.actionCdSetTo)
         || Number.isFinite(skill.feelDuration)
+        || Number.isFinite(skill.sharpenDuration)
+        || Number.isFinite(skill.counterattackDuration)
       ));
     }
 
@@ -998,6 +1013,9 @@
     }
 
     function getPartySkillTarget(unit, skill, attackTarget) {
+      if (skill && skill.target === "self") {
+        return unit;
+      }
       if (skill && skill.sleepCleanse) {
         return getSleepCleanseTarget(unit, skill);
       }
@@ -1324,6 +1342,16 @@
       target.freezingTimer = Math.max(target.freezingTimer || 0, duration);
       target.freezingMax = Math.max(target.freezingMax || 0, duration);
       ctx.addFloat("凍え", target.x, target.y - 34, "#9edbff");
+      return true;
+    }
+
+    function applyFlinching(source, target, duration) {
+      if (!target || target.dead || !Number.isFinite(duration) || duration <= 0) {
+        return false;
+      }
+      target.flinchingTimer = Math.max(target.flinchingTimer || 0, duration);
+      target.flinchingMax = Math.max(target.flinchingMax || 0, duration);
+      ctx.addFloat("怯み", target.x, target.y - 34, "#b9bcc8");
       return true;
     }
 
@@ -2023,7 +2051,48 @@
         const duration = getOffensiveEffectDuration(unit, target, getSkillTimedStatusDuration(unit, key, skill, "freezingDuration", "freezingDurationPerLevel"));
         effectApplied = applyFreezing(unit, target, duration) || effectApplied;
       }
+      if (Number.isFinite(skill && skill.flinchingDuration)) {
+        const duration = getOffensiveEffectDuration(unit, target, getSkillTimedStatusDuration(unit, key, skill, "flinchingDuration", "flinchingDurationPerLevel"));
+        effectApplied = applyFlinching(unit, target, duration) || effectApplied;
+      }
       return effectApplied;
+    }
+
+    function getCounterattackStacks(unit, key, skill) {
+      const base = Math.max(0, Math.floor(Number.isFinite(skill && skill.counterattackBaseStacks) ? skill.counterattackBaseStacks : 0));
+      const perLevel = Math.max(0, Math.floor(Number.isFinite(skill && skill.counterattackStacksPerLevel) ? skill.counterattackStacksPerLevel : 0));
+      return Math.max(0, base + perLevel * getSkillActionUpgradeLevel(unit, key, skill));
+    }
+
+    function applySharpenBlade(unit, key, skill) {
+      const duration = Math.max(0, Number.isFinite(skill && skill.sharpenDuration) ? skill.sharpenDuration : 0);
+      if (!unit || unit.dead || duration <= 0) {
+        return false;
+      }
+      unit.sharpenBladeTimer = Math.max(unit.sharpenBladeTimer || 0, duration);
+      unit.sharpenBladeMax = Math.max(unit.sharpenBladeMax || 0, duration);
+      ctx.addFloat("鋭刃", unit.x, unit.y - 34, "#d7e3ff");
+      if (ctx.awardSupportUltimate) {
+        ctx.awardSupportUltimate(unit, unit);
+      }
+      return true;
+    }
+
+    function applyCounterattackStance(unit, key, skill) {
+      const duration = Math.max(0, Number.isFinite(skill && skill.counterattackDuration) ? skill.counterattackDuration : 0);
+      const stacks = getCounterattackStacks(unit, key, skill);
+      if (!unit || unit.dead || duration <= 0 || stacks <= 0) {
+        return false;
+      }
+      unit.counterattackStanceTimer = Math.max(unit.counterattackStanceTimer || 0, duration);
+      unit.counterattackStanceMax = Math.max(unit.counterattackStanceMax || 0, duration);
+      unit.counterattackStanceStacks = Math.max(0, Math.floor(unit.counterattackStanceStacks || 0)) + stacks;
+      unit.counterattackRange = Math.max(unit.counterattackRange || 0, Number.isFinite(skill.counterattackRange) ? skill.counterattackRange : ctx.battlePx(200));
+      ctx.addFloat(`反撃+${stacks}`, unit.x, unit.y - 34, "#f0b36f");
+      if (ctx.awardSupportUltimate) {
+        ctx.awardSupportUltimate(unit, unit);
+      }
+      return true;
     }
 
     function getFeelDuration(unit, key, skill) {
@@ -2126,11 +2195,15 @@
       return Math.max(0, Number.isFinite(skill && skill.actionCdSetTo) ? skill.actionCdSetTo : 0);
     }
 
-    function getActionCdPulseCastTime(unit, key, skill) {
+    function getAdjustedSkillCastTime(unit, key, skill) {
       const base = Number.isFinite(skill && skill.cast) ? skill.cast : 0;
       const perLevel = Number.isFinite(skill && skill.castReductionPerLevel) ? skill.castReductionPerLevel : 0;
       const level = getSkillUpgradeLevel(unit, key || getSkillSourceKey(skill), skill);
       return Math.max(0, base - perLevel * level);
+    }
+
+    function getActionCdPulseCastTime(unit, key, skill) {
+      return getAdjustedSkillCastTime(unit, key, skill);
     }
 
     function isInActionCdPulseArea(unit, target, skill) {
@@ -2218,6 +2291,8 @@
       if (skill.sleepCleanse) return usePartySleepCleanse(unit, key, skill, target);
       if (Number.isFinite(skill.actionCdSetTo)) return usePartyActionCdPulse(unit, key, skill, target);
       if (Number.isFinite(skill.feelDuration)) return usePartyFeelBuff(unit, key, skill, target);
+      if (Number.isFinite(skill.sharpenDuration)) return usePartySharpenBlade(unit, key, skill);
+      if (Number.isFinite(skill.counterattackDuration)) return usePartyCounterattackStance(unit, key, skill);
       if (skill.approach || Number.isFinite(skill.shockRadius)) return useJumpAreaSkill(unit, key, skill, target);
       if (Number.isFinite(skill.arcDeg)) return useFanAreaSkill(unit, key, skill, target);
       if (Number.isFinite(skill.repeat) && Number.isFinite(skill.hitRange)) return useRepeatedMeleeSkill(unit, key, skill, target);
@@ -2233,12 +2308,27 @@
       speakSkill(unit, key);
       beginPartyAction(unit);
       paySkillCost(unit, skill);
-      unit.actionLock = ctx.ACTION_GAP;
-      finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
-      unit.aimAngle = ctx.angleTo(unit, target);
+      const cast = getCastTime(skill.cast, unit);
       const repeats = Math.max(1, Math.floor(Number.isFinite(skill.repeat) ? skill.repeat : 1));
       const delayMs = Math.max(0, Number.isFinite(skill.repeatDelayMs) ? skill.repeatDelayMs : 0);
+      const sequenceTime = delayMs * Math.max(0, repeats - 1) / 1000;
+      unit.actionLock = cast + sequenceTime + ctx.ACTION_GAP;
+      unit.aimAngle = ctx.angleTo(unit, target);
+      if (cast > 0) {
+        unit.castVisual = {
+          time: cast,
+          total: cast,
+          color: "rgba(244, 197, 79, 0.95)",
+        };
+      }
       let sleepAppliedByThisAction = false;
+      if (cast > 0) {
+        setTimeout(() => {
+          finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+        }, cast * 1000);
+      } else {
+        finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+      }
       for (let i = 0; i < repeats; i += 1) {
         setTimeout(() => {
           if (!unit.dead && !target.dead && canOffensiveAffect(unit, target) && ctx.dist(unit, target) <= skill.hitRange) {
@@ -2256,7 +2346,7 @@
             }
             ctx.slashEffect(unit, target);
           }
-        }, i * delayMs);
+        }, cast * 1000 + i * delayMs);
       }
       return true;
     }
@@ -2420,6 +2510,42 @@
           applyFeelArea(unit, key, skill, unit.aimAngle || 0);
         },
       });
+      return true;
+    }
+
+    function usePartySharpenBlade(unit, key, skill) {
+      speakSkill(unit, key);
+      beginPartyAction(unit);
+      paySkillCost(unit, skill);
+      const cast = getCastTime(getAdjustedSkillCastTime(unit, key, skill), unit);
+      unit.actionLock = cast + ctx.ACTION_GAP;
+      ctx.addTelegraph({
+        type: "circle",
+        x: unit.x,
+        y: unit.y,
+        radius: ctx.battlePx(36),
+        team: "support",
+        time: cast,
+        getPosition: () => ({ x: unit.x, y: unit.y }),
+        resolve: () => {
+          finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+          if (unit.dead || isActionDisabled(unit)) return;
+          applySharpenBlade(unit, key, skill);
+        },
+      });
+      return true;
+    }
+
+    function usePartyCounterattackStance(unit, key, skill) {
+      speakSkill(unit, key);
+      beginPartyAction(unit);
+      paySkillCost(unit, skill);
+      unit.actionLock = ctx.ACTION_GAP;
+      finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+      if (unit.dead || isActionDisabled(unit)) {
+        return false;
+      }
+      applyCounterattackStance(unit, key, skill);
       return true;
     }
 

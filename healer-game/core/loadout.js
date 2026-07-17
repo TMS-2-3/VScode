@@ -85,6 +85,53 @@
       };
     }
 
+    function getSkillLegacyIdentities(owner, key, skill = null) {
+      const identities = [];
+      if (skill && Array.isArray(skill.legacyIdentities)) {
+        identities.push(...skill.legacyIdentities);
+      }
+      if (skill && skill.originalOwner && skill.originalKey) {
+        identities.push(`${skill.originalOwner}:${skill.originalKey}`);
+      }
+      if (owner && key) {
+        identities.push(`${owner}:${key}`);
+      }
+      return [...new Set(identities.filter(Boolean))];
+    }
+
+    function getPassiveLegacyIdentities(owner, key, passive = null) {
+      const identities = [];
+      if (passive && Array.isArray(passive.legacyIdentities)) {
+        identities.push(...passive.legacyIdentities);
+      }
+      if (passive && passive.originalOwner && passive.originalKey) {
+        identities.push(`passive:${passive.originalOwner}:${passive.originalKey}`);
+      }
+      if (owner && key) {
+        identities.push(`passive:${owner}:${key}`);
+      }
+      return [...new Set(identities.filter(Boolean))];
+    }
+
+    function getProgressEntry(identity, legacyIdentities = []) {
+      const store = getSkillProgressStore();
+      let progress = normalizeSkillProgress(store[identity]);
+      if (progress.owned || progress.level > 0) {
+        return progress;
+      }
+      for (const legacyIdentity of legacyIdentities) {
+        if (!legacyIdentity || legacyIdentity === identity || !store[legacyIdentity]) {
+          continue;
+        }
+        progress = normalizeSkillProgress(store[legacyIdentity]);
+        if (progress.owned || progress.level > 0) {
+          store[identity] = progress;
+          return progress;
+        }
+      }
+      return progress;
+    }
+
     function getInitialOwnedSkillIdentities() {
       const owned = new Set();
       const finaldDefaults = LOADOUT_CONFIG.defaults && LOADOUT_CONFIG.defaults.finald || {};
@@ -125,8 +172,7 @@
       if (isAlwaysOwnedSkill(ownerKey, key, skill) || isInitiallyOwnedSkill(ownerKey, key, skill)) {
         return true;
       }
-      const store = getSkillProgressStore();
-      const progress = normalizeSkillProgress(store[getSkillIdentity(ownerKey, key, skill)]);
+      const progress = getProgressEntry(getSkillIdentity(ownerKey, key, skill), getSkillLegacyIdentities(ownerKey, key, skill));
       return progress.owned;
     }
 
@@ -149,8 +195,7 @@
       if (isAlwaysOwnedPassive(ownerKey, key, passive)) {
         return true;
       }
-      const store = getSkillProgressStore();
-      const progress = normalizeSkillProgress(store[getPassiveIdentity(ownerKey, key, passive)]);
+      const progress = getProgressEntry(getPassiveIdentity(ownerKey, key, passive), getPassiveLegacyIdentities(ownerKey, key, passive));
       return progress.owned;
     }
 
@@ -163,8 +208,7 @@
       if (isNormalAttackSkill(ownerKey, key, skill)) {
         return getNormalAttackUpgradeLevel(ownerKey);
       }
-      const store = getSkillProgressStore();
-      return normalizeSkillProgress(store[getSkillIdentity(ownerKey, key, skill)]).level;
+      return getProgressEntry(getSkillIdentity(ownerKey, key, skill), getSkillLegacyIdentities(ownerKey, key, skill)).level;
     }
 
     function getNormalAttackUpgradeLevel(owner) {
@@ -213,7 +257,7 @@
       }
       const identity = getSkillIdentity(ownerKey, key, skill);
       const store = getSkillProgressStore();
-      const current = normalizeSkillProgress(store[identity]);
+      const current = getProgressEntry(identity, getSkillLegacyIdentities(ownerKey, key, skill));
       const next = {
         owned: Object.prototype.hasOwnProperty.call(updates || {}, "owned") ? Boolean(updates.owned) : current.owned,
         level: Object.prototype.hasOwnProperty.call(updates || {}, "level")
@@ -235,7 +279,7 @@
       }
       const identity = getPassiveIdentity(ownerKey, key, passive);
       const store = getSkillProgressStore();
-      const current = normalizeSkillProgress(store[identity]);
+      const current = getProgressEntry(identity, getPassiveLegacyIdentities(ownerKey, key, passive));
       const next = {
         owned: Object.prototype.hasOwnProperty.call(updates || {}, "owned") ? Boolean(updates.owned) : current.owned,
         level: Object.prototype.hasOwnProperty.call(updates || {}, "level")
@@ -559,8 +603,7 @@
         return 0;
       }
       if (entry.kind === "passive") {
-        const store = getSkillProgressStore();
-        return normalizeSkillProgress(store[entry.identity]).level;
+        return getProgressEntry(entry.identity, getPassiveLegacyIdentities(entry.owner, entry.key, entry.skill)).level;
       }
       return getSkillLevel(entry.owner, entry.key);
     }
