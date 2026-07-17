@@ -251,6 +251,7 @@
   }
 
   function draw() {
+    resetCanvasFrameState();
     ctx.clearRect(0, 0, view.w, view.h);
     if (game.state === "title") {
       drawTitleScreen();
@@ -279,6 +280,19 @@
     statusRenderer.drawHud();
     drawSystemMenu();
     drawResultOverlay();
+  }
+
+  function resetCanvasFrameState() {
+    const dpr = Math.max(1, Number.isFinite(view.dpr) ? view.dpr : 1);
+    if (typeof ctx.reset === "function") {
+      ctx.reset();
+    } else if (ctx.canvas) {
+      ctx.canvas.width = ctx.canvas.width;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.imageSmoothingEnabled = true;
   }
 
   function drawTitleScreen() {
@@ -3082,31 +3096,34 @@
     const y = (view.h - h) / 2;
     const ui = getSettingsUi();
     ctx.save();
-    ctx.fillStyle = "rgba(247,255,246,0.98)";
-    ctx.strokeStyle = "rgba(16,32,24,0.36)";
-    ctx.lineWidth = 1.2;
-    roundRect(x, y, w, h, 8);
-    ctx.fill();
-    ctx.stroke();
+    try {
+      ctx.fillStyle = "rgba(247,255,246,0.98)";
+      ctx.strokeStyle = "rgba(16,32,24,0.36)";
+      ctx.lineWidth = 1.2;
+      roundRect(x, y, w, h, 8);
+      ctx.fill();
+      ctx.stroke();
 
-    ctx.fillStyle = "#102018";
-    ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText(panel.title || "設定", x + 28, y + 26);
-    drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
+      ctx.fillStyle = "#102018";
+      ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(panel.title || "設定", x + 28, y + 26);
+      drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
 
-    const nav = { x: x + 28, y: y + 82, w: 142, h: h - 112 };
-    const content = { x: nav.x + nav.w + 24, y: nav.y, w: w - nav.w - 80, h: nav.h };
-    drawSettingsNavItem(nav.x, nav.y, nav.w, 40, "ゲーム", "game", ui.tab === "game");
-    drawSettingsNavItem(nav.x, nav.y + 48, nav.w, 40, "操作", "controls", ui.tab === "controls");
+      const nav = { x: x + 28, y: y + 82, w: 142, h: h - 112 };
+      const content = { x: nav.x + nav.w + 24, y: nav.y, w: w - nav.w - 80, h: nav.h };
+      drawSettingsNavItem(nav.x, nav.y, nav.w, 40, "ゲーム", "game", ui.tab === "game");
+      drawSettingsNavItem(nav.x, nav.y + 48, nav.w, 40, "操作", "controls", ui.tab === "controls");
 
-    if (ui.tab === "controls") {
-      drawSettingsControlsContent(content);
-    } else {
-      drawSettingsGameContent(content);
+      if (ui.tab === "controls") {
+        drawSettingsControlsContent(content);
+      } else {
+        drawSettingsGameContent(content);
+      }
+    } finally {
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   function drawSettingsNavItem(x, y, w, h, label, tab, active) {
@@ -3150,17 +3167,20 @@
     ctx.fillText("ゲーム", content.x, content.y + 2);
 
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
-    ctx.clip();
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = { x: listRect.x, y: listRect.y + i * rowH - ui.gameScroll, w: listRect.w, h: rowH };
-      if (row.y + row.h < listRect.y || row.y > listRect.y + listRect.h) {
-        continue;
+    try {
+      ctx.beginPath();
+      ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
+      ctx.clip();
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = { x: listRect.x, y: listRect.y + i * rowH - ui.gameScroll, w: listRect.w, h: rowH };
+        if (row.y + row.h < listRect.y || row.y > listRect.y + listRect.h) {
+          continue;
+        }
+        drawSettingsGameRow(row, rows[i]);
       }
-      drawSettingsGameRow(row, rows[i]);
+    } finally {
+      ctx.restore();
     }
-    ctx.restore();
     drawSettingsScrollbar(listRect, ui.gameScroll, ui.gameScrollMax, {
       scrollState: ui,
       valueKey: "gameScroll",

@@ -116,6 +116,7 @@
   };
   const TOWN_WALK_DIRECTIONS = ["down", "left", "right", "up"];
   const TOWN_WALK_FRAMES = [1, 2, 3];
+  const TOWN_TILE_CHARACTER_FOOT_OFFSET_Y = 5;
   const townWalkImages = createTownWalkImages();
   const profileAppearanceImages = createProfileAppearanceImages();
 
@@ -174,21 +175,24 @@
 
     const transform = getTownMapTransform();
     ctx.save();
-    ctx.translate(transform.x, transform.y);
-    ctx.scale(transform.scale, transform.scale);
-    ctx.translate(-(transform.cameraX || 0), -(transform.cameraY || 0));
-    const usingTileMap = drawTownTileMap(transform);
-    if (!usingTileMap) {
-      drawTownTerrain();
-      drawTownRoads();
-      drawTownProps();
-      drawTownBuildings();
+    try {
+      ctx.translate(transform.x, transform.y);
+      ctx.scale(transform.scale, transform.scale);
+      ctx.translate(-(transform.cameraX || 0), -(transform.cameraY || 0));
+      const usingTileMap = drawTownTileMap(transform);
+      if (!usingTileMap) {
+        drawTownTerrain();
+        drawTownRoads();
+        drawTownProps();
+        drawTownBuildings();
+      }
+      drawTownCharacters();
+      if (usingTileMap) {
+        drawTownInteractionHighlight(town.interaction || null);
+      }
+    } finally {
+      ctx.restore();
     }
-    drawTownCharacters();
-    if (usingTileMap) {
-      drawTownInteractionHighlight(town.interaction || null);
-    }
-    ctx.restore();
 
     drawTownHud();
     drawTownPanel();
@@ -497,7 +501,7 @@
     }
     const height = actor.spriteHeight || 64;
     const width = height * image.naturalWidth / image.naturalHeight;
-    const footY = actor.y + (getTownTileMap() ? 0 : 24);
+    const footY = actor.y + (getTownTileMap() ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 24);
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.24)";
     ctx.beginPath();
@@ -512,8 +516,8 @@
   }
   function drawTownNpc(x, y, color, label) {
     const usingTileMap = Boolean(getTownTileMap());
-    const footY = usingTileMap ? y : y + 17;
-    const bodyY = usingTileMap ? y - 17 : y;
+    const footY = usingTileMap ? y + TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : y + 17;
+    const bodyY = usingTileMap ? y - 17 + TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : y;
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.22)";
     ctx.beginPath();
