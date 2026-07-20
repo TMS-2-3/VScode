@@ -623,13 +623,14 @@
         <button id="reload-map-button" class="wide-button hidden">現在マップを戻す</button>
         <button id="reload-page-button" class="wide-button">maps再読込</button>
         <button id="delete-map-button" class="wide-button danger hidden">マップ削除</button>
+        <button id="apply-maps-js-button" class="wide-button primary">maps.jsへ適用</button>
         <button id="copy-button" class="wide-button">コピー</button>
         <button id="download-button" class="wide-button">JS書き出し</button>
         <button id="clear-layer-button" class="wide-button danger">レイヤー消去</button>
 
         <h2>マップ定義</h2>
         <textarea id="export-text" spellcheck="false"></textarea>
-        <p class="small-note">安全に同期する場合は、`JS書き出し` で定義を書き出し、`maps.js` に反映したあとで `maps再読込` を押してください。</p>
+        <p class="small-note">`maps.jsへ適用` は選択した `maps.js` の同名マップだけを差し替えます。反映後はゲーム側を再読み込みしてください。</p>
       </aside>
     </div>
 
@@ -754,13 +755,17 @@
         return { tileId, rotate: normalizedRotation };
       }
 
+      function formatStringSource(value) {
+        return JSON.stringify(String(value));
+      }
+
       function formatTileSource(tile) {
         if (!tile) return "null";
-        if (!isTileEntryObject(tile)) return `"${tile}"`;
+        if (!isTileEntryObject(tile)) return formatStringSource(tile);
         const tileId = tile.tileId || tile.id;
         const rotation = normalizeRotation(tile.rotate);
-        if (!rotation) return `"${tileId}"`;
-        return `{ tileId: "${tileId}", rotate: ${rotation} }`;
+        if (!rotation) return formatStringSource(tileId);
+        return `{ tileId: ${formatStringSource(tileId)}, rotate: ${rotation} }`;
       }
 
       function createSerializableTileEntry(tile) {
@@ -1626,23 +1631,23 @@
         setStatus("マップ設定を反映しました。");
       }
 
-      function formatTileRows(tiles, width) {
+      function formatTileRows(tiles, width, indent = "            ") {
         const rows = [];
         for (let y = 0; y < tiles.length / width; y += 1) {
           const row = tiles.slice(y * width, y * width + width)
             .map((tile) => formatTileSource(tile))
             .join(", ");
-          rows.push(`            ${row},`);
+          rows.push(`${indent}${row},`);
         }
         return rows.join("\n");
       }
 
-      function formatMarginTilesSource(marginTiles) {
+      function formatMarginTilesSource(marginTiles, indent = "      ") {
         const source = marginTiles || {};
-        const rows = layerConfigs.map((config) => `        ${config.id}: ${formatTileSource(source[config.id])},`);
+        const rows = layerConfigs.map((config) => `${indent}  ${config.id}: ${formatTileSource(source[config.id])},`);
         return `{
 ${rows.join("\n")}
-      }`;
+${indent}}`;
       }
 
       function rotateSelection(delta) {
@@ -1651,29 +1656,52 @@ ${rows.join("\n")}
         setStatus(`向きを ${state.selectedRotation}度 にしました。`);
       }
 
+      function canUseBarePropertyName(value) {
+        return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
+      }
+
+      function formatMapPropertyKey(value) {
+        return canUseBarePropertyName(value) ? value : formatStringSource(value);
+      }
+
+      function formatMapAccess(value) {
+        return canUseBarePropertyName(value) ? `.${value}` : `[${formatStringSource(value)}]`;
+      }
+
+      function buildMapObjectSource(baseIndent = "    ") {
+        const safeId = sanitizeId(state.map.id);
+        const layerIndent = `${baseIndent}  `;
+        const layers = state.map.layers.map((layer) => `${layerIndent}  {
+${layerIndent}    id: ${formatStringSource(layer.id)},
+${layerIndent}    name: ${formatStringSource(layer.name)},
+${layerIndent}    tiles: [
+${formatTileRows(layer.tiles, state.map.width, `${layerIndent}      `)}
+${layerIndent}    ],
+${layerIndent}  }`).join(",\n");
+
+        return `{
+${baseIndent}  id: ${formatStringSource(safeId)},
+${baseIndent}  name: ${formatStringSource(state.map.name)},
+${baseIndent}  tileSize: ${state.map.tileSize},
+${baseIndent}  width: ${state.map.width},
+${baseIndent}  height: ${state.map.height},
+${baseIndent}  defaultTile: ${formatStringSource(state.map.defaultTile)},
+${baseIndent}  marginTiles: ${formatMarginTilesSource(getMarginTiles(), `${baseIndent}  `)},
+${baseIndent}  layers: [
+${layers}
+${baseIndent}  ],
+${baseIndent}  events: ${JSON.stringify(state.map.events || [], null, 8).replace(/\n/g, `\n${baseIndent}  `)},
+${baseIndent}}`;
+      }
+
       function buildMapSource() {
         const safeId = sanitizeId(state.map.id);
-        const layers = state.map.layers.map((layer) => `        {
-          id: "${layer.id}",
-          name: "${layer.name}",
-          tiles: [
-${formatTileRows(layer.tiles, state.map.width)}
-          ],
-        }`).join(",\n");
+        return `    ${formatMapPropertyKey(safeId)}: ${buildMapObjectSource("    ")},`;
+      }
 
-        return `    ${safeId}: {
-      id: "${safeId}",
-      name: "${state.map.name}",
-      tileSize: ${state.map.tileSize},
-      width: ${state.map.width},
-      height: ${state.map.height},
-      defaultTile: "${state.map.defaultTile}",
-      marginTiles: ${formatMarginTilesSource(getMarginTiles())},
-      layers: [
-${layers}
-      ],
-      events: ${JSON.stringify(state.map.events || [], null, 8).replace(/\n/g, "\n      ")},
-    },`;
+      function buildMapAssignmentSource(indent = "  ") {
+        const safeId = sanitizeId(state.map.id);
+        return `${indent}window.HEALER_TILE_MAPS${formatMapAccess(safeId)} = ${buildMapObjectSource(indent)};`;
       }
 
       function createSerializableMap(map) {
@@ -1983,6 +2011,223 @@ ${layers}
         setStatus("JS定義を書き出しました。maps.js へ反映してください。");
       }
 
+      function escapeRegExp(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function findMatchingBrace(source, openIndex) {
+        let depth = 0;
+        let quote = "";
+        let escaped = false;
+        let inLineComment = false;
+        let inBlockComment = false;
+
+        for (let index = openIndex; index < source.length; index += 1) {
+          const char = source[index];
+          const next = source[index + 1];
+
+          if (inLineComment) {
+            if (char === "\n") inLineComment = false;
+            continue;
+          }
+
+          if (inBlockComment) {
+            if (char === "*" && next === "/") {
+              inBlockComment = false;
+              index += 1;
+            }
+            continue;
+          }
+
+          if (quote) {
+            if (escaped) {
+              escaped = false;
+              continue;
+            }
+            if (char === "\\") {
+              escaped = true;
+              continue;
+            }
+            if (char === quote) quote = "";
+            continue;
+          }
+
+          if (char === "/" && next === "/") {
+            inLineComment = true;
+            index += 1;
+            continue;
+          }
+          if (char === "/" && next === "*") {
+            inBlockComment = true;
+            index += 1;
+            continue;
+          }
+          if (char === "\"" || char === "'" || char === "`") {
+            quote = char;
+            continue;
+          }
+          if (char === "{") {
+            depth += 1;
+          } else if (char === "}") {
+            depth -= 1;
+            if (depth === 0) return index;
+          }
+        }
+
+        return -1;
+      }
+
+      function findMapAssignmentBlock(source, mapId) {
+        const accessPatterns = [
+          `\\.${escapeRegExp(mapId)}`,
+          `\\[\\s*${escapeRegExp(JSON.stringify(mapId))}\\s*\\]`,
+        ];
+        for (const accessPattern of accessPatterns) {
+          const pattern = new RegExp(`(^|\\n)([ \\t]*)window\\.HEALER_TILE_MAPS${accessPattern}\\s*=\\s*{`, "m");
+          const match = pattern.exec(source);
+          if (!match) continue;
+          const start = match.index + match[1].length;
+          const openIndex = match.index + match[0].length - 1;
+          const closeIndex = findMatchingBrace(source, openIndex);
+          if (closeIndex < 0) return null;
+          let end = closeIndex + 1;
+          const semicolon = source.slice(end).match(/^[ \t]*;/);
+          if (semicolon) end += semicolon[0].length;
+          return { start, end, indent: match[2], kind: "replace" };
+        }
+        return null;
+      }
+
+      function findMapPropertyBlock(source, mapId) {
+        const keyPatterns = [escapeRegExp(JSON.stringify(mapId))];
+        if (canUseBarePropertyName(mapId)) keyPatterns.unshift(escapeRegExp(mapId));
+        for (const keyPattern of keyPatterns) {
+          const pattern = new RegExp(`(^|\\n)([ \\t]*)${keyPattern}\\s*:\\s*{`, "m");
+          const match = pattern.exec(source);
+          if (!match) continue;
+          const start = match.index + match[1].length;
+          const openIndex = match.index + match[0].length - 1;
+          const closeIndex = findMatchingBrace(source, openIndex);
+          if (closeIndex < 0) return null;
+          let end = closeIndex + 1;
+          const comma = source.slice(end).match(/^[ \t]*,/);
+          if (comma) end += comma[0].length;
+          return { start, end, indent: match[2], kind: "replace" };
+        }
+        return null;
+      }
+
+      function replaceMapInMapsSource(source, mapId) {
+        const safeId = sanitizeId(mapId);
+        const assignmentBlock = findMapAssignmentBlock(source, safeId);
+        if (assignmentBlock) {
+          const replacement = buildMapAssignmentSource(assignmentBlock.indent);
+          return {
+            source: `${source.slice(0, assignmentBlock.start)}${replacement}${source.slice(assignmentBlock.end)}`,
+            kind: assignmentBlock.kind,
+          };
+        }
+
+        const propertyBlock = findMapPropertyBlock(source, safeId);
+        if (propertyBlock) {
+          const replacement = `${propertyBlock.indent}${formatMapPropertyKey(safeId)}: ${buildMapObjectSource(propertyBlock.indent)},`;
+          return {
+            source: `${source.slice(0, propertyBlock.start)}${replacement}${source.slice(propertyBlock.end)}`,
+            kind: propertyBlock.kind,
+          };
+        }
+
+        const debugMarker = /(^|\n)([ \t]*)window\.HEALER_DEBUG_TILE_MAPS\s*=/.exec(source);
+        if (debugMarker) {
+          const insertAt = debugMarker.index + debugMarker[1].length;
+          const indent = debugMarker[2] || "  ";
+          const insertion = `${buildMapAssignmentSource(indent)}\n`;
+          return {
+            source: `${source.slice(0, insertAt)}${insertion}${source.slice(insertAt)}`,
+            kind: "insert",
+          };
+        }
+
+        const iifeEnd = source.lastIndexOf("})();");
+        if (iifeEnd >= 0) {
+          const insertion = `\n${buildMapAssignmentSource("  ")}\n`;
+          return {
+            source: `${source.slice(0, iifeEnd)}${insertion}${source.slice(iifeEnd)}`,
+            kind: "insert",
+          };
+        }
+
+        throw new Error("maps.js の追記位置を見つけられませんでした。");
+      }
+
+      async function applyCurrentMapToMapsJs() {
+        finishPendingHistoryEntry();
+        updateExport();
+        if (!window.showOpenFilePicker) {
+          setStatus("このブラウザでは直接適用が使えません。Chrome/Edgeで map-editor.html を開いてください。");
+          return;
+        }
+
+        let fileHandle = null;
+        try {
+          const handles = await window.showOpenFilePicker({
+            multiple: false,
+            types: [
+              {
+                description: "maps.js",
+                accept: { "text/javascript": [".js"] },
+              },
+            ],
+          });
+          fileHandle = handles && handles[0];
+        } catch (error) {
+          if (error && error.name === "AbortError") {
+            setStatus("maps.jsへの適用をキャンセルしました。");
+          } else {
+            console.error(error);
+            setStatus("maps.jsの選択に失敗しました。");
+          }
+          return;
+        }
+
+        if (!fileHandle) {
+          setStatus("maps.jsへの適用をキャンセルしました。");
+          return;
+        }
+        if (fileHandle.name !== "maps.js") {
+          setStatus("適用先は healer-game/map/maps.js を選択してください。");
+          return;
+        }
+
+        const safeId = sanitizeId(state.map.id);
+        const ok = window.confirm(`${state.map.name || safeId} (${safeId}) を選択した maps.js に直接適用します。よろしいですか？`);
+        if (!ok) {
+          setStatus("maps.jsへの適用をキャンセルしました。");
+          return;
+        }
+
+        try {
+          const file = await fileHandle.getFile();
+          const rawSource = await file.text();
+          const result = replaceMapInMapsSource(rawSource, safeId);
+          const writable = await fileHandle.createWritable();
+          await writable.write(result.source);
+          await writable.close();
+
+          sourceMaps[safeId] = normalizeMap(createSerializableMap(state.map));
+          renderMapSelect();
+          mapSelect.value = safeId;
+          updateEditorMode();
+          updateExport();
+
+          const actionText = result.kind === "insert" ? "新規追加" : "上書き";
+          setStatus(`${state.map.name || safeId} を maps.js に${actionText}しました。ゲーム側を再読み込みしてください。`);
+        } catch (error) {
+          console.error(error);
+          setStatus("maps.jsへの適用に失敗しました。ファイル内容かブラウザの権限を確認してください。");
+        }
+      }
+
       function clearActiveLayer() {
         const layer = getLayer();
         if (!layer) return;
@@ -2153,6 +2398,7 @@ ${layers}
         document.getElementById("reload-map-button").addEventListener("click", reloadCurrentMapFromSource);
         document.getElementById("reload-page-button").addEventListener("click", reloadTileMapsPage);
         document.getElementById("delete-map-button").addEventListener("click", deleteCurrentMap);
+        document.getElementById("apply-maps-js-button").addEventListener("click", applyCurrentMapToMapsJs);
         document.getElementById("copy-button").addEventListener("click", copyExport);
         document.getElementById("download-button").addEventListener("click", downloadExport);
         document.getElementById("clear-layer-button").addEventListener("click", clearActiveLayer);
