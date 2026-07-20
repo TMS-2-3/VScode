@@ -1953,11 +1953,15 @@
     }
 
     function getSkillDamageOptions(skill, options = {}) {
-      return Object.assign({
+      const result = Object.assign({
         magic: isMagicDamageSkill(skill),
         dotDamage: isDotDamageSkill(skill),
         damageType: getSkillDamageType(skill),
       }, options);
+      if (Number.isFinite(skill && skill.defenseIgnoreRatio) && !Number.isFinite(result.defenseIgnoreRatio)) {
+        result.defenseIgnoreRatio = Math.max(0, Math.min(1, skill.defenseIgnoreRatio));
+      }
+      return result;
     }
 
     function dealPartySkillDamage(unit, target, skill, damage, options = {}) {

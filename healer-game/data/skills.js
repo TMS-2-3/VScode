@@ -208,10 +208,10 @@
       headbutt: {
         id: "headbutt", key: "headbutt", owner: "rihas", name: "頭突き", rank: "D", category: "スキル", skillType: "単体攻撃",
         requiredWeapons: ["拳具"],
-        cd: 27, cost: 15, range: px(60), damageBase: 30, attackScale: 0.5, lines: ["頭突き"], damageType: "不変",
+        cd: 27, cost: 15, range: px(60), damageBase: 30, attackScale: 0.5, defenseIgnoreRatio: 0.2, lines: ["頭突き"], damageType: "physical",
         formula: [{ text: "30 + 攻撃力 * 0.5", stat: "attack", baseProp: "damageBase", scaleProp: "attackScale" }],
-        description: "敵に強力な頭突きを放ち、(式=値)の不変ダメージを与える",
-        simpleDescription: "敵に強力な頭突きを放ち、不変ダメージを与える",
+        description: "敵に強力な頭突きを放ち、(式=値)の物理ダメージを与える。相手の防御力の20%を無視する",
+        simpleDescription: "敵に強力な頭突きを放ち、物理ダメージを与える。相手の防御力を無視する",
         upgradeSimpleDescription: "レベルが上がるごとにダメージが増加する",
         upgradeDescription: "レベルが上がるごとにこのスキルの基礎ダメージが+(5/10/15/20/25)増加する",
       },

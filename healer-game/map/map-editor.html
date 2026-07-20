@@ -177,6 +177,18 @@
         gap: 6px;
       }
 
+      .view-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .view-row .active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
       .rotate-row {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -275,9 +287,26 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
+        z-index: 20000;
         background-image:
           linear-gradient(to right, rgba(20, 24, 18, 0.2) 1px, transparent 1px),
           linear-gradient(to bottom, rgba(20, 24, 18, 0.2) 1px, transparent 1px);
+      }
+
+      .coord-label {
+        position: absolute;
+        left: 4px;
+        top: 3px;
+        min-width: 16px;
+        padding: 1px 3px 2px;
+        border-radius: 2px;
+        background: rgba(0, 0, 0, 0.46);
+        color: #fff;
+        font-weight: 800;
+        line-height: 1;
+        text-align: left;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.34);
+        user-select: none;
       }
 
       .cursor-cell {
@@ -285,6 +314,7 @@
         pointer-events: none;
         border: 2px solid #f7e27b;
         box-shadow: inset 0 0 0 1px rgba(20, 24, 18, 0.45);
+        z-index: 30000;
       }
 
       .selected-info {
@@ -383,6 +413,11 @@
           <button data-tool="fill">塗潰</button>
         </div>
 
+        <h2>表示</h2>
+        <div class="view-row">
+          <button id="coord-label-button" class="active">座標番号</button>
+        </div>
+
         <h2>向き</h2>
         <div class="rotate-row">
           <button id="rotate-left-button">左回転</button>
@@ -450,6 +485,7 @@
         selectedTile: "grass",
         selectedRotation: 0,
         tool: "paint",
+        showCoordLabels: true,
         isPointerDown: false,
         lastPaintKey: "",
       };
@@ -467,6 +503,7 @@
       const surface = document.getElementById("map-surface");
       const grid = document.getElementById("map-grid");
       const cursorCell = document.getElementById("cursor-cell");
+      const coordLabelButton = document.getElementById("coord-label-button");
       const statusLine = document.getElementById("status");
       const mapTitle = document.getElementById("map-title");
       const mapSizeLabel = document.getElementById("map-size-label");
@@ -516,6 +553,20 @@
         const normalizedRotation = normalizeRotation(rotation);
         if (!normalizedRotation) return tileId;
         return { tileId, rotate: normalizedRotation };
+      }
+
+      function getColumnLabel(col) {
+        let index = Math.max(0, Math.floor(Number(col) || 0));
+        let label = "";
+        do {
+          label = String.fromCharCode(65 + (index % 26)) + label;
+          index = Math.floor(index / 26) - 1;
+        } while (index >= 0);
+        return label;
+      }
+
+      function getTileCoordLabel(col, row) {
+        return `${getColumnLabel(col)}${Math.max(0, Math.floor(Number(row) || 0)) + 1}`;
       }
 
       function sanitizeId(value) {
@@ -647,11 +698,34 @@
         surface.appendChild(img);
       }
 
+      function renderCoordLabels() {
+        grid.innerHTML = "";
+        coordLabelButton.classList.toggle("active", state.showCoordLabels);
+        if (!state.showCoordLabels) return;
+
+        const tileSize = state.map.tileSize;
+        const fontSize = Math.max(8, Math.min(13, Math.floor(tileSize * 0.24)));
+        const fragment = document.createDocumentFragment();
+        for (let y = 0; y < state.map.height; y += 1) {
+          for (let x = 0; x < state.map.width; x += 1) {
+            const label = document.createElement("span");
+            label.className = "coord-label";
+            label.textContent = getTileCoordLabel(x, y);
+            label.style.left = `${x * tileSize + 4}px`;
+            label.style.top = `${y * tileSize + 3}px`;
+            label.style.fontSize = `${fontSize}px`;
+            fragment.appendChild(label);
+          }
+        }
+        grid.appendChild(fragment);
+      }
+
       function renderSurface() {
         const tileSize = state.map.tileSize;
         surface.style.width = `${state.map.width * tileSize}px`;
         surface.style.height = `${state.map.height * tileSize}px`;
         grid.style.backgroundSize = `${tileSize}px ${tileSize}px`;
+        renderCoordLabels();
 
         [...surface.querySelectorAll(".map-image")].forEach((node) => node.remove());
 
@@ -738,6 +812,12 @@
         const pass = document.createElement("div");
         pass.textContent = def ? `passable: ${def.passable ? "true" : "false"}` : "passable: -";
         selectedInfo.append(name, id, layer, rotation, pass);
+      }
+
+      function toggleCoordLabels() {
+        state.showCoordLabels = !state.showCoordLabels;
+        renderCoordLabels();
+        setStatus(state.showCoordLabels ? "座標番号を表示しました。" : "座標番号を非表示にしました。");
       }
 
       function renderMapSelect() {
@@ -1145,6 +1225,7 @@ ${layers}
           renderSelectedInfo();
           setStatus("向きを 0度 にしました。");
         });
+        coordLabelButton.addEventListener("click", toggleCoordLabels);
 
         surface.addEventListener("pointerdown", (event) => {
           state.isPointerDown = true;

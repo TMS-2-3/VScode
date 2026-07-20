@@ -235,7 +235,7 @@
       }
 
       if (!fixedDamage) {
-        finalAmount = reduceByDefense(target, finalAmount, damageSchool);
+        finalAmount = reduceByDefense(target, finalAmount, damageSchool, options);
       }
       finalAmount = applyDamageModifierSum(source, target, finalAmount, options);
       finalAmount *= getElementDamageMultiplier(source, target, options);
@@ -784,14 +784,29 @@
       addFloat(`+${Math.round(selfHealed)}`, source.x, source.y - 28, getHealFloatColor(source));
     }
 
-    function reduceByDefense(target, amount, damageSchool = "physical") {
+    function reduceByDefense(target, amount, damageSchool = "physical", options = {}) {
       if (damageSchool === "mixed") {
-        const physicalMultiplier = getDefenseDamageMultiplier(getEffectiveDefense(target));
-        const magicMultiplier = getDefenseDamageMultiplier(getEffectiveMagicDefense(target));
+        const physicalMultiplier = getDefenseDamageMultiplier(applyDefenseIgnore(getEffectiveDefense(target), getDefenseIgnoreRatio(options, "physical")));
+        const magicMultiplier = getDefenseDamageMultiplier(applyDefenseIgnore(getEffectiveMagicDefense(target), getDefenseIgnoreRatio(options, "magic")));
         return amount * ((physicalMultiplier + magicMultiplier) / 2);
       }
       const defense = damageSchool === "magic" ? getEffectiveMagicDefense(target) : getEffectiveDefense(target);
-      return amount * getDefenseDamageMultiplier(defense);
+      const defenseIgnoreRatio = getDefenseIgnoreRatio(options, damageSchool);
+      return amount * getDefenseDamageMultiplier(applyDefenseIgnore(defense, defenseIgnoreRatio));
+    }
+
+    function getDefenseIgnoreRatio(options = {}, damageSchool = "physical") {
+      const schoolProp = damageSchool === "magic" ? "magicDefenseIgnoreRatio" : "physicalDefenseIgnoreRatio";
+      const value = Number.isFinite(options[schoolProp]) ? options[schoolProp] : options.defenseIgnoreRatio;
+      return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+    }
+
+    function applyDefenseIgnore(defense, ratio) {
+      const safeDefense = Number.isFinite(defense) ? defense : DEFENSE_BASELINE;
+      if (!Number.isFinite(ratio) || ratio <= 0 || safeDefense <= DEFENSE_BASELINE) {
+        return safeDefense;
+      }
+      return DEFENSE_BASELINE + (safeDefense - DEFENSE_BASELINE) * (1 - ratio);
     }
 
     function getDefenseDamageMultiplier(defense) {

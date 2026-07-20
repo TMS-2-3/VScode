@@ -86,14 +86,20 @@
       ],
       events: [
         {
-          id: "forest_exit",
-          name: "森の出口",
-          type: "door",
-          x: 5,
-          y: 7,
-          width: 2,
-          height: 1,
-          targetMap: null,
+          id: "forest_to_start_town",
+          name: "始まりの町へ",
+          type: "mapTransfer",
+
+          trigger: "step",
+          x: 0,
+          y: 3,
+          width: 1,
+          height: 2,
+          targetMap: "startTown01",
+
+          targetCol: 7,
+
+          targetRow: 6,
         },
         {
           id: "forest_sign",
@@ -403,6 +409,33 @@
                       "width": 3,
                       "height": 2,
                       "tileId": "itemShopFront"
+
+              },
+
+              {
+
+                      "id": "start_town_to_forest_test01",
+
+                      "name": "森テスト01へ",
+
+                      "type": "mapTransfer",
+
+                      "trigger": "step",
+
+                      "x": 5,
+
+                      "y": 7,
+
+                      "width": 5,
+
+                      "height": 1,
+
+                      "targetMap": "forestTest01",
+
+                      "targetCol": 1,
+
+                      "targetRow": 3
+
               }
       ],
     };
@@ -481,5 +514,3 @@
     { id: "flower", label: "花マップ" },
   ];
 })();
-
-

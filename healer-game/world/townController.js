@@ -117,7 +117,7 @@
       clampTownPlayer();
     }
 
-    function switchTownMap(mapId) {
+    function switchTownMap(mapId, options = {}) {
       if (!mapId || !tileMapSystem || typeof tileMapSystem.getMap !== "function") {
         return false;
       }
@@ -131,11 +131,36 @@
       town.interaction = null;
       town.player.gridMove = null;
       setupTown();
-      placeTownPlayerAtMapCenter(tileMap);
+      const targetCol = Number.isFinite(options.targetCol) ? Math.floor(options.targetCol) : null;
+      const targetRow = Number.isFinite(options.targetRow) ? Math.floor(options.targetRow) : null;
+      if (targetCol !== null && targetRow !== null) {
+        placeTownPlayerAtTile(tileMap, targetCol, targetRow);
+      } else {
+        placeTownPlayerAtMapCenter(tileMap);
+      }
       initializeTownFollowers(true);
       resetTownTrail();
       town.interaction = getTownInteraction();
       updateTownCamera();
+      return true;
+    }
+
+    function placeTownPlayerAtTile(tileMap, col, row) {
+      if (!tileMap) {
+        return false;
+      }
+      const targetTile = isTownGridTilePassable(tileMap, col, row)
+        ? { col, row }
+        : findNearestPassableTownTile(tileMap, col, row);
+      if (!targetTile) {
+        placeTownPlayerAtMapCenter(tileMap);
+        return false;
+      }
+      const center = getTownTileCenter(tileMap, targetTile.col, targetTile.row);
+      town.player.x = center.x;
+      town.player.y = center.y;
+      town.player.gridMove = null;
+      clampTownPlayer();
       return true;
     }
 
@@ -724,11 +749,13 @@
       const distance = Math.hypot(dx, dy);
       const speed = Math.max(1, town.player.speed || 235);
       const amount = speed * Math.max(0, dt || 0);
+      let arrived = false;
       town.player.facing = move.facing || town.player.facing || "down";
       if (distance <= amount || distance <= 0.001) {
         town.player.x = move.targetX;
         town.player.y = move.targetY;
         town.player.gridMove = null;
+        arrived = true;
       } else {
         town.player.x += dx / distance * amount;
         town.player.y += dy / distance * amount;
@@ -740,7 +767,54 @@
         appendTownTrailPoint();
       }
       updateTownCamera();
+      if (arrived) {
+        handleTownStepEvents(tileMap);
+      }
       return true;
+    }
+
+    function getTownMapTransferData(event) {
+      if (!event) {
+        return null;
+      }
+      const raw = event.raw || {};
+      const payload = event.payload || raw.payload || {};
+      const action = event.action || raw.action || raw.type || "";
+      const targetMap = raw.targetMap || payload.targetMap || raw.mapId || payload.mapId || null;
+      if (!targetMap || (action !== "mapTransfer" && action !== "transfer" && action !== "door")) {
+        return null;
+      }
+      return {
+        targetMap,
+        targetCol: Number(raw.targetCol ?? payload.targetCol),
+        targetRow: Number(raw.targetRow ?? payload.targetRow),
+        name: raw.name || event.id || targetMap,
+      };
+    }
+
+    function handleTownStepEvents(tileMap) {
+      if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function") {
+        return false;
+      }
+      const tile = getTownPlayerTile(tileMap);
+      const events = tileMapSystem.getEventsAtTile(tileMap, tile.col, tile.row, "step");
+      for (const event of events) {
+        const transfer = getTownMapTransferData(event);
+        if (!transfer) {
+          continue;
+        }
+        const options = {};
+        if (Number.isFinite(transfer.targetCol) && Number.isFinite(transfer.targetRow)) {
+          options.targetCol = transfer.targetCol;
+          options.targetRow = transfer.targetRow;
+        }
+        if (switchTownMap(transfer.targetMap, options)) {
+          game.message = `${transfer.name || "移動"}: ${transfer.targetMap}`;
+          game.messageTimer = 2.5;
+          return true;
+        }
+      }
+      return false;
     }
     function moveTownPlayerAxis(dx, dy) {
       const nextX = town.player.x + dx;
