@@ -6,8 +6,8 @@
   // such as "map/img_tile/forest/grass.png".
   window.HEALER_TILE_DEFS = {
     test_grass: {
-      id: "test_grass",
-      name: "テスト",
+      id: "natural_grass",
+      name: "明るい草地",
       image: "map/img_tile/rpg_village/grass_base_01.png",
       passable: true,
       tags: ["ground"],
