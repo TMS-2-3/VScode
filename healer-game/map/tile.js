@@ -605,4 +605,139 @@
       drawOffsetY: 0,
     },
   };
+
+  const GENERATED_GROUND_GROUPS = [
+    {
+      idPrefix: "cityTile",
+      folder: "city_generated",
+      tag: "city",
+      names: [
+        "都市タイル 明るい石畳",
+        "都市タイル 暗い石畳",
+        "都市タイル 整った敷石",
+        "都市タイル 紋章広場",
+        "都市タイル 赤レンガ",
+        "都市タイル 斜めレンガ",
+        "都市タイル 古い石畳",
+        "都市タイル 大判石床",
+        "都市タイル 縁石道路",
+        "都市タイル 角縁石道路",
+        "都市タイル 水路",
+        "都市タイル 水路角",
+        "都市タイル 通路石床",
+        "都市タイル 赤い屋根",
+        "都市タイル 青い屋根",
+        "都市タイル 白い装飾床",
+      ],
+    },
+    {
+      idPrefix: "townTile",
+      folder: "town_generated",
+      tag: "town",
+      label: "街タイル",
+    },
+    {
+      idPrefix: "villageTile",
+      folder: "village_generated",
+      tag: "village",
+      label: "村タイル",
+    },
+    {
+      idPrefix: "fieldTile",
+      folder: "field_generated",
+      tag: "field",
+      label: "自然タイル",
+    },
+    {
+      idPrefix: "demonCastleTile",
+      folder: "demon_castle_generated",
+      tag: "demonCastle",
+      label: "魔王城タイル",
+    },
+  ];
+
+  function padTileNumber(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function createGeneratedGroundTiles() {
+    const defs = {};
+
+    GENERATED_GROUND_GROUPS.forEach((group) => {
+      for (let index = 1; index <= 16; index += 1) {
+        const id = `${group.idPrefix}${padTileNumber(index)}`;
+        const row = padTileNumber(Math.floor((index - 1) / 4) + 1);
+        const col = padTileNumber(((index - 1) % 4) + 1);
+        const name = group.names ? group.names[index - 1] : `${group.label} ${padTileNumber(index)}`;
+
+        defs[id] = {
+          id,
+          name,
+          image: `map/img_tile/generated_ground/${group.folder}/tile_${row}_${col}.png`,
+          passable: true,
+          tags: ["ground", "generated", group.tag],
+        };
+      }
+    });
+
+    return defs;
+  }
+
+  Object.assign(window.HEALER_TILE_DEFS, createGeneratedGroundTiles(), {
+    cityRequestOfficeFront: {
+      id: "cityRequestOfficeFront",
+      name: "都市部 依頼所",
+      image: "map/img_tile/city_objects_front/city_request_office_front.png",
+      passable: false,
+      tags: ["object", "building", "requestOffice", "city", "block"],
+      drawWidth: 192,
+      drawHeight: 240,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    cityArmorShopFront: {
+      id: "cityArmorShopFront",
+      name: "都市部 防具屋",
+      image: "map/img_tile/city_objects_front/city_armor_shop_front.png",
+      passable: false,
+      tags: ["object", "building", "shop", "armor", "city", "block"],
+      drawWidth: 192,
+      drawHeight: 240,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    cityInnFront: {
+      id: "cityInnFront",
+      name: "都市部 宿屋",
+      image: "map/img_tile/city_objects_front/city_inn_front.png",
+      passable: false,
+      tags: ["object", "building", "inn", "city", "block"],
+      drawWidth: 192,
+      drawHeight: 240,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    cityWeaponShopFront: {
+      id: "cityWeaponShopFront",
+      name: "都市部 武器屋",
+      image: "map/img_tile/city_objects_front/city_weapon_shop_front.png",
+      passable: false,
+      tags: ["object", "building", "shop", "weapon", "city", "block"],
+      drawWidth: 192,
+      drawHeight: 240,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+    cityItemShopFront: {
+      id: "cityItemShopFront",
+      name: "都市部 アイテム屋",
+      image: "map/img_tile/city_objects_front/city_item_shop_front.png",
+      passable: false,
+      tags: ["object", "building", "shop", "item", "city", "block"],
+      drawWidth: 192,
+      drawHeight: 240,
+      drawOffsetX: 0,
+      drawOffsetY: 0,
+    },
+  });
 })();
