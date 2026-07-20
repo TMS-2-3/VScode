@@ -24,7 +24,9 @@
 
       body {
         margin: 0;
+        height: 100vh;
         min-height: 100vh;
+        overflow: hidden;
         background: var(--bg);
         color: var(--ink);
         font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
@@ -51,18 +53,22 @@
       }
 
       .app {
-        min-height: 100vh;
+        height: 100vh;
+        min-height: 0;
         display: grid;
         grid-template-columns: 292px minmax(420px, 1fr) 340px;
+        overflow: hidden;
       }
 
       .side,
       .export {
-        min-height: 100vh;
+        height: 100vh;
+        min-height: 0;
         padding: 16px;
         background: var(--panel);
         border-right: 1px solid var(--line);
         overflow-y: auto;
+        overscroll-behavior: contain;
       }
 
       .export {
@@ -71,8 +77,13 @@
       }
 
       .stage {
+        min-width: 0;
+        min-height: 0;
+        height: 100vh;
         padding: 16px;
-        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
 
       h1 {
@@ -173,7 +184,7 @@
 
       .tool-row {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 6px;
       }
 
@@ -242,6 +253,7 @@
         justify-content: space-between;
         gap: 12px;
         margin-bottom: 12px;
+        flex: 0 0 auto;
       }
 
       .map-header h1 {
@@ -261,11 +273,116 @@
         line-height: 1.5;
       }
 
+      .map-toolbar {
+        display: grid;
+        justify-items: end;
+        gap: 7px;
+        flex: 0 0 auto;
+      }
+
+      .zoom-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .map-control-row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .history-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .margin-tile-editor {
+        display: grid;
+        gap: 4px;
+        justify-items: center;
+      }
+
+      .margin-tile-editor span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .margin-tile-cell {
+        position: relative;
+        box-sizing: border-box;
+        width: 42px;
+        min-width: 42px;
+        height: 42px;
+        min-height: 42px;
+        padding: 0;
+        overflow: hidden;
+        background: #d8decf;
+      }
+
+      .margin-tile-cell img {
+        position: absolute;
+        display: block;
+        object-fit: cover;
+        pointer-events: none;
+      }
+
+      .margin-tile-cell.empty::after {
+        content: "-";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .history-controls button,
+      .zoom-controls button {
+        min-width: 34px;
+        min-height: 30px;
+        padding: 4px 8px;
+      }
+
+      .zoom-controls input {
+        width: 120px;
+        min-height: 30px;
+        padding: 0;
+      }
+
+      .zoom-value {
+        min-width: 46px;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: right;
+      }
+
+      .surface-viewport {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: #dde7d3;
+        overscroll-behavior: contain;
+      }
+
+      .surface-scale {
+        position: relative;
+        min-width: 100%;
+        min-height: 100%;
+      }
+
       .surface-wrap {
+        position: absolute;
+        left: 0;
+        top: 0;
         width: max-content;
         padding: 18px;
-        border: 1px solid var(--line);
         background: var(--panel-2);
+        transform-origin: left top;
       }
 
       .map-surface {
@@ -317,6 +434,24 @@
         z-index: 30000;
       }
 
+      .range-cell {
+        position: absolute;
+        pointer-events: none;
+        border: 2px solid #f7e27b;
+        background: rgba(247, 226, 123, 0.18);
+        box-shadow: inset 0 0 0 1px rgba(20, 24, 18, 0.45);
+        z-index: 29000;
+      }
+
+      .duplicate-cell {
+        position: absolute;
+        pointer-events: none;
+        border: 2px dashed #46bde8;
+        background: rgba(70, 189, 232, 0.14);
+        box-shadow: inset 0 0 0 1px rgba(20, 24, 18, 0.42);
+        z-index: 29500;
+      }
+
       .selected-info {
         display: grid;
         gap: 6px;
@@ -349,7 +484,8 @@
 
         .export {
           grid-column: 1 / -1;
-          min-height: auto;
+          height: 280px;
+          min-height: 0;
           border-left: 0;
           border-top: 1px solid var(--line);
         }
@@ -403,14 +539,13 @@
         </div>
         <p class="small-note">`新規作成` はブラウザ上の編集用マップを作ります。`maps.js` へは自動保存されません。</p>
 
-        <h2>レイヤー</h2>
-        <div id="layer-tabs" class="layer-tabs"></div>
-
         <h2>ツール</h2>
         <div class="tool-row">
           <button data-tool="paint" class="active">配置</button>
           <button data-tool="erase">消去</button>
           <button data-tool="fill">塗潰</button>
+          <button data-tool="range">範囲</button>
+          <button data-tool="duplicate">複製</button>
         </div>
 
         <h2>表示</h2>
@@ -425,6 +560,9 @@
           <button id="rotate-right-button">右回転</button>
         </div>
 
+        <h2>レイヤー</h2>
+        <div id="layer-tabs" class="layer-tabs"></div>
+
         <h2>選択</h2>
         <div id="selected-info" class="selected-info"></div>
 
@@ -438,12 +576,37 @@
             <h1 id="map-title">小マップ01</h1>
             <div id="status" class="status"></div>
           </div>
-          <div class="status" id="map-size-label"></div>
+          <div class="map-toolbar">
+            <div class="status" id="map-size-label"></div>
+            <div class="map-control-row">
+              <div class="margin-tile-editor">
+                <span>余白タイル</span>
+                <button id="margin-tile-cell" class="margin-tile-cell" type="button"></button>
+              </div>
+              <div class="history-controls">
+                <button id="undo-button" type="button" title="一つ戻る" aria-label="一つ戻る">戻る</button>
+                <button id="redo-button" type="button" title="一つ進む" aria-label="一つ進む">進む</button>
+              </div>
+              <div class="zoom-controls">
+                <button id="zoom-out-button" type="button">-</button>
+                <input id="zoom-range" type="range" min="50" max="200" step="10" value="100" />
+                <button id="zoom-in-button" type="button">+</button>
+                <button id="zoom-reset-button" type="button">100%</button>
+                <span id="zoom-value" class="zoom-value">100%</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="surface-wrap">
-          <div id="map-surface" class="map-surface">
-            <div id="cursor-cell" class="cursor-cell hidden"></div>
-            <div id="map-grid" class="map-grid"></div>
+        <div id="surface-viewport" class="surface-viewport">
+          <div id="surface-scale" class="surface-scale">
+            <div id="surface-wrap" class="surface-wrap">
+              <div id="map-surface" class="map-surface">
+                <div id="cursor-cell" class="cursor-cell hidden"></div>
+                <div id="range-cell" class="range-cell hidden"></div>
+                <div id="duplicate-cell" class="duplicate-cell hidden"></div>
+                <div id="map-grid" class="map-grid"></div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -486,9 +649,24 @@
         selectedRotation: 0,
         tool: "paint",
         showCoordLabels: true,
+        mapZoom: 1,
         isPointerDown: false,
         lastPaintKey: "",
+        rangeStartCell: null,
+        rangeCurrentCell: null,
+        duplicateStartCell: null,
+        duplicateCurrentCell: null,
+        duplicateSelection: null,
+        duplicateHoverCell: null,
+        undoStack: [],
+        redoStack: [],
+        pendingHistorySnapshot: null,
       };
+
+      const MAP_ZOOM_MIN = 0.5;
+      const MAP_ZOOM_MAX = 2;
+      const MAP_ZOOM_STEP = 0.1;
+      const HISTORY_LIMIT = 20;
 
       const mapSelect = document.getElementById("map-select");
       const mapIdInput = document.getElementById("map-id");
@@ -500,10 +678,23 @@
       const layerTabs = document.getElementById("layer-tabs");
       const palette = document.getElementById("palette");
       const selectedInfo = document.getElementById("selected-info");
+      const surfaceViewport = document.getElementById("surface-viewport");
+      const surfaceScale = document.getElementById("surface-scale");
+      const surfaceWrap = document.getElementById("surface-wrap");
       const surface = document.getElementById("map-surface");
       const grid = document.getElementById("map-grid");
       const cursorCell = document.getElementById("cursor-cell");
+      const rangeCell = document.getElementById("range-cell");
+      const duplicateCell = document.getElementById("duplicate-cell");
       const coordLabelButton = document.getElementById("coord-label-button");
+      const marginTileCell = document.getElementById("margin-tile-cell");
+      const undoButton = document.getElementById("undo-button");
+      const redoButton = document.getElementById("redo-button");
+      const zoomOutButton = document.getElementById("zoom-out-button");
+      const zoomInButton = document.getElementById("zoom-in-button");
+      const zoomResetButton = document.getElementById("zoom-reset-button");
+      const zoomRange = document.getElementById("zoom-range");
+      const zoomValue = document.getElementById("zoom-value");
       const statusLine = document.getElementById("status");
       const mapTitle = document.getElementById("map-title");
       const mapSizeLabel = document.getElementById("map-size-label");
@@ -555,6 +746,93 @@
         return { tileId, rotate: normalizedRotation };
       }
 
+      function formatTileSource(tile) {
+        if (!tile) return "null";
+        if (!isTileEntryObject(tile)) return `"${tile}"`;
+        const tileId = tile.tileId || tile.id;
+        const rotation = normalizeRotation(tile.rotate);
+        if (!rotation) return `"${tileId}"`;
+        return `{ tileId: "${tileId}", rotate: ${rotation} }`;
+      }
+
+      function createSerializableTileEntry(tile) {
+        if (!tile) return null;
+        if (!isTileEntryObject(tile)) return tile;
+        const tileId = tile.tileId || tile.id || null;
+        if (!tileId) return null;
+        const rotation = normalizeRotation(tile.rotate);
+        return rotation ? { tileId, rotate: rotation } : tileId;
+      }
+
+      function tileEntriesEqual(a, b) {
+        return JSON.stringify(createSerializableTileEntry(a)) === JSON.stringify(createSerializableTileEntry(b));
+      }
+
+      function copyTileEntry(tile) {
+        return isTileEntryObject(tile) ? clone(tile) : tile;
+      }
+
+      function clampNumber(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function normalizeZoom(value) {
+        const zoom = Number(value);
+        const safeZoom = Number.isFinite(zoom) ? zoom : 1;
+        return clampNumber(Math.round(safeZoom / MAP_ZOOM_STEP) * MAP_ZOOM_STEP, MAP_ZOOM_MIN, MAP_ZOOM_MAX);
+      }
+
+      function getViewportCenterForZoom() {
+        const zoom = state.mapZoom || 1;
+        return {
+          x: (surfaceViewport.scrollLeft + surfaceViewport.clientWidth / 2) / zoom,
+          y: (surfaceViewport.scrollTop + surfaceViewport.clientHeight / 2) / zoom,
+        };
+      }
+
+      function restoreViewportCenterForZoom(center) {
+        if (!center) return;
+        const zoom = state.mapZoom || 1;
+        surfaceViewport.scrollLeft = Math.max(0, center.x * zoom - surfaceViewport.clientWidth / 2);
+        surfaceViewport.scrollTop = Math.max(0, center.y * zoom - surfaceViewport.clientHeight / 2);
+      }
+
+      function syncZoomControls() {
+        const percent = Math.round((state.mapZoom || 1) * 100);
+        zoomRange.value = String(percent);
+        zoomValue.textContent = `${percent}%`;
+        zoomResetButton.textContent = "100%";
+        if (state.map) {
+          const tileSize = state.map.tileSize;
+          mapSizeLabel.textContent = `${state.map.width * tileSize} x ${state.map.height * tileSize}px / ${percent}%`;
+        }
+      }
+
+      function applyMapZoom(options = {}) {
+        const zoom = state.mapZoom || 1;
+        surfaceWrap.style.transform = `scale(${zoom})`;
+        const wrapWidth = Math.max(1, surfaceWrap.offsetWidth || 1);
+        const wrapHeight = Math.max(1, surfaceWrap.offsetHeight || 1);
+        surfaceScale.style.width = `${Math.ceil(wrapWidth * zoom)}px`;
+        surfaceScale.style.height = `${Math.ceil(wrapHeight * zoom)}px`;
+        syncZoomControls();
+        if (options.center) {
+          restoreViewportCenterForZoom(options.center);
+        }
+      }
+
+      function setMapZoom(value, options = {}) {
+        const nextZoom = normalizeZoom(value);
+        if (Math.abs(nextZoom - (state.mapZoom || 1)) < 0.001) {
+          applyMapZoom();
+          return;
+        }
+        const center = options.preserveCenter === false ? null : getViewportCenterForZoom();
+        state.mapZoom = nextZoom;
+        applyMapZoom({ center });
+        setStatus(`表示倍率を ${Math.round(nextZoom * 100)}% にしました。`);
+      }
+
       function getColumnLabel(col) {
         let index = Math.max(0, Math.floor(Number(col) || 0));
         let label = "";
@@ -589,6 +867,52 @@
         return { id: layer.id, name: layer.name || layer.id, tiles };
       }
 
+      function resizeLayerPreservingPositions(layer, oldWidth, oldHeight, width, height, fill) {
+        const oldTiles = Array.isArray(layer.tiles) ? layer.tiles : [];
+        const tiles = Array.from({ length: width * height }, () => fill);
+        const copyWidth = Math.min(Math.max(0, oldWidth), width);
+        const copyHeight = Math.min(Math.max(0, oldHeight), height);
+        for (let y = 0; y < copyHeight; y += 1) {
+          for (let x = 0; x < copyWidth; x += 1) {
+            tiles[y * width + x] = normalizeTileEntry(oldTiles[y * oldWidth + x], fill);
+          }
+        }
+        return { id: layer.id, name: layer.name || layer.id, tiles };
+      }
+
+      function getMarginFillForLayer(layerId, defaultTile = state.map && state.map.defaultTile) {
+        return layerId === "ground" ? defaultTile || "grass" : null;
+      }
+
+      function normalizeMarginTiles(map, defaultTile) {
+        const result = {};
+        const rawMarginTiles = map && map.marginTiles;
+        const hasLayeredMargin = rawMarginTiles && typeof rawMarginTiles === "object" && !Array.isArray(rawMarginTiles);
+        const hasLegacyMargin = Object.prototype.hasOwnProperty.call(map || {}, "marginTile");
+        const legacyMarginTile = hasLegacyMargin ? map.marginTile : defaultTile;
+
+        layerConfigs.forEach((config) => {
+          const fill = getMarginFillForLayer(config.id, defaultTile);
+          if (hasLayeredMargin) {
+            const hasLayerValue = Object.prototype.hasOwnProperty.call(rawMarginTiles, config.id);
+            result[config.id] = normalizeTileEntry(hasLayerValue ? rawMarginTiles[config.id] : fill, fill);
+          } else if (config.id === "ground") {
+            result[config.id] = legacyMarginTile == null ? null : normalizeTileEntry(legacyMarginTile, fill);
+          } else {
+            result[config.id] = null;
+          }
+        });
+
+        return result;
+      }
+
+      function getMarginTiles() {
+        if (!state.map.marginTiles) {
+          state.map.marginTiles = normalizeMarginTiles(state.map, state.map.defaultTile);
+        }
+        return state.map.marginTiles;
+      }
+
       function normalizeMap(map) {
         const width = Math.max(1, Number(map.width) || 8);
         const height = Math.max(1, Number(map.height) || 15);
@@ -608,6 +932,7 @@
           width,
           height,
           defaultTile,
+          marginTiles: normalizeMarginTiles(map, defaultTile),
           layers,
           events: Array.isArray(map.events) ? clone(map.events) : [],
         };
@@ -621,6 +946,12 @@
           width: Number(mapWidthInput.value) || 8,
           height: Number(mapHeightInput.value) || 15,
           defaultTile: defaultTileSelect.value || "grass",
+          marginTiles: {
+            ground: defaultTileSelect.value || "grass",
+            terrain: null,
+            object: null,
+            event: null,
+          },
           layers: [],
           events: [],
         });
@@ -666,10 +997,161 @@
       function getCellFromEvent(event) {
         const rect = surface.getBoundingClientRect();
         const tileSize = state.map.tileSize;
-        const x = Math.floor((event.clientX - rect.left) / tileSize);
-        const y = Math.floor((event.clientY - rect.top) / tileSize);
+        const zoom = state.mapZoom || 1;
+        const x = Math.floor(((event.clientX - rect.left) / zoom) / tileSize);
+        const y = Math.floor(((event.clientY - rect.top) / zoom) / tileSize);
         if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height) return null;
         return { x, y, index: y * state.map.width + x };
+      }
+
+      function getRectFromCells(startCell, endCell) {
+        if (!startCell || !endCell) return null;
+        const minX = Math.min(startCell.x, endCell.x);
+        const maxX = Math.max(startCell.x, endCell.x);
+        const minY = Math.min(startCell.y, endCell.y);
+        const maxY = Math.max(startCell.y, endCell.y);
+        return {
+          minX,
+          maxX,
+          minY,
+          maxY,
+          width: maxX - minX + 1,
+          height: maxY - minY + 1,
+        };
+      }
+
+      function renderRangePreview(startCell, endCell) {
+        const rect = getRectFromCells(startCell, endCell);
+        if (!rect) {
+          rangeCell.classList.add("hidden");
+          return;
+        }
+
+        const tileSize = state.map.tileSize;
+        rangeCell.classList.remove("hidden");
+        rangeCell.style.left = `${rect.minX * tileSize}px`;
+        rangeCell.style.top = `${rect.minY * tileSize}px`;
+        rangeCell.style.width = `${rect.width * tileSize}px`;
+        rangeCell.style.height = `${rect.height * tileSize}px`;
+      }
+
+      function clearRangePreview() {
+        state.rangeStartCell = null;
+        state.rangeCurrentCell = null;
+        rangeCell.classList.add("hidden");
+      }
+
+      function clearDuplicateSelection() {
+        state.duplicateStartCell = null;
+        state.duplicateCurrentCell = null;
+        state.duplicateSelection = null;
+        state.duplicateHoverCell = null;
+        duplicateCell.classList.add("hidden");
+      }
+
+      function renderDuplicateFrame(cell) {
+        const selection = state.duplicateSelection;
+        if (!selection || !cell) {
+          duplicateCell.classList.add("hidden");
+          return;
+        }
+        const tileSize = state.map.tileSize;
+        duplicateCell.classList.remove("hidden");
+        duplicateCell.style.left = `${cell.x * tileSize}px`;
+        duplicateCell.style.top = `${cell.y * tileSize}px`;
+        duplicateCell.style.width = `${selection.width * tileSize}px`;
+        duplicateCell.style.height = `${selection.height * tileSize}px`;
+      }
+
+      function captureDuplicateSelection(startCell, endCell) {
+        const rect = getRectFromCells(startCell, endCell);
+        if (!rect) return false;
+        state.duplicateSelection = {
+          width: rect.width,
+          height: rect.height,
+          layers: state.map.layers.map((layer) => {
+            const tiles = [];
+            for (let y = rect.minY; y <= rect.maxY; y += 1) {
+              for (let x = rect.minX; x <= rect.maxX; x += 1) {
+                tiles.push(copyTileEntry(layer.tiles[y * state.map.width + x]));
+              }
+            }
+            return { id: layer.id, tiles };
+          }),
+        };
+        state.duplicateStartCell = null;
+        state.duplicateCurrentCell = null;
+        clearRangePreview();
+        setStatus(`${rect.width} x ${rect.height} の範囲を複製選択しました。左クリックで貼付、右クリックで連続貼付できます。`);
+        return true;
+      }
+
+      function pasteDuplicateSelection(cell, keepSelection) {
+        const selection = state.duplicateSelection;
+        if (!selection || !cell) return false;
+        const snapshot = createHistorySnapshot();
+        let changed = false;
+        selection.layers.forEach((sourceLayer) => {
+          const layer = state.map.layers.find((entry) => entry.id === sourceLayer.id);
+          if (!layer) return;
+          for (let y = 0; y < selection.height; y += 1) {
+            const destY = cell.y + y;
+            if (destY < 0 || destY >= state.map.height) continue;
+            for (let x = 0; x < selection.width; x += 1) {
+              const destX = cell.x + x;
+              if (destX < 0 || destX >= state.map.width) continue;
+              const destIndex = destY * state.map.width + destX;
+              const nextTile = sourceLayer.tiles[y * selection.width + x];
+              if (!tileEntriesEqual(layer.tiles[destIndex], nextTile)) {
+                layer.tiles[destIndex] = copyTileEntry(nextTile);
+                changed = true;
+              }
+            }
+          }
+        });
+        if (changed) {
+          renderSurface();
+          commitHistoryEntry(snapshot);
+        }
+        if (keepSelection) {
+          state.duplicateHoverCell = cell;
+          renderDuplicateFrame(cell);
+          setStatus(`${selection.width} x ${selection.height} の範囲を複製しました。`);
+        } else {
+          clearDuplicateSelection();
+          setStatus(`${selection.width} x ${selection.height} の範囲を複製しました。`);
+        }
+        return true;
+      }
+
+      function getPlacementTileValue() {
+        if (state.activeLayer !== "ground" && !state.selectedTile) return undefined;
+        return state.activeLayer === "ground"
+          ? createTileEntry(state.selectedTile)
+          : createTileEntry(state.selectedTile) || null;
+      }
+
+      function fillRange(startCell, endCell) {
+        const rect = getRectFromCells(startCell, endCell);
+        const layer = getLayer();
+        const fillValue = getPlacementTileValue();
+        if (!rect || !layer || fillValue === undefined) return;
+
+        const snapshot = createHistorySnapshot();
+        let changed = false;
+        for (let y = rect.minY; y <= rect.maxY; y += 1) {
+          for (let x = rect.minX; x <= rect.maxX; x += 1) {
+            const index = y * state.map.width + x;
+            if (!tileEntriesEqual(layer.tiles[index], fillValue)) {
+              layer.tiles[index] = copyTileEntry(fillValue);
+              changed = true;
+            }
+          }
+        }
+        if (!changed) return;
+        renderSurface();
+        commitHistoryEntry(snapshot);
+        setStatus(`${rect.width} x ${rect.height} の範囲を塗りました。`);
       }
 
       function drawTileImage(tileId, x, y, layerIndex) {
@@ -741,7 +1223,7 @@
         cursorCell.style.width = `${tileSize}px`;
         cursorCell.style.height = `${tileSize}px`;
         mapTitle.textContent = state.map.name;
-        mapSizeLabel.textContent = `${state.map.width * tileSize} x ${state.map.height * tileSize}px`;
+        applyMapZoom();
         updateExport();
       }
 
@@ -814,6 +1296,66 @@
         selectedInfo.append(name, id, layer, rotation, pass);
       }
 
+      function appendTilePreview(parent, tileEntry, boxSize, options = {}) {
+        const tileId = getTileIdFromEntry(tileEntry);
+        const def = getTileDef(tileId);
+        if (!def) return false;
+
+        if (def.image) {
+          const img = document.createElement("img");
+          img.src = resolveEditorImagePath(def.image);
+          img.alt = def.name || tileId;
+          const sourceTileSize = options.sourceTileSize || state.map.tileSize || boxSize;
+          const scale = boxSize / sourceTileSize;
+          img.style.width = `${(def.drawWidth || sourceTileSize) * scale}px`;
+          img.style.height = `${(def.drawHeight || sourceTileSize) * scale}px`;
+          img.style.left = `${(def.drawOffsetX || 0) * scale}px`;
+          img.style.top = `${(def.drawOffsetY || 0) * scale}px`;
+          if (Number.isFinite(options.zIndex)) {
+            img.style.zIndex = String(options.zIndex);
+          }
+          const rotation = getTileRotationFromEntry(tileEntry);
+          if (rotation) {
+            img.style.transform = `rotate(${rotation}deg)`;
+            img.style.transformOrigin = "center center";
+          }
+          parent.appendChild(img);
+        } else {
+          parent.style.background = def.passable === false ? "#777" : "#8bbd62";
+        }
+        return true;
+      }
+
+      function renderMarginTileControl() {
+        marginTileCell.innerHTML = "";
+        marginTileCell.style.background = "#d8decf";
+        const marginTiles = state.map ? getMarginTiles() : {};
+        const entries = layerConfigs
+          .map((config, index) => ({
+            config,
+            index,
+            tileEntry: marginTiles[config.id],
+            tileId: getTileIdFromEntry(marginTiles[config.id]),
+          }))
+          .filter((entry) => entry.tileId);
+
+        marginTileCell.classList.toggle("empty", entries.length === 0);
+        marginTileCell.title = entries.length
+          ? `余白タイル: ${entries.map((entry) => {
+              const def = getTileDef(entry.tileId);
+              return `${entry.config.name} ${def && def.name ? def.name : entry.tileId} (${entry.tileId})`;
+            }).join(" / ")}`
+          : "余白タイルなし";
+
+        const previewSize = Math.max(1, marginTileCell.clientWidth || 42);
+        entries.forEach((entry) => {
+          appendTilePreview(marginTileCell, entry.tileEntry, previewSize, {
+            sourceTileSize: state.map.tileSize,
+            zIndex: 10 + entry.index * 100,
+          });
+        });
+      }
+
       function toggleCoordLabels() {
         state.showCoordLabels = !state.showCoordLabels;
         renderCoordLabels();
@@ -881,16 +1423,53 @@
         if (!layer) return;
         if (state.tool === "paint") {
           if (state.activeLayer !== "ground" && !state.selectedTile) return;
-          layer.tiles[cell.index] = createTileEntry(state.selectedTile);
+          const nextTile = createTileEntry(state.selectedTile);
+          if (tileEntriesEqual(layer.tiles[cell.index], nextTile)) return;
+          beginPendingHistoryEntry();
+          layer.tiles[cell.index] = nextTile;
         } else if (state.tool === "erase") {
-          layer.tiles[cell.index] = state.activeLayer === "ground" ? state.map.defaultTile : null;
+          const nextTile = state.activeLayer === "ground" ? state.map.defaultTile : null;
+          if (tileEntriesEqual(layer.tiles[cell.index], nextTile)) return;
+          beginPendingHistoryEntry();
+          layer.tiles[cell.index] = nextTile;
         } else if (state.tool === "fill") {
           const fillValue = state.activeLayer === "ground"
             ? createTileEntry(state.selectedTile)
             : createTileEntry(state.selectedTile) || null;
+          if (layer.tiles.every((tile) => tileEntriesEqual(tile, fillValue))) return;
+          beginPendingHistoryEntry();
           layer.tiles = layer.tiles.map(() => fillValue);
         }
         renderSurface();
+      }
+
+      function setMarginTileFromSelection() {
+        if (!state.map) return;
+        const marginTiles = getMarginTiles();
+        if (state.tool === "erase") {
+          const nextTile = getMarginFillForLayer(state.activeLayer, state.map.defaultTile);
+          if (tileEntriesEqual(marginTiles[state.activeLayer], nextTile)) return;
+          const snapshot = createHistorySnapshot();
+          marginTiles[state.activeLayer] = nextTile;
+          renderMarginTileControl();
+          updateExport();
+          commitHistoryEntry(snapshot);
+          setStatus(`余白タイルの ${state.activeLayer} レイヤーを消しました。`);
+          return;
+        }
+        if (!state.selectedTile) {
+          setStatus("余白タイルに置くタイルを選択してください。");
+          return;
+        }
+        const nextTile = createTileEntry(state.selectedTile);
+        if (tileEntriesEqual(marginTiles[state.activeLayer], nextTile)) return;
+        const snapshot = createHistorySnapshot();
+        marginTiles[state.activeLayer] = nextTile;
+        renderMarginTileControl();
+        updateExport();
+        commitHistoryEntry(snapshot);
+        const def = getTileDef(state.selectedTile);
+        setStatus(`余白タイルの ${state.activeLayer} レイヤーを ${def && def.name ? def.name : state.selectedTile} にしました。`);
       }
 
       function resizeMapFromInputs() {
@@ -898,6 +1477,9 @@
         const height = Math.max(1, Math.min(80, Number(mapHeightInput.value) || state.map.height));
         const tileSize = Math.max(16, Math.min(96, Number(tileSizeInput.value) || 48));
         const defaultTile = defaultTileSelect.value || "grass";
+        const oldWidth = Math.max(1, Number(state.map.width) || width);
+        const oldHeight = Math.max(1, Number(state.map.height) || height);
+        const snapshot = createHistorySnapshot();
 
         state.map.id = sanitizeId(mapIdInput.value);
         state.map.name = mapNameInput.value || state.map.id;
@@ -907,31 +1489,32 @@
         state.map.defaultTile = defaultTile;
         state.map.layers = state.map.layers.map((layer) => {
           const fill = layer.id === "ground" ? defaultTile : null;
-          return normalizeLayer(layer, width, height, fill);
+          return resizeLayerPreservingPositions(layer, oldWidth, oldHeight, width, height, fill);
         });
+        clearDuplicateSelection();
         syncInputsFromMap();
         renderAll();
+        commitHistoryEntry(snapshot);
         setStatus("マップ設定を反映しました。");
       }
 
       function formatTileRows(tiles, width) {
-        function formatTile(tile) {
-          if (!tile) return "null";
-          if (!isTileEntryObject(tile)) return `"${tile}"`;
-          const tileId = tile.tileId || tile.id;
-          const rotation = normalizeRotation(tile.rotate);
-          if (!rotation) return `"${tileId}"`;
-          return `{ tileId: "${tileId}", rotate: ${rotation} }`;
-        }
-
         const rows = [];
         for (let y = 0; y < tiles.length / width; y += 1) {
           const row = tiles.slice(y * width, y * width + width)
-            .map((tile) => formatTile(tile))
+            .map((tile) => formatTileSource(tile))
             .join(", ");
           rows.push(`            ${row},`);
         }
         return rows.join("\n");
+      }
+
+      function formatMarginTilesSource(marginTiles) {
+        const source = marginTiles || {};
+        const rows = layerConfigs.map((config) => `        ${config.id}: ${formatTileSource(source[config.id])},`);
+        return `{
+${rows.join("\n")}
+      }`;
       }
 
       function rotateSelection(delta) {
@@ -957,6 +1540,7 @@ ${formatTileRows(layer.tiles, state.map.width)}
       width: ${state.map.width},
       height: ${state.map.height},
       defaultTile: "${state.map.defaultTile}",
+      marginTiles: ${formatMarginTilesSource(getMarginTiles())},
       layers: [
 ${layers}
       ],
@@ -972,20 +1556,111 @@ ${layers}
           width: Number(map.width) || 8,
           height: Number(map.height) || 15,
           defaultTile: map.defaultTile || "grass",
+          marginTiles: Object.fromEntries(layerConfigs.map((config) => [
+            config.id,
+            createSerializableTileEntry((map.marginTiles || {})[config.id]),
+          ])),
           layers: (map.layers || []).map((layer) => ({
             id: layer.id,
             name: layer.name || layer.id,
-            tiles: (layer.tiles || []).map((tile) => {
-              if (!tile) return null;
-              if (!isTileEntryObject(tile)) return tile;
-              const tileId = tile.tileId || tile.id || null;
-              if (!tileId) return null;
-              const rotation = normalizeRotation(tile.rotate);
-              return rotation ? { tileId, rotate: rotation } : tileId;
-            }),
+            tiles: (layer.tiles || []).map(createSerializableTileEntry),
           })),
           events: Array.isArray(map.events) ? clone(map.events) : [],
         };
+      }
+
+      function createHistorySnapshot() {
+        return state.map ? createSerializableMap(state.map) : null;
+      }
+
+      function snapshotsEqual(a, b) {
+        return JSON.stringify(a) === JSON.stringify(b);
+      }
+
+      function updateHistoryButtons() {
+        undoButton.disabled = state.undoStack.length === 0;
+        redoButton.disabled = state.redoStack.length === 0;
+        undoButton.title = `一つ戻る (${state.undoStack.length}/${HISTORY_LIMIT})`;
+        redoButton.title = `一つ進む (${state.redoStack.length}/${HISTORY_LIMIT})`;
+      }
+
+      function trimHistoryStack(stack) {
+        while (stack.length > HISTORY_LIMIT) stack.shift();
+      }
+
+      function resetHistory() {
+        state.undoStack = [];
+        state.redoStack = [];
+        state.pendingHistorySnapshot = null;
+        updateHistoryButtons();
+      }
+
+      function commitHistoryEntry(snapshot) {
+        if (!snapshot || !state.map) {
+          updateHistoryButtons();
+          return false;
+        }
+        const current = createHistorySnapshot();
+        if (snapshotsEqual(snapshot, current)) {
+          updateHistoryButtons();
+          return false;
+        }
+        state.undoStack.push(snapshot);
+        trimHistoryStack(state.undoStack);
+        state.redoStack = [];
+        updateHistoryButtons();
+        return true;
+      }
+
+      function beginPendingHistoryEntry() {
+        if (!state.pendingHistorySnapshot) {
+          state.pendingHistorySnapshot = createHistorySnapshot();
+        }
+      }
+
+      function finishPendingHistoryEntry() {
+        const snapshot = state.pendingHistorySnapshot;
+        state.pendingHistorySnapshot = null;
+        return commitHistoryEntry(snapshot);
+      }
+
+      function restoreHistorySnapshot(snapshot) {
+        if (!snapshot) return;
+        state.pendingHistorySnapshot = null;
+        state.map = normalizeMap(snapshot);
+        mapSelect.value = sourceMaps[state.map.id] ? state.map.id : "__new";
+        const choices = getPaletteTiles();
+        if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
+        syncInputsFromMap();
+        renderAll();
+      }
+
+      function undoMapEdit() {
+        finishPendingHistoryEntry();
+        if (!state.undoStack.length) return;
+        const current = createHistorySnapshot();
+        const previous = state.undoStack.pop();
+        if (current) {
+          state.redoStack.push(current);
+          trimHistoryStack(state.redoStack);
+        }
+        restoreHistorySnapshot(previous);
+        updateHistoryButtons();
+        setStatus("一つ戻しました。");
+      }
+
+      function redoMapEdit() {
+        finishPendingHistoryEntry();
+        if (!state.redoStack.length) return;
+        const current = createHistorySnapshot();
+        const next = state.redoStack.pop();
+        if (current) {
+          state.undoStack.push(current);
+          trimHistoryStack(state.undoStack);
+        }
+        restoreHistorySnapshot(next);
+        updateHistoryButtons();
+        setStatus("一つ進めました。");
       }
 
       function createRecordPayload(map) {
@@ -1032,11 +1707,15 @@ ${layers}
       }
 
       function renderAll() {
+        clearRangePreview();
+        clearDuplicateSelection();
         renderLayerTabs();
         renderPalette();
         renderSelectedInfo();
+        renderMarginTileControl();
         renderSurface();
         updateEditorMode();
+        updateHistoryButtons();
       }
 
       function loadMapById(mapId) {
@@ -1050,6 +1729,7 @@ ${layers}
         const choices = getPaletteTiles();
         if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
         syncInputsFromMap();
+        resetHistory();
         renderAll();
         setStatus(mapId === "__new" ? "新規編集マップを開きました。" : `${state.map.name} を読み込みました。`);
       }
@@ -1127,6 +1807,7 @@ ${layers}
         state.map = createNewMap();
         mapSelect.value = "__new";
         syncInputsFromMap();
+        resetHistory();
         renderAll();
         setStatus(`${mapName} を削除して、新規マップへ戻しました。`);
       }
@@ -1140,6 +1821,7 @@ ${layers}
           }
           state.map = normalizeMap(JSON.parse(raw));
           syncInputsFromMap();
+          resetHistory();
           renderAll();
           setStatus("一時保存を読み込みました。");
         } catch (error) {
@@ -1177,8 +1859,11 @@ ${layers}
         const layer = getLayer();
         if (!layer) return;
         const fill = layer.id === "ground" ? state.map.defaultTile : null;
+        if (layer.tiles.every((tile) => tileEntriesEqual(tile, fill))) return;
+        const snapshot = createHistorySnapshot();
         layer.tiles = layer.tiles.map(() => fill);
         renderSurface();
+        commitHistoryEntry(snapshot);
         setStatus(`${layer.name} を消去しました。`);
       }
 
@@ -1193,6 +1878,7 @@ ${layers}
             const raw = await file.text();
             state.map = normalizeMap(parseRecordPayload(raw));
             syncInputsFromMap();
+            resetHistory();
             renderAll();
             setStatus(`${file.name} を読み込みました。`);
           } catch (error) {
@@ -1208,13 +1894,19 @@ ${layers}
           state.map = createNewMap();
           mapSelect.value = "__new";
           syncInputsFromMap();
+          resetHistory();
           renderAll();
           setStatus("新規マップを作成しました。まだ maps.js には保存されていません。");
         });
         document.getElementById("resize-button").addEventListener("click", resizeMapFromInputs);
         document.querySelectorAll("[data-tool]").forEach((button) => {
           button.addEventListener("click", () => {
+            finishPendingHistoryEntry();
             state.tool = button.dataset.tool;
+            state.isPointerDown = false;
+            state.lastPaintKey = "";
+            clearRangePreview();
+            clearDuplicateSelection();
             document.querySelectorAll("[data-tool]").forEach((node) => node.classList.toggle("active", node === button));
           });
         });
@@ -1226,12 +1918,46 @@ ${layers}
           setStatus("向きを 0度 にしました。");
         });
         coordLabelButton.addEventListener("click", toggleCoordLabels);
+        marginTileCell.addEventListener("click", setMarginTileFromSelection);
+        undoButton.addEventListener("click", undoMapEdit);
+        redoButton.addEventListener("click", redoMapEdit);
+        zoomOutButton.addEventListener("click", () => setMapZoom((state.mapZoom || 1) - MAP_ZOOM_STEP));
+        zoomInButton.addEventListener("click", () => setMapZoom((state.mapZoom || 1) + MAP_ZOOM_STEP));
+        zoomResetButton.addEventListener("click", () => setMapZoom(1));
+        zoomRange.addEventListener("input", () => setMapZoom(Number(zoomRange.value) / 100));
+        window.addEventListener("resize", () => applyMapZoom());
+        surface.addEventListener("contextmenu", (event) => {
+          if (state.tool === "duplicate") event.preventDefault();
+        });
 
         surface.addEventListener("pointerdown", (event) => {
+          const cell = getCellFromEvent(event);
+          if (!cell) return;
+          if (state.tool === "duplicate") {
+            event.preventDefault();
+            if (state.duplicateSelection) {
+              pasteDuplicateSelection(cell, event.button === 2);
+              return;
+            }
+            if (event.button !== 0) return;
+            state.isPointerDown = true;
+            state.lastPaintKey = "";
+            state.duplicateStartCell = cell;
+            state.duplicateCurrentCell = cell;
+            surface.setPointerCapture(event.pointerId);
+            renderRangePreview(cell, cell);
+            return;
+          }
           state.isPointerDown = true;
           state.lastPaintKey = "";
           surface.setPointerCapture(event.pointerId);
-          paintCell(getCellFromEvent(event));
+          if (state.tool === "range") {
+            state.rangeStartCell = cell;
+            state.rangeCurrentCell = cell;
+            renderRangePreview(cell, cell);
+            return;
+          }
+          paintCell(cell);
         });
         surface.addEventListener("pointermove", (event) => {
           const cell = getCellFromEvent(event);
@@ -1242,16 +1968,66 @@ ${layers}
           } else {
             cursorCell.classList.add("hidden");
           }
+          if (state.tool === "duplicate") {
+            if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) {
+              if (cell) state.duplicateCurrentCell = cell;
+              renderRangePreview(state.duplicateStartCell, state.duplicateCurrentCell);
+            } else {
+              state.duplicateHoverCell = cell;
+              renderDuplicateFrame(cell);
+            }
+            return;
+          }
+          if (state.isPointerDown && state.tool === "range") {
+            if (cell) state.rangeCurrentCell = cell;
+            renderRangePreview(state.rangeStartCell, state.rangeCurrentCell);
+            return;
+          }
           if (state.isPointerDown && state.tool !== "fill") paintCell(cell);
         });
-        surface.addEventListener("pointerup", () => {
+        surface.addEventListener("pointerup", (event) => {
+          if (state.tool === "duplicate") {
+            if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) {
+              const cell = getCellFromEvent(event) || state.duplicateCurrentCell;
+              if (captureDuplicateSelection(state.duplicateStartCell, cell)) {
+                state.duplicateHoverCell = cell;
+                renderDuplicateFrame(cell);
+              }
+            }
+            state.isPointerDown = false;
+            state.lastPaintKey = "";
+            return;
+          }
+          if (state.tool === "range" && state.rangeStartCell) {
+            fillRange(state.rangeStartCell, getCellFromEvent(event) || state.rangeCurrentCell);
+          }
           state.isPointerDown = false;
           state.lastPaintKey = "";
+          finishPendingHistoryEntry();
+          clearRangePreview();
         });
         surface.addEventListener("pointerleave", () => {
           cursorCell.classList.add("hidden");
+          if (state.tool === "duplicate") {
+            if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) return;
+            state.duplicateHoverCell = null;
+            renderDuplicateFrame(null);
+            return;
+          }
+          if (state.isPointerDown && state.tool === "range") return;
           state.isPointerDown = false;
           state.lastPaintKey = "";
+          finishPendingHistoryEntry();
+          clearRangePreview();
+        });
+        surface.addEventListener("pointercancel", () => {
+          state.isPointerDown = false;
+          state.lastPaintKey = "";
+          finishPendingHistoryEntry();
+          clearRangePreview();
+          if (state.tool === "duplicate" && !state.duplicateSelection) {
+            clearDuplicateSelection();
+          }
         });
 
         document.getElementById("save-record-button").addEventListener("click", saveRecord);

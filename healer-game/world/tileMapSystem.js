@@ -149,6 +149,46 @@
       return Number.isFinite(rotation) ? rotation : 0;
     }
 
+    function getMapMarginTileEntry(map) {
+      if (!map) {
+        return null;
+      }
+      return Object.prototype.hasOwnProperty.call(map, "marginTile") ? map.marginTile : map.defaultTile;
+    }
+
+    function getMapMarginTileEntries(map) {
+      if (!map) {
+        return [];
+      }
+      const marginTiles = map.marginTiles;
+      if (marginTiles && typeof marginTiles === "object" && !Array.isArray(marginTiles)) {
+        const entries = [];
+        const usedLayerIds = new Set();
+        for (const layer of getVisibleLayers(map)) {
+          if (!layer || !layer.id || !Object.prototype.hasOwnProperty.call(marginTiles, layer.id)) {
+            continue;
+          }
+          usedLayerIds.add(layer.id);
+          const tileEntry = marginTiles[layer.id];
+          if (normalizeTileId(tileEntry)) {
+            entries.push(tileEntry);
+          }
+        }
+        Object.keys(marginTiles).forEach((layerId) => {
+          if (usedLayerIds.has(layerId)) {
+            return;
+          }
+          const tileEntry = marginTiles[layerId];
+          if (normalizeTileId(tileEntry)) {
+            entries.push(tileEntry);
+          }
+        });
+        return entries;
+      }
+      const legacyTileEntry = getMapMarginTileEntry(map);
+      return normalizeTileId(legacyTileEntry) ? [legacyTileEntry] : [];
+    }
+
     function isTilePassable(tileId) {
       const tile = getTileDef(tileId);
       if (!tile) {
@@ -309,6 +349,12 @@
         const map = getMap(mapOrId);
         if (map) {
           forEachMapTile(map, (tileId) => ids.add(tileId));
+          for (const marginTileEntry of getMapMarginTileEntries(map)) {
+            const marginTileId = normalizeTileId(marginTileEntry);
+            if (marginTileId) {
+              ids.add(marginTileId);
+            }
+          }
         }
       } else {
         Object.keys(tileDefs).forEach((tileId) => ids.add(tileId));
@@ -361,6 +407,35 @@
             if (tileId) {
               drawTile(ctx, tileEntry, col * tileSize, row * tileSize, tileSize, options);
             }
+          }
+        }
+      }
+      return true;
+    }
+
+    function drawMarginTile(ctx, mapOrId, options = {}) {
+      const map = getMap(mapOrId);
+      if (!ctx || !map) {
+        return false;
+      }
+      const tileEntries = getMapMarginTileEntries(map);
+      if (!tileEntries.length) {
+        return false;
+      }
+      const tileSize = getTileSize(map);
+      const viewport = options.viewport || { x: 0, y: 0, w: getMapPixelSize(map).w, h: getMapPixelSize(map).h };
+      const viewX = Number(viewport.x) || 0;
+      const viewY = Number(viewport.y) || 0;
+      const viewW = Math.max(0, Number(viewport.w) || 0);
+      const viewH = Math.max(0, Number(viewport.h) || 0);
+      const minCol = Math.floor(viewX / tileSize) - 1;
+      const minRow = Math.floor(viewY / tileSize) - 1;
+      const maxCol = Math.ceil((viewX + viewW) / tileSize) + 1;
+      const maxRow = Math.ceil((viewY + viewH) / tileSize) + 1;
+      for (let row = minRow; row <= maxRow; row += 1) {
+        for (let col = minCol; col <= maxCol; col += 1) {
+          for (const tileEntry of tileEntries) {
+            drawTile(ctx, tileEntry, col * tileSize, row * tileSize, tileSize, options);
           }
         }
       }
@@ -476,6 +551,7 @@
       preloadTileImages,
       forEachMapTile,
       drawTileMap,
+      drawMarginTile,
       drawDebugGrid,
     };
   };

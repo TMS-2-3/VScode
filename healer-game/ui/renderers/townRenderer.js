@@ -228,27 +228,35 @@
     const scale = 1;
     const visibleW = Math.max(1, view.w / scale);
     const visibleH = Math.max(1, view.h / scale);
-    const maxCameraX = Math.max(0, mapW - visibleW);
-    const maxCameraY = Math.max(0, mapH - visibleH);
-    const cameraX = clampTownView(town.player.x - visibleW / 2, 0, maxCameraX);
-    const cameraY = clampTownView(town.player.y - visibleH / 2, 0, maxCameraY);
+    const cameraX = clampTownView(town.player.x - visibleW / 2, -visibleW, mapW);
+    const cameraY = clampTownView(town.player.y - visibleH / 2, -visibleH, mapH);
     if (town.camera) {
       town.camera.x = cameraX;
       town.camera.y = cameraY;
     }
     return {
       scale,
-      x: mapW <= visibleW ? (view.w - mapW * scale) / 2 : 0,
-      y: mapH <= visibleH ? (view.h - mapH * scale) / 2 : 0,
+      x: 0,
+      y: 0,
       cameraX,
       cameraY,
-      viewportW: Math.min(mapW, visibleW),
-      viewportH: Math.min(mapH, visibleH),
+      viewportW: visibleW,
+      viewportH: visibleH,
     };
   }
 
   function clampTownView(value, min, max) {
     return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+  }
+
+  function getTownVisibleWorldViewport(transform) {
+    const scale = Math.max(0.001, Number(transform && transform.scale) || 1);
+    return {
+      x: (Number(transform && transform.cameraX) || 0) - (Number(transform && transform.x) || 0) / scale,
+      y: (Number(transform && transform.cameraY) || 0) - (Number(transform && transform.y) || 0) / scale,
+      w: view.w / scale,
+      h: view.h / scale,
+    };
   }
 
   function screenToTownPoint(x, y) {
@@ -276,8 +284,17 @@
     if (!map || !tileMapSystem || typeof tileMapSystem.drawTileMap !== "function") {
       return false;
     }
+    const mapSize = tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function"
+      ? tileMapSystem.getMapPixelSize(map)
+      : { w: TOWN_WIDTH, h: TOWN_HEIGHT };
+    if (typeof tileMapSystem.drawMarginTile === "function") {
+      tileMapSystem.drawMarginTile(ctx, map, {
+        drawFallback: true,
+        viewport: getTownVisibleWorldViewport(transform),
+      });
+    }
     ctx.fillStyle = "#47784f";
-    ctx.fillRect(0, 0, TOWN_WIDTH, TOWN_HEIGHT);
+    ctx.fillRect(0, 0, Math.max(1, mapSize.w || TOWN_WIDTH), Math.max(1, mapSize.h || TOWN_HEIGHT));
     const viewport = {
       x: transform.cameraX || 0,
       y: transform.cameraY || 0,
