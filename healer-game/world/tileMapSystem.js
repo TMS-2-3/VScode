@@ -105,6 +105,44 @@
         : [];
     }
 
+    function createLayerIdSet(value) {
+      if (Array.isArray(value)) {
+        return new Set(value.map((entry) => String(entry)));
+      }
+      if (typeof value === "string") {
+        return new Set([value]);
+      }
+      return null;
+    }
+
+    function shouldUseLayer(layer, includeLayerIds, excludeLayerIds) {
+      if (!layer || layer.draw === false) {
+        return false;
+      }
+      const layerId = String(layer.id || "");
+      if (includeLayerIds && !includeLayerIds.has(layerId)) {
+        return false;
+      }
+      if (excludeLayerIds && excludeLayerIds.has(layerId)) {
+        return false;
+      }
+      return true;
+    }
+
+    function getViewportTileBounds(map, viewport, drawPadding) {
+      const tileSize = getTileSize(map);
+      const mapSize = getMapPixelSize(map);
+      const safeViewport = viewport || { x: 0, y: 0, w: mapSize.w, h: mapSize.h };
+      const padding = Math.max(1, Math.floor(Number(drawPadding) || 3));
+      return {
+        tileSize,
+        minCol: Math.max(0, Math.floor((safeViewport.x || 0) / tileSize) - padding),
+        minRow: Math.max(0, Math.floor((safeViewport.y || 0) / tileSize) - padding),
+        maxCol: Math.min(Math.floor(Number(map.width) || 0) - 1, Math.ceil(((safeViewport.x || 0) + (safeViewport.w || 0)) / tileSize) + padding),
+        maxRow: Math.min(Math.floor(Number(map.height) || 0) - 1, Math.ceil(((safeViewport.y || 0) + (safeViewport.h || 0)) / tileSize) + padding),
+      };
+    }
+
     function getLayerTileId(map, layer, col, row) {
       return normalizeTileId(getLayerTileEntry(map, layer, col, row));
     }
@@ -212,12 +250,7 @@
     function getTileDrawOverflow(tileEntries, tileSize) {
       const overflow = { left: 0, top: 0, right: 0, bottom: 0 };
       for (const tileEntry of tileEntries) {
-        const tileId = normalizeTileId(tileEntry);
-        const tile = getTileDef(tileId);
-        const drawWidth = Math.max(1, Number(tile && tile.drawWidth) || tileSize);
-        const drawHeight = Math.max(1, Number(tile && tile.drawHeight) || tileSize);
-        const drawOffsetX = Number.isFinite(tile && tile.drawOffsetX) ? tile.drawOffsetX : 0;
-        const drawOffsetY = Number.isFinite(tile && tile.drawOffsetY) ? tile.drawOffsetY : 0;
+        const { drawWidth, drawHeight, drawOffsetX, drawOffsetY } = getTileDrawMetrics(tileEntry, tileSize);
         overflow.left = Math.max(overflow.left, Math.ceil(Math.max(0, -drawOffsetX)));
         overflow.top = Math.max(overflow.top, Math.ceil(Math.max(0, -drawOffsetY)));
         overflow.right = Math.max(overflow.right, Math.ceil(Math.max(0, drawOffsetX + drawWidth - tileSize)));
@@ -440,36 +473,77 @@
       }
     }
 
+    function forEachMapTileEntry(mapOrId, callback, options = {}) {
+      const map = getMap(mapOrId);
+      if (!map || typeof callback !== "function") {
+        return false;
+      }
+      const includeLayerIds = createLayerIdSet(options.layerIds || options.includeLayerIds);
+      const excludeLayerIds = createLayerIdSet(options.excludeLayerIds);
+      const bounds = getViewportTileBounds(map, options.viewport, options.drawPadding);
+      for (const layer of getVisibleLayers(map)) {
+        if (!shouldUseLayer(layer, includeLayerIds, excludeLayerIds)) {
+          continue;
+        }
+        for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+          for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
+            const tileEntry = getLayerTileEntry(map, layer, col, row);
+            const tileId = normalizeTileId(tileEntry);
+            if (tileId) {
+              const metrics = getTileDrawMetrics(tileEntry, bounds.tileSize);
+              callback({
+                tileEntry,
+                tileId,
+                layer,
+                col,
+                row,
+                x: col * bounds.tileSize,
+                y: row * bounds.tileSize,
+                tileSize: bounds.tileSize,
+                drawWidth: metrics.drawWidth,
+                drawHeight: metrics.drawHeight,
+                drawOffsetX: metrics.drawOffsetX,
+                drawOffsetY: metrics.drawOffsetY,
+                drawBottomY: row * bounds.tileSize + metrics.drawOffsetY + metrics.drawHeight,
+              });
+            }
+          }
+        }
+      }
+      return true;
+    }
+
     function drawTileMap(ctx, mapOrId, options = {}) {
       const map = getMap(mapOrId);
       if (!ctx || !map) {
         return false;
       }
-      const tileSize = getTileSize(map);
-      const viewport = options.viewport || { x: 0, y: 0, w: getMapPixelSize(map).w, h: getMapPixelSize(map).h };
-      const drawPadding = Math.max(1, Math.floor(Number(options.drawPadding) || 3));
-      const minCol = Math.max(0, Math.floor((viewport.x || 0) / tileSize) - drawPadding);
-      const minRow = Math.max(0, Math.floor((viewport.y || 0) / tileSize) - drawPadding);
-      const maxCol = Math.min(Math.floor(Number(map.width) || 0) - 1, Math.ceil(((viewport.x || 0) + (viewport.w || 0)) / tileSize) + drawPadding);
-      const maxRow = Math.min(Math.floor(Number(map.height) || 0) - 1, Math.ceil(((viewport.y || 0) + (viewport.h || 0)) / tileSize) + drawPadding);
+      const bounds = getViewportTileBounds(map, options.viewport, options.drawPadding);
       const defaultTile = normalizeTileId(map.defaultTile);
-      if (defaultTile) {
-        for (let row = minRow; row <= maxRow; row += 1) {
-          for (let col = minCol; col <= maxCol; col += 1) {
-            drawTile(ctx, defaultTile, col * tileSize, row * tileSize, tileSize, options);
+      const includeLayerIds = createLayerIdSet(options.layerIds || options.includeLayerIds);
+      const excludeLayerIds = createLayerIdSet(options.excludeLayerIds);
+      const shouldDrawDefaultTile = options.drawDefaultTile !== false
+        && (!includeLayerIds
+          || options.includeDefaultTile === true
+          || includeLayerIds.has("default")
+          || includeLayerIds.has("defaultTile"));
+      if (defaultTile && shouldDrawDefaultTile) {
+        for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+          for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
+            drawTile(ctx, defaultTile, col * bounds.tileSize, row * bounds.tileSize, bounds.tileSize, options);
           }
         }
       }
       for (const layer of getVisibleLayers(map)) {
-        if (layer.draw === false) {
+        if (!shouldUseLayer(layer, includeLayerIds, excludeLayerIds)) {
           continue;
         }
-        for (let row = minRow; row <= maxRow; row += 1) {
-          for (let col = minCol; col <= maxCol; col += 1) {
+        for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+          for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
             const tileEntry = getLayerTileEntry(map, layer, col, row);
             const tileId = normalizeTileId(tileEntry);
             if (tileId) {
-              drawTile(ctx, tileEntry, col * tileSize, row * tileSize, tileSize, options);
+              drawTile(ctx, tileEntry, col * bounds.tileSize, row * bounds.tileSize, bounds.tileSize, options);
             }
           }
         }
@@ -556,15 +630,24 @@
       return true;
     }
 
+    function getTileDrawMetrics(tileEntry, size) {
+      const tileId = normalizeTileId(tileEntry);
+      const tile = getTileDef(tileId);
+      const fallbackSize = Math.max(1, Number(size) || 1);
+      return {
+        drawWidth: Math.max(1, Number(tile && tile.drawWidth) || fallbackSize),
+        drawHeight: Math.max(1, Number(tile && tile.drawHeight) || fallbackSize),
+        drawOffsetX: Number.isFinite(tile && tile.drawOffsetX) ? tile.drawOffsetX : 0,
+        drawOffsetY: Number.isFinite(tile && tile.drawOffsetY) ? tile.drawOffsetY : 0,
+      };
+    }
+
     function drawTile(ctx, tileEntry, x, y, size, options = {}) {
       const tileId = normalizeTileId(tileEntry);
       const tile = getTileDef(tileId);
       const image = getTileImage(tileId);
       if (image && image.complete && image.naturalWidth > 0) {
-        const drawWidth = Math.max(1, Number(tile && tile.drawWidth) || size);
-        const drawHeight = Math.max(1, Number(tile && tile.drawHeight) || size);
-        const drawOffsetX = Number.isFinite(tile && tile.drawOffsetX) ? tile.drawOffsetX : 0;
-        const drawOffsetY = Number.isFinite(tile && tile.drawOffsetY) ? tile.drawOffsetY : 0;
+        const { drawWidth, drawHeight, drawOffsetX, drawOffsetY } = getTileDrawMetrics(tileEntry, size);
         const rotation = getTileRotation(tileEntry);
         if (rotation) {
           ctx.save();
@@ -664,7 +747,9 @@
       getTileImage,
       preloadTileImages,
       forEachMapTile,
+      forEachMapTileEntry,
       drawTileMap,
+      drawTile,
       drawMarginTile,
       clearMarginTileCache,
       drawDebugGrid,

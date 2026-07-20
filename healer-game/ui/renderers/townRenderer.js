@@ -179,16 +179,19 @@
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.scale, transform.scale);
       ctx.translate(-(transform.cameraX || 0), -(transform.cameraY || 0));
-      const usingTileMap = drawTownTileMap(transform);
+      const usingTileMap = drawTownTileMapBase(transform);
       if (!usingTileMap) {
         drawTownTerrain();
         drawTownRoads();
         drawTownProps();
         drawTownBuildings();
       }
-      drawTownCharacters();
       if (usingTileMap) {
+        drawTownTileMapDepthSorted(transform);
+        drawTownTileMapDebug(transform);
         drawTownInteractionHighlight(town.interaction || null);
+      } else {
+        drawTownCharacters();
       }
     } finally {
       ctx.restore();
@@ -281,7 +284,25 @@
     return tileMapSystem.getMap(mapId);
   }
 
-  function drawTownTileMap(transform = getTownMapTransform()) {
+  function getTownTileMapViewport(transform) {
+    return {
+      x: transform.cameraX || 0,
+      y: transform.cameraY || 0,
+      w: transform.viewportW || TOWN_WIDTH,
+      h: transform.viewportH || TOWN_HEIGHT,
+    };
+  }
+
+  function getTownForegroundTileLayerIds(map) {
+    if (!map || !Array.isArray(map.layers)) {
+      return ["terrain", "object", "event"];
+    }
+    return map.layers
+      .filter((layer) => layer && layer.id !== "ground" && layer.visible !== false && layer.draw !== false)
+      .map((layer) => layer.id);
+  }
+
+  function drawTownTileMapBase(transform = getTownMapTransform()) {
     const map = getTownTileMap();
     if (!map || !tileMapSystem || typeof tileMapSystem.drawTileMap !== "function") {
       return false;
@@ -298,17 +319,87 @@
     }
     ctx.fillStyle = "#47784f";
     ctx.fillRect(0, 0, Math.max(1, mapSize.w || TOWN_WIDTH), Math.max(1, mapSize.h || TOWN_HEIGHT));
-    const viewport = {
-      x: transform.cameraX || 0,
-      y: transform.cameraY || 0,
-      w: transform.viewportW || TOWN_WIDTH,
-      h: transform.viewportH || TOWN_HEIGHT,
-    };
-    tileMapSystem.drawTileMap(ctx, map, { drawFallback: true, viewport });
-    if (game && game.settings && game.settings.mapDebugMode === true && typeof tileMapSystem.drawDebugGrid === "function") {
-      tileMapSystem.drawDebugGrid(ctx, map, { viewport });
-    }
+    const viewport = getTownTileMapViewport(transform);
+    tileMapSystem.drawTileMap(ctx, map, {
+      drawFallback: true,
+      includeDefaultTile: true,
+      layerIds: ["ground"],
+      viewport,
+    });
     return true;
+  }
+
+  function drawTownTileMapForeground(transform = getTownMapTransform()) {
+    const map = getTownTileMap();
+    if (!map || !tileMapSystem || typeof tileMapSystem.drawTileMap !== "function") {
+      return false;
+    }
+    const layerIds = getTownForegroundTileLayerIds(map);
+    if (!layerIds.length) {
+      return false;
+    }
+    tileMapSystem.drawTileMap(ctx, map, {
+      drawDefaultTile: false,
+      drawFallback: true,
+      layerIds,
+      viewport: getTownTileMapViewport(transform),
+    });
+    return true;
+  }
+
+  function drawTownTileMapDepthSorted(transform = getTownMapTransform()) {
+    const map = getTownTileMap();
+    if (!map || !tileMapSystem || typeof tileMapSystem.forEachMapTileEntry !== "function" || typeof tileMapSystem.drawTile !== "function") {
+      drawTownCharacters();
+      drawTownTileMapForeground(transform);
+      return false;
+    }
+
+    const layerIds = getTownForegroundTileLayerIds(map);
+    const drawables = [];
+    let order = 0;
+    tileMapSystem.forEachMapTileEntry(map, (entry) => {
+      drawables.push({
+        type: "tile",
+        sortY: Number.isFinite(entry.drawBottomY) ? entry.drawBottomY : entry.y + entry.tileSize,
+        order: order++,
+        entry,
+      });
+    }, {
+      layerIds,
+      viewport: getTownTileMapViewport(transform),
+    });
+
+    for (const actor of getTownCharacterActors()) {
+      drawables.push({
+        type: "actor",
+        sortY: getTownActorSortY(actor),
+        order: order++,
+        actor,
+      });
+    }
+
+    drawables.sort((a, b) => (a.sortY - b.sortY) || (a.order - b.order));
+    for (const drawable of drawables) {
+      if (drawable.type === "tile") {
+        const entry = drawable.entry;
+        tileMapSystem.drawTile(ctx, entry.tileEntry, entry.x, entry.y, entry.tileSize, { drawFallback: true });
+      } else {
+        drawTownActor(drawable.actor);
+      }
+    }
+    drawTownArgumentMarks();
+    return true;
+  }
+
+  function drawTownTileMapDebug(transform = getTownMapTransform()) {
+    const map = getTownTileMap();
+    if (!map || !tileMapSystem) {
+      return;
+    }
+    if (game && game.settings && game.settings.mapDebugMode === true && typeof tileMapSystem.drawDebugGrid === "function") {
+      tileMapSystem.drawDebugGrid(ctx, map, { viewport: getTownTileMapViewport(transform) });
+    }
   }
 
   function drawTownTerrain() {
@@ -502,6 +593,56 @@
     for (const actor of actors) {
       drawTownActor(actor);
     }
+  }
+
+  function getTownCharacterActors() {
+    if (!playerProfile.done) {
+      return [];
+    }
+    const actors = [{
+      id: "finald",
+      x: town.player.x,
+      y: town.player.y,
+      color: town.player.color || COLORS.player,
+      label: town.player.label || "荳ｻ",
+      facing: town.player.facing || "down",
+      walkFrame: town.player.walkFrame || 1,
+      spriteHeight: town.player.spriteHeight || 72,
+    }];
+    if (!town.meetingDone) {
+      const guild = getTownBuilding("guild");
+      const baseX = guild ? guild.door.x : 800;
+      const baseY = guild ? guild.door.y - 18 : 790;
+      actors.push(
+        { id: "ulpes", x: baseX - 74, y: baseY + 8, color: COLORS.ulpes, label: "繧ｦ", facing: "down", walkFrame: 1 },
+        { id: "rihas", x: baseX - 8, y: baseY + 34, color: COLORS.rihas, label: "繝ｪ", facing: "down", walkFrame: 1 },
+        { id: "sushia", x: baseX + 66, y: baseY + 10, color: COLORS.sushia, label: "繧ｹ", facing: "down", walkFrame: 1 },
+      );
+    } else if (Array.isArray(town.followers)) {
+      for (const follower of town.followers) {
+        actors.push(follower);
+      }
+    }
+    return actors;
+  }
+
+  function drawTownArgumentMarks() {
+    if (!playerProfile.done || town.meetingDone) {
+      return;
+    }
+    const guild = getTownBuilding("guild");
+    const baseX = guild ? guild.door.x : 800;
+    const baseY = guild ? guild.door.y - 18 : 790;
+    drawArgumentMark(baseX - 48, baseY - 22);
+    drawArgumentMark(baseX + 6, baseY + 4);
+    drawArgumentMark(baseX + 66, baseY - 18);
+  }
+
+  function getTownActorSortY(actor) {
+    if (!actor) {
+      return 0;
+    }
+    return actor.y + (getTownTileMap() ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 0);
   }
 
   function drawTownActor(actor) {

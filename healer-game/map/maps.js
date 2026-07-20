@@ -578,7 +578,7 @@
     name: "クラク村",
     tileSize: 48,
     width: 20,
-    height: 14,
+    height: 19,
     defaultTile: "grass",
     marginTiles: {
       ground: "test_grass",
@@ -587,287 +587,173 @@
       event: null,
     },
     layers: [
-        {
-          id: "ground",
-          name: "地面",
-          tiles: [
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          ],
-        },
-        {
-          id: "terrain",
-          name: "地形",
-          tiles: [
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          ],
-        },
-        {
-          id: "object",
-          name: "配置物",
-          tiles: [
-            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
-            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, "fallenLog", null, null, "weaponShopFront", null, null, null, "armorShopFront", null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, "shrubCluster", null, null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, "well", null, "tree", "tree",
-            "tree", "tree", null, null, null, "innFront", null, null, "requestOfficeFront", null, null, "itemShopFront", null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, "fallenLog", null, null, "tree", "tree",
-            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
-            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
-            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
-          ],
-        },
-        {
-          id: "event",
-          name: "イベント",
-          tiles: [
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          ],
-        }
+    {
+      id: "ground",
+      name: "地面",
+      tiles: [
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+        "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+      ],
+    },
+    {
+      id: "terrain",
+      name: "地形",
+      tiles: [
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+      ],
+    },
+    {
+      id: "object",
+      name: "配置物",
+      tiles: [
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, "fallenLog", null, null, "weaponShopFront", null, null, null, "armorShopFront", null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, "shrubCluster", null, null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, "well", null, "tree", "tree",
+        "tree", "tree", null, null, null, "innFront", null, null, "requestOfficeFront", null, null, "itemShopFront", null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, "fallenLog", null, null, "tree", "tree",
+        "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+        "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+      ],
+    },
+    {
+      id: "event",
+      name: "イベント",
+      tiles: [
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+      ],
+    }
     ],
     events: [
-              {
-                      "id": "start_town_armor_shop_area",
-                      "name": "防具屋エリア",
-                      "type": "buildingArea",
-                      "x": 10,
-                      "y": 3,
-                      "width": 3,
-                      "height": 2,
-                      "tileId": "armorShopFront"
-              },
-              {
-                      "id": "start_town_weapon_shop_area",
-                      "name": "武器屋エリア",
-                      "type": "buildingArea",
-                      "x": 6,
-                      "y": 3,
-                      "width": 3,
-                      "height": 2,
-                      "tileId": "weaponShopFront"
-              },
-              {
-                      "id": "start_town_inn_area",
-                      "name": "宿屋エリア",
-                      "type": "buildingArea",
-                      "x": 5,
-                      "y": 7,
-                      "width": 3,
-                      "height": 2,
-                      "tileId": "innFront"
-              },
-              {
-                      "id": "start_town_request_office_area",
-                      "name": "依頼所エリア",
-                      "type": "buildingArea",
-                      "x": 8,
-                      "y": 7,
-                      "width": 3,
-                      "height": 2,
-                      "tileId": "requestOfficeFront"
-              },
-              {
-                      "id": "start_town_item_shop_area",
-                      "name": "アイテム屋エリア",
-                      "type": "buildingArea",
-                      "x": 11,
-                      "y": 7,
-                      "width": 3,
-                      "height": 2,
-                      "tileId": "itemShopFront"
-              },
-              {
-                      "id": "start_town_to_forest_test01",
-                      "name": "森テスト01へ",
-                      "type": "mapTransfer",
-                      "trigger": "step",
-                      "x": 9,
-                      "y": 12,
-                      "width": 1,
-                      "height": 2,
-                      "targetMap": "forestTest01",
-                      "targetCol": 1,
-                      "targetRow": 3
-              }
-      ],
+          {
+                "id": "start_town_armor_shop_area",
+                "name": "防具屋エリア",
+                "type": "buildingArea",
+                "x": 10,
+                "y": 3,
+                "width": 3,
+                "height": 2,
+                "tileId": "armorShopFront"
+          },
+          {
+                "id": "start_town_weapon_shop_area",
+                "name": "武器屋エリア",
+                "type": "buildingArea",
+                "x": 6,
+                "y": 3,
+                "width": 3,
+                "height": 2,
+                "tileId": "weaponShopFront"
+          },
+          {
+                "id": "start_town_inn_area",
+                "name": "宿屋エリア",
+                "type": "buildingArea",
+                "x": 5,
+                "y": 7,
+                "width": 3,
+                "height": 2,
+                "tileId": "innFront"
+          },
+          {
+                "id": "start_town_request_office_area",
+                "name": "依頼所エリア",
+                "type": "buildingArea",
+                "x": 8,
+                "y": 7,
+                "width": 3,
+                "height": 2,
+                "tileId": "requestOfficeFront"
+          },
+          {
+                "id": "start_town_item_shop_area",
+                "name": "アイテム屋エリア",
+                "type": "buildingArea",
+                "x": 11,
+                "y": 7,
+                "width": 3,
+                "height": 2,
+                "tileId": "itemShopFront"
+          },
+          {
+                "id": "start_town_to_forest_test01",
+                "name": "森テスト01へ",
+                "type": "mapTransfer",
+                "trigger": "step",
+                "x": 9,
+                "y": 17,
+                "width": 1,
+                "height": 2,
+                "targetMap": "forestTest01",
+                "targetCol": 1,
+                "targetRow": 3
+          }
+    ],
   };
-
-  window.HEALER_TILE_MAPS.flower = {
-
-      id: "flower",
-
-      name: "花マップ",
-
-      tileSize: 48,
-
-      width: 15,
-
-      height: 8,
-
-      defaultTile: "grass",
-
-      layers: [
-
-        {
-
-          id: "ground",
-
-          name: "地面",
-
-          tiles: [
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-            "grass", { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, { tileId: "flowerMeadow", rotate: 270 }, "grass",
-
-          ],
-
-        },
-
-        {
-
-          id: "terrain",
-
-          name: "地形",
-
-          tiles: [
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-            { tileId: "forestWallLeaf", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallLeaf", rotate: 90 },
-
-          ],
-
-        },
-
-        {
-
-          id: "object",
-
-          name: "配置物",
-
-          tiles: [
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, "shrubCluster", null,
-
-            null, "shrubCluster", "shrubCluster", "shrubCluster", "shrubCluster", "shrubCluster", null, null, null, "shrubCluster", "shrubCluster", "shrubCluster", "shrubCluster", "shrubCluster", null,
-
-          ],
-
-        },
-
-        {
-
-          id: "event",
-
-          name: "イベント",
-
-          tiles: [
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-          ],
-
-        }
-
-      ],
-
-      events: [],
-
-    };
   window.HEALER_DEBUG_TILE_MAPS = [
     { id: "startTown01", label: "始まりの町" },
     { id: "forestTest01", label: "森テスト1" },
