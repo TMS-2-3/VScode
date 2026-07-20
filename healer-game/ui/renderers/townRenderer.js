@@ -228,16 +228,18 @@
     const scale = 1;
     const visibleW = Math.max(1, view.w / scale);
     const visibleH = Math.max(1, view.h / scale);
-    const cameraX = clampTownView(town.player.x - visibleW / 2, -visibleW, mapW);
-    const cameraY = clampTownView(town.player.y - visibleH / 2, -visibleH, mapH);
+    const mapFitsX = mapW <= visibleW;
+    const mapFitsY = mapH <= visibleH;
+    const cameraX = mapFitsX ? 0 : clampTownView(town.player.x - visibleW / 2, 0, mapW - visibleW);
+    const cameraY = mapFitsY ? 0 : clampTownView(town.player.y - visibleH / 2, 0, mapH - visibleH);
     if (town.camera) {
       town.camera.x = cameraX;
       town.camera.y = cameraY;
     }
     return {
       scale,
-      x: 0,
-      y: 0,
+      x: mapFitsX ? Math.max(0, (view.w - mapW * scale) / 2) : 0,
+      y: mapFitsY ? Math.max(0, (view.h - mapH * scale) / 2) : 0,
       cameraX,
       cameraY,
       viewportW: visibleW,
@@ -290,6 +292,7 @@
     if (typeof tileMapSystem.drawMarginTile === "function") {
       tileMapSystem.drawMarginTile(ctx, map, {
         drawFallback: true,
+        useCache: true,
         viewport: getTownVisibleWorldViewport(transform),
       });
     }

@@ -574,269 +574,166 @@
 
 
   window.HEALER_TILE_MAPS.startTown01 = {
-
-      id: "startTown01",
-
-      name: "始まりの町01",
-
-      tileSize: 48,
-
-      width: 15,
-
-      height: 8,
-
-      defaultTile: "grass",
-
-      layers: [
-
+    id: "startTown01",
+    name: "クラク村",
+    tileSize: 48,
+    width: 20,
+    height: 14,
+    defaultTile: "grass",
+    marginTiles: {
+      ground: "test_grass",
+      terrain: null,
+      object: "tree",
+      event: null,
+    },
+    layers: [
         {
-
           id: "ground",
-
           name: "地面",
-
           tiles: [
-
-            "mossyGrass", "mossyGrass", "mossyGrass", "mossyGrass", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "mossyGrass", "mossyGrass", "mossyGrass", "mossyGrass",
-
-            "mossyGrass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "cobblestonePath", "cobblestonePath", "cobblestonePath", "mossyGrass",
-
-            "mossyGrass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "mossyGrass",
-
-            "mossyGrass", "cobblestonePath", "cobblestonePath", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "cobblestonePath", "cobblestonePath", "mossyGrass",
-
-            "mossyGrass", "cobblestonePath", "cobblestonePath", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "stonePlain", "cobblestonePath", "cobblestonePath", "mossyGrass",
-
-            "mossyGrass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "mossyGrass",
-
-            "mossyGrass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "mossyGrass",
-
-            "mossyGrass", "mossyGrass", "mossyGrass", "mossyGrass", "mossyGrass", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "cobblestonePath", "mossyGrass", "mossyGrass", "mossyGrass", "mossyGrass", "mossyGrass",
-
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+            "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "villageTile04", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           ],
-
         },
-
         {
-
           id: "terrain",
-
           name: "地形",
-
           tiles: [
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           ],
-
         },
-
         {
-
           id: "object",
-
           name: "配置物",
-
           tiles: [
-
-            "fence", "fence", "fence", "fence", "armorShopFront", null, null, null, "weaponShopFront", null, null, "fence", "fence", "fence", "fence",
-
-            "flowerPatchObject", null, null, null, null, null, null, null, null, null, null, null, null, null, "flowerPatchObject",
-
-            "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, null, null, "shrubCluster",
-
-            "shrubCluster", null, null, "innFront", null, null, "requestOfficeFront", null, null, "itemShopFront", null, null, null, null, "shrubCluster",
-
-            "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, null, null, "shrubCluster",
-
-            "shrubCluster", null, null, null, null, null, null, null, null, null, null, null, null, null, "shrubCluster",
-
-            "flowerPatchObject", null, null, null, null, null, null, null, null, null, null, null, null, null, "flowerPatchObject",
-
-            "fence", "fence", "fence", "fence", "fence", null, null, null, null, null, "fence", "fence", "fence", "fence", "fence",
-
+            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, "fallenLog", null, null, "weaponShopFront", null, null, null, "armorShopFront", null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, "shrubCluster", null, null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, "well", null, "tree", "tree",
+            "tree", "tree", null, null, null, "innFront", null, null, "requestOfficeFront", null, null, "itemShopFront", null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, "fallenLog", null, null, "tree", "tree",
+            "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree",
+            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+            "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
           ],
-
         },
-
         {
-
           id: "event",
-
           name: "イベント",
-
           tiles: [
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           ],
-
         }
-
-      ],
-
-      events: [
-
+    ],
+    events: [
               {
-
                       "id": "start_town_armor_shop_area",
-
                       "name": "防具屋エリア",
-
                       "type": "buildingArea",
-
-                      "x": 4,
-
-                      "y": 0,
-
+                      "x": 10,
+                      "y": 3,
                       "width": 3,
-
                       "height": 2,
-
                       "tileId": "armorShopFront"
-
               },
-
               {
-
                       "id": "start_town_weapon_shop_area",
-
                       "name": "武器屋エリア",
-
                       "type": "buildingArea",
-
-                      "x": 8,
-
-                      "y": 0,
-
-                      "width": 3,
-
-                      "height": 2,
-
-                      "tileId": "weaponShopFront"
-
-              },
-
-              {
-
-                      "id": "start_town_inn_area",
-
-                      "name": "宿屋エリア",
-
-                      "type": "buildingArea",
-
-                      "x": 3,
-
-                      "y": 3,
-
-                      "width": 3,
-
-                      "height": 2,
-
-                      "tileId": "innFront"
-
-              },
-
-              {
-
-                      "id": "start_town_request_office_area",
-
-                      "name": "依頼所エリア",
-
-                      "type": "buildingArea",
-
                       "x": 6,
-
                       "y": 3,
-
                       "width": 3,
-
                       "height": 2,
-
-                      "tileId": "requestOfficeFront"
-
+                      "tileId": "weaponShopFront"
               },
-
               {
-
-                      "id": "start_town_item_shop_area",
-
-                      "name": "アイテム屋エリア",
-
+                      "id": "start_town_inn_area",
+                      "name": "宿屋エリア",
                       "type": "buildingArea",
-
-                      "x": 9,
-
-                      "y": 3,
-
-                      "width": 3,
-
-                      "height": 2,
-
-                      "tileId": "itemShopFront"
-
-
-              },
-
-              {
-
-                      "id": "start_town_to_forest_test01",
-
-                      "name": "森テスト01へ",
-
-                      "type": "mapTransfer",
-
-                      "trigger": "step",
-
                       "x": 5,
-
                       "y": 7,
-
-                      "width": 5,
-
-                      "height": 1,
-
+                      "width": 3,
+                      "height": 2,
+                      "tileId": "innFront"
+              },
+              {
+                      "id": "start_town_request_office_area",
+                      "name": "依頼所エリア",
+                      "type": "buildingArea",
+                      "x": 8,
+                      "y": 7,
+                      "width": 3,
+                      "height": 2,
+                      "tileId": "requestOfficeFront"
+              },
+              {
+                      "id": "start_town_item_shop_area",
+                      "name": "アイテム屋エリア",
+                      "type": "buildingArea",
+                      "x": 11,
+                      "y": 7,
+                      "width": 3,
+                      "height": 2,
+                      "tileId": "itemShopFront"
+              },
+              {
+                      "id": "start_town_to_forest_test01",
+                      "name": "森テスト01へ",
+                      "type": "mapTransfer",
+                      "trigger": "step",
+                      "x": 9,
+                      "y": 12,
+                      "width": 1,
+                      "height": 2,
                       "targetMap": "forestTest01",
-
                       "targetCol": 1,
-
                       "targetRow": 3
-
               }
-
       ],
-
-    };
-
-
+  };
 
   window.HEALER_TILE_MAPS.flower = {
 

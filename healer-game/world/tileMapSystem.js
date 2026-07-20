@@ -5,6 +5,7 @@
     const tileDefs = options.tileDefs || window.HEALER_TILE_DEFS || {};
     const tileMaps = options.tileMaps || window.HEALER_TILE_MAPS || {};
     const imageCache = new Map();
+    const marginTileCache = new Map();
 
     function getMap(mapOrId) {
       if (!mapOrId) {
@@ -187,6 +188,69 @@
       }
       const legacyTileEntry = getMapMarginTileEntry(map);
       return normalizeTileId(legacyTileEntry) ? [legacyTileEntry] : [];
+    }
+
+    function getMapCacheId(map) {
+      return String((map && (map.id || map.name)) || "map");
+    }
+
+    function createRenderCanvas(width, height) {
+      const safeWidth = Math.max(1, Math.ceil(Number(width) || 1));
+      const safeHeight = Math.max(1, Math.ceil(Number(height) || 1));
+      if (typeof OffscreenCanvas !== "undefined") {
+        return new OffscreenCanvas(safeWidth, safeHeight);
+      }
+      if (typeof document !== "undefined" && document.createElement) {
+        const canvas = document.createElement("canvas");
+        canvas.width = safeWidth;
+        canvas.height = safeHeight;
+        return canvas;
+      }
+      return null;
+    }
+
+    function getTileDrawOverflow(tileEntries, tileSize) {
+      const overflow = { left: 0, top: 0, right: 0, bottom: 0 };
+      for (const tileEntry of tileEntries) {
+        const tileId = normalizeTileId(tileEntry);
+        const tile = getTileDef(tileId);
+        const drawWidth = Math.max(1, Number(tile && tile.drawWidth) || tileSize);
+        const drawHeight = Math.max(1, Number(tile && tile.drawHeight) || tileSize);
+        const drawOffsetX = Number.isFinite(tile && tile.drawOffsetX) ? tile.drawOffsetX : 0;
+        const drawOffsetY = Number.isFinite(tile && tile.drawOffsetY) ? tile.drawOffsetY : 0;
+        overflow.left = Math.max(overflow.left, Math.ceil(Math.max(0, -drawOffsetX)));
+        overflow.top = Math.max(overflow.top, Math.ceil(Math.max(0, -drawOffsetY)));
+        overflow.right = Math.max(overflow.right, Math.ceil(Math.max(0, drawOffsetX + drawWidth - tileSize)));
+        overflow.bottom = Math.max(overflow.bottom, Math.ceil(Math.max(0, drawOffsetY + drawHeight - tileSize)));
+      }
+      return overflow;
+    }
+
+    function canCacheMarginTiles(tileEntries) {
+      return tileEntries.every((tileEntry) => {
+        const tileId = normalizeTileId(tileEntry);
+        const tile = getTileDef(tileId);
+        const src = tile && (tile.image || tile.src);
+        if (!src) {
+          return true;
+        }
+        const image = getTileImage(tileId);
+        return image && image.complete && image.naturalWidth > 0;
+      });
+    }
+
+    function clearMarginTileCache(mapOrId = null) {
+      if (!mapOrId) {
+        marginTileCache.clear();
+        return;
+      }
+      const map = getMap(mapOrId) || mapOrId;
+      const prefix = `${getMapCacheId(map)}|`;
+      for (const key of [...marginTileCache.keys()]) {
+        if (key.startsWith(prefix)) {
+          marginTileCache.delete(key);
+        }
+      }
     }
 
     function isTilePassable(tileId) {
@@ -432,8 +496,58 @@
       const minRow = Math.floor(viewY / tileSize) - 1;
       const maxCol = Math.ceil((viewX + viewW) / tileSize) + 1;
       const maxRow = Math.ceil((viewY + viewH) / tileSize) + 1;
+      const mapWidth = Math.floor(Number(map.width) || 0);
+      const mapHeight = Math.floor(Number(map.height) || 0);
+      if (minCol >= 0 && minRow >= 0 && maxCol < mapWidth && maxRow < mapHeight) {
+        return false;
+      }
+      if (options.useCache !== false && canCacheMarginTiles(tileEntries)) {
+        const overflow = getTileDrawOverflow(tileEntries, tileSize);
+        const cacheKey = [
+          getMapCacheId(map),
+          tileSize,
+          minCol,
+          minRow,
+          maxCol,
+          maxRow,
+          JSON.stringify(tileEntries),
+          options.drawFallback === false ? "nofallback" : "fallback",
+        ].join("|");
+        let cached = marginTileCache.get(cacheKey);
+        if (!cached) {
+          const cols = Math.max(1, maxCol - minCol + 1);
+          const rows = Math.max(1, maxRow - minRow + 1);
+          const canvas = createRenderCanvas(cols * tileSize + overflow.left + overflow.right, rows * tileSize + overflow.top + overflow.bottom);
+          const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
+          if (cacheCtx) {
+            for (let row = minRow; row <= maxRow; row += 1) {
+              for (let col = minCol; col <= maxCol; col += 1) {
+                if (isInsideMap(map, col, row)) {
+                  continue;
+                }
+                for (const tileEntry of tileEntries) {
+                  drawTile(cacheCtx, tileEntry, (col - minCol) * tileSize + overflow.left, (row - minRow) * tileSize + overflow.top, tileSize, options);
+                }
+              }
+            }
+            cached = {
+              canvas,
+              x: minCol * tileSize - overflow.left,
+              y: minRow * tileSize - overflow.top,
+            };
+            marginTileCache.set(cacheKey, cached);
+          }
+        }
+        if (cached) {
+          ctx.drawImage(cached.canvas, cached.x, cached.y);
+          return true;
+        }
+      }
       for (let row = minRow; row <= maxRow; row += 1) {
         for (let col = minCol; col <= maxCol; col += 1) {
+          if (isInsideMap(map, col, row)) {
+            continue;
+          }
           for (const tileEntry of tileEntries) {
             drawTile(ctx, tileEntry, col * tileSize, row * tileSize, tileSize, options);
           }
@@ -552,6 +666,7 @@
       forEachMapTile,
       drawTileMap,
       drawMarginTile,
+      clearMarginTileCache,
       drawDebugGrid,
     };
   };

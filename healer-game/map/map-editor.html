@@ -428,6 +428,7 @@
 
       .cursor-cell {
         position: absolute;
+        box-sizing: border-box;
         pointer-events: none;
         border: 2px solid #f7e27b;
         box-shadow: inset 0 0 0 1px rgba(20, 24, 18, 0.45);
@@ -436,6 +437,7 @@
 
       .range-cell {
         position: absolute;
+        box-sizing: border-box;
         pointer-events: none;
         border: 2px solid #f7e27b;
         background: rgba(247, 226, 123, 0.18);
@@ -445,6 +447,7 @@
 
       .duplicate-cell {
         position: absolute;
+        box-sizing: border-box;
         pointer-events: none;
         border: 2px dashed #46bde8;
         background: rgba(70, 189, 232, 0.14);
@@ -661,12 +664,17 @@
         undoStack: [],
         redoStack: [],
         pendingHistorySnapshot: null,
+        dragClientX: null,
+        dragClientY: null,
+        autoScrollFrameId: 0,
       };
 
       const MAP_ZOOM_MIN = 0.5;
       const MAP_ZOOM_MAX = 2;
       const MAP_ZOOM_STEP = 0.1;
       const HISTORY_LIMIT = 20;
+      const DRAG_SCROLL_EDGE_SIZE = 56;
+      const DRAG_SCROLL_MAX_SPEED = 24;
 
       const mapSelect = document.getElementById("map-select");
       const mapIdInput = document.getElementById("map-id");
@@ -994,14 +1002,134 @@
           });
       }
 
-      function getCellFromEvent(event) {
+      function getCellFromClientPoint(clientX, clientY) {
         const rect = surface.getBoundingClientRect();
         const tileSize = state.map.tileSize;
         const zoom = state.mapZoom || 1;
-        const x = Math.floor(((event.clientX - rect.left) / zoom) / tileSize);
-        const y = Math.floor(((event.clientY - rect.top) / zoom) / tileSize);
+        const x = Math.floor(((clientX - rect.left) / zoom) / tileSize);
+        const y = Math.floor(((clientY - rect.top) / zoom) / tileSize);
         if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height) return null;
         return { x, y, index: y * state.map.width + x };
+      }
+
+      function getCellFromEvent(event) {
+        return getCellFromClientPoint(event.clientX, event.clientY);
+      }
+
+      function updateCursorForCell(cell) {
+        if (cell) {
+          cursorCell.classList.remove("hidden");
+          cursorCell.style.left = `${cell.x * state.map.tileSize}px`;
+          cursorCell.style.top = `${cell.y * state.map.tileSize}px`;
+        } else {
+          cursorCell.classList.add("hidden");
+        }
+      }
+
+      function updateSurfacePointerFromClient(clientX, clientY) {
+        const cell = getCellFromClientPoint(clientX, clientY);
+        updateCursorForCell(cell);
+        if (state.tool === "duplicate") {
+          if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) {
+            if (cell) state.duplicateCurrentCell = cell;
+            renderRangePreview(state.duplicateStartCell, state.duplicateCurrentCell);
+          } else {
+            state.duplicateHoverCell = cell;
+            renderDuplicateFrame(cell);
+          }
+          return;
+        }
+        if (state.isPointerDown && state.tool === "range") {
+          if (cell) state.rangeCurrentCell = cell;
+          renderRangePreview(state.rangeStartCell, state.rangeCurrentCell);
+          return;
+        }
+        if (state.isPointerDown && state.tool !== "fill") paintCell(cell);
+      }
+
+      function canAutoScrollDrag() {
+        if (!state.isPointerDown || !state.map) return false;
+        if (state.tool === "fill") return false;
+        return !(state.tool === "duplicate" && state.duplicateSelection);
+      }
+
+      function getDragScrollSpeed(edgeDistance) {
+        const proximity = clampNumber((DRAG_SCROLL_EDGE_SIZE - edgeDistance) / DRAG_SCROLL_EDGE_SIZE, 0, 1);
+        if (proximity <= 0) return 0;
+        return Math.ceil(2 + (DRAG_SCROLL_MAX_SPEED - 2) * proximity * proximity);
+      }
+
+      function getDragScrollDelta(clientX, clientY) {
+        const rect = surfaceViewport.getBoundingClientRect();
+        const maxScrollLeft = Math.max(0, surfaceViewport.scrollWidth - surfaceViewport.clientWidth);
+        const maxScrollTop = Math.max(0, surfaceViewport.scrollHeight - surfaceViewport.clientHeight);
+        let dx = 0;
+        let dy = 0;
+
+        if (maxScrollLeft > 0) {
+          const leftDistance = clientX - rect.left;
+          const rightDistance = rect.right - clientX;
+          if (leftDistance < DRAG_SCROLL_EDGE_SIZE && surfaceViewport.scrollLeft > 0) {
+            dx = -getDragScrollSpeed(leftDistance);
+          } else if (rightDistance < DRAG_SCROLL_EDGE_SIZE && surfaceViewport.scrollLeft < maxScrollLeft) {
+            dx = getDragScrollSpeed(rightDistance);
+          }
+        }
+
+        if (maxScrollTop > 0) {
+          const topDistance = clientY - rect.top;
+          const bottomDistance = rect.bottom - clientY;
+          if (topDistance < DRAG_SCROLL_EDGE_SIZE && surfaceViewport.scrollTop > 0) {
+            dy = -getDragScrollSpeed(topDistance);
+          } else if (bottomDistance < DRAG_SCROLL_EDGE_SIZE && surfaceViewport.scrollTop < maxScrollTop) {
+            dy = getDragScrollSpeed(bottomDistance);
+          }
+        }
+
+        return { dx, dy };
+      }
+
+      function rememberDragPointer(event) {
+        state.dragClientX = event.clientX;
+        state.dragClientY = event.clientY;
+      }
+
+      function scheduleDragAutoScroll() {
+        if (state.autoScrollFrameId) return;
+        state.autoScrollFrameId = window.requestAnimationFrame(runDragAutoScroll);
+      }
+
+      function startDragAutoScroll(event) {
+        rememberDragPointer(event);
+        if (canAutoScrollDrag()) {
+          scheduleDragAutoScroll();
+        }
+      }
+
+      function stopDragAutoScroll() {
+        if (state.autoScrollFrameId) {
+          window.cancelAnimationFrame(state.autoScrollFrameId);
+        }
+        state.autoScrollFrameId = 0;
+        state.dragClientX = null;
+        state.dragClientY = null;
+      }
+
+      function runDragAutoScroll() {
+        state.autoScrollFrameId = 0;
+        if (!canAutoScrollDrag() || state.dragClientX === null || state.dragClientY === null) return;
+
+        const { dx, dy } = getDragScrollDelta(state.dragClientX, state.dragClientY);
+        if (dx || dy) {
+          const beforeLeft = surfaceViewport.scrollLeft;
+          const beforeTop = surfaceViewport.scrollTop;
+          surfaceViewport.scrollLeft += dx;
+          surfaceViewport.scrollTop += dy;
+          if (surfaceViewport.scrollLeft !== beforeLeft || surfaceViewport.scrollTop !== beforeTop) {
+            updateSurfacePointerFromClient(state.dragClientX, state.dragClientY);
+          }
+          scheduleDragAutoScroll();
+        }
       }
 
       function getRectFromCells(startCell, endCell) {
@@ -1904,6 +2032,7 @@ ${layers}
             finishPendingHistoryEntry();
             state.tool = button.dataset.tool;
             state.isPointerDown = false;
+            stopDragAutoScroll();
             state.lastPaintKey = "";
             clearRangePreview();
             clearDuplicateSelection();
@@ -1945,12 +2074,14 @@ ${layers}
             state.duplicateStartCell = cell;
             state.duplicateCurrentCell = cell;
             surface.setPointerCapture(event.pointerId);
+            startDragAutoScroll(event);
             renderRangePreview(cell, cell);
             return;
           }
           state.isPointerDown = true;
           state.lastPaintKey = "";
           surface.setPointerCapture(event.pointerId);
+          startDragAutoScroll(event);
           if (state.tool === "range") {
             state.rangeStartCell = cell;
             state.rangeCurrentCell = cell;
@@ -1960,32 +2091,14 @@ ${layers}
           paintCell(cell);
         });
         surface.addEventListener("pointermove", (event) => {
-          const cell = getCellFromEvent(event);
-          if (cell) {
-            cursorCell.classList.remove("hidden");
-            cursorCell.style.left = `${cell.x * state.map.tileSize}px`;
-            cursorCell.style.top = `${cell.y * state.map.tileSize}px`;
-          } else {
-            cursorCell.classList.add("hidden");
+          if (state.isPointerDown) {
+            rememberDragPointer(event);
+            if (canAutoScrollDrag()) scheduleDragAutoScroll();
           }
-          if (state.tool === "duplicate") {
-            if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) {
-              if (cell) state.duplicateCurrentCell = cell;
-              renderRangePreview(state.duplicateStartCell, state.duplicateCurrentCell);
-            } else {
-              state.duplicateHoverCell = cell;
-              renderDuplicateFrame(cell);
-            }
-            return;
-          }
-          if (state.isPointerDown && state.tool === "range") {
-            if (cell) state.rangeCurrentCell = cell;
-            renderRangePreview(state.rangeStartCell, state.rangeCurrentCell);
-            return;
-          }
-          if (state.isPointerDown && state.tool !== "fill") paintCell(cell);
+          updateSurfacePointerFromClient(event.clientX, event.clientY);
         });
         surface.addEventListener("pointerup", (event) => {
+          stopDragAutoScroll();
           if (state.tool === "duplicate") {
             if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) {
               const cell = getCellFromEvent(event) || state.duplicateCurrentCell;
@@ -2008,6 +2121,7 @@ ${layers}
         });
         surface.addEventListener("pointerleave", () => {
           cursorCell.classList.add("hidden");
+          if (state.isPointerDown && (state.tool === "paint" || state.tool === "erase")) return;
           if (state.tool === "duplicate") {
             if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) return;
             state.duplicateHoverCell = null;
@@ -2016,12 +2130,14 @@ ${layers}
           }
           if (state.isPointerDown && state.tool === "range") return;
           state.isPointerDown = false;
+          stopDragAutoScroll();
           state.lastPaintKey = "";
           finishPendingHistoryEntry();
           clearRangePreview();
         });
         surface.addEventListener("pointercancel", () => {
           state.isPointerDown = false;
+          stopDragAutoScroll();
           state.lastPaintKey = "";
           finishPendingHistoryEntry();
           clearRangePreview();

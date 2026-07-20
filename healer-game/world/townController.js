@@ -125,6 +125,9 @@
       if (!tileMap) {
         return false;
       }
+      if (tileMapSystem && typeof tileMapSystem.clearMarginTileCache === "function") {
+        tileMapSystem.clearMarginTileCache();
+      }
       town.mapId = mapId;
       town.panel = null;
       town.selectedQuest = null;
