@@ -116,9 +116,12 @@
   };
   const TOWN_WALK_DIRECTIONS = ["down", "left", "right", "up"];
   const TOWN_WALK_FRAMES = [1, 2, 3];
-  const TOWN_TILE_CHARACTER_FOOT_OFFSET_Y = 5;
+  const TOWN_TILE_CHARACTER_FOOT_OFFSET_Y = 7;
   const townWalkImages = createTownWalkImages();
   const profileAppearanceImages = createProfileAppearanceImages();
+  let townTileMapRenderCache = null;
+  let townDebugGridCache = null;
+  let lastTownMapDebugMode = false;
 
   function createTownWalkImages() {
     const images = {};
@@ -169,6 +172,291 @@
   function isTownImageReady(image) {
     return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
   }
+
+  function createTownRenderCanvas(width, height) {
+    const safeWidth = Math.max(1, Math.ceil(Number(width) || 1));
+    const safeHeight = Math.max(1, Math.ceil(Number(height) || 1));
+    if (typeof OffscreenCanvas !== "undefined") {
+      return new OffscreenCanvas(safeWidth, safeHeight);
+    }
+    if (typeof document !== "undefined" && document.createElement) {
+      const canvas = document.createElement("canvas");
+      canvas.width = safeWidth;
+      canvas.height = safeHeight;
+      return canvas;
+    }
+    return null;
+  }
+
+  function getTownMapCacheId(map) {
+    return String((map && (map.id || map.name)) || "map");
+  }
+
+  function getTownMapPixelSize(map) {
+    return tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function"
+      ? tileMapSystem.getMapPixelSize(map)
+      : {
+          w: Math.max(1, Math.floor(Number(map && map.width) || 0) * Math.floor(Number(map && map.tileSize) || 48)),
+          h: Math.max(1, Math.floor(Number(map && map.height) || 0) * Math.floor(Number(map && map.tileSize) || 48)),
+        };
+  }
+
+  function getTownFullMapViewport(map, mapSize = getTownMapPixelSize(map)) {
+    return { x: 0, y: 0, w: Math.max(1, mapSize.w || 1), h: Math.max(1, mapSize.h || 1) };
+  }
+
+  function normalizeTownTileId(tileEntry) {
+    if (tileEntry && typeof tileEntry === "object") {
+      return normalizeTownTileId(tileEntry.tileId ?? tileEntry.id ?? tileEntry.key ?? null);
+    }
+    if (tileEntry === null || tileEntry === undefined || tileEntry === "" || tileEntry === "." || tileEntry === false) {
+      return null;
+    }
+    return String(tileEntry);
+  }
+
+  function isTownTileEntryImageReady(tileEntry) {
+    const tileId = normalizeTownTileId(tileEntry);
+    if (!tileId || !tileMapSystem || typeof tileMapSystem.getTileDef !== "function") {
+      return true;
+    }
+    const tile = tileMapSystem.getTileDef(tileId);
+    const src = tile && (tile.image || tile.src);
+    if (!src || typeof tileMapSystem.getTileImage !== "function") {
+      return true;
+    }
+    const image = tileMapSystem.getTileImage(tileId);
+    return !image || image.complete === true;
+  }
+
+  function getTownGroundTileLayerIds(map) {
+    if (!map || !Array.isArray(map.layers)) {
+      return ["ground"];
+    }
+    return map.layers
+      .filter((layer) => layer && layer.id === "ground" && layer.visible !== false && layer.draw !== false)
+      .map((layer) => layer.id);
+  }
+
+  function getTownTileMapCacheLayerIds(map) {
+    return [...getTownGroundTileLayerIds(map), ...getTownForegroundTileLayerIds(map)];
+  }
+
+  function areTownTileMapCacheImagesReady(map) {
+    if (!map || !tileMapSystem || typeof tileMapSystem.forEachMapTileEntry !== "function") {
+      return false;
+    }
+    let ready = true;
+    tileMapSystem.forEachMapTileEntry(map, (entry) => {
+      if (!isTownTileEntryImageReady(entry.tileEntry)) {
+        ready = false;
+      }
+    }, {
+      layerIds: getTownTileMapCacheLayerIds(map),
+      viewport: getTownFullMapViewport(map),
+    });
+    return ready;
+  }
+
+  function getTownTileMapCacheKey(map, mapSize) {
+    const layerIds = getTownTileMapCacheLayerIds(map).join(",");
+    return [
+      getTownMapCacheId(map),
+      Math.floor(Number(map && map.width) || 0),
+      Math.floor(Number(map && map.height) || 0),
+      Math.floor(Number(map && map.tileSize) || 48),
+      Math.round(Number(mapSize && mapSize.w) || 0),
+      Math.round(Number(mapSize && mapSize.h) || 0),
+      layerIds,
+    ].join("|");
+  }
+
+  function getTownTileMapRenderCache(map) {
+    if (!map || !tileMapSystem || typeof tileMapSystem.drawTileMap !== "function") {
+      return null;
+    }
+    const mapSize = getTownMapPixelSize(map);
+    const key = getTownTileMapCacheKey(map, mapSize);
+    if (townTileMapRenderCache && townTileMapRenderCache.key === key) {
+      if (!townTileMapRenderCache.ready && areTownTileMapCacheImagesReady(map)) {
+        buildTownTileMapRenderCache(townTileMapRenderCache, map, mapSize);
+      }
+      return townTileMapRenderCache;
+    }
+    townTileMapRenderCache = {
+      key,
+      ready: false,
+      mapSize,
+      baseCanvas: null,
+      depthGroups: [],
+    };
+    if (areTownTileMapCacheImagesReady(map)) {
+      buildTownTileMapRenderCache(townTileMapRenderCache, map, mapSize);
+    }
+    return townTileMapRenderCache;
+  }
+
+  function buildTownTileMapRenderCache(cache, map, mapSize) {
+    if (!cache || !map) {
+      return false;
+    }
+    const baseCanvas = buildTownTileMapBaseCanvas(map, mapSize);
+    const depthGroups = buildTownTileMapDepthGroups(map, mapSize);
+    if (!baseCanvas || !depthGroups) {
+      cache.ready = false;
+      return false;
+    }
+    cache.baseCanvas = baseCanvas;
+    cache.depthGroups = depthGroups;
+    cache.ready = true;
+    return true;
+  }
+
+  function buildTownTileMapBaseCanvas(map, mapSize) {
+    const canvas = createTownRenderCanvas(mapSize.w, mapSize.h);
+    const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
+    if (!cacheCtx) {
+      return null;
+    }
+    cacheCtx.fillStyle = "#47784f";
+    cacheCtx.fillRect(0, 0, Math.max(1, mapSize.w || TOWN_WIDTH), Math.max(1, mapSize.h || TOWN_HEIGHT));
+    const groundLayerIds = getTownGroundTileLayerIds(map);
+    if (groundLayerIds.length) {
+      tileMapSystem.drawTileMap(cacheCtx, map, {
+        drawFallback: true,
+        drawDefaultTile: false,
+        layerIds: groundLayerIds,
+        viewport: getTownFullMapViewport(map, mapSize),
+      });
+    }
+    return canvas;
+  }
+
+  function buildTownTileMapDepthGroups(map, mapSize) {
+    if (!tileMapSystem || typeof tileMapSystem.forEachMapTileEntry !== "function" || typeof tileMapSystem.drawTile !== "function") {
+      return null;
+    }
+    const layerIds = getTownForegroundTileLayerIds(map);
+    if (!layerIds.length) {
+      return [];
+    }
+    const groupsBySortY = new Map();
+    let order = 0;
+    tileMapSystem.forEachMapTileEntry(map, (entry) => {
+      const sortY = Number.isFinite(entry.drawBottomY) ? entry.drawBottomY : entry.y + entry.tileSize;
+      const key = String(Math.round(sortY * 100) / 100);
+      const left = entry.x + (Number.isFinite(entry.drawOffsetX) ? entry.drawOffsetX : 0);
+      const top = entry.y + (Number.isFinite(entry.drawOffsetY) ? entry.drawOffsetY : 0);
+      const right = left + Math.max(1, Number(entry.drawWidth) || entry.tileSize);
+      const bottom = top + Math.max(1, Number(entry.drawHeight) || entry.tileSize);
+      let group = groupsBySortY.get(key);
+      if (!group) {
+        group = {
+          sortY,
+          order,
+          entries: [],
+          minX: left,
+          minY: top,
+          maxX: right,
+          maxY: bottom,
+        };
+        groupsBySortY.set(key, group);
+      }
+      group.entries.push({ ...entry, order: order++ });
+      group.minX = Math.min(group.minX, left);
+      group.minY = Math.min(group.minY, top);
+      group.maxX = Math.max(group.maxX, right);
+      group.maxY = Math.max(group.maxY, bottom);
+    }, {
+      layerIds,
+      viewport: getTownFullMapViewport(map, mapSize),
+    });
+
+    const groups = [...groupsBySortY.values()].sort((a, b) => (a.sortY - b.sortY) || (a.order - b.order));
+    for (const group of groups) {
+      group.x = Math.floor(group.minX);
+      group.y = Math.floor(group.minY);
+      group.w = Math.max(1, Math.ceil(group.maxX) - group.x);
+      group.h = Math.max(1, Math.ceil(group.maxY) - group.y);
+      const canvas = createTownRenderCanvas(group.w, group.h);
+      const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
+      if (!cacheCtx) {
+        return null;
+      }
+      group.entries.sort((a, b) => a.order - b.order);
+      for (const entry of group.entries) {
+        tileMapSystem.drawTile(cacheCtx, entry.tileEntry, entry.x - group.x, entry.y - group.y, entry.tileSize, { drawFallback: true });
+      }
+      group.canvas = canvas;
+      delete group.entries;
+      delete group.minX;
+      delete group.minY;
+      delete group.maxX;
+      delete group.maxY;
+    }
+    return groups;
+  }
+
+  function getTownDebugGridCache(map) {
+    if (!map || !tileMapSystem || typeof tileMapSystem.drawDebugGrid !== "function") {
+      return null;
+    }
+    const mapSize = getTownMapPixelSize(map);
+    const key = [
+      getTownMapCacheId(map),
+      Math.floor(Number(map.width) || 0),
+      Math.floor(Number(map.height) || 0),
+      Math.floor(Number(map.tileSize) || 48),
+      Math.round(mapSize.w || 0),
+      Math.round(mapSize.h || 0),
+      "debug-grid",
+    ].join("|");
+    if (townDebugGridCache && townDebugGridCache.key === key) {
+      return townDebugGridCache;
+    }
+    const canvas = createTownRenderCanvas(mapSize.w, mapSize.h);
+    const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
+    if (!cacheCtx) {
+      return null;
+    }
+    tileMapSystem.drawDebugGrid(cacheCtx, map, {
+      viewport: getTownFullMapViewport(map, mapSize),
+    });
+    townDebugGridCache = { key, canvas, mapSize };
+    return townDebugGridCache;
+  }
+
+  function drawCachedTownCanvas(canvas, viewport, mapSize) {
+    if (!canvas || !viewport) {
+      return false;
+    }
+    const sx = Math.max(0, Math.floor(Number(viewport.x) || 0));
+    const sy = Math.max(0, Math.floor(Number(viewport.y) || 0));
+    const maxW = Math.max(1, Math.ceil(Number(mapSize && mapSize.w) || canvas.width || 1));
+    const maxH = Math.max(1, Math.ceil(Number(mapSize && mapSize.h) || canvas.height || 1));
+    const sw = Math.max(0, Math.min(maxW - sx, Math.ceil(Number(viewport.w) || maxW)));
+    const sh = Math.max(0, Math.min(maxH - sy, Math.ceil(Number(viewport.h) || maxH)));
+    if (sw <= 0 || sh <= 0) {
+      return false;
+    }
+    ctx.drawImage(canvas, sx, sy, sw, sh, sx, sy, sw, sh);
+    return true;
+  }
+
+  function isTownDepthGroupVisible(group, viewport) {
+    if (!group || !viewport) {
+      return false;
+    }
+    const viewX = Number(viewport.x) || 0;
+    const viewY = Number(viewport.y) || 0;
+    const viewW = Math.max(0, Number(viewport.w) || 0);
+    const viewH = Math.max(0, Number(viewport.h) || 0);
+    return group.x + group.w >= viewX
+      && group.y + group.h >= viewY
+      && group.x <= viewX + viewW
+      && group.y <= viewY + viewH;
+  }
+
   function drawTown() {
     ctx.fillStyle = "#3f6a48";
     ctx.fillRect(0, 0, view.w, view.h);
@@ -317,12 +605,16 @@
         viewport: getTownVisibleWorldViewport(transform),
       });
     }
+    const cache = getTownTileMapRenderCache(map);
+    const viewport = getTownTileMapViewport(transform);
+    if (cache && cache.ready && cache.baseCanvas && drawCachedTownCanvas(cache.baseCanvas, viewport, cache.mapSize || mapSize)) {
+      return true;
+    }
     ctx.fillStyle = "#47784f";
     ctx.fillRect(0, 0, Math.max(1, mapSize.w || TOWN_WIDTH), Math.max(1, mapSize.h || TOWN_HEIGHT));
-    const viewport = getTownTileMapViewport(transform);
     tileMapSystem.drawTileMap(ctx, map, {
       drawFallback: true,
-      includeDefaultTile: true,
+      drawDefaultTile: false,
       layerIds: ["ground"],
       viewport,
     });
@@ -356,6 +648,42 @@
     }
 
     const layerIds = getTownForegroundTileLayerIds(map);
+    const cache = getTownTileMapRenderCache(map);
+    if (cache && cache.ready) {
+      const viewport = getTownTileMapViewport(transform);
+      const drawables = [];
+      for (const group of cache.depthGroups || []) {
+        if (!isTownDepthGroupVisible(group, viewport)) {
+          continue;
+        }
+        drawables.push({
+          type: "group",
+          sortY: group.sortY,
+          order: group.order,
+          group,
+        });
+      }
+      let order = 1000000;
+      for (const actor of getTownCharacterActors()) {
+        drawables.push({
+          type: "actor",
+          sortY: getTownActorSortY(actor),
+          order: order++,
+          actor,
+        });
+      }
+      drawables.sort((a, b) => (a.sortY - b.sortY) || (a.order - b.order));
+      for (const drawable of drawables) {
+        if (drawable.type === "group") {
+          ctx.drawImage(drawable.group.canvas, drawable.group.x, drawable.group.y);
+        } else {
+          drawTownActor(drawable.actor);
+        }
+      }
+      drawTownArgumentMarks();
+      return true;
+    }
+
     const drawables = [];
     let order = 0;
     tileMapSystem.forEachMapTileEntry(map, (entry) => {
@@ -397,7 +725,19 @@
     if (!map || !tileMapSystem) {
       return;
     }
-    if (game && game.settings && game.settings.mapDebugMode === true && typeof tileMapSystem.drawDebugGrid === "function") {
+    const debugEnabled = game && game.settings && game.settings.mapDebugMode === true;
+    if (!debugEnabled) {
+      if (lastTownMapDebugMode) {
+        townDebugGridCache = null;
+      }
+      lastTownMapDebugMode = false;
+      return;
+    }
+    lastTownMapDebugMode = true;
+    const debugCache = getTownDebugGridCache(map);
+    if (debugCache && debugCache.canvas) {
+      drawCachedTownCanvas(debugCache.canvas, getTownTileMapViewport(transform), debugCache.mapSize);
+    } else if (typeof tileMapSystem.drawDebugGrid === "function") {
       tileMapSystem.drawDebugGrid(ctx, map, { viewport: getTownTileMapViewport(transform) });
     }
   }

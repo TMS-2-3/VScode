@@ -66,6 +66,7 @@
       }
     }
 
+    const initialTownMapId = typeof town.mapId === "string" && town.mapId ? town.mapId : null;
     const initialTownPlayer = clonePlain(town.player, {});
     const initialPlayer = clonePlain(player, null);
 
@@ -410,6 +411,7 @@
         },
       };
 
+      town.mapId = initialTownMapId;
       town.player = clonePlain(initialTownPlayer, {});
       town.camera = { x: 0, y: 0 };
       town.buildings = [];
