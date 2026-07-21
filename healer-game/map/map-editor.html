@@ -1265,6 +1265,41 @@
           : createTileEntry(state.selectedTile) || null;
       }
 
+      function floodFillConnectedTiles(cell) {
+        const layer = getLayer();
+        const fillValue = getPlacementTileValue();
+        if (!cell || !layer || fillValue === undefined) return 0;
+
+        const targetTile = copyTileEntry(layer.tiles[cell.index]);
+        if (tileEntriesEqual(targetTile, fillValue)) return 0;
+
+        const width = state.map.width;
+        const height = state.map.height;
+        const visited = new Uint8Array(width * height);
+        const stack = [cell.index];
+        let changed = 0;
+
+        beginPendingHistoryEntry();
+        while (stack.length) {
+          const index = stack.pop();
+          if (visited[index]) continue;
+          visited[index] = 1;
+          if (!tileEntriesEqual(layer.tiles[index], targetTile)) continue;
+
+          layer.tiles[index] = copyTileEntry(fillValue);
+          changed += 1;
+
+          const x = index % width;
+          const y = Math.floor(index / width);
+          if (x > 0) stack.push(index - 1);
+          if (x < width - 1) stack.push(index + 1);
+          if (y > 0) stack.push(index - width);
+          if (y < height - 1) stack.push(index + width);
+        }
+
+        return changed;
+      }
+
       function fillRange(startCell, endCell) {
         const rect = getRectFromCells(startCell, endCell);
         const layer = getLayer();
@@ -1567,12 +1602,9 @@
           beginPendingHistoryEntry();
           layer.tiles[cell.index] = nextTile;
         } else if (state.tool === "fill") {
-          const fillValue = state.activeLayer === "ground"
-            ? createTileEntry(state.selectedTile)
-            : createTileEntry(state.selectedTile) || null;
-          if (layer.tiles.every((tile) => tileEntriesEqual(tile, fillValue))) return;
-          beginPendingHistoryEntry();
-          layer.tiles = layer.tiles.map(() => fillValue);
+          const filledCount = floodFillConnectedTiles(cell);
+          if (!filledCount) return;
+          setStatus(`${filledCount}マスを塗りつぶしました。`);
         }
         renderSurface();
       }
