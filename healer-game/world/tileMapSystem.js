@@ -188,6 +188,80 @@
       return Number.isFinite(rotation) ? rotation : 0;
     }
 
+    function readPositiveTileSpan(tile, keys) {
+      if (!tile) {
+        return 1;
+      }
+      for (const key of keys) {
+        const value = Math.floor(Number(tile[key]) || 0);
+        if (value > 0) {
+          return value;
+        }
+      }
+      return 1;
+    }
+
+    function getTileFootprint(tileEntry) {
+      const tileId = normalizeTileId(tileEntry);
+      const tile = getTileDef(tileId);
+      let width = readPositiveTileSpan(tile, ["footprintWidth", "footprintW", "tileWidth", "widthTiles", "collisionWidth"]);
+      let height = readPositiveTileSpan(tile, ["footprintHeight", "footprintH", "tileHeight", "heightTiles", "collisionHeight"]);
+      const rotation = Math.abs(getTileRotation(tileEntry)) % 180;
+      if (rotation === 90) {
+        [width, height] = [height, width];
+      }
+      return { width, height };
+    }
+
+    function getMaxTileFootprint() {
+      let width = 1;
+      let height = 1;
+      Object.keys(tileDefs).forEach((tileId) => {
+        const footprint = getTileFootprint(tileId);
+        width = Math.max(width, footprint.width);
+        height = Math.max(height, footprint.height);
+      });
+      return { width, height };
+    }
+
+    function tilePlacementCoversCoord(originCol, originRow, tileEntry, col, row) {
+      const footprint = getTileFootprint(tileEntry);
+      return col >= originCol
+        && row >= originRow
+        && col < originCol + footprint.width
+        && row < originRow + footprint.height;
+    }
+
+    function forEachTilePlacementCoveringCoord(mapOrId, col, row, callback) {
+      const map = getMap(mapOrId);
+      if (!map || !isInsideMap(map, col, row) || typeof callback !== "function") {
+        return false;
+      }
+      const maxFootprint = getMaxTileFootprint();
+      const minOriginCol = Math.max(0, col - maxFootprint.width + 1);
+      const minOriginRow = Math.max(0, row - maxFootprint.height + 1);
+      for (const layer of getVisibleLayers(map)) {
+        for (let originRow = minOriginRow; originRow <= row; originRow += 1) {
+          for (let originCol = minOriginCol; originCol <= col; originCol += 1) {
+            const tileEntry = getLayerTileEntry(map, layer, originCol, originRow);
+            const tileId = normalizeTileId(tileEntry);
+            if (!tileId || !tilePlacementCoversCoord(originCol, originRow, tileEntry, col, row)) {
+              continue;
+            }
+            callback({
+              tileEntry,
+              tileId,
+              layer,
+              col: originCol,
+              row: originRow,
+              footprint: getTileFootprint(tileEntry),
+            });
+          }
+        }
+      }
+      return true;
+    }
+
     function getMapMarginTileEntry(map) {
       if (!map) {
         return null;
@@ -299,7 +373,17 @@
       if (!map || !isInsideMap(map, col, row)) {
         return options.outOfBoundsPassable === true;
       }
-      return getTileStackAt(map, col, row).every(isTilePassable);
+      const defaultTile = normalizeTileId(map.defaultTile);
+      if (defaultTile && !isTilePassable(defaultTile)) {
+        return false;
+      }
+      let passable = true;
+      forEachTilePlacementCoveringCoord(map, col, row, (placement) => {
+        if (!isTilePassable(placement.tileId)) {
+          passable = false;
+        }
+      });
+      return passable;
     }
 
     function isWorldPointPassable(mapOrId, x, y, options = {}) {
@@ -330,9 +414,9 @@
         return [];
       }
       const events = [];
-      for (const tileId of getTileStackAt(map, col, row)) {
-        addTileEvents(events, tileId, trigger, col, row);
-      }
+      forEachTilePlacementCoveringCoord(map, col, row, (placement) => {
+        addTileEvents(events, placement.tileId, trigger, col, row);
+      });
       for (const event of Array.isArray(map.events) ? map.events : []) {
         if (eventMatchesTile(event, col, row, trigger)) {
           events.push(normalizeEvent(event, col, row));
@@ -735,6 +819,7 @@
       isInsideMap,
       getTileIdAt,
       getTileStackAt,
+      getTileFootprint,
       isTilePassable,
       isTileCoordPassable,
       isWorldPointPassable,

@@ -242,6 +242,7 @@
         followers: [],
         trail: [],
         interaction: null,
+        mapNamePopup: null,
         panel: null,
         selectedQuest: null,
         story: null,

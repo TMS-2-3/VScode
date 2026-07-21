@@ -419,6 +419,7 @@
       town.followers = [];
       town.trail = [];
       town.interaction = null;
+      town.mapNamePopup = null;
       town.panel = null;
       town.selectedQuest = null;
       town.story = null;

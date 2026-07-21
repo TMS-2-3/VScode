@@ -979,6 +979,161 @@
         return tileId ? defs[tileId] : null;
       }
 
+      function readPositiveTileSpan(def, keys) {
+        if (!def) return 1;
+        for (const key of keys) {
+          const value = Math.floor(Number(def[key]) || 0);
+          if (value > 0) return value;
+        }
+        return 1;
+      }
+
+      function getTileFootprint(tileEntry) {
+        const tileId = getTileIdFromEntry(tileEntry);
+        const def = getTileDef(tileId);
+        let width = readPositiveTileSpan(def, ["footprintWidth", "footprintW", "tileWidth", "widthTiles", "collisionWidth"]);
+        let height = readPositiveTileSpan(def, ["footprintHeight", "footprintH", "tileHeight", "heightTiles", "collisionHeight"]);
+        const rotation = getTileRotationFromEntry(tileEntry) % 180;
+        if (rotation === 90) {
+          [width, height] = [height, width];
+        }
+        return { width, height };
+      }
+
+      function getMaxTileFootprint() {
+        let width = 1;
+        let height = 1;
+        Object.keys(defs).forEach((tileId) => {
+          const footprint = getTileFootprint(tileId);
+          width = Math.max(width, footprint.width);
+          height = Math.max(height, footprint.height);
+        });
+        return { width, height };
+      }
+
+      function getTilePlacementAnchor(tileEntry, footprint = getTileFootprint(tileEntry)) {
+        const tileId = getTileIdFromEntry(tileEntry);
+        const def = getTileDef(tileId);
+        const explicitX = Math.floor(Number(def && (def.placementAnchorX ?? def.anchorX)) || 0);
+        const explicitY = Math.floor(Number(def && (def.placementAnchorY ?? def.anchorY)) || 0);
+        if (def && (Number.isFinite(def.placementAnchorX) || Number.isFinite(def.anchorX) || Number.isFinite(def.placementAnchorY) || Number.isFinite(def.anchorY))) {
+          return {
+            x: clampNumber(explicitX, 0, footprint.width - 1),
+            y: clampNumber(explicitY, 0, footprint.height - 1),
+          };
+        }
+        if (def && def.placementAnchor === "bottomCenter") {
+          return { x: Math.floor(footprint.width / 2), y: footprint.height - 1 };
+        }
+        return { x: 0, y: 0 };
+      }
+
+      function getPlacementRectFromOrigin(x, y, tileEntry) {
+        const footprint = getTileFootprint(tileEntry);
+        return { x, y, width: footprint.width, height: footprint.height };
+      }
+
+      function getPlacementRectFromCell(cell, tileEntry) {
+        if (!cell) return null;
+        const footprint = getTileFootprint(tileEntry);
+        const anchor = getTilePlacementAnchor(tileEntry, footprint);
+        return {
+          x: cell.x - anchor.x,
+          y: cell.y - anchor.y,
+          width: footprint.width,
+          height: footprint.height,
+        };
+      }
+
+      function isRectInsideMap(rect) {
+        return rect
+          && rect.x >= 0
+          && rect.y >= 0
+          && rect.x + rect.width <= state.map.width
+          && rect.y + rect.height <= state.map.height;
+      }
+
+      function rectContainsCell(rect, cell) {
+        return rect && cell
+          && cell.x >= rect.x
+          && cell.y >= rect.y
+          && cell.x < rect.x + rect.width
+          && cell.y < rect.y + rect.height;
+      }
+
+      function rectsOverlap(a, b) {
+        return a && b
+          && a.x < b.x + b.width
+          && a.x + a.width > b.x
+          && a.y < b.y + b.height
+          && a.y + a.height > b.y;
+      }
+
+      function findPlacementAtCell(layer, cell) {
+        if (!layer || !cell) return null;
+        const maxFootprint = getMaxTileFootprint();
+        const minX = Math.max(0, cell.x - maxFootprint.width + 1);
+        const minY = Math.max(0, cell.y - maxFootprint.height + 1);
+        for (let y = cell.y; y >= minY; y -= 1) {
+          for (let x = cell.x; x >= minX; x -= 1) {
+            const index = y * state.map.width + x;
+            const tileEntry = layer.tiles[index];
+            if (!getTileIdFromEntry(tileEntry)) continue;
+            const rect = getPlacementRectFromOrigin(x, y, tileEntry);
+            if (rectContainsCell(rect, cell)) {
+              return { x, y, index, rect, tileEntry };
+            }
+          }
+        }
+        return null;
+      }
+
+      function hasOverlappingPlacement(layer, rect, exceptIndex = -1) {
+        if (!layer || !rect) return false;
+        const maxFootprint = getMaxTileFootprint();
+        const minX = Math.max(0, rect.x - maxFootprint.width + 1);
+        const minY = Math.max(0, rect.y - maxFootprint.height + 1);
+        const maxX = Math.min(state.map.width - 1, rect.x + rect.width - 1);
+        const maxY = Math.min(state.map.height - 1, rect.y + rect.height - 1);
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const index = y * state.map.width + x;
+            if (index === exceptIndex) continue;
+            const tileEntry = layer.tiles[index];
+            if (!getTileIdFromEntry(tileEntry)) continue;
+            if (rectsOverlap(rect, getPlacementRectFromOrigin(x, y, tileEntry))) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function clearOverlappingPlacements(layer, rect, exceptIndex = -1) {
+        if (!layer || !rect) return false;
+        const maxFootprint = getMaxTileFootprint();
+        const fill = state.activeLayer === "ground" ? state.map.defaultTile : null;
+        const minX = Math.max(0, rect.x - maxFootprint.width + 1);
+        const minY = Math.max(0, rect.y - maxFootprint.height + 1);
+        const maxX = Math.min(state.map.width - 1, rect.x + rect.width - 1);
+        const maxY = Math.min(state.map.height - 1, rect.y + rect.height - 1);
+        let changed = false;
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const index = y * state.map.width + x;
+            if (index === exceptIndex) continue;
+            const tileEntry = layer.tiles[index];
+            if (!getTileIdFromEntry(tileEntry)) continue;
+            if (!rectsOverlap(rect, getPlacementRectFromOrigin(x, y, tileEntry))) continue;
+            if (!tileEntriesEqual(layer.tiles[index], fill)) {
+              layer.tiles[index] = fill;
+              changed = true;
+            }
+          }
+        }
+        return changed;
+      }
+
       function resolveEditorImagePath(src) {
         if (!src) return "";
         return src.startsWith("map/") ? `../${src}` : src;
@@ -1023,13 +1178,23 @@
       }
 
       function updateCursorForCell(cell) {
-        if (cell) {
-          cursorCell.classList.remove("hidden");
-          cursorCell.style.left = `${cell.x * state.map.tileSize}px`;
-          cursorCell.style.top = `${cell.y * state.map.tileSize}px`;
-        } else {
+        if (!cell) {
           cursorCell.classList.add("hidden");
+          return;
         }
+        let rect = { x: cell.x, y: cell.y, width: 1, height: 1 };
+        if (state.tool === "paint" && state.selectedTile) {
+          const nextTile = createTileEntry(state.selectedTile);
+          rect = getPlacementRectFromCell(cell, nextTile) || rect;
+        } else if (state.tool === "erase") {
+          const placement = findPlacementAtCell(getLayer(), cell);
+          if (placement) rect = placement.rect;
+        }
+        cursorCell.classList.remove("hidden");
+        cursorCell.style.left = `${rect.x * state.map.tileSize}px`;
+        cursorCell.style.top = `${rect.y * state.map.tileSize}px`;
+        cursorCell.style.width = `${rect.width * state.map.tileSize}px`;
+        cursorCell.style.height = `${rect.height * state.map.tileSize}px`;
       }
 
       function updateSurfacePointerFromClient(clientX, clientY) {
@@ -1389,8 +1554,6 @@
           });
         });
 
-        cursorCell.style.width = `${tileSize}px`;
-        cursorCell.style.height = `${tileSize}px`;
         mapTitle.textContent = state.map.name;
         applyMapZoom();
         updateExport();
@@ -1584,23 +1747,34 @@
 
       function paintCell(cell) {
         if (!cell) return;
-        const key = `${cell.index}:${state.activeLayer}:${state.tool}:${state.selectedTile}:${state.selectedRotation}`;
-        if (state.lastPaintKey === key && state.tool !== "fill") return;
-        state.lastPaintKey = key;
-
         const layer = getLayer();
         if (!layer) return;
         if (state.tool === "paint") {
           if (state.activeLayer !== "ground" && !state.selectedTile) return;
           const nextTile = createTileEntry(state.selectedTile);
-          if (tileEntriesEqual(layer.tiles[cell.index], nextTile)) return;
+          const rect = getPlacementRectFromCell(cell, nextTile);
+          const originIndex = rect ? rect.y * state.map.width + rect.x : -1;
+          const key = `${originIndex}:${state.activeLayer}:${state.tool}:${state.selectedTile}:${state.selectedRotation}`;
+          if (state.lastPaintKey === key) return;
+          state.lastPaintKey = key;
+          if (!isRectInsideMap(rect)) {
+            setStatus("その位置には配置範囲がマップ外にはみ出すため置けません。");
+            return;
+          }
+          if (tileEntriesEqual(layer.tiles[originIndex], nextTile) && !hasOverlappingPlacement(layer, rect, originIndex)) return;
           beginPendingHistoryEntry();
-          layer.tiles[cell.index] = nextTile;
+          clearOverlappingPlacements(layer, rect, originIndex);
+          layer.tiles[originIndex] = nextTile;
         } else if (state.tool === "erase") {
+          const placement = findPlacementAtCell(layer, cell);
+          const targetIndex = placement ? placement.index : cell.index;
+          const key = `${targetIndex}:${state.activeLayer}:${state.tool}`;
+          if (state.lastPaintKey === key) return;
+          state.lastPaintKey = key;
           const nextTile = state.activeLayer === "ground" ? state.map.defaultTile : null;
-          if (tileEntriesEqual(layer.tiles[cell.index], nextTile)) return;
+          if (tileEntriesEqual(layer.tiles[targetIndex], nextTile)) return;
           beginPendingHistoryEntry();
-          layer.tiles[cell.index] = nextTile;
+          layer.tiles[targetIndex] = nextTile;
         } else if (state.tool === "fill") {
           const filledCount = floodFillConnectedTiles(cell);
           if (!filledCount) return;

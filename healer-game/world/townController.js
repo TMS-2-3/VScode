@@ -85,6 +85,23 @@
       return mapId;
     }
 
+    function showTownMapNamePopup(tileMap, mapId) {
+      const name = tileMap && (tileMap.name || tileMap.label || tileMap.title);
+      const popupName = String(name || mapId || "").trim();
+      town.mapNamePopup = popupName ? { name: popupName, age: 0 } : null;
+    }
+
+    function updateTownMapNamePopup(dt = 0) {
+      const popup = town.mapNamePopup;
+      if (!popup) {
+        return;
+      }
+      popup.age = Math.max(0, Number(popup.age) || 0) + Math.max(0, Number(dt) || 0);
+      if (popup.age >= 4) {
+        town.mapNamePopup = null;
+      }
+    }
+
     function getTownTileMap() {
       const mapId = getTownMapId();
       if (!mapId || !tileMapSystem || typeof tileMapSystem.getMap !== "function") {
@@ -129,6 +146,7 @@
         tileMapSystem.clearMarginTileCache();
       }
       town.mapId = mapId;
+      showTownMapNamePopup(tileMap, mapId);
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;
@@ -414,6 +432,7 @@
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;
+      town.mapNamePopup = null;
       player.aim = null;
       town.player.gridMove = null;
       if (getTownTileMap() || town.buildings.length === 0) {
@@ -489,6 +508,7 @@
     }
 
     function updateTown(dt = 0) {
+      updateTownMapNamePopup(dt);
       if (!playerProfile.done) {
         updateProfileNameInput();
         town.interaction = getTownInteraction();
@@ -812,8 +832,6 @@
           options.targetRow = transfer.targetRow;
         }
         if (switchTownMap(transfer.targetMap, options)) {
-          game.message = `${transfer.name || "移動"}: ${transfer.targetMap}`;
-          game.messageTimer = 2.5;
           return true;
         }
       }

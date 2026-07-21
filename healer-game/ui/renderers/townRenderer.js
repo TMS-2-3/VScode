@@ -485,7 +485,7 @@
       ctx.restore();
     }
 
-    drawTownHud();
+    drawTownMapNamePopup();
     drawTownPanel();
   }
 
@@ -1061,19 +1061,36 @@
     ctx.restore();
   }
 
-  function drawTownHud() {
-    drawPanel(18, 18, Math.min(430, view.w - 36), 80);
+  function drawTownMapNamePopup() {
+    const popup = town && town.mapNamePopup;
+    if (!popup || !popup.name) {
+      return;
+    }
+    const holdTime = 3;
+    const fadeTime = 1;
+    const age = Math.max(0, Number(popup.age) || 0);
+    const alpha = age <= holdTime ? 1 : Math.max(0, 1 - (age - holdTime) / fadeTime);
+    if (alpha <= 0) {
+      return;
+    }
+
+    const title = String(popup.name);
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.font = "900 24px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const popupW = Math.min(view.w - 36, Math.max(230, ctx.measureText(title).width + 64));
+    const popupH = 56;
+    const popupX = Math.round((view.w - popupW) / 2);
+    const popupY = 24;
+    drawPanel(popupX, popupY, popupW, popupH);
     ctx.fillStyle = "#f7fff6";
-    ctx.font = "800 19px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText("はじまりの町", 34, 47);
-    ctx.font = "13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillStyle = "#ffd86b";
-    const interactLabel = getInteractLabel();
-    const moveText = getTownTileMap() ? "WASDで1マス移動" : "WASDで移動";
-    const target = town.interaction ? `${town.interaction.name}: ${interactLabel}で利用` : `${moveText} / 施設の近くで${interactLabel}`;
-    ctx.fillText(target, 34, 73);
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.lineWidth = 4;
+    ctx.strokeText(title, popupX + popupW / 2, popupY + popupH / 2 + 1);
+    ctx.fillText(title, popupX + popupW / 2, popupY + popupH / 2 + 1);
+    ctx.restore();
   }
 
   function drawTownPanel() {

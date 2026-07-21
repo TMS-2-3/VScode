@@ -526,6 +526,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     weaponShopFront: {
       id: "weaponShopFront",
@@ -537,6 +540,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     innFront: {
       id: "innFront",
@@ -548,6 +554,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     requestOfficeFront: {
       id: "requestOfficeFront",
@@ -559,6 +568,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     itemShopFront: {
       id: "itemShopFront",
@@ -570,6 +582,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     townHouseFront: {
       id: "townHouseFront",
@@ -581,6 +596,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     townHouseSideLeft: {
       id: "townHouseSideLeft",
@@ -592,6 +610,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
     townHouseSideRight: {
       id: "townHouseSideRight",
@@ -603,6 +624,9 @@
       drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 3,
+      footprintHeight: 2,
+      placementAnchor: "bottomCenter",
     },
   };
 
@@ -694,6 +718,9 @@
       drawHeight: 240,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 4,
+      footprintHeight: 5,
+      placementAnchor: "bottomCenter",
     },
     cityArmorShopFront: {
       id: "cityArmorShopFront",
@@ -705,6 +732,9 @@
       drawHeight: 240,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 4,
+      footprintHeight: 5,
+      placementAnchor: "bottomCenter",
     },
     cityInnFront: {
       id: "cityInnFront",
@@ -716,6 +746,9 @@
       drawHeight: 240,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 4,
+      footprintHeight: 5,
+      placementAnchor: "bottomCenter",
     },
     cityWeaponShopFront: {
       id: "cityWeaponShopFront",
@@ -727,6 +760,9 @@
       drawHeight: 240,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 4,
+      footprintHeight: 5,
+      placementAnchor: "bottomCenter",
     },
     cityItemShopFront: {
       id: "cityItemShopFront",
@@ -738,6 +774,9 @@
       drawHeight: 240,
       drawOffsetX: 0,
       drawOffsetY: 0,
+      footprintWidth: 4,
+      footprintHeight: 5,
+      placementAnchor: "bottomCenter",
     },
   });
 })();
