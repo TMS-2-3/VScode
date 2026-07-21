@@ -37,174 +37,100 @@
 
 
 
-    forestTest01: {
-
-      id: "forestTest01",
-
-      name: "森テスト01",
-
+    kuraku_forest_1: {
+      id: "kuraku_forest_1",
+      name: "クラク森1",
       tileSize: 48,
-
       width: 15,
-
       height: 8,
-
       defaultTile: "grass",
-
+      marginTiles: {
+        ground: "grass",
+        terrain: null,
+        object: null,
+        event: null,
+      },
       layers: [
-
         {
-
           id: "ground",
-
           name: "地面",
-
           tiles: [
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
             "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass", "darkGrass",
-
           ],
-
         },
-
         {
-
           id: "terrain",
-
           name: "地形",
-
           tiles: [
-
             { tileId: "forestWallPine", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallPine", rotate: 90 },
-
             { tileId: "forestWallPine", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallPine", rotate: 90 },
-
             { tileId: "forestWallPine", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallPine", rotate: 90 },
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             { tileId: "forestWallPine", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallPine", rotate: 90 },
-
             { tileId: "forestWallPine", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallPine", rotate: 90 },
-
             { tileId: "forestWallPine", rotate: 270 }, null, null, null, null, null, null, null, null, null, null, null, null, null, { tileId: "forestWallPine", rotate: 90 },
-
           ],
-
         },
-
         {
-
           id: "object",
-
           name: "配置物",
-
           tiles: [
-
             null, "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree", "pineTree",
-
           ],
-
         },
-
         {
-
           id: "event",
-
           name: "イベント",
-
           tiles: [
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-
           ],
-
-        },
-
+        }
       ],
-
       events: [
-
-        {
-
-          id: "forest_to_start_town",
-          name: "始まりの町へ",
-          type: "mapTransfer",
-
-          trigger: "step",
-          x: 0,
-          y: 3,
-          width: 1,
-          height: 2,
-          targetMap: "startTown01",
-
-          targetCol: 7,
-
-          targetRow: 6,
-        },
-
-        {
-
-          id: "forest_sign",
-
-          name: "森の看板",
-
-          type: "inspect",
-
-          x: 9,
-
-          y: 6,
-
-          text: "森の奥に注意。",
-
-        },
-
+              {
+                      "id": "forest_to_start_town",
+                      "name": "始まりの町へ",
+                      "type": "mapTransfer",
+                      "trigger": "step",
+                      "x": 0,
+                      "y": 3,
+                      "width": 1,
+                      "height": 2,
+                      "targetMap": "startTown01",
+                      "targetCol": 7,
+                      "targetRow": 6
+              },
+              {
+                      "id": "forest_sign",
+                      "name": "森の看板",
+                      "type": "inspect",
+                      "x": 9,
+                      "y": 6,
+                      "text": "森の奥に注意。"
+              }
       ],
-
     },
 
 
@@ -748,7 +674,7 @@
                 "y": 17,
                 "width": 1,
                 "height": 2,
-                "targetMap": "forestTest01",
+                "targetMap": "kuraku_forest_1",
                 "targetCol": 1,
                 "targetRow": 3
           }
@@ -756,7 +682,7 @@
   };
   window.HEALER_DEBUG_TILE_MAPS = [
     { id: "startTown01", label: "始まりの町" },
-    { id: "forestTest01", label: "森テスト1" },
+    { id: "kuraku_forest_1", label: "クラク森1" },
     { id: "forest2", label: "森テスト2" },
     { id: "flower", label: "花マップ" },
   ];

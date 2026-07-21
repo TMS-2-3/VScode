@@ -665,6 +665,7 @@
         undoStack: [],
         redoStack: [],
         pendingHistorySnapshot: null,
+        sourceMapId: null,
         dragClientX: null,
         dragClientY: null,
         autoScrollFrameId: 0,
@@ -1605,7 +1606,8 @@
         setStatus(`余白タイルの ${state.activeLayer} レイヤーを ${def && def.name ? def.name : state.selectedTile} にしました。`);
       }
 
-      function resizeMapFromInputs() {
+      function applyMapSettingsFromInputs(options = {}) {
+        const shouldRender = options.render !== false;
         const width = Math.max(1, Math.min(80, Number(mapWidthInput.value) || state.map.width));
         const height = Math.max(1, Math.min(80, Number(mapHeightInput.value) || state.map.height));
         const tileSize = Math.max(16, Math.min(96, Number(tileSizeInput.value) || 48));
@@ -1624,11 +1626,17 @@
           const fill = layer.id === "ground" ? defaultTile : null;
           return resizeLayerPreservingPositions(layer, oldWidth, oldHeight, width, height, fill);
         });
+        const changed = !snapshotsEqual(snapshot, createHistorySnapshot());
         clearDuplicateSelection();
         syncInputsFromMap();
-        renderAll();
-        commitHistoryEntry(snapshot);
-        setStatus("マップ設定を反映しました。");
+        if (shouldRender) renderAll();
+        if (changed) commitHistoryEntry(snapshot);
+        return changed;
+      }
+
+      function resizeMapFromInputs() {
+        const changed = applyMapSettingsFromInputs();
+        setStatus(changed ? "マップ設定を反映しました。" : "マップ設定に変更はありません。");
       }
 
       function formatTileRows(tiles, width, indent = "            ") {
@@ -1877,9 +1885,11 @@ ${baseIndent}}`;
       function loadMapById(mapId) {
         if (mapId === "__new") {
           state.map = createNewMap();
+          state.sourceMapId = null;
           mapSelect.value = "__new";
         } else {
           state.map = normalizeMap(sourceMaps[mapId]);
+          state.sourceMapId = mapId;
           mapSelect.value = mapId;
         }
         const choices = getPaletteTiles();
@@ -1961,6 +1971,7 @@ ${baseIndent}}`;
         }
 
         state.map = createNewMap();
+        state.sourceMapId = null;
         mapSelect.value = "__new";
         syncInputsFromMap();
         resetHistory();
@@ -1976,6 +1987,7 @@ ${baseIndent}}`;
             return;
           }
           state.map = normalizeMap(JSON.parse(raw));
+          state.sourceMapId = sourceMaps[state.map.id] ? state.map.id : null;
           syncInputsFromMap();
           resetHistory();
           renderAll();
@@ -1988,6 +2000,7 @@ ${baseIndent}}`;
       }
 
       async function copyExport() {
+        applyMapSettingsFromInputs();
         updateExport();
         try {
           await navigator.clipboard.writeText(exportText.value);
@@ -2000,6 +2013,7 @@ ${baseIndent}}`;
       }
 
       function downloadExport() {
+        applyMapSettingsFromInputs();
         updateExport();
         const blob = new Blob([exportText.value], { type: "text/javascript;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -2093,7 +2107,7 @@ ${baseIndent}}`;
           let end = closeIndex + 1;
           const semicolon = source.slice(end).match(/^[ \t]*;/);
           if (semicolon) end += semicolon[0].length;
-          return { start, end, indent: match[2], kind: "replace" };
+          return { start, end, indent: match[2], kind: "replace", format: "assignment", mapId };
         }
         return null;
       }
@@ -2112,28 +2126,128 @@ ${baseIndent}}`;
           let end = closeIndex + 1;
           const comma = source.slice(end).match(/^[ \t]*,/);
           if (comma) end += comma[0].length;
-          return { start, end, indent: match[2], kind: "replace" };
+          return { start, end, indent: match[2], kind: "replace", format: "property", mapId };
         }
         return null;
       }
 
-      function replaceMapInMapsSource(source, mapId) {
-        const safeId = sanitizeId(mapId);
-        const assignmentBlock = findMapAssignmentBlock(source, safeId);
-        if (assignmentBlock) {
-          const replacement = buildMapAssignmentSource(assignmentBlock.indent);
-          return {
-            source: `${source.slice(0, assignmentBlock.start)}${replacement}${source.slice(assignmentBlock.end)}`,
-            kind: assignmentBlock.kind,
-          };
+      function findMapBlock(source, mapId) {
+        return findMapAssignmentBlock(source, mapId) || findMapPropertyBlock(source, mapId);
+      }
+
+      function buildReplacementForBlock(block, mapId) {
+        if (block.format === "assignment") return buildMapAssignmentSource(block.indent);
+        return `${block.indent}${formatMapPropertyKey(mapId)}: ${buildMapObjectSource(block.indent)},`;
+      }
+
+      function replaceTargetMapReferences(source, previousMapId, mapId) {
+        if (!previousMapId || previousMapId === mapId) return source;
+        const oldId = escapeRegExp(JSON.stringify(previousMapId));
+        const nextId = JSON.stringify(mapId);
+        return source
+          .replace(new RegExp(`(targetMap\\s*:\\s*)${oldId}`, "g"), `$1${nextId}`)
+          .replace(new RegExp(`("targetMap"\\s*:\\s*)${oldId}`, "g"), `$1${nextId}`);
+      }
+
+      function findMatchingBracket(source, openIndex) {
+        let depth = 0;
+        let quote = "";
+        let escaped = false;
+        let inLineComment = false;
+        let inBlockComment = false;
+
+        for (let index = openIndex; index < source.length; index += 1) {
+          const char = source[index];
+          const next = source[index + 1];
+
+          if (inLineComment) {
+            if (char === "\n") inLineComment = false;
+            continue;
+          }
+          if (inBlockComment) {
+            if (char === "*" && next === "/") {
+              inBlockComment = false;
+              index += 1;
+            }
+            continue;
+          }
+          if (quote) {
+            if (escaped) {
+              escaped = false;
+              continue;
+            }
+            if (char === "\\") {
+              escaped = true;
+              continue;
+            }
+            if (char === quote) quote = "";
+            continue;
+          }
+          if (char === "/" && next === "/") {
+            inLineComment = true;
+            index += 1;
+            continue;
+          }
+          if (char === "/" && next === "*") {
+            inBlockComment = true;
+            index += 1;
+            continue;
+          }
+          if (char === "\"" || char === "'" || char === "`") {
+            quote = char;
+            continue;
+          }
+          if (char === "[") {
+            depth += 1;
+          } else if (char === "]") {
+            depth -= 1;
+            if (depth === 0) return index;
+          }
         }
 
-        const propertyBlock = findMapPropertyBlock(source, safeId);
-        if (propertyBlock) {
-          const replacement = `${propertyBlock.indent}${formatMapPropertyKey(safeId)}: ${buildMapObjectSource(propertyBlock.indent)},`;
+        return -1;
+      }
+
+      function upsertDebugMapEntry(source, previousMapId, mapId, mapName) {
+        const label = mapName || mapId;
+        const ids = Array.from(new Set([previousMapId, mapId].filter(Boolean)));
+        for (const id of ids) {
+          const pattern = new RegExp(
+            `(^|\\n)([ \\t]*)\\{\\s*id:\\s*${escapeRegExp(JSON.stringify(id))}\\s*,\\s*label:\\s*(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*')\\s*\\},?`,
+            "m",
+          );
+          const match = pattern.exec(source);
+          if (!match) continue;
+          const start = match.index + match[1].length;
+          const replacement = `${match[2]}{ id: ${formatStringSource(mapId)}, label: ${formatStringSource(label)} },`;
+          return `${source.slice(0, start)}${replacement}${source.slice(match.index + match[0].length)}`;
+        }
+
+        const debugMatch = /(^|\n)([ \t]*)window\.HEALER_DEBUG_TILE_MAPS\s*=\s*\[/.exec(source);
+        if (!debugMatch) return source;
+        const openIndex = source.indexOf("[", debugMatch.index);
+        const closeIndex = findMatchingBracket(source, openIndex);
+        if (closeIndex < 0) return source;
+        const entryIndent = `${debugMatch[2] || "  "}  `;
+        const insertion = `${entryIndent}{ id: ${formatStringSource(mapId)}, label: ${formatStringSource(label)} },\n`;
+        return `${source.slice(0, closeIndex)}${insertion}${source.slice(closeIndex)}`;
+      }
+
+      function replaceMapInMapsSource(source, mapId, previousMapId = mapId) {
+        const safeId = sanitizeId(mapId);
+        const previousSafeId = previousMapId ? sanitizeId(previousMapId) : safeId;
+        const renameBlock = previousSafeId !== safeId ? findMapBlock(source, previousSafeId) : null;
+        const currentBlock = findMapBlock(source, safeId);
+        const replaceBlock = renameBlock || currentBlock;
+
+        if (replaceBlock) {
+          const replacement = buildReplacementForBlock(replaceBlock, safeId);
+          let nextSource = `${source.slice(0, replaceBlock.start)}${replacement}${source.slice(replaceBlock.end)}`;
+          nextSource = replaceTargetMapReferences(nextSource, replaceBlock.mapId, safeId);
+          nextSource = upsertDebugMapEntry(nextSource, replaceBlock.mapId, safeId, state.map.name);
           return {
-            source: `${source.slice(0, propertyBlock.start)}${replacement}${source.slice(propertyBlock.end)}`,
-            kind: propertyBlock.kind,
+            source: nextSource,
+            kind: replaceBlock.mapId === safeId ? "replace" : "rename",
           };
         }
 
@@ -2142,8 +2256,9 @@ ${baseIndent}}`;
           const insertAt = debugMarker.index + debugMarker[1].length;
           const indent = debugMarker[2] || "  ";
           const insertion = `${buildMapAssignmentSource(indent)}\n`;
+          const insertedSource = `${source.slice(0, insertAt)}${insertion}${source.slice(insertAt)}`;
           return {
-            source: `${source.slice(0, insertAt)}${insertion}${source.slice(insertAt)}`,
+            source: upsertDebugMapEntry(insertedSource, previousSafeId, safeId, state.map.name),
             kind: "insert",
           };
         }
@@ -2151,8 +2266,9 @@ ${baseIndent}}`;
         const iifeEnd = source.lastIndexOf("})();");
         if (iifeEnd >= 0) {
           const insertion = `\n${buildMapAssignmentSource("  ")}\n`;
+          const insertedSource = `${source.slice(0, iifeEnd)}${insertion}${source.slice(iifeEnd)}`;
           return {
-            source: `${source.slice(0, iifeEnd)}${insertion}${source.slice(iifeEnd)}`,
+            source: upsertDebugMapEntry(insertedSource, previousSafeId, safeId, state.map.name),
             kind: "insert",
           };
         }
@@ -2162,6 +2278,7 @@ ${baseIndent}}`;
 
       async function applyCurrentMapToMapsJs() {
         finishPendingHistoryEntry();
+        applyMapSettingsFromInputs();
         updateExport();
         if (!window.showOpenFilePicker) {
           setStatus("このブラウザでは直接適用が使えません。Chrome/Edgeで map-editor.html を開いてください。");
@@ -2200,31 +2317,55 @@ ${baseIndent}}`;
         }
 
         const safeId = sanitizeId(state.map.id);
-        const ok = window.confirm(`${state.map.name || safeId} (${safeId}) を選択した maps.js に直接適用します。よろしいですか？`);
+        const previousMapId = state.sourceMapId || safeId;
+        const renameText = previousMapId !== safeId ? `\n${previousMapId} から ${safeId} へIDを変更します。` : "";
+        const ok = window.confirm(`${state.map.name || safeId} (${safeId}) を選択した maps.js に直接適用します。${renameText}\nよろしいですか？`);
         if (!ok) {
           setStatus("maps.jsへの適用をキャンセルしました。");
           return;
         }
 
+        let phase = "maps.jsの読み込み";
         try {
           const file = await fileHandle.getFile();
           const rawSource = await file.text();
-          const result = replaceMapInMapsSource(rawSource, safeId);
+          phase = "マップ定義の差し替え";
+          const result = replaceMapInMapsSource(rawSource, safeId, previousMapId);
+          phase = "maps.jsの構文確認";
+          new Function(result.source);
+          phase = "maps.jsへの書き込み";
           const writable = await fileHandle.createWritable();
           await writable.write(result.source);
           await writable.close();
 
+          if (previousMapId !== safeId) {
+            delete sourceMaps[previousMapId];
+          }
           sourceMaps[safeId] = normalizeMap(createSerializableMap(state.map));
+          state.sourceMapId = safeId;
           renderMapSelect();
           mapSelect.value = safeId;
           updateEditorMode();
           updateExport();
 
-          const actionText = result.kind === "insert" ? "新規追加" : "上書き";
+          const actionText = result.kind === "insert" ? "新規追加" : result.kind === "rename" ? "ID変更して上書き" : "上書き";
           setStatus(`${state.map.name || safeId} を maps.js に${actionText}しました。ゲーム側を再読み込みしてください。`);
+
+          try {
+            const savedFile = await fileHandle.getFile();
+            const savedSource = await savedFile.text();
+            if (!savedSource.includes(`id: ${formatStringSource(safeId)}`) && !savedSource.includes(`"id": ${formatStringSource(safeId)}`)) {
+              setStatus(`${state.map.name || safeId} を maps.js に${actionText}しましたが、保存後確認でIDを見つけられませんでした。ゲーム側で確認してください。`);
+            }
+          } catch (verifyError) {
+            console.warn("maps.js write verification skipped", verifyError);
+          }
         } catch (error) {
           console.error(error);
-          setStatus("maps.jsへの適用に失敗しました。ファイル内容かブラウザの権限を確認してください。");
+          const detail = error && (error.name || error.message)
+            ? ` (${[error.name, error.message].filter(Boolean).join(": ")})`
+            : "";
+          setStatus(`${phase}で失敗しました${detail}`);
         }
       }
 
@@ -2250,6 +2391,7 @@ ${baseIndent}}`;
           try {
             const raw = await file.text();
             state.map = normalizeMap(parseRecordPayload(raw));
+            state.sourceMapId = sourceMaps[state.map.id] ? state.map.id : null;
             syncInputsFromMap();
             resetHistory();
             renderAll();
@@ -2265,6 +2407,7 @@ ${baseIndent}}`;
         mapSelect.addEventListener("change", () => loadMapById(mapSelect.value));
         document.getElementById("new-map-button").addEventListener("click", () => {
           state.map = createNewMap();
+          state.sourceMapId = null;
           mapSelect.value = "__new";
           syncInputsFromMap();
           resetHistory();
