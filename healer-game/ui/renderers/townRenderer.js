@@ -119,9 +119,11 @@
   const TOWN_WALK_DIRECTIONS = ["down", "left", "right", "up"];
   const TOWN_WALK_FRAMES = [1, 2, 3];
   const TOWN_TILE_CHARACTER_FOOT_OFFSET_Y = 7;
+  const TOWN_MARGIN_DEPTH_DRAW_PADDING = 2;
   const townWalkImages = createTownWalkImages();
   const profileAppearanceImages = createProfileAppearanceImages();
   let townTileMapRenderCache = null;
+  let townMarginDepthRenderCache = null;
   let townDebugGridCache = null;
   let lastTownMapDebugMode = false;
 
@@ -399,6 +401,193 @@
     return groups;
   }
 
+  function getTownMarginDepthBounds(map, viewport, drawPadding = TOWN_MARGIN_DEPTH_DRAW_PADDING) {
+    const tileSize = tileMapSystem && typeof tileMapSystem.getTileSize === "function"
+      ? tileMapSystem.getTileSize(map)
+      : Math.max(1, Math.floor(Number(map && map.tileSize) || 48));
+    const mapSize = getTownMapPixelSize(map);
+    const safeViewport = viewport || { x: 0, y: 0, w: mapSize.w, h: mapSize.h };
+    const padding = Math.max(1, Math.floor(Number(drawPadding) || 1));
+    const viewX = Number(safeViewport.x) || 0;
+    const viewY = Number(safeViewport.y) || 0;
+    const viewW = Math.max(0, Number(safeViewport.w) || 0);
+    const viewH = Math.max(0, Number(safeViewport.h) || 0);
+    return {
+      tileSize,
+      minCol: Math.floor(viewX / tileSize) - padding,
+      minRow: Math.floor(viewY / tileSize) - padding,
+      maxCol: Math.ceil((viewX + viewW) / tileSize) + padding,
+      maxRow: Math.ceil((viewY + viewH) / tileSize) + padding,
+      mapWidth: Math.floor(Number(map && map.width) || 0),
+      mapHeight: Math.floor(Number(map && map.height) || 0),
+    };
+  }
+
+  function getTownMarginDepthCacheKey(map, layerIds, bounds) {
+    return [
+      getTownMapCacheId(map),
+      Math.floor(Number(map && map.width) || 0),
+      Math.floor(Number(map && map.height) || 0),
+      Math.floor(Number(map && map.tileSize) || 48),
+      layerIds.join(","),
+      bounds.tileSize,
+      bounds.minCol,
+      bounds.minRow,
+      bounds.maxCol,
+      bounds.maxRow,
+    ].join("|");
+  }
+
+  function getTownMarginEntrySide(entry, map) {
+    const mapWidth = Math.floor(Number(map && map.width) || 0);
+    if (entry && entry.col < 0) {
+      return "left";
+    }
+    if (entry && entry.col >= mapWidth) {
+      return "right";
+    }
+    return "middle";
+  }
+
+  function getTownMarginEntryOrderBase(side) {
+    if (side === "left") {
+      return -100000;
+    }
+    if (side === "right") {
+      return 900000;
+    }
+    return 400000;
+  }
+
+  function areTownMarginDepthImagesReady(map, layerIds, viewport) {
+    if (!tileMapSystem || typeof tileMapSystem.forEachMarginTileEntry !== "function") {
+      return false;
+    }
+    let ready = true;
+    tileMapSystem.forEachMarginTileEntry(map, (entry) => {
+      if (!isTownTileEntryImageReady(entry.tileEntry)) {
+        ready = false;
+      }
+    }, {
+      layerIds,
+      viewport,
+      drawPadding: TOWN_MARGIN_DEPTH_DRAW_PADDING,
+    });
+    return ready;
+  }
+
+  function buildTownMarginDepthGroups(map, layerIds, viewport) {
+    if (!tileMapSystem || typeof tileMapSystem.forEachMarginTileEntry !== "function" || typeof tileMapSystem.drawTile !== "function") {
+      return null;
+    }
+    const groupsByKey = new Map();
+    let order = 0;
+    tileMapSystem.forEachMarginTileEntry(map, (entry) => {
+      const sortY = Number.isFinite(entry.drawBottomY) ? entry.drawBottomY : entry.y + entry.tileSize;
+      const side = getTownMarginEntrySide(entry, map);
+      const key = `${Math.round(sortY * 100) / 100}|${side}`;
+      const left = entry.x + (Number.isFinite(entry.drawOffsetX) ? entry.drawOffsetX : 0);
+      const top = entry.y + (Number.isFinite(entry.drawOffsetY) ? entry.drawOffsetY : 0);
+      const right = left + Math.max(1, Number(entry.drawWidth) || entry.tileSize);
+      const bottom = top + Math.max(1, Number(entry.drawHeight) || entry.tileSize);
+      let group = groupsByKey.get(key);
+      if (!group) {
+        group = {
+          sortY,
+          order: getTownMarginEntryOrderBase(side) + order,
+          entries: [],
+          minX: left,
+          minY: top,
+          maxX: right,
+          maxY: bottom,
+        };
+        groupsByKey.set(key, group);
+      }
+      group.entries.push({ ...entry, order: order++ });
+      group.minX = Math.min(group.minX, left);
+      group.minY = Math.min(group.minY, top);
+      group.maxX = Math.max(group.maxX, right);
+      group.maxY = Math.max(group.maxY, bottom);
+    }, {
+      layerIds,
+      viewport,
+      drawPadding: TOWN_MARGIN_DEPTH_DRAW_PADDING,
+    });
+
+    const groups = [...groupsByKey.values()].sort((a, b) => (a.sortY - b.sortY) || (a.order - b.order));
+    for (const group of groups) {
+      group.x = Math.floor(group.minX);
+      group.y = Math.floor(group.minY);
+      group.w = Math.max(1, Math.ceil(group.maxX) - group.x);
+      group.h = Math.max(1, Math.ceil(group.maxY) - group.y);
+      const canvas = createTownRenderCanvas(group.w, group.h);
+      const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
+      if (!cacheCtx) {
+        return null;
+      }
+      group.entries.sort((a, b) => (a.order - b.order));
+      for (const entry of group.entries) {
+        tileMapSystem.drawTile(cacheCtx, entry.tileEntry, entry.x - group.x, entry.y - group.y, entry.tileSize, { drawFallback: true });
+      }
+      group.canvas = canvas;
+      delete group.entries;
+      delete group.minX;
+      delete group.minY;
+      delete group.maxX;
+      delete group.maxY;
+    }
+    return groups;
+  }
+
+  function getTownMarginDepthRenderCache(map, layerIds, viewport) {
+    if (!map || !layerIds.length || !tileMapSystem || typeof tileMapSystem.forEachMarginTileEntry !== "function") {
+      return null;
+    }
+    const bounds = getTownMarginDepthBounds(map, viewport);
+    if (bounds.minCol >= 0 && bounds.minRow >= 0 && bounds.maxCol < bounds.mapWidth && bounds.maxRow < bounds.mapHeight) {
+      return { key: "", ready: true, groups: [] };
+    }
+    const key = getTownMarginDepthCacheKey(map, layerIds, bounds);
+    if (townMarginDepthRenderCache && townMarginDepthRenderCache.key === key) {
+      if (!townMarginDepthRenderCache.ready && areTownMarginDepthImagesReady(map, layerIds, viewport)) {
+        townMarginDepthRenderCache.groups = buildTownMarginDepthGroups(map, layerIds, viewport) || [];
+        townMarginDepthRenderCache.ready = true;
+      }
+      return townMarginDepthRenderCache;
+    }
+    townMarginDepthRenderCache = {
+      key,
+      ready: false,
+      groups: [],
+    };
+    if (areTownMarginDepthImagesReady(map, layerIds, viewport)) {
+      townMarginDepthRenderCache.groups = buildTownMarginDepthGroups(map, layerIds, viewport) || [];
+      townMarginDepthRenderCache.ready = true;
+    }
+    return townMarginDepthRenderCache;
+  }
+
+  function appendTownMarginDepthGroupDrawables(drawables, map, layerIds, viewport) {
+    if (!Array.isArray(drawables)) {
+      return;
+    }
+    const cache = getTownMarginDepthRenderCache(map, layerIds, viewport);
+    if (!cache || !cache.ready) {
+      return;
+    }
+    for (const group of cache.groups || []) {
+      if (!isTownDepthGroupVisible(group, viewport)) {
+        continue;
+      }
+      drawables.push({
+        type: "marginGroup",
+        sortY: group.sortY,
+        order: group.order,
+        group,
+      });
+    }
+  }
+
   function getTownDebugGridCache(map) {
     if (!map || !tileMapSystem || typeof tileMapSystem.drawDebugGrid !== "function") {
       return null;
@@ -607,6 +796,7 @@
     if (typeof tileMapSystem.drawMarginTile === "function") {
       tileMapSystem.drawMarginTile(ctx, map, {
         drawFallback: true,
+        layerIds: getTownGroundTileLayerIds(map),
         useCache: true,
         viewport: getTownVisibleWorldViewport(transform),
       });
@@ -657,7 +847,9 @@
     const cache = getTownTileMapRenderCache(map);
     if (cache && cache.ready) {
       const viewport = getTownTileMapViewport(transform);
+      const marginViewport = getTownVisibleWorldViewport(transform);
       const drawables = [];
+      appendTownMarginDepthGroupDrawables(drawables, map, layerIds, marginViewport);
       for (const group of cache.depthGroups || []) {
         if (!isTownDepthGroupVisible(group, viewport)) {
           continue;
@@ -680,7 +872,7 @@
       }
       drawables.sort((a, b) => (a.sortY - b.sortY) || (a.order - b.order));
       for (const drawable of drawables) {
-        if (drawable.type === "group") {
+        if (drawable.type === "group" || drawable.type === "marginGroup") {
           ctx.drawImage(drawable.group.canvas, drawable.group.x, drawable.group.y);
         } else {
           drawTownActor(drawable.actor);
@@ -704,6 +896,9 @@
       viewport: getTownTileMapViewport(transform),
     });
 
+    appendTownMarginDepthGroupDrawables(drawables, map, layerIds, getTownVisibleWorldViewport(transform));
+
+    order = 1000000;
     for (const actor of getTownCharacterActors()) {
       drawables.push({
         type: "actor",
@@ -718,6 +913,8 @@
       if (drawable.type === "tile") {
         const entry = drawable.entry;
         tileMapSystem.drawTile(ctx, entry.tileEntry, entry.x, entry.y, entry.tileSize, { drawFallback: true });
+      } else if (drawable.type === "marginGroup") {
+        ctx.drawImage(drawable.group.canvas, drawable.group.x, drawable.group.y);
       } else {
         drawTownActor(drawable.actor);
       }

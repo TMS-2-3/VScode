@@ -45,9 +45,9 @@
       height: 21,
       defaultTile: "grass",
       marginTiles: {
-        ground: "grass",
+        ground: "test_grass",
         terrain: null,
-        object: null,
+        object: "tree",
         event: null,
       },
       layers: [
@@ -183,7 +183,7 @@
                       "y": 6,
                       "width": 1,
                       "height": 2,
-                      "targetMap": "forest2",
+                      "targetMap": "kuraku_forest_2",
                       "targetCol": 1,
                       "targetRow": 6
               },
@@ -200,17 +200,17 @@
 
 
 
-    forest2: {
-      id: "forest2",
-      name: "森テスト02",
+    kuraku_forest_2: {
+      id: "kuraku_forest_2",
+      name: "クラク森2",
       tileSize: 48,
       width: 30,
       height: 20,
       defaultTile: "grass",
       marginTiles: {
-        ground: "grass",
+        ground: "test_grass",
         terrain: null,
-        object: null,
+        object: "tree",
         event: null,
       },
       layers: [
@@ -868,7 +868,7 @@
   window.HEALER_DEBUG_TILE_MAPS = [
     { id: "startTown01", label: "クラク村" },
     { id: "kuraku_forest_1", label: "クラク森1" },
-    { id: "forest2", label: "森テスト02" },
+    { id: "kuraku_forest_2", label: "クラク森2" },
     { id: "flower", label: "花マップ" },
   ];
 })();

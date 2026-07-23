@@ -269,16 +269,32 @@
       return Object.prototype.hasOwnProperty.call(map, "marginTile") ? map.marginTile : map.defaultTile;
     }
 
-    function getMapMarginTileEntries(map) {
+    function shouldUseMarginLayerId(layerId, includeLayerIds, excludeLayerIds) {
+      const safeLayerId = String(layerId || "");
+      if (includeLayerIds && !includeLayerIds.has(safeLayerId)) {
+        return false;
+      }
+      if (excludeLayerIds && excludeLayerIds.has(safeLayerId)) {
+        return false;
+      }
+      return true;
+    }
+
+    function getMapMarginTileEntries(map, options = {}) {
       if (!map) {
         return [];
       }
+      const includeLayerIds = createLayerIdSet(options.layerIds || options.includeLayerIds);
+      const excludeLayerIds = createLayerIdSet(options.excludeLayerIds);
       const marginTiles = map.marginTiles;
       if (marginTiles && typeof marginTiles === "object" && !Array.isArray(marginTiles)) {
         const entries = [];
         const usedLayerIds = new Set();
         for (const layer of getVisibleLayers(map)) {
           if (!layer || !layer.id || !Object.prototype.hasOwnProperty.call(marginTiles, layer.id)) {
+            continue;
+          }
+          if (!shouldUseLayer(layer, includeLayerIds, excludeLayerIds)) {
             continue;
           }
           usedLayerIds.add(layer.id);
@@ -291,6 +307,9 @@
           if (usedLayerIds.has(layerId)) {
             return;
           }
+          if (!shouldUseMarginLayerId(layerId, includeLayerIds, excludeLayerIds)) {
+            return;
+          }
           const tileEntry = marginTiles[layerId];
           if (normalizeTileId(tileEntry)) {
             entries.push(tileEntry);
@@ -299,7 +318,48 @@
         return entries;
       }
       const legacyTileEntry = getMapMarginTileEntry(map);
+      if (includeLayerIds
+        && !includeLayerIds.has("default")
+        && !includeLayerIds.has("defaultTile")
+        && !includeLayerIds.has("ground")
+        && !includeLayerIds.has("margin")) {
+        return [];
+      }
+      if (excludeLayerIds
+        && (excludeLayerIds.has("default")
+          || excludeLayerIds.has("defaultTile")
+          || excludeLayerIds.has("ground")
+          || excludeLayerIds.has("margin"))) {
+        return [];
+      }
       return normalizeTileId(legacyTileEntry) ? [legacyTileEntry] : [];
+    }
+
+    function getMarginTileBounds(map, viewport, drawPadding) {
+      const tileSize = getTileSize(map);
+      const mapSize = getMapPixelSize(map);
+      const safeViewport = viewport || { x: 0, y: 0, w: mapSize.w, h: mapSize.h };
+      const padding = Math.max(1, Math.floor(Number(drawPadding) || 1));
+      const viewX = Number(safeViewport.x) || 0;
+      const viewY = Number(safeViewport.y) || 0;
+      const viewW = Math.max(0, Number(safeViewport.w) || 0);
+      const viewH = Math.max(0, Number(safeViewport.h) || 0);
+      return {
+        tileSize,
+        minCol: Math.floor(viewX / tileSize) - padding,
+        minRow: Math.floor(viewY / tileSize) - padding,
+        maxCol: Math.ceil((viewX + viewW) / tileSize) + padding,
+        maxRow: Math.ceil((viewY + viewH) / tileSize) + padding,
+        mapWidth: Math.floor(Number(map.width) || 0),
+        mapHeight: Math.floor(Number(map.height) || 0),
+      };
+    }
+
+    function isMarginBoundsInsideMap(bounds) {
+      return bounds.minCol >= 0
+        && bounds.minRow >= 0
+        && bounds.maxCol < bounds.mapWidth
+        && bounds.maxRow < bounds.mapHeight;
     }
 
     function getMapCacheId(map) {
@@ -597,6 +657,50 @@
       return true;
     }
 
+    function forEachMarginTileEntry(mapOrId, callback, options = {}) {
+      const map = getMap(mapOrId);
+      if (!map || typeof callback !== "function") {
+        return false;
+      }
+      const tileEntries = getMapMarginTileEntries(map, options);
+      if (!tileEntries.length) {
+        return false;
+      }
+      const bounds = getMarginTileBounds(map, options.viewport, options.drawPadding);
+      if (isMarginBoundsInsideMap(bounds)) {
+        return false;
+      }
+      for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+        for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
+          if (isInsideMap(map, col, row)) {
+            continue;
+          }
+          for (const tileEntry of tileEntries) {
+            const tileId = normalizeTileId(tileEntry);
+            if (!tileId) {
+              continue;
+            }
+            const metrics = getTileDrawMetrics(tileEntry, bounds.tileSize);
+            callback({
+              tileEntry,
+              tileId,
+              col,
+              row,
+              x: col * bounds.tileSize,
+              y: row * bounds.tileSize,
+              tileSize: bounds.tileSize,
+              drawWidth: metrics.drawWidth,
+              drawHeight: metrics.drawHeight,
+              drawOffsetX: metrics.drawOffsetX,
+              drawOffsetY: metrics.drawOffsetY,
+              drawBottomY: row * bounds.tileSize + metrics.drawOffsetY + metrics.drawHeight,
+            });
+          }
+        }
+      }
+      return true;
+    }
+
     function drawTileMap(ctx, mapOrId, options = {}) {
       const map = getMap(mapOrId);
       if (!ctx || !map) {
@@ -640,58 +744,47 @@
       if (!ctx || !map) {
         return false;
       }
-      const tileEntries = getMapMarginTileEntries(map);
+      const tileEntries = getMapMarginTileEntries(map, options);
       if (!tileEntries.length) {
         return false;
       }
-      const tileSize = getTileSize(map);
-      const viewport = options.viewport || { x: 0, y: 0, w: getMapPixelSize(map).w, h: getMapPixelSize(map).h };
-      const viewX = Number(viewport.x) || 0;
-      const viewY = Number(viewport.y) || 0;
-      const viewW = Math.max(0, Number(viewport.w) || 0);
-      const viewH = Math.max(0, Number(viewport.h) || 0);
-      const minCol = Math.floor(viewX / tileSize) - 1;
-      const minRow = Math.floor(viewY / tileSize) - 1;
-      const maxCol = Math.ceil((viewX + viewW) / tileSize) + 1;
-      const maxRow = Math.ceil((viewY + viewH) / tileSize) + 1;
-      const mapWidth = Math.floor(Number(map.width) || 0);
-      const mapHeight = Math.floor(Number(map.height) || 0);
-      if (minCol >= 0 && minRow >= 0 && maxCol < mapWidth && maxRow < mapHeight) {
+      const bounds = getMarginTileBounds(map, options.viewport, options.drawPadding);
+      if (isMarginBoundsInsideMap(bounds)) {
         return false;
       }
       if (options.useCache !== false && canCacheMarginTiles(tileEntries)) {
-        const overflow = getTileDrawOverflow(tileEntries, tileSize);
+        const overflow = getTileDrawOverflow(tileEntries, bounds.tileSize);
         const cacheKey = [
           getMapCacheId(map),
-          tileSize,
-          minCol,
-          minRow,
-          maxCol,
-          maxRow,
+          bounds.tileSize,
+          bounds.minCol,
+          bounds.minRow,
+          bounds.maxCol,
+          bounds.maxRow,
           JSON.stringify(tileEntries),
           options.drawFallback === false ? "nofallback" : "fallback",
         ].join("|");
         let cached = marginTileCache.get(cacheKey);
         if (!cached) {
-          const cols = Math.max(1, maxCol - minCol + 1);
-          const rows = Math.max(1, maxRow - minRow + 1);
-          const canvas = createRenderCanvas(cols * tileSize + overflow.left + overflow.right, rows * tileSize + overflow.top + overflow.bottom);
+          const cols = Math.max(1, bounds.maxCol - bounds.minCol + 1);
+          const rows = Math.max(1, bounds.maxRow - bounds.minRow + 1);
+          const canvas = createRenderCanvas(cols * bounds.tileSize + overflow.left + overflow.right, rows * bounds.tileSize + overflow.top + overflow.bottom);
           const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
           if (cacheCtx) {
-            for (let row = minRow; row <= maxRow; row += 1) {
-              for (let col = minCol; col <= maxCol; col += 1) {
+            for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+              for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
                 if (isInsideMap(map, col, row)) {
                   continue;
                 }
                 for (const tileEntry of tileEntries) {
-                  drawTile(cacheCtx, tileEntry, (col - minCol) * tileSize + overflow.left, (row - minRow) * tileSize + overflow.top, tileSize, options);
+                  drawTile(cacheCtx, tileEntry, (col - bounds.minCol) * bounds.tileSize + overflow.left, (row - bounds.minRow) * bounds.tileSize + overflow.top, bounds.tileSize, options);
                 }
               }
             }
             cached = {
               canvas,
-              x: minCol * tileSize - overflow.left,
-              y: minRow * tileSize - overflow.top,
+              x: bounds.minCol * bounds.tileSize - overflow.left,
+              y: bounds.minRow * bounds.tileSize - overflow.top,
             };
             marginTileCache.set(cacheKey, cached);
           }
@@ -701,13 +794,13 @@
           return true;
         }
       }
-      for (let row = minRow; row <= maxRow; row += 1) {
-        for (let col = minCol; col <= maxCol; col += 1) {
+      for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+        for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
           if (isInsideMap(map, col, row)) {
             continue;
           }
           for (const tileEntry of tileEntries) {
-            drawTile(ctx, tileEntry, col * tileSize, row * tileSize, tileSize, options);
+            drawTile(ctx, tileEntry, col * bounds.tileSize, row * bounds.tileSize, bounds.tileSize, options);
           }
         }
       }
@@ -833,6 +926,7 @@
       preloadTileImages,
       forEachMapTile,
       forEachMapTileEntry,
+      forEachMarginTileEntry,
       drawTileMap,
       drawTile,
       drawMarginTile,

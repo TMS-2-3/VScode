@@ -446,6 +446,7 @@
 
     function createGameLoopContext() {
       return {
+        config,
         game: state.game,
         update: callLater("battleRuntime", "update"),
         draw: callLater("renderer", "draw"),
