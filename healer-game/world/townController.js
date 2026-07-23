@@ -76,6 +76,29 @@
       requestOfficeFront: "guild",
       itemShopFront: "item",
     };
+    const TOWN_EVENT_ACTOR_LABELS = {
+      ulpes: "ウ",
+      rihas: "リ",
+      sushia: "ス",
+    };
+    const TOWN_EVENT_ACTOR_COLORS = {
+      ulpes: "#f4c54f",
+      rihas: "#e37a3f",
+      sushia: "#b985ee",
+    };
+    const SYMBOL_ENCOUNTER_MAX_PER_CONFIG = 3;
+    const SYMBOL_ENCOUNTER_WANDER_INTERVAL = 2;
+    const SYMBOL_ENCOUNTER_CHASE_INTERVAL = 1;
+    const SYMBOL_ENCOUNTER_ALERT_RANGE = 3;
+    const SYMBOL_ENCOUNTER_RELEASE_RANGE = 5;
+    const SYMBOL_ENCOUNTER_TRANSFER_EXCLUSION_RADIUS = 2;
+    const SYMBOL_ENCOUNTER_RANDOM_ATTEMPTS = 240;
+    const SYMBOL_ENCOUNTER_DIRECTIONS = [
+      { x: 0, y: -1, facing: "up" },
+      { x: 1, y: 0, facing: "right" },
+      { x: 0, y: 1, facing: "down" },
+      { x: -1, y: 0, facing: "left" },
+    ];
 
     function getTownMapId() {
       const fallbackId = TOWN_DATA && typeof TOWN_DATA.tileMapId === "string" ? TOWN_DATA.tileMapId : null;
@@ -162,6 +185,7 @@
       }
       initializeTownFollowers(true);
       resetTownTrail();
+      ensureTownMapSymbols(tileMap);
       town.interaction = getTownInteraction();
       updateTownCamera();
       return true;
@@ -413,6 +437,10 @@
 
     function startTown() {
       const returningFromBattle = game.state === "won" || game.state === "lost";
+      const completedQuest = game.currentQuest;
+      const completedSymbolEncounter = returningFromBattle && game.state === "won"
+        ? completedQuest && completedQuest.symbolEncounter
+        : null;
       if (returningFromBattle) {
         savePartyHp();
         savePartyStatuses();
@@ -430,6 +458,9 @@
       game.currentQuest = null;
       game.message = "はじまりの町";
       game.messageTimer = 4;
+      if (completedSymbolEncounter && completedSymbolEncounter.mapId) {
+        town.mapId = completedSymbolEncounter.mapId;
+      }
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;
@@ -439,7 +470,9 @@
       if (getTownTileMap() || town.buildings.length === 0) {
         setupTown();
       }
-      if (!town.introDone) {
+      if (completedSymbolEncounter && Number.isFinite(completedSymbolEncounter.returnCol) && Number.isFinite(completedSymbolEncounter.returnRow)) {
+        placeTownPlayerAtTile(getTownTileMap(), completedSymbolEncounter.returnCol, completedSymbolEncounter.returnRow);
+      } else if (!town.introDone) {
         const inn = getTownBuilding("inn");
         town.player.x = inn ? inn.door.x : TOWN_WIDTH * 0.5;
         town.player.y = inn ? inn.door.y + 52 : TOWN_HEIGHT - 155;
@@ -449,6 +482,12 @@
       }
       snapTownPlayerToGridCenter();
       clampTownPlayer();
+      if (completedSymbolEncounter) {
+        completeTownSymbolEncounter(completedSymbolEncounter);
+      } else if (returningFromBattle && town.symbolEncounters) {
+        ensureTownSymbolEncounterState().pendingBattle = null;
+      }
+      ensureTownMapSymbols();
       initializeTownFollowers(true);
       resetTownTrail();
       town.interaction = getTownInteraction();
@@ -521,6 +560,7 @@
       }
       updateTownMovement(dt);
       updateTownFollowers(dt);
+      updateTownSymbolEncounters(getTownTileMap(), dt);
       town.interaction = getTownInteraction();
     }
 
@@ -565,12 +605,380 @@
       };
     }
 
+    function getTownRawMapEvent(event) {
+      return event && event.raw ? event.raw : event;
+    }
+
+    function getTownMapEventAction(event) {
+      const raw = getTownRawMapEvent(event) || {};
+      return event && event.action || raw.action || raw.type || "";
+    }
+
+    function isTownMapEventActive(event) {
+      const raw = getTownRawMapEvent(event);
+      if (!raw || raw.enabled === false) {
+        return false;
+      }
+      if (raw.requiresProfileDone === true && !playerProfile.done) {
+        return false;
+      }
+      if ((raw.disabledWhenMeetingDone === true || raw.onlyBeforeMeetingDone === true) && town.meetingDone) {
+        return false;
+      }
+      if (raw.requiresMeetingDone === true && !town.meetingDone) {
+        return false;
+      }
+      return true;
+    }
+
+    function townMapEventMatchesTile(event, col, row) {
+      const raw = getTownRawMapEvent(event);
+      if (!raw) {
+        return false;
+      }
+      const eventCol = Math.floor(Number(raw.col ?? raw.x) || 0);
+      const eventRow = Math.floor(Number(raw.row ?? raw.y) || 0);
+      const width = Math.max(1, Math.floor(Number(raw.w ?? raw.width) || 1));
+      const height = Math.max(1, Math.floor(Number(raw.h ?? raw.height) || 1));
+      return col >= eventCol && row >= eventRow && col < eventCol + width && row < eventRow + height;
+    }
+
+    function getTownEventActors(tileMap = getTownTileMap()) {
+      if (!tileMap || !playerProfile.done || town.meetingDone) {
+        return [];
+      }
+      const events = Array.isArray(tileMap.events) ? tileMap.events : [];
+      return events
+        .filter((event) => {
+          const action = getTownMapEventAction(event);
+          return isTownMapEventActive(event) && (action === "partyJoinNpc" || action === "townNpc");
+        })
+        .map((event) => {
+          const raw = getTownRawMapEvent(event) || {};
+          const npcId = raw.npcId || raw.actorId || raw.characterId || raw.id;
+          const col = Math.floor(Number(raw.col ?? raw.x) || 0);
+          const row = Math.floor(Number(raw.row ?? raw.y) || 0);
+          const center = getTownTileCenter(tileMap, col, row);
+          return {
+            id: npcId,
+            eventId: raw.id || npcId,
+            name: raw.name || npcId,
+            x: center.x,
+            y: center.y,
+            color: raw.color || TOWN_EVENT_ACTOR_COLORS[npcId] || "#f7fff6",
+            label: raw.label || TOWN_EVENT_ACTOR_LABELS[npcId] || String(raw.name || npcId || "?").slice(0, 1),
+            facing: raw.facing || raw.direction || "down",
+            walkFrame: 1,
+            spriteHeight: Number.isFinite(town.player && town.player.spriteHeight) ? town.player.spriteHeight : TOWN_FOLLOWER_SPRITE_HEIGHT,
+            showArgumentMark: raw.showArgumentMark !== false,
+          };
+        });
+    }
+
+    function ensureTownSymbolEncounterState() {
+      if (!town.symbolEncounters || typeof town.symbolEncounters !== "object") {
+        town.symbolEncounters = {};
+      }
+      if (!town.symbolEncounters.byMapId || typeof town.symbolEncounters.byMapId !== "object") {
+        town.symbolEncounters.byMapId = {};
+      }
+      if (!Number.isFinite(town.symbolEncounters.nextId)) {
+        town.symbolEncounters.nextId = 1;
+      }
+      return town.symbolEncounters;
+    }
+
+    function getTownSymbolMapId(tileMap = getTownTileMap()) {
+      return String(tileMap && tileMap.id || getTownMapId() || "town");
+    }
+
+    function getTownSymbolMapState(mapId = getTownSymbolMapId()) {
+      const state = ensureTownSymbolEncounterState();
+      const key = String(mapId || "town");
+      if (!state.byMapId[key] || typeof state.byMapId[key] !== "object") {
+        state.byMapId[key] = { symbols: [] };
+      }
+      const mapState = state.byMapId[key];
+      if (!Array.isArray(mapState.symbols)) {
+        mapState.symbols = [];
+      }
+      return mapState;
+    }
+
+    function getTownSymbolEncounterConfigs(tileMap = getTownTileMap()) {
+      const configs = tileMap && (
+        tileMap.symbolEncounters
+        || tileMap.monsterSymbols
+        || tileMap.encounterSymbols
+      );
+      return Array.isArray(configs)
+        ? configs.filter((config) => config && config.enabled !== false)
+        : [];
+    }
+
+    function getTownSymbolConfigId(config, index = 0) {
+      return String(
+        config.id
+        || config.key
+        || config.symbolId
+        || config.enemyId
+        || config.role
+        || `symbol_${index + 1}`,
+      );
+    }
+
+    function getTownSymbolMaxCount(config) {
+      const value = Math.floor(Number(config && (config.maxSymbols ?? config.max ?? config.countPerMap)) || SYMBOL_ENCOUNTER_MAX_PER_CONFIG);
+      return Math.max(0, Math.min(SYMBOL_ENCOUNTER_MAX_PER_CONFIG, value));
+    }
+
+    function getTownSymbolEnemyCount(config) {
+      const value = Math.floor(Number(config && (config.enemyCount ?? config.enemyCountPerSymbol ?? config.battleCount)) || 3);
+      return Math.max(1, value);
+    }
+
+    function normalizeTownSymbolEnemyEntry(entry) {
+      if (typeof entry === "string") {
+        return entry ? { role: entry } : null;
+      }
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const role = entry.role || entry.enemyId || entry.type || entry.id;
+      if (!role) {
+        return null;
+      }
+      return { ...entry, role };
+    }
+
+    function resolveTownSymbolEnemyEntries(config) {
+      if (Array.isArray(config && config.enemies) && config.enemies.length > 0) {
+        return config.enemies
+          .map((entry) => normalizeTownSymbolEnemyEntry(entry))
+          .filter(Boolean);
+      }
+      const exactIds = Array.isArray(config && config.battleEnemyIds)
+        ? config.battleEnemyIds
+        : (Array.isArray(config && config.encounterEnemyIds) ? config.encounterEnemyIds : null);
+      if (exactIds && exactIds.length > 0) {
+        return exactIds
+          .map((enemyId) => normalizeTownSymbolEnemyEntry(enemyId))
+          .filter(Boolean);
+      }
+      const ids = [];
+      if (Array.isArray(config && config.enemyIds)) {
+        ids.push(...config.enemyIds.filter((enemyId) => enemyId));
+      } else if (config && (config.enemyId || config.role || config.enemyType)) {
+        ids.push(config.enemyId || config.role || config.enemyType);
+      }
+      if (ids.length === 0) {
+        return [];
+      }
+      if (ids.length > 1) {
+        return ids.map((enemyId) => ({ role: enemyId }));
+      }
+      const enemyCount = getTownSymbolEnemyCount(config);
+      return Array.from({ length: enemyCount }, () => ({ role: ids[0] }));
+    }
+
+    function getTownSymbolLabel(config) {
+      const label = String(config && (config.symbolLabel || config.mapLabel || config.marker || "") || "").trim();
+      if (label) {
+        return label.slice(0, 2);
+      }
+      return "M";
+    }
+
+    function getTownMapTransferTiles(tileMap) {
+      const tiles = [];
+      const events = Array.isArray(tileMap && tileMap.events) ? tileMap.events : [];
+      for (const event of events) {
+        const raw = getTownRawMapEvent(event) || {};
+        if (raw.enabled === false) {
+          continue;
+        }
+        const action = getTownMapEventAction(event);
+        if (action !== "mapTransfer" && action !== "transfer" && action !== "door") {
+          continue;
+        }
+        const eventCol = Math.floor(Number(raw.col ?? raw.x) || 0);
+        const eventRow = Math.floor(Number(raw.row ?? raw.y) || 0);
+        const width = Math.max(1, Math.floor(Number(raw.w ?? raw.width) || 1));
+        const height = Math.max(1, Math.floor(Number(raw.h ?? raw.height) || 1));
+        for (let row = eventRow; row < eventRow + height; row += 1) {
+          for (let col = eventCol; col < eventCol + width; col += 1) {
+            tiles.push({ col, row });
+          }
+        }
+      }
+      return tiles;
+    }
+
+    function isTownSymbolNearTransferTile(col, row, transferTiles) {
+      for (const tile of transferTiles || []) {
+        if (Math.hypot(col - tile.col, row - tile.row) <= SYMBOL_ENCOUNTER_TRANSFER_EXCLUSION_RADIUS) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function getTownSymbolTileKey(col, row) {
+      return `${Math.floor(col)},${Math.floor(row)}`;
+    }
+
+    function getTownSymbolOccupiedTiles(mapState, ignoreSymbolId = null) {
+      const occupied = new Set();
+      for (const symbol of Array.isArray(mapState && mapState.symbols) ? mapState.symbols : []) {
+        if (!symbol || symbol.removed || symbol.id === ignoreSymbolId) {
+          continue;
+        }
+        occupied.add(getTownSymbolTileKey(symbol.col, symbol.row));
+      }
+      return occupied;
+    }
+
+    function isTownSymbolSpawnTileAllowed(tileMap, col, row, occupied, transferTiles) {
+      if (!isTownGridTilePassable(tileMap, col, row)) {
+        return false;
+      }
+      const playerTile = getTownPlayerTile(tileMap);
+      if (playerTile && playerTile.col === col && playerTile.row === row) {
+        return false;
+      }
+      if (occupied && occupied.has(getTownSymbolTileKey(col, row))) {
+        return false;
+      }
+      return !isTownSymbolNearTransferTile(col, row, transferTiles);
+    }
+
+    function findTownSymbolSpawnTile(tileMap, mapState) {
+      const width = Math.max(0, Math.floor(Number(tileMap && tileMap.width) || 0));
+      const height = Math.max(0, Math.floor(Number(tileMap && tileMap.height) || 0));
+      if (width <= 0 || height <= 0) {
+        return null;
+      }
+      const occupied = getTownSymbolOccupiedTiles(mapState);
+      const transferTiles = getTownMapTransferTiles(tileMap);
+      for (let attempt = 0; attempt < SYMBOL_ENCOUNTER_RANDOM_ATTEMPTS; attempt += 1) {
+        const col = Math.floor(Math.random() * width);
+        const row = Math.floor(Math.random() * height);
+        if (isTownSymbolSpawnTileAllowed(tileMap, col, row, occupied, transferTiles)) {
+          return { col, row };
+        }
+      }
+      const total = width * height;
+      const start = Math.floor(Math.random() * Math.max(1, total));
+      for (let offset = 0; offset < total; offset += 1) {
+        const index = (start + offset) % total;
+        const col = index % width;
+        const row = Math.floor(index / width);
+        if (isTownSymbolSpawnTileAllowed(tileMap, col, row, occupied, transferTiles)) {
+          return { col, row };
+        }
+      }
+      return null;
+    }
+
+    function makeTownMonsterSymbol(tileMap, mapId, config, configIndex, spawnTile) {
+      const state = ensureTownSymbolEncounterState();
+      const configId = getTownSymbolConfigId(config, configIndex);
+      const center = getTownTileCenter(tileMap, spawnTile.col, spawnTile.row);
+      const enemyEntries = resolveTownSymbolEnemyEntries(config);
+      return {
+        type: "monsterSymbol",
+        id: `${mapId}:${configId}:${state.nextId++}`,
+        mapId,
+        configId,
+        name: String(config.name || config.label || configId),
+        label: getTownSymbolLabel(config),
+        color: config.color || "#9f7cff",
+        rank: config.rank || "D",
+        col: spawnTile.col,
+        row: spawnTile.row,
+        x: center.x,
+        y: center.y,
+        facing: "down",
+        alert: false,
+        moveTimer: Math.random() * SYMBOL_ENCOUNTER_WANDER_INTERVAL,
+        chaseTimer: 0,
+        radius: Math.max(10, Number(config.radius) || 16),
+        enemyEntries,
+      };
+    }
+
+    function ensureTownMapSymbols(tileMap = getTownTileMap()) {
+      if (!tileMap) {
+        return [];
+      }
+      const configs = getTownSymbolEncounterConfigs(tileMap);
+      const mapId = getTownSymbolMapId(tileMap);
+      const mapState = getTownSymbolMapState(mapId);
+      if (configs.length === 0) {
+        mapState.symbols = [];
+        return mapState.symbols;
+      }
+      const activeConfigIds = new Set(configs.map((config, index) => getTownSymbolConfigId(config, index)));
+      mapState.symbols = mapState.symbols.filter((symbol) => symbol && !symbol.removed && activeConfigIds.has(symbol.configId));
+      configs.forEach((config, index) => {
+        const configId = getTownSymbolConfigId(config, index);
+        const maxCount = getTownSymbolMaxCount(config);
+        let currentCount = mapState.symbols.filter((symbol) => symbol.configId === configId).length;
+        while (currentCount < maxCount) {
+          const spawnTile = findTownSymbolSpawnTile(tileMap, mapState);
+          if (!spawnTile) {
+            break;
+          }
+          mapState.symbols.push(makeTownMonsterSymbol(tileMap, mapId, config, index, spawnTile));
+          currentCount += 1;
+        }
+      });
+      return mapState.symbols;
+    }
+
+    function getTownMonsterSymbols(tileMap = getTownTileMap()) {
+      return ensureTownMapSymbols(tileMap)
+        .filter((symbol) => symbol && !symbol.removed)
+        .map((symbol) => ({
+          type: "monsterSymbol",
+          id: symbol.id,
+          mapId: symbol.mapId,
+          configId: symbol.configId,
+          name: symbol.name,
+          label: symbol.label,
+          color: symbol.color,
+          x: symbol.x,
+          y: symbol.y,
+          col: symbol.col,
+          row: symbol.row,
+          facing: symbol.facing || "down",
+          alert: symbol.alert === true,
+          radius: symbol.radius,
+        }));
+    }
+
+    function isTownTileBlockedByMapEvent(tileMap, col, row) {
+      if (!tileMap || town.meetingDone) {
+        return false;
+      }
+      const events = Array.isArray(tileMap.events) ? tileMap.events : [];
+      return events.some((event) => {
+        const action = getTownMapEventAction(event);
+        const raw = getTownRawMapEvent(event) || {};
+        const blocks = raw.blocking === true || action === "partyJoinNpc";
+        return blocks && isTownMapEventActive(event) && townMapEventMatchesTile(event, col, row);
+      });
+    }
+
     function isTownGridTilePassable(tileMap, col, row) {
       if (!tileMap) {
         return false;
       }
       if (tileMapSystem && typeof tileMapSystem.isTileCoordPassable === "function"
         && !tileMapSystem.isTileCoordPassable(tileMap, col, row, { outOfBoundsPassable: false })) {
+        return false;
+      }
+      if (isTownTileBlockedByMapEvent(tileMap, col, row)) {
         return false;
       }
       const tileSize = getTownTileSize(tileMap);
@@ -866,12 +1274,63 @@
       };
     }
 
+    function getTownGuidedStepData(event) {
+      if (!event) {
+        return null;
+      }
+      const raw = getTownRawMapEvent(event) || {};
+      const payload = event.payload || raw.payload || {};
+      const action = getTownMapEventAction(event);
+      if (action !== "guidedStep" && action !== "forcedStep") {
+        return null;
+      }
+      if (!isTownMapEventActive(event)) {
+        return null;
+      }
+      const move = raw.move || payload.move || {};
+      const moveX = Math.floor(Number(raw.moveX ?? raw.dx ?? move.x) || 0);
+      const moveY = Math.floor(Number(raw.moveY ?? raw.dy ?? move.y) || 0);
+      return {
+        message: raw.message || payload.message || "",
+        messageTimer: Number(raw.messageTimer ?? payload.messageTimer) || 3,
+        facing: raw.facing || raw.direction || payload.facing || payload.direction || town.player.facing || "down",
+        moveX,
+        moveY,
+      };
+    }
+
+    function runTownGuidedStep(tileMap, guided) {
+      if (!guided) {
+        return false;
+      }
+      if (guided.message) {
+        game.message = guided.message;
+        game.messageTimer = Math.max(0, guided.messageTimer || 3);
+      }
+      town.player.facing = guided.facing || town.player.facing || "down";
+      town.player.gridMove = null;
+      if (guided.moveX || guided.moveY) {
+        startTownGridMove(tileMap, {
+          x: guided.moveX,
+          y: guided.moveY,
+          facing: town.player.facing,
+        });
+      }
+      return true;
+    }
+
     function handleTownStepEvents(tileMap) {
       if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function") {
         return false;
       }
       const tile = getTownPlayerTile(tileMap);
       const events = tileMapSystem.getEventsAtTile(tileMap, tile.col, tile.row, "step");
+      for (const event of events) {
+        const guided = getTownGuidedStepData(event);
+        if (runTownGuidedStep(tileMap, guided)) {
+          return true;
+        }
+      }
       for (const event of events) {
         const transfer = getTownMapTransferData(event);
         if (!transfer) {
@@ -887,6 +1346,217 @@
         }
       }
       return false;
+    }
+
+    function updateTownSymbolEncounters(tileMap = getTownTileMap(), dt = 0) {
+      if (!tileMap) {
+        return;
+      }
+      const symbols = ensureTownMapSymbols(tileMap);
+      if (!symbols.length || game.state !== "town" || !playerProfile.done || town.panel || town.story || (game.systemMenu && game.systemMenu.open)) {
+        return;
+      }
+      const elapsed = Math.min(0.5, Math.max(0, Number(dt) || 0));
+      if (elapsed <= 0) {
+        checkTownSymbolEncounter(tileMap, symbols);
+        return;
+      }
+      const playerTile = getTownPlayerTile(tileMap);
+      const occupied = getTownSymbolOccupiedTiles(getTownSymbolMapState(getTownSymbolMapId(tileMap)));
+      for (const symbol of symbols) {
+        if (!symbol || symbol.removed) {
+          continue;
+        }
+        updateTownSymbolAlert(symbol, playerTile);
+        if (symbol.alert) {
+          updateTownSymbolChase(tileMap, symbol, playerTile, occupied, elapsed);
+        } else {
+          updateTownSymbolWander(tileMap, symbol, occupied, elapsed);
+        }
+        updateTownSymbolAlert(symbol, playerTile);
+      }
+      checkTownSymbolEncounter(tileMap, symbols);
+    }
+
+    function getTownSymbolDistanceToTile(symbol, tile) {
+      if (!symbol || !tile) {
+        return Infinity;
+      }
+      return Math.hypot(symbol.col - tile.col, symbol.row - tile.row);
+    }
+
+    function updateTownSymbolAlert(symbol, playerTile) {
+      const distance = getTownSymbolDistanceToTile(symbol, playerTile);
+      if (symbol.alert) {
+        if (distance > SYMBOL_ENCOUNTER_RELEASE_RANGE) {
+          symbol.alert = false;
+          symbol.chaseTimer = 0;
+        }
+      } else if (distance <= SYMBOL_ENCOUNTER_ALERT_RANGE) {
+        symbol.alert = true;
+        symbol.chaseTimer = 0;
+      }
+    }
+
+    function updateTownSymbolWander(tileMap, symbol, occupied, dt) {
+      symbol.moveTimer = (Number.isFinite(symbol.moveTimer) ? symbol.moveTimer : 0) + dt;
+      while (symbol.moveTimer >= SYMBOL_ENCOUNTER_WANDER_INTERVAL) {
+        symbol.moveTimer -= SYMBOL_ENCOUNTER_WANDER_INTERVAL;
+        const directions = shuffleTownSymbolDirections(SYMBOL_ENCOUNTER_DIRECTIONS);
+        for (const step of directions) {
+          if (tryMoveTownSymbol(tileMap, symbol, step, occupied)) {
+            break;
+          }
+        }
+      }
+    }
+
+    function updateTownSymbolChase(tileMap, symbol, playerTile, occupied, dt) {
+      symbol.chaseTimer = (Number.isFinite(symbol.chaseTimer) ? symbol.chaseTimer : 0) + dt;
+      while (symbol.chaseTimer >= SYMBOL_ENCOUNTER_CHASE_INTERVAL) {
+        symbol.chaseTimer -= SYMBOL_ENCOUNTER_CHASE_INTERVAL;
+        const directions = getTownSymbolChaseDirections(symbol, playerTile);
+        for (const step of directions) {
+          if (tryMoveTownSymbol(tileMap, symbol, step, occupied)) {
+            break;
+          }
+        }
+      }
+    }
+
+    function shuffleTownSymbolDirections(directions) {
+      const result = directions.slice();
+      for (let i = result.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+
+    function getTownSymbolChaseDirections(symbol, playerTile) {
+      return shuffleTownSymbolDirections(SYMBOL_ENCOUNTER_DIRECTIONS)
+        .map((step) => ({
+          ...step,
+          score: Math.hypot((symbol.col + step.x) - playerTile.col, (symbol.row + step.y) - playerTile.row),
+        }))
+        .sort((a, b) => a.score - b.score);
+    }
+
+    function tryMoveTownSymbol(tileMap, symbol, step, occupied) {
+      if (!step || (!step.x && !step.y)) {
+        return false;
+      }
+      const targetCol = symbol.col + step.x;
+      const targetRow = symbol.row + step.y;
+      const fromKey = getTownSymbolTileKey(symbol.col, symbol.row);
+      const targetKey = getTownSymbolTileKey(targetCol, targetRow);
+      if (occupied && occupied.has(targetKey)) {
+        return false;
+      }
+      if (!isTownGridTilePassable(tileMap, targetCol, targetRow)) {
+        return false;
+      }
+      const center = getTownTileCenter(tileMap, targetCol, targetRow);
+      if (occupied) {
+        occupied.delete(fromKey);
+        occupied.add(targetKey);
+      }
+      symbol.col = targetCol;
+      symbol.row = targetRow;
+      symbol.x = center.x;
+      symbol.y = center.y;
+      symbol.facing = step.facing || symbol.facing || "down";
+      return true;
+    }
+
+    function checkTownSymbolEncounter(tileMap, symbols = ensureTownMapSymbols(tileMap)) {
+      if (!tileMap || game.state !== "town" || !Array.isArray(symbols) || !symbols.length) {
+        return false;
+      }
+      const playerTile = getTownPlayerTile(tileMap);
+      const engagedSymbols = symbols.filter((symbol) => symbol
+        && !symbol.removed
+        && symbol.alert === true
+        && symbol.col === playerTile.col
+        && symbol.row === playerTile.row);
+      if (!engagedSymbols.length) {
+        return false;
+      }
+      return startTownSymbolEncounterBattle(tileMap, engagedSymbols);
+    }
+
+    function startTownSymbolEncounterBattle(tileMap, symbols) {
+      const quest = buildTownSymbolEncounterQuest(tileMap, symbols);
+      if (!quest) {
+        return false;
+      }
+      const state = ensureTownSymbolEncounterState();
+      state.pendingBattle = quest.symbolEncounter;
+      for (const symbol of symbols) {
+        symbol.inBattle = true;
+      }
+      resetGame(quest);
+      return true;
+    }
+
+    function buildTownSymbolEncounterQuest(tileMap, symbols) {
+      const mapId = getTownSymbolMapId(tileMap);
+      const playerTile = getTownPlayerTile(tileMap);
+      const enemiesForBattle = [];
+      symbols.forEach((symbol, symbolIndex) => {
+        const enemyEntries = Array.isArray(symbol.enemyEntries) ? symbol.enemyEntries : [];
+        enemyEntries.forEach((entry, enemyIndex) => {
+          const normalized = normalizeTownSymbolEnemyEntry(entry);
+          if (!normalized) {
+            return;
+          }
+          enemiesForBattle.push({
+            ...normalized,
+            name: normalized.name || `${symbol.name || symbol.configId}${symbolIndex + 1}-${enemyIndex + 1}`,
+          });
+        });
+      });
+      if (!enemiesForBattle.length) {
+        return null;
+      }
+      const primaryName = symbols.length === 1
+        ? (symbols[0].name || symbols[0].configId || "Symbol")
+        : `Symbols x${symbols.length}`;
+      return {
+        id: `symbol_${mapId}_${Date.now()}`,
+        type: "symbolEncounter",
+        rank: symbols[0] && symbols[0].rank || "D",
+        name: primaryName,
+        objective: "Defeat all enemies",
+        enemyPreview: enemiesForBattle.map((entry) => entry.role).join(" / "),
+        battleId: `symbol_${mapId}`,
+        enemies: enemiesForBattle,
+        symbolEncounter: {
+          mapId,
+          symbolIds: symbols.map((symbol) => symbol.id),
+          returnCol: playerTile.col,
+          returnRow: playerTile.row,
+        },
+      };
+    }
+
+    function completeTownSymbolEncounter(encounter) {
+      if (!encounter || !encounter.mapId || !Array.isArray(encounter.symbolIds)) {
+        return;
+      }
+      const mapState = getTownSymbolMapState(encounter.mapId);
+      const defeatedIds = new Set(encounter.symbolIds);
+      mapState.symbols = mapState.symbols.filter((symbol) => symbol && !defeatedIds.has(symbol.id));
+      const state = ensureTownSymbolEncounterState();
+      if (state.pendingBattle && state.pendingBattle.mapId === encounter.mapId) {
+        state.pendingBattle = null;
+      }
+      const tileMap = tileMapSystem && typeof tileMapSystem.getMap === "function"
+        ? tileMapSystem.getMap(encounter.mapId)
+        : null;
+      if (tileMap) {
+        ensureTownMapSymbols(tileMap);
+      }
     }
     function moveTownPlayerAxis(dx, dy) {
       const nextX = town.player.x + dx;
@@ -1182,6 +1852,38 @@
       return { x: fallback.x, y: fallback.y, facing: fallback.facing || "down" };
     }
 
+    function getTownFacingDelta(facing) {
+      if (facing === "left") return { x: -1, y: 0 };
+      if (facing === "right") return { x: 1, y: 0 };
+      if (facing === "up") return { x: 0, y: -1 };
+      return { x: 0, y: 1 };
+    }
+
+    function getTownNpcInteractionFromTileMap(tileMap) {
+      if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function" || town.meetingDone) {
+        return null;
+      }
+      const tile = getTownPlayerTile(tileMap);
+      const dir = getTownFacingDelta(town.player.facing || "down");
+      const targetCol = tile.col + dir.x;
+      const targetRow = tile.row + dir.y;
+      const events = tileMapSystem.getEventsAtTile(tileMap, targetCol, targetRow, "interact");
+      for (const event of events) {
+        const raw = getTownRawMapEvent(event) || {};
+        const action = getTownMapEventAction(event);
+        if (!isTownMapEventActive(event) || (action !== "partyJoinNpc" && action !== "townNpc")) {
+          continue;
+        }
+        return {
+          id: "meetingNpc",
+          eventId: raw.id || null,
+          npcId: raw.npcId || raw.actorId || raw.characterId || null,
+          name: raw.name || raw.npcId || raw.id || "仲間",
+        };
+      }
+      return null;
+    }
+
     function getTownFacilityInteractionFromTileMap(tileMap) {
       if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function") {
         return null;
@@ -1232,6 +1934,10 @@
       }
       const tileMap = getTownTileMap();
       if (tileMap) {
+        const npc = getTownNpcInteractionFromTileMap(tileMap);
+        if (npc) {
+          return npc;
+        }
         return getTownFacilityInteractionFromTileMap(tileMap);
       }
       let best = null;
@@ -1284,6 +1990,11 @@
         return;
       }
 
+      if (target.id === "meetingNpc") {
+        startGuildMeetingStory();
+        return;
+      }
+
       if (target.id === "inn") {
         showInnPanel();
       } else if (target.id === "item") {
@@ -1294,7 +2005,8 @@
         showEquipmentShopPanel("armor");
       } else if (target.id === "guild") {
         if (!town.meetingDone) {
-          startGuildMeetingStory();
+          game.message = "3人に話しかけよう";
+          game.messageTimer = 3;
           return;
         }
         showQuestTypePanel();
@@ -2480,6 +3192,8 @@
       setupTown,
       makeTownBuilding,
       getTownBuilding,
+      getTownEventActors,
+      getTownMonsterSymbols,
       updateTown,
       updateTownCamera,
       getTownInteraction,

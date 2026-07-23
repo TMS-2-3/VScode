@@ -329,6 +329,8 @@
         selectProfilePronoun: callLater("profileSystem", "selectProfilePronoun"),
         confirmProfileName: callLater("profileSystem", "confirmProfileName"),
         getTownBuilding: callLater("townController", "getTownBuilding"),
+        getTownEventActors: callLater("townController", "getTownEventActors"),
+        getTownMonsterSymbols: callLater("townController", "getTownMonsterSymbols"),
         getQuestTypes: callLater("townController", "getQuestTypes"),
         getQuestsByType: callLater("townController", "getQuestsByType"),
         getQuestById: callLater("townController", "getQuestById"),

@@ -420,6 +420,7 @@
       town.trail = [];
       town.interaction = null;
       town.mapNamePopup = null;
+      town.symbolEncounters = null;
       town.panel = null;
       town.selectedQuest = null;
       town.story = null;
@@ -498,6 +499,7 @@
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;
+      town.symbolEncounters = null;
       if (saved.player && typeof saved.player === "object") {
         Object.assign(town.player, clonePlain(saved.player, {}));
       }

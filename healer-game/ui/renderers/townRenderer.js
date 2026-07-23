@@ -34,6 +34,8 @@
       selectProfilePronoun,
       confirmProfileName,
       getTownBuilding,
+      getTownEventActors,
+      getTownMonsterSymbols,
       getQuestTypes,
       getQuestsByType,
       getQuestById,
@@ -904,6 +906,14 @@
     drawFittedTownText(getInteractLabel(), building.x + building.w / 2, building.y - 63, 86, 800, 15, 9, "#f7fff6", "center");
   }
 
+  function getTownEventCharacterActors() {
+    return typeof getTownEventActors === "function" ? getTownEventActors() : [];
+  }
+
+  function getTownMonsterSymbolActors() {
+    return typeof getTownMonsterSymbols === "function" ? getTownMonsterSymbols() : [];
+  }
+
   function drawTownCharacters() {
     if (!playerProfile.done) {
       return;
@@ -918,7 +928,10 @@
       walkFrame: town.player.walkFrame || 1,
       spriteHeight: town.player.spriteHeight || 72,
     }];
-    if (!town.meetingDone) {
+    const eventActors = getTownEventCharacterActors();
+    if (!town.meetingDone && eventActors.length > 0) {
+      actors.push(...eventActors);
+    } else if (!town.meetingDone) {
       const guild = getTownBuilding("guild");
       const baseX = guild ? guild.door.x : 800;
       const baseY = guild ? guild.door.y - 18 : 790;
@@ -933,6 +946,7 @@
         actors.push(follower);
       }
     }
+    actors.push(...getTownMonsterSymbolActors());
     actors.sort((a, b) => a.y - b.y);
     for (const actor of actors) {
       drawTownActor(actor);
@@ -953,7 +967,10 @@
       walkFrame: town.player.walkFrame || 1,
       spriteHeight: town.player.spriteHeight || 72,
     }];
-    if (!town.meetingDone) {
+    const eventActors = getTownEventCharacterActors();
+    if (!town.meetingDone && eventActors.length > 0) {
+      actors.push(...eventActors);
+    } else if (!town.meetingDone) {
       const guild = getTownBuilding("guild");
       const baseX = guild ? guild.door.x : 800;
       const baseY = guild ? guild.door.y - 18 : 790;
@@ -967,11 +984,21 @@
         actors.push(follower);
       }
     }
+    actors.push(...getTownMonsterSymbolActors());
     return actors;
   }
 
   function drawTownArgumentMarks() {
     if (!playerProfile.done || town.meetingDone) {
+      return;
+    }
+    const eventActors = getTownEventCharacterActors();
+    if (eventActors.length > 0) {
+      for (const actor of eventActors) {
+        if (actor && actor.showArgumentMark !== false) {
+          drawArgumentMark(actor.x, actor.y - 44);
+        }
+      }
       return;
     }
     const guild = getTownBuilding("guild");
@@ -993,10 +1020,42 @@
     if (!actor) {
       return;
     }
+    if (actor.type === "monsterSymbol") {
+      drawTownMonsterSymbol(actor);
+      return;
+    }
     if (drawTownCharacterSprite(actor)) {
       return;
     }
     drawTownNpc(actor.x, actor.y, actor.color, actor.label);
+  }
+
+  function drawTownMonsterSymbol(actor) {
+    const usingTileMap = Boolean(getTownTileMap());
+    const radius = Math.max(10, Number(actor.radius) || 16);
+    const footY = actor.y + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 17);
+    const bodyY = actor.y - radius * 0.65 + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 0);
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.24)";
+    ctx.beginPath();
+    ctx.ellipse(actor.x, footY, radius * 1.08, radius * 0.46, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = actor.color || "#9f7cff";
+    ctx.strokeStyle = actor.alert ? "#ffcf66" : "#182018";
+    ctx.lineWidth = actor.alert ? 4 : 3;
+    ctx.beginPath();
+    ctx.arc(actor.x, bodyY, radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#101814";
+    ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(actor.label || "M", actor.x, bodyY + 1);
+    ctx.restore();
+    if (actor.alert) {
+      drawArgumentMark(actor.x, bodyY - radius - 16);
+    }
   }
 
   function drawTownCharacterSprite(actor) {

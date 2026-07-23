@@ -8,6 +8,7 @@
       view,
       input,
       game,
+      town,
       playerProfile,
       player,
       party,
@@ -99,6 +100,13 @@
       rihas: "rihas_img",
       sushia: "sushia_img",
     };
+    const battleCharacterSleepImagePaths = {
+      finaldMale: "img/char/arjuna_man_img/sleep/66_face_down_extra.png",
+      finaldFemale: "img/char/arjuna_woman_img/sleep/67_face_down_extra.png",
+      ulpes: "img/char/ulpes_img/sleep/69_face_down_extra.png",
+      rihas: "img/char/rihas_img/sleep/60_face_down_extra.png",
+      sushia: "img/char/sushia_img/sleep/65_face_down_extra.png",
+    };
     const equipmentCharacterArtPaths = {
       finaldMale: "img/char/arjuna_man_img/default/front.png",
       finaldFemale: "img/char/arjuna_woman_img/default/front.png",
@@ -107,6 +115,7 @@
       sushia: "img/char/sushia_img/default/front.png",
     };
     const battleCharacterSprites = createBattleCharacterSprites();
+    const battleCharacterSleepImages = createBattleCharacterSleepImages();
     const battleWalkRenderCache = new WeakMap();
     const battleWalkWarmQueue = [];
     let battleWalkWarmScheduled = false;
@@ -135,6 +144,19 @@
     return images;
   }
 
+  function getAvailableEquipmentUnitOrder() {
+    const liveIds = new Set(["finald"]);
+    const livePartyIds = Array.isArray(party)
+      ? party.map((member) => member && member.id).filter((id) => id && id !== "finald")
+      : [];
+    if (livePartyIds.length > 0) {
+      livePartyIds.forEach((id) => liveIds.add(id));
+    } else if (town && town.meetingDone) {
+      equipmentUnitOrder.forEach((id) => liveIds.add(id));
+    }
+    return equipmentUnitOrder.filter((unitId) => liveIds.has(unitId));
+  }
+
   function createBattleCharacterSprites() {
     const images = {};
     if (typeof Image !== "function") {
@@ -151,6 +173,20 @@
           images[unitKey][direction][frame] = image;
         }
       }
+    }
+    return images;
+  }
+
+  function createBattleCharacterSleepImages() {
+    const images = {};
+    if (typeof Image !== "function") {
+      return images;
+    }
+    for (const [unitKey, imagePath] of Object.entries(battleCharacterSleepImagePaths)) {
+      const image = new Image();
+      image.src = imagePath;
+      prepareBattleWalkImage(image);
+      images[unitKey] = image;
     }
     return images;
   }
@@ -916,7 +952,7 @@
   }
 
   function drawUnits() {
-    const units = [...enemies, ...party].filter((unit) => !unit.dead && isFieldUnit(unit));
+    const units = [...enemies, ...party].filter((unit) => isFieldUnit(unit) && (!unit.dead || unit.team === "party"));
     units.sort((a, b) => a.y - b.y);
     cleanupBattleSpriteStates(units);
     for (const unit of units) {
@@ -1042,6 +1078,10 @@
   }
 
   function drawUnit(unit) {
+    if (unit.dead && unit.team === "party") {
+      drawIncapacitatedBattleCharacter(unit);
+      return;
+    }
     const isHovered = game.hover === unit;
     const mood = unit.mood === null ? MOOD_BASELINE : unit.mood;
 
@@ -1161,6 +1201,46 @@
     ctx.imageSmoothingEnabled = previousSmoothing;
     ctx.restore();
     return true;
+  }
+
+  function drawIncapacitatedBattleCharacter(unit) {
+    const image = getBattleSleepImage(unit);
+    if (!isSystemImageReady(image)) {
+      drawIncapacitatedFallback(unit);
+      return;
+    }
+    const renderImage = getBattleWalkRenderImage(image);
+    const metrics = getBattleCharacterSpriteMetrics(unit, renderImage);
+    ctx.save();
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(renderImage, metrics.x, metrics.y, metrics.w, metrics.h);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+    ctx.restore();
+  }
+
+  function drawIncapacitatedFallback(unit) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = "#6b756f";
+    ctx.strokeStyle = "#101814";
+    ctx.lineWidth = Math.max(2, battlePx(3));
+    ctx.beginPath();
+    ctx.ellipse(unit.x, unit.y + unit.radius * 0.45, unit.radius * 1.5, unit.radius * 0.6, 0, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function getBattleSleepImage(unit) {
+    if (!unit || unit.team !== "party") {
+      return null;
+    }
+    const imageKey = unit.id === "finald"
+      ? playerProfile.gender === "女の子" ? "finaldFemale" : "finaldMale"
+      : unit.id;
+    return battleCharacterSleepImages[imageKey] || null;
   }
 
   function getBattleWalkRenderImage(image) {
@@ -1952,8 +2032,9 @@
       game.saveUi.message = "";
     }
     const equipment = game.systemMenu.equipment;
-    if (!equipmentUnitOrder.includes(equipment.selectedUnitId)) {
-      equipment.selectedUnitId = "finald";
+    const availableEquipmentUnits = getAvailableEquipmentUnitOrder();
+    if (!availableEquipmentUnits.includes(equipment.selectedUnitId)) {
+      equipment.selectedUnitId = availableEquipmentUnits[0] || "finald";
     }
     if (typeof equipment.presetName !== "string") {
       equipment.presetName = "プリセット1";
@@ -3501,7 +3582,9 @@
     drawSystemMenuBackdrop(game.state === "playing" ? 0.52 : 0.28);
     const rect = getEquipmentPanelRect();
     const ui = getSystemMenu().equipment;
-    const unit = getEquipmentDisplayUnit(ui.selectedUnitId) || getEquipmentDisplayUnit("finald");
+    const availableUnits = getAvailableEquipmentUnitOrder();
+    const fallbackUnitId = availableUnits[0] || "finald";
+    const unit = getEquipmentDisplayUnit(ui.selectedUnitId) || getEquipmentDisplayUnit(fallbackUnitId);
     const readOnly = Boolean(panel.readOnly);
     const layout = getEquipmentPanelLayout(rect);
     equipmentTooltipTargets.length = 0;
@@ -3679,8 +3762,9 @@
     roundRect(rect.x, rect.y, rect.w, rect.h, 8);
     ctx.fill();
     ctx.stroke();
-    for (let i = 0; i < equipmentUnitOrder.length; i += 1) {
-      const unit = getEquipmentDisplayUnit(equipmentUnitOrder[i]);
+    const availableUnits = getAvailableEquipmentUnitOrder();
+    for (let i = 0; i < availableUnits.length; i += 1) {
+      const unit = getEquipmentDisplayUnit(availableUnits[i]);
       const y = rect.y + 12 + i * rowH;
       const active = unit && selectedUnit && unit.id === selectedUnit.id;
       ctx.fillStyle = active ? "#102018" : "rgba(255,255,255,0.64)";

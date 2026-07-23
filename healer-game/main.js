@@ -270,6 +270,7 @@
         trail: [],
         interaction: null,
         mapNamePopup: null,
+        symbolEncounters: null,
         panel: null,
         selectedQuest: null,
         story: null,

@@ -158,8 +158,9 @@
         game.saveUi.message = "";
       }
       const equipment = game.systemMenu.equipment;
-      if (!equipmentUnitOrder.includes(equipment.selectedUnitId)) {
-        equipment.selectedUnitId = "finald";
+      const availableEquipmentUnits = getAvailableEquipmentUnitOrder();
+      if (!availableEquipmentUnits.includes(equipment.selectedUnitId)) {
+        equipment.selectedUnitId = availableEquipmentUnits[0] || "finald";
       }
       if (typeof equipment.presetName !== "string") {
         equipment.presetName = "プリセット1";
@@ -919,6 +920,19 @@
       return getSystemMenu().equipment;
     }
 
+    function getAvailableEquipmentUnitOrder() {
+      const liveIds = new Set(["finald"]);
+      const livePartyIds = Array.isArray(party)
+        ? party.map((member) => member && member.id).filter((id) => id && id !== "finald")
+        : [];
+      if (livePartyIds.length > 0) {
+        livePartyIds.forEach((id) => liveIds.add(id));
+      } else if (town && town.meetingDone) {
+        equipmentUnitOrder.forEach((id) => liveIds.add(id));
+      }
+      return equipmentUnitOrder.filter((unitId) => liveIds.has(unitId));
+    }
+
     function isEquipmentPanelOpen() {
       const menu = getSystemMenu();
       return Boolean(menu.panel && menu.panel.type === "equipment");
@@ -1130,7 +1144,7 @@
         lines: target.lines || [],
         readOnly: Boolean(target.readOnly),
       };
-      ui.selectedUnitId = "finald";
+      ui.selectedUnitId = getAvailableEquipmentUnitOrder()[0] || "finald";
       ui.picker = null;
       ui.preset = null;
       hidePresetTextInput();
@@ -2952,7 +2966,7 @@
           }
         } else if (target.action === "selectEquipmentUnit") {
           const ui = getEquipmentUi();
-          if (equipmentUnitOrder.includes(target.unitId)) {
+          if (getAvailableEquipmentUnitOrder().includes(target.unitId)) {
             ui.selectedUnitId = target.unitId;
             ui.picker = null;
             ui.preset = null;
