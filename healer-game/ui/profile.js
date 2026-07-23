@@ -216,9 +216,14 @@
     }
 
     function positionNameInput(inputEl, rect) {
-      inputEl.style.width = `${rect.w}px`;
-      inputEl.style.left = `${rect.x}px`;
-      inputEl.style.top = `${rect.y}px`;
+      const scale = Math.max(0.01, Number(view.displayScale) || 1);
+      const offsetX = Number.isFinite(view.displayX) ? view.displayX : 0;
+      const offsetY = Number.isFinite(view.displayY) ? view.displayY : 0;
+      inputEl.style.width = `${Math.max(1, rect.w * scale)}px`;
+      inputEl.style.height = `${Math.max(1, rect.h * scale)}px`;
+      inputEl.style.left = `${offsetX + rect.x * scale}px`;
+      inputEl.style.top = `${offsetY + rect.y * scale}px`;
+      inputEl.style.fontSize = `${Math.max(11, 22 * scale)}px`;
     }
 
     function isProfileNameInputFocused() {

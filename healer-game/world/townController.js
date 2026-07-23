@@ -57,6 +57,7 @@
     const TOWN_WALK_ANIMATION_SEQUENCE = [2, 1, 3, 1];
     const TOWN_WALK_FRAME_INTERVAL = 0.16;
     const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
+    const TOWN_FOLLOWER_SPRITE_HEIGHT = 72;
     const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury", "debuff_poison", "debuff_wound"];
     const EQUIPMENT_SHOP_RANK_FILTERS = ["D", "C", "B", "A", "S"];
     const EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
@@ -717,13 +718,51 @@
       }
       town.player.facing = step.facing;
       if (!startTownGridMove(tileMap, step)) {
-        updateTownActorWalkAnimation(town.player, dt, false);
-        return;
+        const fallbackStep = step.x && step.y ? getTownGridCardinalFallbackStep(keys) : null;
+        if (!fallbackStep || !startTownGridMove(tileMap, fallbackStep)) {
+          updateTownActorWalkAnimation(town.player, dt, false);
+          return;
+        }
       }
       continueTownGridMove(tileMap, dt);
     }
 
     function getTownGridStepFromInput(keys) {
+      if (!keys) {
+        return null;
+      }
+      const dx = getTownGridAxisFromInput(keys, "a", "d");
+      const dy = getTownGridAxisFromInput(keys, "w", "s");
+      if (!dx && !dy) {
+        return null;
+      }
+      return {
+        x: dx,
+        y: dy,
+        facing: getTownFacingFromInput(keys, dx, dy, town.player.facing || "down"),
+      };
+    }
+
+    function getTownGridAxisFromInput(keys, negativeKey, positiveKey) {
+      const order = Array.isArray(town.movementKeyOrder) ? town.movementKeyOrder : [];
+      const negativePressed = Boolean(keys && keys[negativeKey]);
+      const positivePressed = Boolean(keys && keys[positiveKey]);
+      if (negativePressed && positivePressed) {
+        for (const key of order) {
+          if (!keys || !keys[key]) {
+            continue;
+          }
+          if (key === negativeKey) return -1;
+          if (key === positiveKey) return 1;
+        }
+        return 0;
+      }
+      if (negativePressed) return -1;
+      if (positivePressed) return 1;
+      return 0;
+    }
+
+    function getTownGridCardinalFallbackStep(keys) {
       const order = Array.isArray(town.movementKeyOrder) ? town.movementKeyOrder : [];
       for (const key of order) {
         if (!keys || !keys[key]) {
@@ -742,9 +781,16 @@
     }
 
     function startTownGridMove(tileMap, step) {
+      if (step && step.facing) {
+        town.player.facing = step.facing;
+      }
       const current = getTownPlayerTile(tileMap);
       const targetCol = current.col + step.x;
       const targetRow = current.row + step.y;
+      if (step.x && step.y && !canTownMoveDiagonally(tileMap, current.col, current.row, step.x, step.y)) {
+        town.player.gridMove = null;
+        return false;
+      }
       if (!isTownGridTilePassable(tileMap, targetCol, targetRow)) {
         town.player.gridMove = null;
         return false;
@@ -757,7 +803,14 @@
         row: targetRow,
         facing: step.facing,
       };
+      appendTownTileTrailPoint(tileMap, targetCol, targetRow, step.facing);
       return true;
+    }
+
+    function canTownMoveDiagonally(tileMap, col, row, dx, dy) {
+      return isTownGridTilePassable(tileMap, col + dx, row)
+        && isTownGridTilePassable(tileMap, col, row + dy)
+        && isTownGridTilePassable(tileMap, col + dx, row + dy);
     }
 
     function continueTownGridMove(tileMap, dt) {
@@ -786,11 +839,9 @@
       clampTownPlayer();
       const moved = distPoint(beforeX, beforeY, town.player.x, town.player.y) > 0.05;
       updateTownActorWalkAnimation(town.player, dt, moved || Boolean(town.player.gridMove));
-      if (moved) {
-        appendTownTrailPoint();
-      }
       updateTownCamera();
       if (arrived) {
+        appendTownTrailPoint();
         handleTownStepEvents(tileMap);
       }
       return true;
@@ -891,24 +942,116 @@
         return;
       }
       if (!force && Array.isArray(town.followers) && town.followers.length === 3) {
+        town.followers.forEach(normalizeTownFollowerDisplay);
         return;
       }
       const startX = town.player.x;
       const startY = town.player.y;
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        const trail = buildInitialTownTileTrail(tileMap);
+        const first = trail[trail.length - 2] || trail[trail.length - 1] || getTownTrailPointFromPlayer(tileMap);
+        const second = trail[trail.length - 3] || first;
+        const third = trail[trail.length - 4] || second;
+        town.followers = [
+          makeTownFollower("ulpes", "ウ", "#f4c54f", first.x, first.y, first.facing || "down"),
+          makeTownFollower("rihas", "リ", "#e37a3f", second.x, second.y, second.facing || "down"),
+          makeTownFollower("sushia", "ス", "#b985ee", third.x, third.y, third.facing || "down"),
+        ];
+        return;
+      }
       town.followers = [
-        { id: "ulpes", label: "ウ", color: "#f4c54f", x: startX - 44, y: startY + 52, facing: "down", walkFrame: 1, walkFrameIndex: -1, walkTimer: 0 },
-        { id: "rihas", label: "リ", color: "#e37a3f", x: startX, y: startY + 72, facing: "down", walkFrame: 1, walkFrameIndex: -1, walkTimer: 0 },
-        { id: "sushia", label: "ス", color: "#b985ee", x: startX + 44, y: startY + 52, facing: "down", walkFrame: 1, walkFrameIndex: -1, walkTimer: 0 },
+        makeTownFollower("ulpes", "ウ", "#f4c54f", startX - 44, startY + 52, "down"),
+        makeTownFollower("rihas", "リ", "#e37a3f", startX, startY + 72, "down"),
+        makeTownFollower("sushia", "ス", "#b985ee", startX + 44, startY + 52, "down"),
       ];
     }
 
+    function makeTownFollower(id, label, color, x, y, facing = "down") {
+      return normalizeTownFollowerDisplay({
+        id,
+        label,
+        color,
+        x,
+        y,
+        facing,
+        walkFrame: 1,
+        walkFrameIndex: -1,
+        walkTimer: 0,
+      });
+    }
+
+    function normalizeTownFollowerDisplay(follower) {
+      if (!follower) {
+        return follower;
+      }
+      follower.spriteHeight = Number.isFinite(town.player && town.player.spriteHeight)
+        ? town.player.spriteHeight
+        : TOWN_FOLLOWER_SPRITE_HEIGHT;
+      return follower;
+    }
+
+    function getTownTrailPointFromPlayer(tileMap = getTownTileMap()) {
+      if (tileMap) {
+        const tile = getTownPlayerTile(tileMap);
+        const center = getTownTileCenter(tileMap, tile.col, tile.row);
+        return {
+          x: center.x,
+          y: center.y,
+          col: tile.col,
+          row: tile.row,
+          facing: town.player.facing || "down",
+        };
+      }
+      return { x: town.player.x, y: town.player.y, facing: town.player.facing || "down" };
+    }
+
+    function getTownBackStepFromFacing(facing) {
+      if (facing === "up") return { x: 0, y: 1 };
+      if (facing === "left") return { x: 1, y: 0 };
+      if (facing === "right") return { x: -1, y: 0 };
+      return { x: 0, y: -1 };
+    }
+
+    function getTownTrailPointFromTile(tileMap, col, row, facing) {
+      const center = getTownTileCenter(tileMap, col, row);
+      return { x: center.x, y: center.y, col, row, facing: facing || town.player.facing || "down" };
+    }
+
+    function buildInitialTownTileTrail(tileMap = getTownTileMap()) {
+      if (!tileMap) {
+        return [getTownTrailPointFromPlayer(null)];
+      }
+      const current = getTownPlayerTile(tileMap);
+      const facing = town.player.facing || "down";
+      const back = getTownBackStepFromFacing(facing);
+      const currentPoint = getTownTrailPointFromTile(tileMap, current.col, current.row, facing);
+      const trail = [];
+      for (let offset = 3; offset >= 1; offset -= 1) {
+        const col = current.col + back.x * offset;
+        const row = current.row + back.y * offset;
+        trail.push(isTownGridTilePassable(tileMap, col, row)
+          ? getTownTrailPointFromTile(tileMap, col, row, facing)
+          : currentPoint);
+      }
+      trail.push(currentPoint);
+      return trail;
+    }
+
     function resetTownTrail() {
-      town.trail = [{ x: town.player.x, y: town.player.y, facing: town.player.facing || "down" }];
+      const tileMap = getTownTileMap();
+      town.trail = tileMap ? buildInitialTownTileTrail(tileMap) : [getTownTrailPointFromPlayer(null)];
     }
 
     function appendTownTrailPoint() {
       if (!Array.isArray(town.trail) || town.trail.length === 0) {
         resetTownTrail();
+        return;
+      }
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        const tile = getTownPlayerTile(tileMap);
+        appendTownTileTrailPoint(tileMap, tile.col, tile.row, town.player.facing || "down");
         return;
       }
       const last = town.trail[town.trail.length - 1];
@@ -930,6 +1073,11 @@
       if (!Array.isArray(town.trail) || town.trail.length === 0) {
         resetTownTrail();
       }
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        updateTownTileFollowers(tileMap, dt);
+        return;
+      }
       for (let i = 0; i < town.followers.length; i += 1) {
         const follower = town.followers[i];
         const beforeX = follower.x;
@@ -944,6 +1092,71 @@
         updateTownActorWalkAnimation(follower, dt, moved);
       }
     }
+
+    function appendTownTileTrailPoint(tileMap, col, row, facing = town.player.facing || "down") {
+      if (!tileMap) {
+        return;
+      }
+      if (!Array.isArray(town.trail) || town.trail.length === 0) {
+        town.trail = [];
+      }
+      const point = getTownTrailPointFromTile(tileMap, col, row, facing);
+      const last = town.trail[town.trail.length - 1];
+      if (last && last.col === point.col && last.row === point.row) {
+        last.facing = point.facing;
+        return;
+      }
+      town.trail.push(point);
+      if (town.trail.length > 80) {
+        town.trail.splice(0, town.trail.length - 80);
+      }
+    }
+
+    function updateTownTileFollowers(tileMap, dt = 0) {
+      for (let i = 0; i < town.followers.length; i += 1) {
+        const follower = town.followers[i];
+        const target = getTileTrailPointBehind(i + 1);
+        moveTownFollowerTowardTilePoint(follower, target, dt);
+      }
+    }
+
+    function getTileTrailPointBehind(tileOffset) {
+      const trail = town.trail || [];
+      if (trail.length === 0) {
+        return getTownTrailPointFromPlayer();
+      }
+      const index = Math.max(0, trail.length - 1 - Math.max(0, Math.floor(tileOffset) || 0));
+      return trail[index] || trail[0];
+    }
+
+    function moveTownFollowerTowardTilePoint(follower, target, dt = 0) {
+      if (!follower || !target) {
+        return;
+      }
+      const beforeX = follower.x;
+      const beforeY = follower.y;
+      const dx = target.x - follower.x;
+      const dy = target.y - follower.y;
+      const distance = Math.hypot(dx, dy);
+      const speed = Math.max(1, town.player.speed || 235);
+      const amount = speed * Math.max(0, dt || 0);
+      if (distance <= amount || distance <= 0.001) {
+        follower.x = target.x;
+        follower.y = target.y;
+        if (target.facing) {
+          follower.facing = target.facing;
+        }
+      } else {
+        follower.x += dx / distance * amount;
+        follower.y += dy / distance * amount;
+        if (target.facing) {
+          follower.facing = target.facing;
+        }
+      }
+      const moved = distPoint(beforeX, beforeY, follower.x, follower.y) > 0.05;
+      updateTownActorWalkAnimation(follower, dt, moved);
+    }
+
     function getTrailPointBehind(distance) {
       const trail = town.trail || [];
       if (trail.length === 0) {
@@ -969,9 +1182,57 @@
       return { x: fallback.x, y: fallback.y, facing: fallback.facing || "down" };
     }
 
+    function getTownFacilityInteractionFromTileMap(tileMap) {
+      if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function") {
+        return null;
+      }
+      if ((town.player.facing || "down") !== "up") {
+        return null;
+      }
+      const tile = getTownPlayerTile(tileMap);
+      const events = tileMapSystem.getEventsAtTile(tileMap, tile.col, tile.row, "interact");
+      for (const event of events) {
+        const raw = event && event.raw || {};
+        const action = event && event.action || raw.type || raw.action || "";
+        if (action !== "facilityInteraction") {
+          continue;
+        }
+        const requiredFacing = raw.facing || raw.direction || raw.requiredFacing || null;
+        if (requiredFacing && requiredFacing !== town.player.facing) {
+          continue;
+        }
+        const payload = raw.payload || {};
+        const facilityId = raw.facilityId || raw.buildingId || raw.targetId || payload.facilityId || null;
+        if (!facilityId) {
+          continue;
+        }
+        const building = getTownBuilding(facilityId);
+        if (building) {
+          return building;
+        }
+        const tileSize = getTownTileSize(tileMap);
+        const template = getTownBuildingTemplateById(facilityId);
+        return {
+          id: facilityId,
+          name: template && template.name || String(raw.name || facilityId),
+          sign: template && template.sign || "",
+          x: tile.col * tileSize,
+          y: tile.row * tileSize,
+          w: tileSize,
+          h: tileSize,
+          door: getTownTileCenter(tileMap, tile.col, tile.row),
+        };
+      }
+      return null;
+    }
+
     function getTownInteraction() {
       if (town.panel || town.story) {
         return null;
+      }
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        return getTownFacilityInteractionFromTileMap(tileMap);
       }
       let best = null;
       let bestDist = Infinity;

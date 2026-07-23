@@ -4,6 +4,7 @@
   window.createHealerInputSystem = function createHealerInputSystem(context) {
     const {
       canvas,
+      view,
       input,
       game,
       town,
@@ -1428,10 +1429,12 @@
       const y = target && Number.isFinite(target.y) ? target.y : 0;
       const w = target && Number.isFinite(target.w) ? target.w : 1;
       const h = target && Number.isFinite(target.h) ? target.h : 1;
-      el.style.left = `${rect.left + x}px`;
-      el.style.top = `${rect.top + y}px`;
-      el.style.width = `${Math.max(1, w)}px`;
-      el.style.height = `${Math.max(1, h)}px`;
+      const scaleX = rect.width / Math.max(1, view.w || rect.width || 1);
+      const scaleY = rect.height / Math.max(1, view.h || rect.height || 1);
+      el.style.left = `${rect.left + x * scaleX}px`;
+      el.style.top = `${rect.top + y * scaleY}px`;
+      el.style.width = `${Math.max(1, w * scaleX)}px`;
+      el.style.height = `${Math.max(1, h * scaleY)}px`;
       el.style.display = "block";
     }
 
@@ -3508,8 +3511,10 @@
 
     function setMouseFromEvent(event) {
       const rect = canvas.getBoundingClientRect();
-      input.mouse.x = event.clientX - rect.left;
-      input.mouse.y = event.clientY - rect.top;
+      const scaleX = Math.max(1, view.w || rect.width || 1) / Math.max(1, rect.width || 1);
+      const scaleY = Math.max(1, view.h || rect.height || 1) / Math.max(1, rect.height || 1);
+      input.mouse.x = (event.clientX - rect.left) * scaleX;
+      input.mouse.y = (event.clientY - rect.top) * scaleY;
     }
 
     return {

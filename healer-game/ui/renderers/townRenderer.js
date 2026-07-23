@@ -556,7 +556,11 @@
     const transform = getTownMapTransform();
     const worldX = (x - transform.x) / transform.scale + (transform.cameraX || 0);
     const worldY = (y - transform.y) / transform.scale + (transform.cameraY || 0);
-    if (worldX < 0 || worldY < 0 || worldX > TOWN_WIDTH || worldY > TOWN_HEIGHT) {
+    const tileMap = getTownTileMap();
+    const mapSize = tileMap ? getTownMapPixelSize(tileMap) : { w: TOWN_WIDTH, h: TOWN_HEIGHT };
+    const maxW = Math.max(1, Number(mapSize && mapSize.w) || TOWN_WIDTH);
+    const maxH = Math.max(1, Number(mapSize && mapSize.h) || TOWN_HEIGHT);
+    if (worldX < 0 || worldY < 0 || worldX > maxW || worldY > maxH) {
       return null;
     }
     return { x: worldX, y: worldY };

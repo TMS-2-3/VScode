@@ -405,6 +405,7 @@
       return {
         canvas: state.canvas,
         canvasCtx: state.canvasCtx,
+        config,
         view: state.view,
         game: state.game,
         clampTownPlayer: callLater("geometry", "clampTownPlayer"),
@@ -440,6 +441,7 @@
     function createInputContext() {
       return {
         canvas: state.canvas,
+        view: state.view,
         input: state.input,
         game: state.game,
         town: state.town,

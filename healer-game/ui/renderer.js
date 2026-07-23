@@ -284,12 +284,13 @@
 
   function resetCanvasFrameState() {
     const dpr = Math.max(1, Number.isFinite(view.dpr) ? view.dpr : 1);
+    const renderScale = Math.max(0.01, Number.isFinite(view.renderScale) ? view.renderScale : dpr);
     if (typeof ctx.reset === "function") {
       ctx.reset();
     } else if (ctx.canvas) {
       ctx.canvas.width = ctx.canvas.width;
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
     ctx.imageSmoothingEnabled = true;

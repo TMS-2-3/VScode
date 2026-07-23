@@ -9,12 +9,13 @@ body {
 
 body {
   font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #game {
   display: block;
-  width: 100vw;
-  height: 100vh;
   cursor: crosshair;
   user-select: none;
 }

@@ -139,10 +139,37 @@
 
   function createInitialState(options) {
     const { canvas, canvasCtx, townData } = options;
+    const baseW = Math.max(1, Math.floor(Number(CONFIG.baseScreenWidth) || 1920));
+    const baseH = Math.max(1, Math.floor(Number(CONFIG.baseScreenHeight) || 1080));
+    const screenW = Math.max(1, Math.floor(window.innerWidth || baseW));
+    const screenH = Math.max(1, Math.floor(window.innerHeight || baseH));
+    const fitScale = Math.max(0.01, Math.min(screenW / baseW, screenH / baseH));
+    const smallScreenZoom = Math.max(1, Number(CONFIG.smallScreenDefaultZoom) || 1);
+    const screenZoom = fitScale < 1 ? smallScreenZoom : 1;
+    const viewW = baseW / screenZoom;
+    const viewH = baseH / screenZoom;
+    const displayW = Math.max(1, Math.round(baseW * fitScale));
+    const displayH = Math.max(1, Math.round(baseH * fitScale));
+    const displayScale = displayW / viewW;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const renderW = Math.max(1, Math.floor(displayW * dpr));
+    const renderH = Math.max(1, Math.floor(displayH * dpr));
     const view = {
-      w: window.innerWidth,
-      h: window.innerHeight,
-      dpr: Math.min(window.devicePixelRatio || 1, 2),
+      w: viewW,
+      h: viewH,
+      baseW,
+      baseH,
+      screenW,
+      screenH,
+      fitScale,
+      screenZoom,
+      displayScale,
+      displayW,
+      displayH,
+      displayX: Math.round((screenW - displayW) / 2),
+      displayY: Math.round((screenH - displayH) / 2),
+      dpr,
+      renderScale: Math.min(renderW / viewW, renderH / viewH),
     };
 
     return {
