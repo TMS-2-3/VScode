@@ -91,6 +91,7 @@
     const SYMBOL_ENCOUNTER_CHASE_INTERVAL = 1;
     const SYMBOL_ENCOUNTER_ALERT_RANGE = 3;
     const SYMBOL_ENCOUNTER_RELEASE_RANGE = 5;
+    const SYMBOL_ENCOUNTER_PLAYER_SPAWN_EXCLUSION_RADIUS = 3;
     const SYMBOL_ENCOUNTER_TRANSFER_EXCLUSION_RADIUS = 2;
     const SYMBOL_ENCOUNTER_RANDOM_ATTEMPTS = 240;
     const SYMBOL_ENCOUNTER_DIRECTIONS = [
@@ -170,6 +171,7 @@
         tileMapSystem.clearMarginTileCache();
       }
       town.mapId = mapId;
+      resetTownSymbolsForMapEntry(mapId);
       showTownMapNamePopup(tileMap, mapId);
       town.panel = null;
       town.selectedQuest = null;
@@ -705,6 +707,16 @@
       return mapState;
     }
 
+    function resetTownSymbolsForMapEntry(mapId = getTownSymbolMapId()) {
+      const state = ensureTownSymbolEncounterState();
+      const key = String(mapId || "town");
+      state.byMapId = {
+        [key]: { symbols: [] },
+      };
+      state.pendingBattle = null;
+      return state.byMapId[key];
+    }
+
     function getTownSymbolEncounterConfigs(tileMap = getTownTileMap()) {
       const configs = tileMap && (
         tileMap.symbolEncounters
@@ -843,7 +855,7 @@
         return false;
       }
       const playerTile = getTownPlayerTile(tileMap);
-      if (playerTile && playerTile.col === col && playerTile.row === row) {
+      if (playerTile && Math.hypot(playerTile.col - col, playerTile.row - row) <= SYMBOL_ENCOUNTER_PLAYER_SPAWN_EXCLUSION_RADIUS) {
         return false;
       }
       if (occupied && occupied.has(getTownSymbolTileKey(col, row))) {

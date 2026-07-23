@@ -414,8 +414,57 @@
 
     function speakSkill(unit, key) {
       const skill = getUnitSkill(unit, key);
+      playSkillStartEffects(unit, key, skill);
       const lines = skill && Array.isArray(skill.lines) ? skill.lines : [];
       if (lines.length) ctx.addSpeech(lines[Math.floor(Math.random() * lines.length)], unit);
+    }
+
+    function playSkillStartEffects(unit, key, skill) {
+      if (!unit || !skill || typeof ctx.playEffect !== "function") {
+        return;
+      }
+      const entries = getSkillStartEffectEntries(skill);
+      for (const entry of entries) {
+        const effectId = entry.effectId || entry.id;
+        if (!effectId) {
+          continue;
+        }
+        ctx.playEffect(effectId, {
+          source: unit,
+          target: unit,
+          skill,
+          key,
+          x: unit.x,
+          y: unit.y,
+          duration: skill.effectDuration ?? skill.duration ?? 0,
+          radius: entry.radius ?? skill.effectRadius ?? skill.radius ?? skill.burstRadius ?? unit.radius,
+          follow: entry.follow ?? skill.effectFollow,
+          anchor: entry.anchor ?? skill.effectAnchor,
+          scale: entry.scale ?? skill.effectScale,
+        });
+      }
+    }
+
+    function getSkillStartEffectEntries(skill) {
+      const entries = [];
+      if (skill.startEffectId) {
+        entries.push({ effectId: skill.startEffectId });
+      }
+      if (Array.isArray(skill.effects)) {
+        for (const entry of skill.effects) {
+          if (typeof entry === "string") {
+            continue;
+          }
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+          const timing = entry.timing || entry.when || "manual";
+          if (timing === "start" || timing === "activation" || timing === "castComplete") {
+            entries.push(entry);
+          }
+        }
+      }
+      return entries;
     }
 
     function ensureSkillQueue(unit) {

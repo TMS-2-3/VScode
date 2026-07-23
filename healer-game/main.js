@@ -16,6 +16,7 @@
     createBattleAi: window.createHealerBattleAi,
     createBattleSetup: window.createHealerBattleSetup,
     createBattleRuntime: window.createHealerBattleRuntime,
+    createEffectSystem: window.createHealerEffectSystem,
     createItemSystem: window.createHealerItemSystem,
     createInputSystem: window.createHealerInputSystem,
     createRenderer: window.createHealerRenderer,
@@ -36,6 +37,7 @@
     CHARACTER_DEFS: window.HEALER_CHARACTER_DEFS,
     ENEMY_DEFS: window.HEALER_ENEMY_DEFS,
     SKILL_DATA: window.HEALER_SKILL_DATA,
+    EFFECT_DATA: window.HEALER_EFFECT_DATA,
     STATUS_DATA: window.HEALER_STATUS_DATA,
     PASSIVE_DATA: window.HEALER_PASSIVE_DATA,
     LOADOUT_CONFIG: window.HEALER_LOADOUT_CONFIG,
@@ -113,6 +115,7 @@
   systems.equipmentSystem = modules.createEquipmentSystem(contexts.createEquipmentContext());
   systems.walletSystem = modules.createWalletSystem(contexts.createWalletContext());
   systems.unitFactory = modules.createUnitFactory(contexts.createUnitFactoryContext());
+  systems.effectSystem = modules.createEffectSystem(contexts.createEffectContext());
 
   state.player = systems.unitFactory.makeUnit({
     ...data.CHARACTER_DEFS.player,

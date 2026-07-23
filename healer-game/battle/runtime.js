@@ -13,6 +13,7 @@
       telegraphs,
       areas,
       effects,
+      effectSystem,
       skillSystem,
       getItemSystem,
       ACTION_GAP,
@@ -662,6 +663,10 @@
     }
 
     function updateEffects(dt) {
+      if (effectSystem && typeof effectSystem.updateEffects === "function") {
+        effectSystem.updateEffects(dt);
+        return;
+      }
       for (let i = effects.length - 1; i >= 0; i -= 1) {
         const effect = effects[i];
         effect.time -= dt;

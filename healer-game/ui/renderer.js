@@ -1680,6 +1680,8 @@
       ctx.save();
       if (effect.type === "speech") {
         drawSpeechBubble(effect);
+      } else if (effect.type === "spriteEffect") {
+        drawSpriteEffect(effect);
       } else if (effect.type === "float") {
         ctx.globalAlpha = life;
         ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -1711,6 +1713,49 @@
       }
       ctx.restore();
     }
+  }
+
+  function drawSpriteEffect(effect) {
+    const images = Array.isArray(effect.images) ? effect.images : [];
+    const frameIndex = Math.max(0, Math.min(images.length - 1, Math.floor(Number(effect.frameIndex) || 0)));
+    const image = images[frameIndex];
+    if (!image || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      return;
+    }
+    const x = Number(effect.x);
+    const y = Number(effect.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    const scale = Number.isFinite(effect.scale) && effect.scale > 0 ? effect.scale : 1;
+    const radius = Number.isFinite(effect.radius) && effect.radius > 0 ? effect.radius : 0;
+    let width = Number(effect.width);
+    let height = Number(effect.height);
+    if (effect.scaleToRadius && radius > 0) {
+      width = radius * 2;
+      height = width * image.naturalHeight / image.naturalWidth;
+    }
+    if (!Number.isFinite(width) || width <= 0) {
+      width = Number.isFinite(height) && height > 0
+        ? height * image.naturalWidth / image.naturalHeight
+        : image.naturalWidth * scale;
+    }
+    if (!Number.isFinite(height) || height <= 0) {
+      height = width * image.naturalHeight / image.naturalWidth;
+    }
+    const anchor = effect.anchor || "center";
+    const anchorX = anchor === "left" ? 0 : (anchor === "right" ? width : width / 2);
+    const anchorY = anchor === "top" ? 0 : ((anchor === "bottom" || anchor === "feet") ? height : height / 2);
+    ctx.globalAlpha = clamp(Number.isFinite(effect.alpha) ? effect.alpha : 1, 0, 1);
+    ctx.translate(x, y);
+    const rotation = Number(effect.rotation) || 0;
+    if (rotation) {
+      ctx.rotate(rotation);
+    }
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, -anchorX, -anchorY, width, height);
+    ctx.imageSmoothingEnabled = previousSmoothing;
   }
 
   function drawResultOverlay() {

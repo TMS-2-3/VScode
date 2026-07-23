@@ -17,6 +17,7 @@
       CHARACTER_DEFS,
       ENEMY_DEFS,
       SKILL_DATA,
+      EFFECT_DATA,
       STATUS_DATA,
       PASSIVE_DATA,
       LOADOUT_CONFIG,
@@ -173,6 +174,15 @@
       };
     }
 
+    function createEffectContext() {
+      return {
+        effects: state.effects,
+        EFFECT_DATA,
+        SKILL_DATA,
+        battlePx,
+      };
+    }
+
     function createSkillContext() {
       return {
         get player() { return state.player; },
@@ -232,6 +242,8 @@
         addBurst: callLater("battleRuntime", "addBurst"),
         addFloat: callLater("battleRuntime", "addFloat"),
         addSpeech: callLater("battleRuntime", "addSpeech"),
+        playEffect: callLater("effectSystem", "playEffect"),
+        playSkillEffect: callLater("effectSystem", "playSkillEffect"),
         slashEffect: callLater("battleRuntime", "slashEffect"),
         addShield: callLater("combatSystem", "addShield"),
         startPlayerCast: callLater("battleRuntime", "startPlayerCast"),
@@ -599,6 +611,7 @@
         clampAllUnits: callLater("geometry", "clampAllUnits"),
         addBurst: callLater("battleRuntime", "addBurst"),
         addFloat: callLater("battleRuntime", "addFloat"),
+        preloadBattleEffects: callLater("effectSystem", "preloadBattleEffects"),
       };
     }
 
@@ -783,6 +796,7 @@
         telegraphs: state.telegraphs,
         areas: state.areas,
         effects: state.effects,
+        effectSystem: systems.effectSystem,
         skillSystem: systems.skillSystem,
         getItemSystem: () => systems.itemSystem,
         ACTION_GAP: balance.actionGap,
@@ -815,6 +829,7 @@
         formatGold: callLater("walletSystem", "formatGold"),
         addItem: callLater("itemSystem", "addItem"),
         hasPassive: callLater("loadoutSystem", "hasPassive"),
+        preloadBattleEffects: callLater("effectSystem", "preloadBattleEffects"),
       };
     }
 
@@ -827,6 +842,7 @@
       createLoadoutContext,
       createEquipmentContext,
       createUnitFactoryContext,
+      createEffectContext,
       createSkillContext,
       createRenderContext,
       createScreenContext,
