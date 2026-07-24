@@ -275,6 +275,7 @@
         interaction: null,
         mapNamePopup: null,
         symbolEncounters: null,
+        acceptedQuestIds: {},
         panel: null,
         selectedQuest: null,
         story: null,

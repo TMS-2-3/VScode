@@ -812,6 +812,31 @@
       };
     }
 
+    function collectQuestRewards(quest = game.currentQuest) {
+      if (!quest) {
+        return;
+      }
+      const rewardEntries = Array.isArray(quest.rewards)
+        ? quest.rewards
+        : Array.isArray(quest.rewardEntries)
+          ? quest.rewardEntries
+          : [];
+      for (const reward of rewardEntries) {
+        addBattleReward(normalizeDropReward(reward));
+      }
+      const gold = Math.max(0, Math.floor(Number(
+        quest.rewardGold ?? quest.goldReward ?? quest.gold ?? 0
+      )));
+      if (gold > 0) {
+        addBattleReward({
+          type: "currency",
+          key: "gold",
+          name: "お金",
+          amount: gold,
+        });
+      }
+    }
+
     function addBattleReward(reward) {
       if (!reward) {
         return;
@@ -874,6 +899,7 @@
       if (rewards.claimed) {
         return;
       }
+      collectQuestRewards();
       rewards.granted = rewards.pending.map((entry) => ({ ...entry }));
       rewards.claimed = true;
       setupBattleRewardPowerCrystalAutoUse(rewards);

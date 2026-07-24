@@ -30,6 +30,7 @@
       beginOpeningStory,
       getPlayerFirstName,
       getMeetingStory,
+      getQuestAcceptedStory,
       getKeybindLabel,
       getGold,
       formatGold,
@@ -690,6 +691,40 @@
       return town.symbolEncounters;
     }
 
+    function ensureTownAcceptedQuestState() {
+      if (!town.acceptedQuestIds || typeof town.acceptedQuestIds !== "object" || Array.isArray(town.acceptedQuestIds)) {
+        town.acceptedQuestIds = {};
+      }
+      return town.acceptedQuestIds;
+    }
+
+    function getTownQuestIdFromSymbolConfig(config) {
+      const questId = config && (config.questId || config.quest || config.questKey);
+      return questId ? String(questId) : "";
+    }
+
+    function isTownQuestAccepted(questId) {
+      if (!questId) {
+        return false;
+      }
+      return ensureTownAcceptedQuestState()[String(questId)] === true;
+    }
+
+    function acceptTownQuest(quest) {
+      if (!quest || !quest.id) {
+        return false;
+      }
+      ensureTownAcceptedQuestState()[String(quest.id)] = true;
+      return true;
+    }
+
+    function clearTownAcceptedQuest(questId) {
+      if (!questId) {
+        return;
+      }
+      delete ensureTownAcceptedQuestState()[String(questId)];
+    }
+
     function getTownSymbolMapId(tileMap = getTownTileMap()) {
       return String(tileMap && tileMap.id || getTownMapId() || "town");
     }
@@ -718,18 +753,37 @@
     }
 
     function getTownSymbolEncounterConfigs(tileMap = getTownTileMap()) {
-      const configs = tileMap && (
-        tileMap.symbolEncounters
-        || tileMap.monsterSymbols
-        || tileMap.encounterSymbols
-      );
-      return Array.isArray(configs)
-        ? configs.filter((config) => config && config.enabled !== false)
-        : [];
+      const wildConfigs = [];
+      const questConfigs = [];
+      if (tileMap) {
+        for (const key of ["symbolEncounters", "monsterSymbols", "encounterSymbols"]) {
+          if (Array.isArray(tileMap[key])) {
+            wildConfigs.push(...tileMap[key]);
+          }
+        }
+        for (const key of ["questSymbolEncounters", "questMonsterSymbols", "questEncounterSymbols"]) {
+          if (Array.isArray(tileMap[key])) {
+            questConfigs.push(...tileMap[key]);
+          }
+        }
+      }
+      const activeWildConfigs = wildConfigs.filter((config) => (
+        config
+        && config.enabled !== false
+        && !getTownQuestIdFromSymbolConfig(config)
+      ));
+      const activeQuestConfigs = questConfigs
+        .concat(wildConfigs.filter((config) => config && getTownQuestIdFromSymbolConfig(config)))
+        .filter((config) => (
+          config
+          && config.enabled !== false
+          && isTownQuestAccepted(getTownQuestIdFromSymbolConfig(config))
+        ));
+      return activeWildConfigs.concat(activeQuestConfigs);
     }
 
     function getTownSymbolConfigId(config, index = 0) {
-      return String(
+      const baseId = String(
         config.id
         || config.key
         || config.symbolId
@@ -737,6 +791,8 @@
         || config.role
         || `symbol_${index + 1}`,
       );
+      const questId = getTownQuestIdFromSymbolConfig(config);
+      return questId ? `quest:${questId}:${baseId}` : `wild:${baseId}`;
     }
 
     function getTownSymbolMaxCount(config) {
@@ -906,6 +962,12 @@
         label: getTownSymbolLabel(config),
         color: config.color || "#9f7cff",
         rank: config.rank || "D",
+        questId: getTownQuestIdFromSymbolConfig(config) || null,
+        battleId: config.battleId || null,
+        objective: config.objective || null,
+        enemyPreview: config.enemyPreview || null,
+        reward: config.reward || null,
+        rewards: Array.isArray(config.rewards) ? config.rewards.map((entry) => ({ ...entry })) : null,
         col: spawnTile.col,
         row: spawnTile.row,
         x: center.x,
@@ -1534,17 +1596,26 @@
       const primaryName = symbols.length === 1
         ? (symbols[0].name || symbols[0].configId || "Symbol")
         : `Symbols x${symbols.length}`;
+      const primarySymbol = symbols[0] || null;
+      const questId = symbols.map((symbol) => symbol && symbol.questId).find(Boolean) || null;
+      const questTemplate = symbols.length === 1 && questId
+        ? getQuestById(questId)
+        : null;
       return {
-        id: `symbol_${mapId}_${Date.now()}`,
-        type: "symbolEncounter",
-        rank: symbols[0] && symbols[0].rank || "D",
-        name: primaryName,
-        objective: "Defeat all enemies",
-        enemyPreview: enemiesForBattle.map((entry) => entry.role).join(" / "),
-        battleId: `symbol_${mapId}`,
+        ...(questTemplate || {}),
+        id: questTemplate && questTemplate.id || `symbol_${mapId}_${Date.now()}`,
+        type: questTemplate && questTemplate.type || "symbolEncounter",
+        rank: questTemplate && questTemplate.rank || primarySymbol && primarySymbol.rank || "D",
+        name: questTemplate && questTemplate.name || primaryName,
+        objective: questTemplate && questTemplate.objective || primarySymbol && primarySymbol.objective || "敵を全滅させる",
+        enemyPreview: questTemplate && questTemplate.enemyPreview || primarySymbol && primarySymbol.enemyPreview || enemiesForBattle.map((entry) => entry.role).join(" / "),
+        reward: questTemplate && questTemplate.reward || primarySymbol && primarySymbol.reward || "",
+        rewards: questTemplate && questTemplate.rewards || primarySymbol && primarySymbol.rewards || null,
+        battleId: questTemplate && questTemplate.battleId || primarySymbol && primarySymbol.battleId || `symbol_${mapId}`,
         enemies: enemiesForBattle,
         symbolEncounter: {
           mapId,
+          questId,
           symbolIds: symbols.map((symbol) => symbol.id),
           returnCol: playerTile.col,
           returnRow: playerTile.row,
@@ -1563,6 +1634,7 @@
       if (state.pendingBattle && state.pendingBattle.mapId === encounter.mapId) {
         state.pendingBattle = null;
       }
+      clearTownAcceptedQuest(encounter.questId);
       const tileMap = tileMapSystem && typeof tileMapSystem.getMap === "function"
         ? tileMapSystem.getMap(encounter.mapId)
         : null;
@@ -1992,7 +2064,7 @@
         } else if (town.panel.action === "questDecision") {
           confirmSelectedQuest();
         } else if (town.panel.action === "battleGuide") {
-          resetGame(town.selectedQuest);
+          startSelectedQuest();
         } else {
           closeTownPanel();
         }
@@ -2099,7 +2171,7 @@
       } else if (action.kind === "backToQuestList") {
         showQuestListPanel(action.type || (town.selectedQuest && town.selectedQuest.type) || "story");
       } else if (action.kind === "startBattle") {
-        resetGame(town.selectedQuest);
+        startSelectedQuest();
       } else if (action.kind === "confirmInnRest") {
         confirmInnRest();
       } else if (action.kind === "buyItem") {
@@ -2141,6 +2213,30 @@
       } else if (action.kind === "close") {
         closeTownPanel();
       }
+    }
+
+    function startSelectedQuest() {
+      const quest = town.selectedQuest || getQuestById(town.panel && town.panel.questId);
+      if (quest && quest.fieldMapId) {
+        acceptTownQuest(quest);
+        closeTownPanel();
+        if (getTownMapId() === quest.fieldMapId) {
+          ensureTownMapSymbols(getTownTileMap());
+        }
+        const acceptedMessage = `${quest.name}を受けました。${quest.fieldLocation || "出現場所"}へ向かいましょう。`;
+        const storyLines = typeof getQuestAcceptedStory === "function" ? getQuestAcceptedStory(quest) : [];
+        if (Array.isArray(storyLines) && storyLines.length > 0) {
+          startTownStory(`questAccepted:${quest.id}`, storyLines, () => {
+            game.message = acceptedMessage;
+            game.messageTimer = 5;
+          });
+          return;
+        }
+        game.message = acceptedMessage;
+        game.messageTimer = 5;
+        return;
+      }
+      resetGame(quest);
     }
 
     function showInnPanel() {
@@ -3230,9 +3326,10 @@
         finald: keyLabel("battle.ultimate.finald", "4"),
       };
       town.panel = {
-        title: quest ? `出発前の確認: ${quest.name}` : "出発前の確認",
+        title: quest ? `${quest.fieldMapId ? "依頼の確認" : "出発前の確認"}: ${quest.name}` : "出発前の確認",
         action: "battleGuide",
         questId: quest ? quest.id : null,
+        startsInField: Boolean(quest && quest.fieldMapId),
         clickTargets: [],
         sections: [
           quest ? {
@@ -3241,7 +3338,15 @@
               `ランク: ${quest.rank || "-"}`,
               `目的: ${quest.objective || "敵を全滅させる"}`,
               `敵情報: ${quest.enemyPreview || "不明"}`,
+              quest.fieldLocation ? `出現場所: ${quest.fieldLocation}` : null,
               `報酬: ${quest.reward || "未定"}`,
+            ].filter(Boolean),
+          } : null,
+          quest && quest.fieldMapId ? {
+            title: "受注後",
+            lines: [
+              "依頼を受けても自動では移動しない。任意のタイミングで出現場所へ向かう。",
+              "出現場所のマップに入ると、依頼シンボルが野良シンボルとは別枠で出現する。",
             ],
           } : null,
           {

@@ -561,6 +561,7 @@
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getMeetingStory: callLater("storyData", "getMeetingStory"),
+        getQuestAcceptedStory: callLater("storyData", "getQuestAcceptedStory"),
         getKeybindLabel,
         getGold: callLater("walletSystem", "getGold"),
         formatGold: callLater("walletSystem", "formatGold"),

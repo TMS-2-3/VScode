@@ -50,6 +50,23 @@
         object: "tree",
         event: null,
       },
+      questSymbolEncounters: [
+        {
+          id: "story_horn_rabbit_competition",
+          questId: "story_horn_rabbit_competition_001",
+          name: "討伐数対決!?",
+          symbolLabel: "兎",
+          color: "#d9bc64",
+          rank: "D",
+          maxSymbols: 1,
+          enemies: [
+            { name: "ツノウサギA", role: "horn_rabbit", dx: -18, dy: -88 },
+            { name: "ツノウサギB", role: "horn_rabbit", dx: 54, dy: -36 },
+            { name: "ツノウサギC", role: "horn_rabbit", dx: -8, dy: 34 },
+            { name: "ツノウサギD", role: "horn_rabbit", dx: 66, dy: 92 },
+          ],
+        },
+      ],
       layers: [
         {
           id: "ground",
@@ -332,6 +349,19 @@
                       "targetMap": "kuraku_forest_1",
                       "targetCol": 31,
                       "targetRow": 6
+              },
+              {
+                      "id": "forest2_to_forest3",
+                      "name": "クラク森3へ",
+                      "type": "mapTransfer",
+                      "trigger": "step",
+                      "x": 24,
+                      "y": 0,
+                      "width": 1,
+                      "height": 1,
+                      "targetMap": "kuraku_forest_3",
+                      "targetCol": 11,
+                      "targetRow": 18
               }
       ],
     },
@@ -984,7 +1014,21 @@
         ],
       }
     ],
-    events: [],
+    events: [
+      {
+        id: "forest3_to_forest2",
+        name: "クラク森2へ",
+        type: "mapTransfer",
+        trigger: "step",
+        x: 24,
+        y: 19,
+        width: 1,
+        height: 1,
+        targetMap: "kuraku_forest_2",
+        targetCol: 24,
+        targetRow: 1,
+      },
+    ],
   };
   window.HEALER_DEBUG_TILE_MAPS = [
     { id: "startTown01", label: "クラク村" },

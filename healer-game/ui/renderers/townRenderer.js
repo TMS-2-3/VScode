@@ -2814,6 +2814,7 @@
       quest.summary,
       `目的: ${quest.objective || "敵を全滅させる"}`,
       `敵情報: ${quest.enemyPreview || "不明"}`,
+      quest.fieldLocation ? `出現場所: ${quest.fieldLocation}` : null,
       `推奨: ${quest.recommended || "-"}`,
       `報酬: ${quest.reward || "未定"}`,
     ].filter(Boolean);
@@ -2922,7 +2923,8 @@
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.fillText(`${getInteractLabel()} で戦闘開始`, x + w - 24, y + h - 20);
+    const actionLabel = town.panel.startsInField ? "依頼を受ける" : "戦闘開始";
+    ctx.fillText(`${getInteractLabel()} で${actionLabel}`, x + w - 24, y + h - 20);
     ctx.restore();
   }
 

@@ -41,9 +41,25 @@
       ];
     }
 
+    function getQuestAcceptedStory(quest) {
+      if (!quest || quest.id !== "story_horn_rabbit_competition_001") {
+        return [];
+      }
+      const name = getPlayerFirstName();
+      return [
+        { speaker: "スシア", text: "今回の依頼の敵は雑魚ね" },
+        { speaker: "リハス", text: "早く行こうぜ！俺様の実力見せてやるよ！" },
+        { speaker: "ウルペス", text: "ふっ、僕が一番多く倒して見せるさ" },
+        { speaker: name, text: "じゃっ、じゃあ、早く行こうか" },
+        { speaker: name, text: "ツノウサギが多く生息しているのはクラク森1の方だね" },
+        { speaker: name, text: "(みんなずっとこの調子なのかな…)" },
+      ];
+    }
+
     return {
       getOpeningStory,
       getMeetingStory,
+      getQuestAcceptedStory,
     };
   };
 })();

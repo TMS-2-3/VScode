@@ -316,21 +316,6 @@
       return spawned > 0;
     }
 
-    function spawnTutorialEnemies(bounds) {
-      const startX = Math.min(bounds.right - battlePx(120), bounds.left + bounds.width * 0.72);
-      const startY = bounds.centerY;
-      const enemySpread = Math.min(battlePx(150), bounds.height * 0.32);
-      enemies.push(
-        makeEnemy("魔物A", startX, startY - enemySpread, "brute"),
-        makeEnemy("魔物B", startX + battlePx(72), startY - enemySpread * 0.53, "skirmisher"),
-        makeEnemy("魔物C", startX + battlePx(18), startY + battlePx(5), "brute"),
-        makeEnemy("魔物D", startX + battlePx(92), startY + enemySpread * 0.59, "skirmisher"),
-        makeEnemy("小術師A", startX + battlePx(205), startY - enemySpread * 0.64, "caster"),
-        makeEnemy("小術師B", startX + battlePx(220), startY + enemySpread * 0.53, "caster"),
-        makeEnemy("大魔物", startX + battlePx(150), startY + battlePx(4), "elite"),
-      );
-    }
-
     function hasQuestReinforcements(quest) {
       return Boolean(quest && Array.isArray(quest.reinforcements) && quest.reinforcements.length > 0);
     }
@@ -439,7 +424,8 @@
 
       enemies.length = 0;
       if (!spawnQuestEnemies(quest, bounds)) {
-        spawnTutorialEnemies(bounds);
+        game.message = "敵データが設定されていません";
+        game.messageTimer = 4;
       }
       if (typeof preloadBattleEffects === "function") {
         preloadBattleEffects([...party, ...enemies]);

@@ -177,6 +177,7 @@
           introDone: town.introDone === true,
           meetingDone: town.meetingDone === true,
           player: clonePlain(town.player, {}),
+          acceptedQuestIds: clonePlain(town.acceptedQuestIds, {}),
         },
         playerProfile: clonePlain(playerProfile, {}),
       };
@@ -421,6 +422,7 @@
       town.interaction = null;
       town.mapNamePopup = null;
       town.symbolEncounters = null;
+      town.acceptedQuestIds = {};
       town.panel = null;
       town.selectedQuest = null;
       town.story = null;
@@ -500,6 +502,7 @@
       town.selectedQuest = null;
       town.interaction = null;
       town.symbolEncounters = null;
+      town.acceptedQuestIds = clonePlain(saved.acceptedQuestIds, {});
       if (saved.player && typeof saved.player === "object") {
         Object.assign(town.player, clonePlain(saved.player, {}));
       }
