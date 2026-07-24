@@ -127,6 +127,12 @@
       weapon: "weapon",
     };
     const keybindTools = KEYBINDS || window.HEALER_KEYBINDS || null;
+    const FPS_LIMIT_OPTIONS = Array.isArray(window.HEALER_CONFIG && window.HEALER_CONFIG.fpsLimitOptions)
+      ? window.HEALER_CONFIG.fpsLimitOptions
+      : [15, 30, 45, 60, 90, 120, 140, 160, 180, 210, "unlimited"];
+    const DEFAULT_FPS_LIMIT = Number.isFinite(window.HEALER_CONFIG && window.HEALER_CONFIG.defaultFpsLimit)
+      ? window.HEALER_CONFIG.defaultFpsLimit
+      : 60;
     const equipmentTooltipTargets = [];
     const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
 
@@ -2122,12 +2128,33 @@
     if (typeof game.settings.mapDebugMode !== "boolean") {
       game.settings.mapDebugMode = false;
     }
+    game.settings.fpsLimit = normalizeFpsLimit(game.settings.fpsLimit);
     if (keybindTools) {
       game.settings.keybinds = keybindTools.normalizeKeybinds(
         game.settings.keybinds || keybindTools.loadSavedKeybinds()
       );
     }
     return game.settings;
+  }
+
+  function normalizeFpsLimit(value) {
+    if (value === "unlimited" || value === "無制限") {
+      return "unlimited";
+    }
+    const numeric = Math.floor(Number(value));
+    if (FPS_LIMIT_OPTIONS.some((option) => option !== "unlimited" && Number(option) === numeric)) {
+      return numeric;
+    }
+    return DEFAULT_FPS_LIMIT;
+  }
+
+  function getCurrentFpsLimit() {
+    return normalizeFpsLimit(getGameSettings().fpsLimit);
+  }
+
+  function getFpsLimitLabel(value) {
+    const normalized = normalizeFpsLimit(value);
+    return normalized === "unlimited" ? "無制限" : `${normalized}`;
   }
 
   function isDetailedDescriptionEnabled() {
@@ -3273,17 +3300,18 @@
   function drawSettingsGameContent(content) {
     const ui = getSettingsUi();
     const headerH = 44;
-    const rowH = 58;
+    const defaultRowH = 58;
     const rows = [
-      { type: "toggleDetailedDescriptions", label: "詳細説明文の適用" },
-      { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用" },
-      { type: "toggleMapDebugMode", label: "マップデバッグモード" },
+      { type: "toggleDetailedDescriptions", label: "詳細説明文の適用", h: defaultRowH },
+      { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用", h: defaultRowH },
+      { type: "toggleMapDebugMode", label: "マップデバッグモード", h: defaultRowH },
+      { type: "fpsLimit", label: "FPS上限", h: 96 },
     ];
     if (isMapDebugModeEnabled()) {
-      rows.push({ type: "debugMapSelector", label: "マップ確認" });
+      rows.push({ type: "debugMapSelector", label: "マップ確認", h: defaultRowH });
     }
     const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
-    const listContentH = rows.length * rowH;
+    const listContentH = rows.reduce((total, row) => total + (row.h || defaultRowH), 0);
     ui.gameScrollMax = Math.max(0, listContentH - listRect.h);
     ui.gameScroll = Math.max(0, Math.min(ui.gameScrollMax, ui.gameScroll || 0));
 
@@ -3298,8 +3326,11 @@
       ctx.beginPath();
       ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
       ctx.clip();
+      let y = listRect.y - ui.gameScroll;
       for (let i = 0; i < rows.length; i += 1) {
-        const row = { x: listRect.x, y: listRect.y + i * rowH - ui.gameScroll, w: listRect.w, h: rowH };
+        const rowH = rows[i].h || defaultRowH;
+        const row = { x: listRect.x, y, w: listRect.w, h: rowH };
+        y += rowH;
         if (row.y + row.h < listRect.y || row.y > listRect.y + listRect.h) {
           continue;
         }
@@ -3332,9 +3363,47 @@
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isPowerCrystalAutoUseEnabled(), "togglePowerCrystalAutoUse");
     } else if (entry.type === "toggleMapDebugMode") {
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isMapDebugModeEnabled(), "toggleMapDebugMode");
+    } else if (entry.type === "fpsLimit") {
+      drawSettingsFpsLimitSelector(row);
     } else if (entry.type === "debugMapSelector") {
       drawDebugMapSelector(row);
     }
+  }
+
+  function drawSettingsFpsLimitSelector(row) {
+    const gap = 6;
+    const labelW = Math.min(150, row.w * 0.28);
+    const startX = row.x + labelW;
+    const availableW = Math.max(120, row.w - labelW - 6);
+    const minButtonW = 58;
+    const columns = Math.max(2, Math.min(FPS_LIMIT_OPTIONS.length, Math.floor((availableW + gap) / (minButtonW + gap)) || 2));
+    const buttonW = Math.max(52, Math.min(82, (availableW - gap * (columns - 1)) / columns));
+    const buttonH = 28;
+    const lineCount = Math.ceil(FPS_LIMIT_OPTIONS.length / columns);
+    const totalH = lineCount * buttonH + Math.max(0, lineCount - 1) * gap;
+    const startY = row.y + Math.max(8, (row.h - totalH) / 2);
+    const current = getCurrentFpsLimit();
+    for (let i = 0; i < FPS_LIMIT_OPTIONS.length; i += 1) {
+      const option = normalizeFpsLimit(FPS_LIMIT_OPTIONS[i]);
+      const col = i % columns;
+      const line = Math.floor(i / columns);
+      const x = startX + col * (buttonW + gap);
+      const y = startY + line * (buttonH + gap);
+      drawSettingsFpsButton(x, y, buttonW, buttonH, option, option === current);
+    }
+  }
+
+  function drawSettingsFpsButton(x, y, w, h, value, active) {
+    ctx.save();
+    ctx.fillStyle = active ? "#246b4a" : "rgba(16,32,24,0.07)";
+    ctx.strokeStyle = active ? "#1c573c" : "rgba(16,32,24,0.22)";
+    ctx.lineWidth = active ? 1.4 : 1;
+    roundRect(x, y, w, h, 7);
+    ctx.fill();
+    ctx.stroke();
+    drawFittedSystemText(getFpsLimitLabel(value), x + w / 2, y + h / 2, w - 10, 900, 12, 8, active ? "#f7fff6" : "#102018", "center", "middle");
+    ctx.restore();
+    addSystemMenuTarget({ action: "setFpsLimit", fpsLimit: value, x, y, w, h });
   }
 
   function drawDebugMapSelector(row) {

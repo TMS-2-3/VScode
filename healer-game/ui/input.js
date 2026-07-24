@@ -131,6 +131,23 @@
     const DEFEAT_TOWN_RESTART_HP_RATIO = 0.1;
     let presetTextInput = null;
     let syncingPresetTextInput = false;
+    const FPS_LIMIT_OPTIONS = Array.isArray(window.HEALER_CONFIG && window.HEALER_CONFIG.fpsLimitOptions)
+      ? window.HEALER_CONFIG.fpsLimitOptions
+      : [15, 30, 45, 60, 90, 120, 140, 160, 180, 210, "unlimited"];
+    const DEFAULT_FPS_LIMIT = Number.isFinite(window.HEALER_CONFIG && window.HEALER_CONFIG.defaultFpsLimit)
+      ? window.HEALER_CONFIG.defaultFpsLimit
+      : 60;
+
+    function normalizeFpsLimit(value) {
+      if (value === "unlimited" || value === "無制限") {
+        return "unlimited";
+      }
+      const numeric = Math.floor(Number(value));
+      if (FPS_LIMIT_OPTIONS.some((option) => option !== "unlimited" && Number(option) === numeric)) {
+        return numeric;
+      }
+      return DEFAULT_FPS_LIMIT;
+    }
 
     function getSystemMenu() {
       if (!game.systemMenu || typeof game.systemMenu !== "object") {
@@ -203,6 +220,7 @@
       if (typeof game.settings.mapDebugMode !== "boolean") {
         game.settings.mapDebugMode = false;
       }
+      game.settings.fpsLimit = normalizeFpsLimit(game.settings.fpsLimit);
       if (keybindTools) {
         game.settings.keybinds = keybindTools.normalizeKeybinds(
           game.settings.keybinds || keybindTools.loadSavedKeybinds()
@@ -3066,6 +3084,10 @@
           const settings = getGameSettings();
           settings.mapDebugMode = !settings.mapDebugMode;
           clearMovementKeys();
+        } else if (target.action === "setFpsLimit") {
+          const settings = getGameSettings();
+          settings.fpsLimit = normalizeFpsLimit(target.fpsLimit);
+          clearMovementKeys();
         } else if (target.action === "switchDebugTownMap") {
           switchDebugTownMap(target.mapId);
         } else if (target.action === "selectSettingsTab") {
@@ -3465,6 +3487,10 @@
         return;
       }
       if (game.state === "town" && town.panel) {
+        if (town.panel.filterOpen) {
+          event.preventDefault();
+          return;
+        }
         if (town.panel.upgradeResult) {
           if (scrollNumericState(town.panel, "resultScroll", "resultScrollMax", event.deltaY)) {
             event.preventDefault();

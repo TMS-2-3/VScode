@@ -1973,6 +1973,8 @@
         const clicked = options.pointer ? getTownPanelClickAction() : null;
         if (clicked) {
           runTownPanelAction(clicked);
+        } else if (town.panel.filterOpen) {
+          return;
         } else if (town.panel.confirmation) {
           clearEquipmentResetConfirmation();
         } else if (town.panel.upgradeResult) {
@@ -2108,6 +2110,14 @@
         adjustItemShopQuantity(action.itemId, action.delta);
       } else if (action.kind === "selectEquipmentShopTab") {
         selectEquipmentShopTab(action.tab);
+      } else if (action.kind === "openEquipmentShopFilter") {
+        openEquipmentShopFilterWindow();
+      } else if (action.kind === "applyEquipmentShopFilter") {
+        applyEquipmentShopFilterWindow();
+      } else if (action.kind === "resetEquipmentShopFilterDraft") {
+        resetEquipmentShopFilterDraft();
+      } else if (action.kind === "closeEquipmentShopFilter") {
+        closeEquipmentShopFilterWindow();
       } else if (action.kind === "toggleEquipmentShopFilter") {
         toggleEquipmentShopFilter(action.category, action.value);
       } else if (action.kind === "setEquipmentShopFilterGroup") {
@@ -2353,6 +2363,10 @@
       town.panel.message = "";
       town.panel.upgradeResult = null;
       town.panel.confirmation = null;
+      town.panel.filterOpen = false;
+      town.panel.filterDraft = null;
+      town.panel.filterScroll = 0;
+      town.panel.filterScrollMax = 0;
     }
 
     function createEquipmentShopFilters() {
@@ -2372,6 +2386,31 @@
           detailStats: [...EQUIPMENT_SHOP_ARMOR_DETAIL_STAT_FILTERS],
           sortKey: null,
           sortDir: "desc",
+        },
+      };
+    }
+
+    function cloneEquipmentShopFilters(filters) {
+      const source = filters && typeof filters === "object" ? filters : createEquipmentShopFilters();
+      const defaults = createEquipmentShopFilters();
+      const weapon = source.weapon && typeof source.weapon === "object" ? source.weapon : defaults.weapon;
+      const armor = source.armor && typeof source.armor === "object" ? source.armor : defaults.armor;
+      return {
+        weapon: {
+          mode: weapon.mode === "unit" ? "unit" : "type",
+          weaponTypes: Array.isArray(weapon.weaponTypes) ? weapon.weaponTypes.slice() : defaults.weapon.weaponTypes.slice(),
+          unitIds: Array.isArray(weapon.unitIds) ? weapon.unitIds.slice() : defaults.weapon.unitIds.slice(),
+          ranks: Array.isArray(weapon.ranks) ? weapon.ranks.slice() : defaults.weapon.ranks.slice(),
+          sortKey: ["attack", "magic", "rank"].includes(weapon.sortKey) ? weapon.sortKey : null,
+          sortDir: weapon.sortDir === "asc" ? "asc" : "desc",
+        },
+        armor: {
+          ranks: Array.isArray(armor.ranks) ? armor.ranks.slice() : defaults.armor.ranks.slice(),
+          slots: Array.isArray(armor.slots) ? armor.slots.slice() : defaults.armor.slots.slice(),
+          basicStats: Array.isArray(armor.basicStats) ? armor.basicStats.slice() : defaults.armor.basicStats.slice(),
+          detailStats: Array.isArray(armor.detailStats) ? armor.detailStats.slice() : defaults.armor.detailStats.slice(),
+          sortKey: armor.sortKey === "rank" ? "rank" : null,
+          sortDir: armor.sortDir === "asc" ? "asc" : "desc",
         },
       };
     }
@@ -2429,11 +2468,94 @@
       return filters;
     }
 
+    function ensureEquipmentShopFilterDraft() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return createEquipmentShopFilters();
+      }
+      if (!town.panel.filterDraft || typeof town.panel.filterDraft !== "object") {
+        town.panel.filterDraft = cloneEquipmentShopFilters(ensureEquipmentShopFilters());
+      }
+      return town.panel.filterDraft;
+    }
+
+    function getMutableEquipmentShopFilters() {
+      if (town.panel && town.panel.filterOpen) {
+        return ensureEquipmentShopFilterDraft();
+      }
+      return ensureEquipmentShopFilters();
+    }
+
+    function markEquipmentShopFilterEdited() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      if (town.panel.filterOpen) {
+        town.panel.filterScroll = 0;
+        town.panel.filterScrollMax = 0;
+      } else {
+        town.panel.scroll = 0;
+        town.panel.scrollMax = 0;
+      }
+    }
+
+    function openEquipmentShopFilterWindow() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      town.panel.filterOpen = true;
+      town.panel.filterDraft = cloneEquipmentShopFilters(ensureEquipmentShopFilters());
+      town.panel.filterScroll = 0;
+      town.panel.filterScrollMax = 0;
+      town.panel.message = "";
+    }
+
+    function applyEquipmentShopFilterWindow() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      const draft = cloneEquipmentShopFilters(ensureEquipmentShopFilterDraft());
+      town.panel.filters = draft;
+      town.panel.filterOpen = false;
+      town.panel.filterDraft = null;
+      town.panel.filterScroll = 0;
+      town.panel.filterScrollMax = 0;
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
+      setTownPanelMessage("フィルターを適用しました。");
+    }
+
+    function resetEquipmentShopFilterDraft() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      const draft = ensureEquipmentShopFilterDraft();
+      const defaults = createEquipmentShopFilters();
+      if (town.panel.shopKind === "weapon") {
+        draft.weapon = defaults.weapon;
+      } else {
+        draft.armor = defaults.armor;
+      }
+      town.panel.filterScroll = 0;
+      town.panel.filterScrollMax = 0;
+      town.panel.message = "フィルターを初期状態に戻しました。適用で反映します。";
+    }
+
+    function closeEquipmentShopFilterWindow() {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      town.panel.filterOpen = false;
+      town.panel.filterDraft = null;
+      town.panel.filterScroll = 0;
+      town.panel.filterScrollMax = 0;
+      town.panel.message = "";
+    }
+
     function toggleEquipmentShopFilter(category, value) {
       if (!town.panel || town.panel.action !== "equipmentShop" || !value) {
         return;
       }
-      const filters = ensureEquipmentShopFilters();
+      const filters = getMutableEquipmentShopFilters();
       if (category === "weaponType") {
         filters.weapon.mode = "type";
         filters.weapon.unitIds = [];
@@ -2453,15 +2575,14 @@
       } else if (category === "armorDetailStat") {
         toggleListValue(filters.armor.detailStats, value);
       }
-      town.panel.scroll = 0;
-      town.panel.scrollMax = 0;
+      markEquipmentShopFilterEdited();
     }
 
     function setEquipmentShopFilterGroup(category, mode) {
       if (!town.panel || town.panel.action !== "equipmentShop") {
         return;
       }
-      const filters = ensureEquipmentShopFilters();
+      const filters = getMutableEquipmentShopFilters();
       const values = getEquipmentShopFilterValues(category);
       if (!values) {
         return;
@@ -2486,8 +2607,7 @@
       } else if (category === "armorDetailStat") {
         filters.armor.detailStats = next;
       }
-      town.panel.scroll = 0;
-      town.panel.scrollMax = 0;
+      markEquipmentShopFilterEdited();
     }
 
     function getEquipmentShopFilterValues(category) {
@@ -2525,7 +2645,7 @@
       if (!town.panel || town.panel.action !== "equipmentShop") {
         return;
       }
-      const filters = ensureEquipmentShopFilters();
+      const filters = getMutableEquipmentShopFilters();
       const target = town.panel.shopKind === "armor" ? filters.armor : filters.weapon;
       if (sortKey === "default") {
         target.sortKey = null;
@@ -2536,22 +2656,20 @@
       if (sortDir) {
         target.sortDir = sortDir === "asc" ? "asc" : "desc";
       }
-      town.panel.scroll = 0;
-      town.panel.scrollMax = 0;
+      markEquipmentShopFilterEdited();
     }
 
     function clearEquipmentShopFilters() {
       if (!town.panel || town.panel.action !== "equipmentShop") {
         return;
       }
-      const filters = ensureEquipmentShopFilters();
+      const filters = getMutableEquipmentShopFilters();
       if (town.panel.shopKind === "weapon") {
         filters.weapon = createEquipmentShopFilters().weapon;
       } else {
         filters.armor = createEquipmentShopFilters().armor;
       }
-      town.panel.scroll = 0;
-      town.panel.scrollMax = 0;
+      markEquipmentShopFilterEdited();
     }
 
     function craftEquipment(itemId) {
@@ -3158,6 +3276,10 @@
     }
 
     function closeTownPanel() {
+      if (town.panel && town.panel.action === "equipmentShop" && town.panel.filterOpen) {
+        closeEquipmentShopFilterWindow();
+        return;
+      }
       town.panel = null;
     }
 

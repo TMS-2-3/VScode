@@ -1600,9 +1600,11 @@
     drawTextButton(x + 26, y + 66, 112, 34, craftLabel, { kind: "selectEquipmentShopTab", tab: "craft" }, tab === "craft");
     drawTextButton(x + 148, y + 66, 112, 34, "強化", { kind: "selectEquipmentShopTab", tab: "upgrade" }, tab === "upgrade");
     drawTextButton(x + 270, y + 66, 138, 34, "強化リセット", { kind: "selectEquipmentShopTab", tab: "reset" }, tab === "reset");
-    const filterY = y + 110;
-    const filterH = drawEquipmentShopFilters(x + 26, filterY, w - 52, shopKind);
-    const listTop = filterY + filterH + 10;
+    const filterButtonW = 128;
+    const filterButtonX = Math.min(x + 420, x + w - filterButtonW - 26);
+    const filterChanged = !isCurrentEquipmentShopFilterDefaultForTown(shopKind);
+    drawTextButton(filterButtonX, y + 66, filterButtonW, 34, filterChanged ? "フィルター*" : "フィルター", { kind: "openEquipmentShopFilter" }, filterChanged);
+    const listTop = y + 112;
 
     if (!rows.length) {
       town.panel.scroll = 0;
@@ -1658,10 +1660,50 @@
     if (town.panel.confirmation) {
       drawEquipmentResetConfirmationOverlay();
     }
+    if (town.panel.filterOpen) {
+      drawEquipmentShopFilterOverlay(shopKind);
+    }
   }
 
-  function drawEquipmentShopFilters(x, y, w, shopKind) {
-    const filters = ensureEquipmentShopFiltersForTown();
+  function drawEquipmentShopFilterOverlay(shopKind) {
+    const filters = getEquipmentShopFilterDraftForTown();
+    const w = Math.min(900, Math.max(420, view.w - 56));
+    const h = Math.min(620, Math.max(360, view.h - 72));
+    const x = (view.w - w) / 2;
+    const y = (view.h - h) / 2;
+    town.panel.clickTargets.push({ x: 0, y: 0, w: view.w, h: view.h, action: { kind: "noop" } });
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(0, 0, view.w, view.h);
+    ctx.restore();
+
+    drawPanel(x, y, w, h);
+    ctx.save();
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "800 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("フィルター", x + 26, y + 42);
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("適用するまで一覧には反映されません。", x + 26, y + 66);
+    ctx.restore();
+
+    const contentRect = { x: x + 26, y: y + 88, w: w - 52, h: h - 156 };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(contentRect.x, contentRect.y, contentRect.w, contentRect.h);
+    ctx.clip();
+    drawEquipmentShopFilters(contentRect.x, contentRect.y, contentRect.w, shopKind, filters);
+    ctx.restore();
+
+    drawTextButton(x + 26, y + h - 52, 118, 34, "閉じる", { kind: "closeEquipmentShopFilter" });
+    drawTextButton(x + w - 282, y + h - 52, 118, 34, "リセット", { kind: "resetEquipmentShopFilterDraft" });
+    drawTextButton(x + w - 150, y + h - 52, 124, 34, "適用", { kind: "applyEquipmentShopFilter" }, true);
+  }
+
+  function drawEquipmentShopFilters(x, y, w, shopKind, filters = ensureEquipmentShopFiltersForTown()) {
     const startY = y;
     ctx.save();
     ctx.fillStyle = "rgba(255,255,255,0.055)";
@@ -1677,7 +1719,6 @@
     ctx.textBaseline = "alphabetic";
     ctx.fillText("絞り込み", x, y + 8);
     ctx.restore();
-    drawFilterChip(x + w - 86, y - 8, 86, 24, "条件クリア", false, { kind: "clearEquipmentShopFilters" });
     y += 22;
 
     if (shopKind === "weapon") {
@@ -2148,6 +2189,45 @@
         sortDir: "desc",
       },
     };
+  }
+
+  function getEquipmentShopFilterDraftForTown() {
+    if (town.panel && town.panel.filterOpen && town.panel.filterDraft && typeof town.panel.filterDraft === "object") {
+      return town.panel.filterDraft;
+    }
+    return ensureEquipmentShopFiltersForTown();
+  }
+
+  function getEquipmentShopFilterSnapshotForTown(shopKind, filters) {
+    const target = shopKind === "weapon" ? filters && filters.weapon : filters && filters.armor;
+    if (shopKind === "weapon") {
+      return JSON.stringify({
+        mode: target && target.mode === "unit" ? "unit" : "type",
+        weaponTypes: getSortedFilterValues(target && target.weaponTypes),
+        unitIds: getSortedFilterValues(target && target.unitIds),
+        ranks: getSortedFilterValues(target && target.ranks),
+        sortKey: target && target.sortKey || null,
+        sortDir: target && target.sortDir === "asc" ? "asc" : "desc",
+      });
+    }
+    return JSON.stringify({
+      ranks: getSortedFilterValues(target && target.ranks),
+      slots: getSortedFilterValues(target && target.slots),
+      basicStats: getSortedFilterValues(target && target.basicStats),
+      detailStats: getSortedFilterValues(target && target.detailStats),
+      sortKey: target && target.sortKey || null,
+      sortDir: target && target.sortDir === "asc" ? "asc" : "desc",
+    });
+  }
+
+  function getSortedFilterValues(values) {
+    return Array.isArray(values) ? values.slice().sort() : [];
+  }
+
+  function isCurrentEquipmentShopFilterDefaultForTown(shopKind) {
+    const filters = ensureEquipmentShopFiltersForTown();
+    const defaults = createDefaultEquipmentShopFiltersForTown();
+    return getEquipmentShopFilterSnapshotForTown(shopKind, filters) === getEquipmentShopFilterSnapshotForTown(shopKind, defaults);
   }
 
   function ensureEquipmentShopFiltersForTown() {
