@@ -56,10 +56,23 @@
       ];
     }
 
+    function getQuestEncounterStory(quest) {
+      if (!quest || quest.id !== "story_horn_rabbit_competition_001") {
+        return [];
+      }
+      return [
+        { speaker: "ウルペス", text: "発見！僕が一番強いということを証明してやろう！" },
+        { speaker: "リハス", text: "どけ！俺様が一番に決まっているだろ！" },
+        { speaker: "スシア", text: "戦うときくらい足並みそろえましょうよ" },
+        { speaker: "スシア", text: "ほんと、バカなのかしら" },
+      ];
+    }
+
     return {
       getOpeningStory,
       getMeetingStory,
       getQuestAcceptedStory,
+      getQuestEncounterStory,
     };
   };
 })();

@@ -52,13 +52,21 @@
       return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
     }
 
+    function isBattleTutorialPaused() {
+      const tutorial = window.HEALER_BATTLE_TUTORIAL;
+      return Boolean(game.state === "playing" && tutorial && typeof tutorial.shouldPause === "function" && tutorial.shouldPause(game));
+    }
+
     function update(dt) {
       if (isSystemMenuPaused()) {
         return;
       }
-      game.time += dt;
-      if (game.messageTimer > 0) {
-        game.messageTimer -= dt;
+      const tutorialPaused = isBattleTutorialPaused();
+      if (!tutorialPaused) {
+        game.time += dt;
+        if (game.messageTimer > 0) {
+          game.messageTimer -= dt;
+        }
       }
 
       updateEffects(dt);
@@ -67,6 +75,9 @@
         return;
       }
       if (game.state !== "playing") {
+        return;
+      }
+      if (tutorialPaused) {
         return;
       }
 

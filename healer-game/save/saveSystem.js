@@ -178,6 +178,7 @@
           meetingDone: town.meetingDone === true,
           player: clonePlain(town.player, {}),
           acceptedQuestIds: clonePlain(town.acceptedQuestIds, {}),
+          completedQuestIds: clonePlain(town.completedQuestIds, {}),
         },
         playerProfile: clonePlain(playerProfile, {}),
       };
@@ -368,6 +369,7 @@
       game.innRestUsedUntilBattle = false;
       game.battleRewards = null;
       game.currentQuest = null;
+      game.battleTutorial = null;
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
       game.currentSaveId = null;
@@ -423,6 +425,7 @@
       town.mapNamePopup = null;
       town.symbolEncounters = null;
       town.acceptedQuestIds = {};
+      town.completedQuestIds = {};
       town.panel = null;
       town.selectedQuest = null;
       town.story = null;
@@ -503,6 +506,7 @@
       town.interaction = null;
       town.symbolEncounters = null;
       town.acceptedQuestIds = clonePlain(saved.acceptedQuestIds, {});
+      town.completedQuestIds = clonePlain(saved.completedQuestIds, {});
       if (saved.player && typeof saved.player === "object") {
         Object.assign(town.player, clonePlain(saved.player, {}));
       }

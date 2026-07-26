@@ -67,6 +67,30 @@
           ],
         },
       ],
+      symbolEncounters: [
+        {
+          id: "wild_horn_rabbit",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+          name: "ツノウサギ",
+          symbolLabel: "兎",
+          color: "#d9bc64",
+          rank: "D",
+          maxSymbols: 3,
+          enemyId: "horn_rabbit",
+          enemyCount: 3,
+        },
+        {
+          id: "wild_bud_alraune",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+          name: "つぼみのアルラウネ",
+          symbolLabel: "蕾",
+          color: "#72c874",
+          rank: "D",
+          maxSymbols: 3,
+          enemyId: "bud_alraune",
+          enemyCount: 3,
+        },
+      ],
       layers: [
         {
           id: "ground",
@@ -230,6 +254,30 @@
         object: "tree",
         event: null,
       },
+      symbolEncounters: [
+        {
+          id: "wild_horn_rabbit",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+          name: "ツノウサギ",
+          symbolLabel: "兎",
+          color: "#d9bc64",
+          rank: "D",
+          maxSymbols: 3,
+          enemyId: "horn_rabbit",
+          enemyCount: 3,
+        },
+        {
+          id: "wild_shadow_wolf",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+          name: "シャドウウルフ",
+          symbolLabel: "狼",
+          color: "#7771c8",
+          rank: "D",
+          maxSymbols: 3,
+          enemyId: "shadow_wolf",
+          enemyCount: 3,
+        },
+      ],
       layers: [
         {
           id: "ground",
@@ -771,8 +819,11 @@
                     "y": 17,
                     "width": 1,
                     "height": 1,
-                    "message": "依頼所に行こう!",
-                    "messageTimer": 3,
+                    "dialogue": [
+                            {
+                                    "text": "依頼所に向かおう"
+                            }
+                    ],
                     "facing": "up",
                     "moveX": 0,
                     "moveY": -1,

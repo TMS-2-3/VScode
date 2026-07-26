@@ -15,6 +15,7 @@
       areas,
       effects,
       expandedStatusUnitIds,
+      statusUiButtons,
       player,
       playerProfile,
       CHARACTER_DEFS,
@@ -38,15 +39,22 @@
       PLAYER_SKILL_SLOT_KEYS,
       ITEM_SLOT_KEYS,
       KEYBINDS,
+      battlePx,
       getKeybinds,
       getKeybindLabel,
       getPanelSkills,
+      getUltimateCost,
       startPlayerAim,
       usePlayerCommand,
       cancelPlayerAim,
       confirmPlayerAim,
       isPlayerControlLocked,
       triggerUltimate,
+      healUnit,
+      addShield,
+      dealDamage,
+      addFloat,
+      addBurst,
       useItemSlot,
       cancelItemAim,
       confirmItemAim,
@@ -3183,6 +3191,10 @@
         return;
       }
 
+      if (handleBattleTutorialKey(event, key)) {
+        return;
+      }
+
       if (isLockedBattleControlEvent(event)) {
         event.preventDefault();
         return;
@@ -3297,6 +3309,216 @@
       }
     }
 
+    function getBattleTutorialApi() {
+      return window.HEALER_BATTLE_TUTORIAL || null;
+    }
+
+    function isBattleTutorialActive() {
+      const tutorial = getBattleTutorialApi();
+      return Boolean(tutorial && typeof tutorial.isActive === "function" && tutorial.isActive(game));
+    }
+
+    function getBattleTutorialHelpers() {
+      return {
+        player,
+        party,
+        enemies,
+        SKILL_DATA,
+        playerProfile,
+        battlePx,
+        getKeybindLabel,
+        getUltimateCost,
+        getPlayerFirstName,
+        startPlayerAim,
+        cancelPlayerAim,
+        cancelItemAim,
+        triggerUltimate,
+        healUnit,
+        addShield,
+        dealDamage,
+        addFloat,
+        addBurst,
+      };
+    }
+
+    function handleBattleTutorialKey(event, key) {
+      const tutorial = getBattleTutorialApi();
+      if (!tutorial || !isBattleTutorialActive()) {
+        return false;
+      }
+      const step = tutorial.getCurrentStep(game);
+      if (!step) {
+        return false;
+      }
+      event.preventDefault();
+      clearMovementKeys();
+      const helpers = getBattleTutorialHelpers();
+      if (step.type === "line") {
+        if (isActionEvent("field.interact", event)) {
+          tutorial.advanceLine(game, helpers);
+        } else {
+          tutorial.reject(game, "会話を進めてください");
+        }
+        return true;
+      }
+      if (step.type !== "wait") {
+        tutorial.reject(game, "今は指定された操作だけ使えます");
+        return true;
+      }
+      if (isActionEvent("battle.cancelAim", event)) {
+        if (!tutorial.cancelSelectedSkill(game, helpers)) {
+          tutorial.reject(game, "今は指定された操作だけ使えます");
+        }
+        return true;
+      }
+      if (step.waitType === "ultimate") {
+        for (const [unitId, actionId] of Object.entries(ultimateActionByUnitId)) {
+          if (isActionEvent(actionId, event)) {
+            tutorial.activateUltimate(game, unitId, helpers);
+            return true;
+          }
+        }
+        tutorial.reject(game, `${tutorial.getUnitName(step.unitId, helpers)}の必殺技を使いましょう`);
+        return true;
+      }
+      if (step.waitType === "skillTarget") {
+        const slotIndex = playerSkillActionIds.findIndex((actionId) => isActionEvent(actionId, event));
+        if (slotIndex >= 0) {
+          const skill = getBattleTutorialSkillForSlot(slotIndex);
+          tutorial.selectSkill(game, skill && skill.key, helpers);
+          return true;
+        }
+        if (isActionEvent("battle.confirm", event)) {
+          tutorial.confirmTarget(game, getBattleTutorialUnitAt(input.mouse.x, input.mouse.y), helpers);
+          return true;
+        }
+        tutorial.reject(game, `${tutorial.getSkillName(step.skillKey, helpers)}を使いましょう`);
+        return true;
+      }
+      tutorial.reject(game, "今は指定された操作だけ使えます");
+      return true;
+    }
+
+    function handleBattleTutorialMouse(event) {
+      const tutorial = getBattleTutorialApi();
+      if (!tutorial || !isBattleTutorialActive()) {
+        return false;
+      }
+      const step = tutorial.getCurrentStep(game);
+      if (!step) {
+        return false;
+      }
+      const helpers = getBattleTutorialHelpers();
+      if (step.type === "line") {
+        if (isActionEvent("field.interact", event)) {
+          tutorial.advanceLine(game, helpers);
+        } else {
+          tutorial.reject(game, "会話を進めてください");
+        }
+        return true;
+      }
+      if (step.type !== "wait") {
+        tutorial.reject(game, "今は指定された操作だけ使えます");
+        return true;
+      }
+      if (isActionEvent("battle.cancelAim", event)) {
+        if (!tutorial.cancelSelectedSkill(game, helpers)) {
+          tutorial.reject(game, "今は指定された操作だけ使えます");
+        }
+        return true;
+      }
+      const button = getBattleTutorialStatusButtonAt(input.mouse.x, input.mouse.y);
+      if (button && handleBattleTutorialStatusButton(button, tutorial, step, helpers)) {
+        return true;
+      }
+      if (step.waitType === "skillTarget" && isActionEvent("battle.confirm", event)) {
+        tutorial.confirmTarget(game, getBattleTutorialUnitAt(input.mouse.x, input.mouse.y), helpers);
+        return true;
+      }
+      tutorial.reject(game, getBattleTutorialWaitHint(step, tutorial, helpers));
+      return true;
+    }
+
+    function handleBattleTutorialStatusButton(button, tutorial, step, helpers) {
+      if (!button || !step || !tutorial) {
+        return false;
+      }
+      if (step.waitType === "ultimate" && button.action === "unitUltimate") {
+        tutorial.activateUltimate(game, button.unitId, helpers);
+        return true;
+      }
+      if (step.waitType === "skillTarget" && (button.action === "playerSkill" || button.action === "playerCommand")) {
+        tutorial.selectSkill(game, button.skillKey, helpers);
+        return true;
+      }
+      tutorial.reject(game, getBattleTutorialWaitHint(step, tutorial, helpers));
+      return true;
+    }
+
+    function getBattleTutorialWaitHint(step, tutorial, helpers) {
+      if (!step || !tutorial) {
+        return "今は指定された操作だけ使えます";
+      }
+      if (step.waitType === "ultimate") {
+        return `${tutorial.getUnitName(step.unitId, helpers)}の必殺技を使いましょう`;
+      }
+      if (step.waitType === "skillTarget") {
+        return `${tutorial.getSkillName(step.skillKey, helpers)}を使いましょう`;
+      }
+      return "今は指定された操作だけ使えます";
+    }
+
+    function getBattleTutorialSkillForSlot(slotIndex) {
+      const pageIndex = game.skillPage === "page2" ? 1 : 0;
+      const skills = getPanelSkills(player, pageIndex);
+      return skills && skills[slotIndex] || null;
+    }
+
+    function getBattleTutorialStatusButtonAt(x, y) {
+      const buttons = Array.isArray(statusUiButtons) ? statusUiButtons : [];
+      for (let i = buttons.length - 1; i >= 0; i -= 1) {
+        const button = buttons[i];
+        if (button && x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) {
+          return button;
+        }
+      }
+      return null;
+    }
+
+    function getBattleTutorialUnitAt(x, y) {
+      const units = [];
+      const seen = new Set();
+      const add = (unit) => {
+        if (!unit || seen.has(unit) || unit.dead) {
+          return;
+        }
+        seen.add(unit);
+        units.push(unit);
+      };
+      add(player);
+      for (const unit of Array.isArray(party) ? party : []) {
+        add(unit);
+      }
+      for (const unit of Array.isArray(enemies) ? enemies : []) {
+        add(unit);
+      }
+      let best = null;
+      let bestDistance = Infinity;
+      for (const unit of units) {
+        const distance = Math.hypot((unit.x || 0) - x, (unit.y || 0) - y);
+        const hitRadius = Math.max((unit.radius || 0) + tutorialPx(34), tutorialPx(44));
+        if (distance <= hitRadius && distance < bestDistance) {
+          best = unit;
+          bestDistance = distance;
+        }
+      }
+      return best;
+    }
+
+    function tutorialPx(value) {
+      return typeof battlePx === "function" ? battlePx(value) : value;
+    }
+
     function handleMouseMove(event) {
       setMouseFromEvent(event);
       if (updateActiveScrollbarDrag()) {
@@ -3366,6 +3588,9 @@
         return;
       }
       if (game.state !== "playing") {
+        return;
+      }
+      if (handleBattleTutorialMouse(event)) {
         return;
       }
       if (event.button === 0) {

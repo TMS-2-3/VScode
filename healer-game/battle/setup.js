@@ -320,6 +320,23 @@
       return Boolean(quest && Array.isArray(quest.reinforcements) && quest.reinforcements.length > 0);
     }
 
+    function startBattleTutorial(quest) {
+      const tutorial = window.HEALER_BATTLE_TUTORIAL;
+      if (!tutorial || typeof tutorial.start !== "function") {
+        game.battleTutorial = null;
+        return;
+      }
+      tutorial.start(game, quest, {
+        player,
+        party,
+        enemies,
+        battlePx,
+        getUltimateCost,
+        addBurst,
+        addFloat,
+      });
+    }
+
     function resetGame(quest = null) {
       projectiles.length = 0;
       telegraphs.length = 0;
@@ -337,6 +354,7 @@
       game.avoidTargetTimer = 0;
       game.skillPage = "page1";
       game.currentQuest = quest;
+      game.battleTutorial = null;
       game.battleRewards = { pending: [], granted: [], claimed: false };
       game.innRestUsedUntilBattle = false;
       game.message = quest ? `依頼: ${quest.name}` : "依頼: 魔物を全滅させる";
@@ -435,6 +453,7 @@
         applyCarriedStatuses(member);
       }
 
+      startBattleTutorial(quest);
       clampAllUnits();
     }
 

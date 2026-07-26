@@ -31,6 +31,7 @@
       getPlayerFirstName,
       getMeetingStory,
       getQuestAcceptedStory,
+      getQuestEncounterStory,
       getKeybindLabel,
       getGold,
       formatGold,
@@ -698,8 +699,26 @@
       return town.acceptedQuestIds;
     }
 
+    function ensureTownCompletedQuestState() {
+      if (!town.completedQuestIds || typeof town.completedQuestIds !== "object" || Array.isArray(town.completedQuestIds)) {
+        town.completedQuestIds = {};
+      }
+      return town.completedQuestIds;
+    }
+
     function getTownQuestIdFromSymbolConfig(config) {
       const questId = config && (config.questId || config.quest || config.questKey);
+      return questId ? String(questId) : "";
+    }
+
+    function getTownRequiredCompletedQuestIdFromSymbolConfig(config) {
+      const questId = config && (
+        config.requiresQuestCompleted
+        || config.requiredCompletedQuestId
+        || config.requiredQuestCompleted
+        || config.afterQuestId
+        || config.unlockQuestId
+      );
       return questId ? String(questId) : "";
     }
 
@@ -708,6 +727,18 @@
         return false;
       }
       return ensureTownAcceptedQuestState()[String(questId)] === true;
+    }
+
+    function isTownQuestCompleted(questId) {
+      if (!questId) {
+        return false;
+      }
+      return ensureTownCompletedQuestState()[String(questId)] === true;
+    }
+
+    function isTownSymbolWildUnlocked(config) {
+      const questId = getTownRequiredCompletedQuestIdFromSymbolConfig(config);
+      return !questId || isTownQuestCompleted(questId);
     }
 
     function acceptTownQuest(quest) {
@@ -723,6 +754,13 @@
         return;
       }
       delete ensureTownAcceptedQuestState()[String(questId)];
+    }
+
+    function completeTownQuest(questId) {
+      if (!questId) {
+        return;
+      }
+      ensureTownCompletedQuestState()[String(questId)] = true;
     }
 
     function getTownSymbolMapId(tileMap = getTownTileMap()) {
@@ -771,6 +809,7 @@
         config
         && config.enabled !== false
         && !getTownQuestIdFromSymbolConfig(config)
+        && isTownSymbolWildUnlocked(config)
       ));
       const activeQuestConfigs = questConfigs
         .concat(wildConfigs.filter((config) => config && getTownQuestIdFromSymbolConfig(config)))
@@ -1364,22 +1403,43 @@
       const move = raw.move || payload.move || {};
       const moveX = Math.floor(Number(raw.moveX ?? raw.dx ?? move.x) || 0);
       const moveY = Math.floor(Number(raw.moveY ?? raw.dy ?? move.y) || 0);
+      const dialogue = raw.dialogue || raw.lines || payload.dialogue || payload.lines || null;
       return {
+        id: raw.id || event.id || "guidedStep",
         message: raw.message || payload.message || "",
         messageTimer: Number(raw.messageTimer ?? payload.messageTimer) || 3,
+        dialogue: normalizeTownGuidedStepDialogue(dialogue),
         facing: raw.facing || raw.direction || payload.facing || payload.direction || town.player.facing || "down",
         moveX,
         moveY,
       };
     }
 
-    function runTownGuidedStep(tileMap, guided) {
+    function normalizeTownGuidedStepDialogue(dialogue) {
+      const entries = Array.isArray(dialogue)
+        ? dialogue
+        : dialogue
+          ? [dialogue]
+          : [];
+      return entries
+        .map((entry) => {
+          if (typeof entry === "string") {
+            return { text: entry };
+          }
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
+          return {
+            speaker: entry.speaker || entry.name || undefined,
+            text: String(entry.text || entry.message || ""),
+          };
+        })
+        .filter((entry) => entry && entry.text);
+    }
+
+    function applyTownGuidedStepMove(tileMap, guided) {
       if (!guided) {
         return false;
-      }
-      if (guided.message) {
-        game.message = guided.message;
-        game.messageTimer = Math.max(0, guided.messageTimer || 3);
       }
       town.player.facing = guided.facing || town.player.facing || "down";
       town.player.gridMove = null;
@@ -1391,6 +1451,25 @@
         });
       }
       return true;
+    }
+
+    function runTownGuidedStep(tileMap, guided) {
+      if (!guided) {
+        return false;
+      }
+      if (Array.isArray(guided.dialogue) && guided.dialogue.length > 0) {
+        town.player.facing = guided.facing || town.player.facing || "down";
+        town.player.gridMove = null;
+        startTownStory(`guidedStep:${guided.id}`, guided.dialogue, () => {
+          applyTownGuidedStepMove(getTownTileMap() || tileMap, guided);
+        });
+        return true;
+      }
+      if (guided.message) {
+        game.message = guided.message;
+        game.messageTimer = Math.max(0, guided.messageTimer || 3);
+      }
+      return applyTownGuidedStepMove(tileMap, guided);
     }
 
     function handleTownStepEvents(tileMap) {
@@ -1564,13 +1643,25 @@
       if (!quest) {
         return false;
       }
+      const storyLines = typeof getQuestEncounterStory === "function" ? getQuestEncounterStory(quest) : [];
+      if (Array.isArray(storyLines) && storyLines.length > 0) {
+        town.player.gridMove = null;
+        startTownStory(`questEncounter:${quest.id}`, storyLines, () => {
+          beginTownSymbolEncounterBattle(quest, symbols);
+        });
+        return true;
+      }
+      beginTownSymbolEncounterBattle(quest, symbols);
+      return true;
+    }
+
+    function beginTownSymbolEncounterBattle(quest, symbols) {
       const state = ensureTownSymbolEncounterState();
       state.pendingBattle = quest.symbolEncounter;
       for (const symbol of symbols) {
         symbol.inBattle = true;
       }
       resetGame(quest);
-      return true;
     }
 
     function buildTownSymbolEncounterQuest(tileMap, symbols) {
@@ -1635,6 +1726,7 @@
         state.pendingBattle = null;
       }
       clearTownAcceptedQuest(encounter.questId);
+      completeTownQuest(encounter.questId);
       const tileMap = tileMapSystem && typeof tileMapSystem.getMap === "function"
         ? tileMapSystem.getMap(encounter.mapId)
         : null;

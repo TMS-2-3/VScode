@@ -10,6 +10,8 @@
       game,
       town,
       playerProfile,
+      statusUiButtons,
+      statusCardMetas,
       player,
       party,
       enemies,
@@ -320,8 +322,252 @@
     drawFloatingArjuna();
     drawEffects();
     statusRenderer.drawHud();
+    drawBattleTutorialOverlay();
     drawSystemMenu();
     drawResultOverlay();
+  }
+
+  function drawBattleTutorialOverlay() {
+    const tutorial = window.HEALER_BATTLE_TUTORIAL;
+    if (!tutorial || typeof tutorial.isActive !== "function" || !tutorial.isActive(game)) {
+      return;
+    }
+    const step = tutorial.getCurrentStep(game);
+    if (!step) {
+      return;
+    }
+    const helpers = getBattleTutorialRenderHelpers();
+    ctx.save();
+    ctx.fillStyle = "rgba(2, 8, 7, 0.34)";
+    ctx.fillRect(0, 0, view.w, view.h);
+    drawBattleTutorialHighlights(step, tutorial, helpers);
+    drawBattleTutorialMessage(step, tutorial, helpers);
+    ctx.restore();
+  }
+
+  function getBattleTutorialRenderHelpers() {
+    return {
+      player,
+      party,
+      enemies,
+      SKILL_DATA,
+      playerProfile,
+      getKeybindLabel,
+      getPlayerFirstName,
+    };
+  }
+
+  function drawBattleTutorialHighlights(step, tutorial, helpers) {
+    const highlighted = [];
+    const addRect = (rect, color, label = "") => {
+      if (rect) {
+        highlighted.push({ kind: "rect", rect, color, label });
+      }
+    };
+    const addUnit = (unit, color, label = "") => {
+      if (unit) {
+        highlighted.push({ kind: "unit", unit, color, label });
+      }
+    };
+    if (step.skillKey) {
+      addRect(findBattleTutorialSkillButton(step.skillKey), "#ffd56b", tutorial.getSkillName(step.skillKey, helpers));
+    }
+    if (step.unitId || step.highlightUltimateUnitId) {
+      const unitId = step.unitId || step.highlightUltimateUnitId;
+      addRect(findBattleTutorialUltimateButton(unitId), "#73dfff", "必殺技");
+    }
+    if (step.targetUnitId || step.highlightUnitId) {
+      const unitId = step.targetUnitId || step.highlightUnitId;
+      addUnit(tutorial.getUnitById(unitId, helpers), "#79ff8d", tutorial.getUnitName(unitId, helpers));
+    }
+    if (step.highlightStatusUnitId) {
+      addRect(findBattleTutorialStatusCard(step.highlightStatusUnitId), "#ff9f43", "調子");
+    }
+    if (step.highlightCommandUnitId) {
+      addRect(findBattleTutorialStatusCard(step.highlightCommandUnitId), "#9cc6ff", "行動方針");
+    }
+    for (const item of highlighted) {
+      if (item.kind === "unit") {
+        drawBattleTutorialUnitHighlight(item.unit, item.color, item.label);
+      } else {
+        drawBattleTutorialRectHighlight(item.rect, item.color, item.label);
+      }
+    }
+  }
+
+  function findBattleTutorialSkillButton(skillKey) {
+    const buttons = Array.isArray(statusUiButtons) ? statusUiButtons : [];
+    return buttons.find((button) =>
+      button
+      && (button.action === "playerSkill" || button.action === "playerCommand")
+      && button.skillKey === skillKey
+    ) || null;
+  }
+
+  function findBattleTutorialUltimateButton(unitId) {
+    const buttons = Array.isArray(statusUiButtons) ? statusUiButtons : [];
+    return buttons.find((button) => button && button.action === "unitUltimate" && button.unitId === unitId) || null;
+  }
+
+  function findBattleTutorialStatusCard(unitId) {
+    const cards = Array.isArray(statusCardMetas) ? statusCardMetas : [];
+    const card = cards.find((item) => item && item.unitId === unitId);
+    return card ? { x: card.x, y: card.y, w: card.w, h: card.h } : null;
+  }
+
+  function drawBattleTutorialRectHighlight(rect, color, label = "") {
+    if (!rect) {
+      return;
+    }
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    roundRect(rect.x - 6, rect.y - 6, rect.w + 12, rect.h + 12, 10);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(7, 12, 10, 0.88)";
+    const labelText = String(label || "");
+    if (labelText) {
+      ctx.font = "900 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      const labelW = Math.min(150, Math.max(42, ctx.measureText(labelText).width + 20));
+      const labelH = 22;
+      const labelX = clamp(rect.x + rect.w / 2 - labelW / 2, 8, view.w - labelW - 8);
+      const labelY = Math.max(8, rect.y - labelH - 14);
+      roundRect(labelX, labelY, labelW, labelH, 6);
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#f7fff6";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labelText, labelX + labelW / 2, labelY + labelH / 2 + 0.5);
+    }
+    ctx.restore();
+  }
+
+  function drawBattleTutorialUnitHighlight(unit, color, label = "") {
+    if (!unit || unit.dead) {
+      return;
+    }
+    const radius = Math.max((unit.radius || 16) + battlePx(16), battlePx(34));
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(3, battlePx(3));
+    ctx.beginPath();
+    ctx.arc(unit.x, unit.y, radius, 0, TAU);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(7, 12, 10, 0.88)";
+    const labelText = String(label || "");
+    if (labelText) {
+      ctx.font = "900 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      const labelW = Math.min(150, Math.max(42, ctx.measureText(labelText).width + 20));
+      const labelH = 22;
+      const labelX = clamp(unit.x - labelW / 2, 8, view.w - labelW - 8);
+      const labelY = Math.max(8, unit.y - radius - labelH - 8);
+      roundRect(labelX, labelY, labelW, labelH, 6);
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#f7fff6";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labelText, labelX + labelW / 2, labelY + labelH / 2 + 0.5);
+    }
+    ctx.restore();
+  }
+
+  function drawBattleTutorialMessage(step, tutorial, helpers) {
+    const state = game.battleTutorial || {};
+    const text = tutorial.formatStepText(step, helpers);
+    const speaker = tutorial.getStepSpeaker(step, helpers);
+    const maxW = Math.min(view.w - 48, 780);
+    const lines = wrapBattleTutorialText(text, maxW - 40, "900 20px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif");
+    const feedback = String(state.feedback || "");
+    const panelH = Math.min(view.h - 120, Math.max(118, 78 + lines.length * 28 + (feedback ? 26 : 0)));
+    const panelW = maxW;
+    const x = view.w / 2 - panelW / 2;
+    const bottomReserve = clamp(view.h * 0.19, 130, 170);
+    const y = clamp(view.h - bottomReserve - panelH - 16, 94, view.h - panelH - 24);
+    ctx.save();
+    ctx.fillStyle = "rgba(6, 12, 10, 0.92)";
+    ctx.strokeStyle = "rgba(247, 255, 246, 0.62)";
+    ctx.lineWidth = 2;
+    roundRect(x, y, panelW, panelH, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    const innerX = x + 22;
+    let ty = y + 26;
+    if (speaker) {
+      ctx.fillStyle = "#8de2a1";
+      ctx.font = "900 15px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(speaker, innerX, ty);
+      ty += 28;
+    }
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 20px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    for (const line of lines) {
+      ctx.fillText(line, innerX, ty);
+      ty += 28;
+    }
+    if (feedback) {
+      ctx.fillStyle = "#ffd56b";
+      ctx.font = "900 14px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+      ctx.fillText(feedback, innerX, ty + 6);
+    }
+    const guide = step.type === "line"
+      ? `${getBattleTutorialInteractLabel()}で進む`
+      : getBattleTutorialWaitGuide(step, state);
+    ctx.fillStyle = "rgba(247, 255, 246, 0.72)";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(guide, x + panelW - 22, y + panelH - 18);
+    ctx.restore();
+  }
+
+  function getBattleTutorialInteractLabel() {
+    return typeof getKeybindLabel === "function" ? (getKeybindLabel("field.interact") || "E") : "E";
+  }
+
+  function getBattleTutorialWaitGuide(step, state) {
+    if (step.waitType === "skillTarget" && state && state.selectedSkillKey) {
+      return "対象をクリック";
+    }
+    return "指定された操作だけ受け付けます";
+  }
+
+  function wrapBattleTutorialText(text, maxWidth, font) {
+    ctx.save();
+    ctx.font = font;
+    const source = Array.from(String(text || ""));
+    const lines = [];
+    let line = "";
+    for (const char of source) {
+      const next = line + char;
+      if (line && ctx.measureText(next).width > maxWidth) {
+        lines.push(line);
+        line = char;
+      } else {
+        line = next;
+      }
+    }
+    if (line || lines.length === 0) {
+      lines.push(line);
+    }
+    ctx.restore();
+    return lines;
   }
 
   function resetCanvasFrameState() {
