@@ -763,6 +763,27 @@
       ensureTownCompletedQuestState()[String(questId)] = true;
     }
 
+    function isTownQuestCompletionBlocking(quest) {
+      return Boolean(quest && quest.type === "story" && isTownQuestCompleted(quest.id));
+    }
+
+    function isTownQuestUnavailable(quest) {
+      return Boolean(quest && (isTownQuestAccepted(quest.id) || isTownQuestCompletionBlocking(quest)));
+    }
+
+    function getTownQuestUnavailableMessage(quest) {
+      if (!quest) {
+        return "依頼データが見つからない";
+      }
+      if (isTownQuestAccepted(quest.id)) {
+        return "この依頼は受注中です。";
+      }
+      if (isTownQuestCompletionBlocking(quest)) {
+        return "この依頼は達成済みです。";
+      }
+      return "";
+    }
+
     function getTownSymbolMapId(tileMap = getTownTileMap()) {
       return String(tileMap && tileMap.id || getTownMapId() || "town");
     }
@@ -2237,6 +2258,15 @@
         game.messageTimer = 3;
         return;
       }
+      if (isTownQuestUnavailable(quest)) {
+        const message = getTownQuestUnavailableMessage(quest);
+        if (town.panel) {
+          town.panel.message = message;
+        }
+        game.message = message;
+        game.messageTimer = 3;
+        return;
+      }
       town.selectedQuest = quest;
       showBattleGuidePanel(quest);
     }
@@ -2245,7 +2275,13 @@
       if (!town.panel || !Array.isArray(town.panel.quests) || town.panel.quests.length === 0) {
         return;
       }
-      showQuestDecisionPanel(town.panel.quests[0].id);
+      const quest = town.panel.quests.find((entry) => entry && !isTownQuestUnavailable(entry));
+      if (!quest) {
+        game.message = "受けられる依頼がありません。";
+        game.messageTimer = 3;
+        return;
+      }
+      showQuestDecisionPanel(quest.id);
     }
 
     function runTownPanelAction(action) {
@@ -2309,6 +2345,15 @@
 
     function startSelectedQuest() {
       const quest = town.selectedQuest || getQuestById(town.panel && town.panel.questId);
+      if (isTownQuestUnavailable(quest)) {
+        const message = getTownQuestUnavailableMessage(quest);
+        if (town.panel) {
+          town.panel.message = message;
+        }
+        game.message = message;
+        game.messageTimer = 3;
+        return;
+      }
       if (quest && quest.fieldMapId) {
         acceptTownQuest(quest);
         closeTownPanel();

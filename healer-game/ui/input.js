@@ -137,6 +137,7 @@
     const presetNameMaxLength = 16;
     const DEFEAT_INN_RESTART_COST = 100;
     const DEFEAT_TOWN_RESTART_HP_RATIO = 0.1;
+    const TUTORIAL_QUEST_ID = "story_horn_rabbit_competition_001";
     let presetTextInput = null;
     let syncingPresetTextInput = false;
     const FPS_LIMIT_OPTIONS = Array.isArray(window.HEALER_CONFIG && window.HEALER_CONFIG.fpsLimitOptions)
@@ -213,6 +214,29 @@
         settings.gameScrollMax = 0;
       }
       return game.systemMenu;
+    }
+
+    function isTutorialQuestCompleteForEquipmentChange() {
+      return Boolean(town && town.completedQuestIds && town.completedQuestIds[TUTORIAL_QUEST_ID] === true);
+    }
+
+    function isEquipmentChangeLockedByTutorialQuest() {
+      return Boolean(playerProfile && playerProfile.done && !isTutorialQuestCompleteForEquipmentChange());
+    }
+
+    function showEquipmentChangeLockedMessage() {
+      setEquipmentMessage("今は変更できません");
+      game.message = "今は変更できません";
+      game.messageTimer = 3;
+      clearMovementKeys();
+    }
+
+    function blockEquipmentChangeIfTutorialLocked() {
+      if (!isEquipmentChangeLockedByTutorialQuest()) {
+        return false;
+      }
+      showEquipmentChangeLockedMessage();
+      return true;
     }
 
     function getGameSettings() {
@@ -1625,6 +1649,9 @@
         setEquipmentMessage("戦闘中は装備確認のみです。");
         return;
       }
+      if (blockEquipmentChangeIfTutorialLocked()) {
+        return;
+      }
       const unit = getSelectedEquipmentUnit();
       const item = typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(itemId) : null;
       if (!unit || !item || typeof equipItem !== "function") {
@@ -1672,6 +1699,9 @@
     function unequipSelectedSlot(slotKey) {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      if (blockEquipmentChangeIfTutorialLocked()) {
         return;
       }
       const unit = getSelectedEquipmentUnit();
@@ -1750,6 +1780,9 @@
         setEquipmentMessage("戦闘中は装備確認のみです。");
         return;
       }
+      if (blockEquipmentChangeIfTutorialLocked()) {
+        return;
+      }
       const unit = getSelectedEquipmentUnit();
       const candidates = typeof getItemCandidates === "function" ? getItemCandidates() : [];
       const item = candidates.find((entry) => entry && entry.id === itemId);
@@ -1797,6 +1830,9 @@
     function clearSelectedCharacterItem() {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      if (blockEquipmentChangeIfTutorialLocked()) {
         return;
       }
       const unit = getSelectedEquipmentUnit();
@@ -1979,6 +2015,10 @@
     }
 
     function confirmEquipmentSkillTransfer() {
+      if (blockEquipmentChangeIfTutorialLocked()) {
+        closeEquipmentConfirm();
+        return;
+      }
       const ui = getEquipmentUi();
       const confirm = ui.confirm;
       if (!confirm || confirm.type !== "stealActiveSkill") {
@@ -2008,6 +2048,10 @@
     }
 
     function confirmEquipmentItemTransfer() {
+      if (blockEquipmentChangeIfTutorialLocked()) {
+        closeEquipmentConfirm();
+        return;
+      }
       const ui = getEquipmentUi();
       const confirm = ui.confirm;
       if (!confirm || confirm.type !== "stealEquipmentItem") {
@@ -2054,6 +2098,9 @@
     function equipSelectedActiveSkill(slotIndex, skillKey, options = {}) {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      if (blockEquipmentChangeIfTutorialLocked()) {
         return;
       }
       const unit = getSelectedEquipmentUnit();
@@ -2127,6 +2174,9 @@
         setEquipmentMessage("戦闘中は装備確認のみです。");
         return;
       }
+      if (blockEquipmentChangeIfTutorialLocked()) {
+        return;
+      }
       const unit = getSelectedEquipmentUnit();
       if (!unit) {
         return;
@@ -2148,6 +2198,9 @@
     function equipSelectedPassive(passiveKey) {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      if (blockEquipmentChangeIfTutorialLocked()) {
         return;
       }
       const unit = getSelectedEquipmentUnit();
@@ -2183,6 +2236,9 @@
     function equipSelectedUltimate(ultimateKey) {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中は装備確認のみです。");
+        return;
+      }
+      if (blockEquipmentChangeIfTutorialLocked()) {
         return;
       }
       const unit = getSelectedEquipmentUnit();
@@ -2301,6 +2357,9 @@
     function loadEquipmentPreset(index) {
       if (isEquipmentReadOnly()) {
         setEquipmentMessage("戦闘中はプリセット読み込みできません。");
+        return;
+      }
+      if (blockEquipmentChangeIfTutorialLocked()) {
         return;
       }
       const unit = getSelectedEquipmentUnit();

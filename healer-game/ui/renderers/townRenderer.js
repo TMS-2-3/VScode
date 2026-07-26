@@ -54,6 +54,32 @@
     return getActionLabel("common.menuBack", "Esc");
   }
 
+  function isQuestAcceptedForTown(quest) {
+    return Boolean(quest && town && town.acceptedQuestIds && town.acceptedQuestIds[quest.id] === true);
+  }
+
+  function isQuestCompletedForTown(quest) {
+    return Boolean(quest && quest.type === "story" && town && town.completedQuestIds && town.completedQuestIds[quest.id] === true);
+  }
+
+  function isQuestUnavailableForTown(quest) {
+    return isQuestAcceptedForTown(quest) || isQuestCompletedForTown(quest);
+  }
+
+  function getQuestStatusText(quest) {
+    if (isQuestAcceptedForTown(quest)) {
+      return "受注中";
+    }
+    if (isQuestCompletedForTown(quest)) {
+      return "達成済み";
+    }
+    return "";
+  }
+
+  function getAvailableQuestCount(typeKey) {
+    return getQuestsByType(typeKey).filter((quest) => !isQuestUnavailableForTown(quest)).length;
+  }
+
   const EQUIPMENT_RANK_FILTERS = ["D", "C", "B", "A", "S"];
   const EQUIPMENT_SHOP_WEAPON_TYPES = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
   const EQUIPMENT_SHOP_UNITS = [
@@ -2714,8 +2740,9 @@
       const type = types[i];
       const bx = startX + i * (buttonW + buttonGap);
       const by = startY;
-      const questCount = getQuestsByType(type.key).length;
-      drawQuestButton(bx, by, buttonW, buttonH, type.name, questCount ? `${questCount}件` : "準備中", {
+      const totalQuestCount = getQuestsByType(type.key).length;
+      const questCount = getAvailableQuestCount(type.key);
+      drawQuestButton(bx, by, buttonW, buttonH, type.name, totalQuestCount ? `受注可 ${questCount}件` : "準備中", {
         kind: "selectQuestType",
         type: type.key,
       }, questCount === 0);
@@ -2767,10 +2794,12 @@
         if (rowY + buttonH < listRect.y || rowY > listRect.y + listRect.h) {
           continue;
         }
-        drawQuestButton(listRect.x, rowY, listRect.w, buttonH, `${quest.rank || "-"}  ${quest.name}`, quest.summary || "", {
+        const statusText = getQuestStatusText(quest);
+        const disabled = isQuestUnavailableForTown(quest);
+        drawQuestButton(listRect.x, rowY, listRect.w, buttonH, `${quest.rank || "-"}  ${quest.name}${statusText ? `  [${statusText}]` : ""}`, statusText || quest.summary || "", {
           kind: "selectQuest",
           questId: quest.id,
-        });
+        }, disabled);
       }
       ctx.restore();
       drawTownScrollbar(listRect, scroll, scrollMax);
@@ -2826,9 +2855,15 @@
         cursorY += 22;
       }
     }
+    const statusText = getQuestStatusText(quest);
+    if (statusText || town.panel.message) {
+      ctx.fillStyle = statusText ? "#ffd86b" : "#ffb4a8";
+      ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText(statusText ? `状態: ${statusText}` : town.panel.message, x + 26, y + h - 82);
+    }
 
     drawTextButton(x + 24, y + h - 60, 130, 38, "戻る", { kind: "backToQuestList", type: quest.type });
-    drawTextButton(x + w - 214, y + h - 60, 190, 38, "この依頼を受ける", { kind: "confirmQuest" }, true);
+    drawTextButton(x + w - 214, y + h - 60, 190, 38, statusText ? "受注不可" : "この依頼を受ける", { kind: "confirmQuest" }, true, Boolean(statusText));
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";
@@ -2836,7 +2871,7 @@
   }
 
   function drawQuestButton(x, y, w, h, title, subText, action, disabled = false) {
-    town.panel.clickTargets.push({ x, y, w, h, action });
+    town.panel.clickTargets.push({ x, y, w, h, action: disabled ? { kind: "noop" } : action });
     ctx.save();
     ctx.fillStyle = disabled ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.11)";
     ctx.strokeStyle = disabled ? "rgba(255,255,255,0.12)" : "rgba(255,216,107,0.52)";
