@@ -369,6 +369,7 @@
       game.innRestUsedUntilBattle = false;
       game.battleRewards = null;
       game.currentQuest = null;
+      game.encounterCutin = null;
       game.battleTutorial = null;
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
@@ -463,6 +464,7 @@
       game.innRestUsedUntilBattle = saved.innRestUsedUntilBattle === true;
       game.battleRewards = null;
       game.currentQuest = null;
+      game.encounterCutin = null;
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
       game.defeatUi = null;
@@ -537,6 +539,7 @@
       game.systemMenu.panel = null;
       game.systemMenu.confirm = null;
       game.currentSaveId = saveId;
+      game.encounterCutin = null;
       game.defeatUi = null;
       game.titleLoadOpen = false;
       game.titleLoadMessage = "";

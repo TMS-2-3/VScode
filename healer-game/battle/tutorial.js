@@ -125,6 +125,8 @@
       index: 0,
       mode: "line",
       selectedSkillKey: null,
+      pendingWait: null,
+      pendingScript: null,
       feedback: "",
       flash: 0,
     };
@@ -255,7 +257,11 @@
   }
 
   function shouldPause(game) {
-    return isActive(game);
+    if (!isActive(game)) {
+      return false;
+    }
+    const step = getCurrentStep(game);
+    return Boolean(step && step.type === "line");
   }
 
   function getCurrentStep(gameOrState) {
@@ -281,9 +287,13 @@
         return null;
       }
       if (step.type === "script") {
-        applyScript(step.action, game, helpers, state);
+        const result = applyScript(step.action, game, helpers, state);
         if (!state.active) {
           return null;
+        }
+        if (result === "pending") {
+          state.mode = "script";
+          return step;
         }
         state.index += 1;
         continue;
@@ -310,6 +320,9 @@
   function selectSkill(game, skillKey, helpers = {}) {
     const state = getState(game);
     const step = getCurrentStep(state);
+    if (state && state.pendingWait) {
+      return reject(game, "発動を待っています");
+    }
     if (!state || !step || step.type !== "wait" || step.waitType !== "skillTarget") {
       return reject(game, "今は指定された操作だけ使えます");
     }
@@ -334,6 +347,9 @@
   function cancelSelectedSkill(game, helpers = {}) {
     const state = getState(game);
     const step = getCurrentStep(state);
+    if (state && state.pendingWait) {
+      return reject(game, "発動を待っています");
+    }
     if (!state || !step || step.type !== "wait" || step.waitType !== "skillTarget" || !state.selectedSkillKey) {
       return false;
     }
@@ -348,6 +364,9 @@
   function confirmTarget(game, target, helpers = {}) {
     const state = getState(game);
     const step = getCurrentStep(state);
+    if (state && state.pendingWait) {
+      return reject(game, "発動を待っています");
+    }
     if (!state || !step || step.type !== "wait" || step.waitType !== "skillTarget") {
       return reject(game, "今は指定された操作だけ使えます");
     }
@@ -357,34 +376,22 @@
     if (!target || target.id !== step.targetUnitId) {
       return reject(game, `${getUnitName(step.targetUnitId, helpers)}を選択してください`);
     }
-    applyWaitOutcome(step, game, helpers, state);
-    state.index += 1;
-    state.selectedSkillKey = null;
-    state.feedback = "";
-    if (typeof helpers.cancelPlayerAim === "function") {
-      helpers.cancelPlayerAim();
-    } else if (helpers.player) {
-      helpers.player.aim = null;
-    }
-    prepare(game, helpers);
-    return true;
+    return beginWaitAction(step, target, game, helpers, state);
   }
 
   function activateUltimate(game, unitId, helpers = {}) {
     const state = getState(game);
     const step = getCurrentStep(state);
+    if (state && state.pendingWait) {
+      return reject(game, "発動を待っています");
+    }
     if (!state || !step || step.type !== "wait" || step.waitType !== "ultimate") {
       return reject(game, "今は指定された操作だけ使えます");
     }
     if (unitId !== step.unitId) {
       return reject(game, `${getUnitName(step.unitId, helpers)}の必殺技を使いましょう`);
     }
-    applyWaitOutcome(step, game, helpers, state);
-    state.index += 1;
-    state.selectedSkillKey = null;
-    state.feedback = "";
-    prepare(game, helpers);
-    return true;
+    return beginWaitUltimate(step, unitId, game, helpers, state);
   }
 
   function reject(game, message) {
@@ -397,73 +404,252 @@
     return true;
   }
 
-  function applyWaitOutcome(step, game, helpers, state) {
-    if (step.id === "healRihas") {
-      const target = getUnitById("rihas", helpers);
-      if (target && typeof helpers.healUnit === "function") {
-        helpers.healUnit(helpers.player, target, Math.max(1, target.maxHp || 1), { noMood: true });
-      } else if (target) {
-        target.hp = Math.max(1, target.maxHp || target.hp || 1);
-      }
-      burstUnit(target, helpers, "rgba(121,255,141,0.22)");
-      return;
+  function beginWaitAction(step, target, game, helpers, state) {
+    const player = helpers.player;
+    const before = makeWaitSnapshot(step, target, helpers);
+    let started = false;
+    if (step.skillKey === "heal" && typeof helpers.castHeal === "function") {
+      started = helpers.castHeal(target);
+    } else if (step.skillKey === "shield" && typeof helpers.castShield === "function") {
+      started = helpers.castShield(target);
+    } else if (step.skillKey === "commandDefend" && typeof helpers.usePlayerCommand === "function") {
+      started = helpers.usePlayerCommand(step.skillKey, target);
     }
-    if (step.id === "shieldUlpes") {
-      const target = getUnitById("ulpes", helpers);
-      const amount = Math.max(1, (target && target.maxHp || 1) * 0.55);
-      if (target && typeof helpers.addShield === "function") {
-        helpers.addShield(target, amount, 10);
-      } else if (target) {
-        target.shield = Math.min(target.maxHp || amount, amount);
-        target.shieldTimer = 10;
-        target.shields = [{ amount: target.shield, timer: 10 }];
-      }
-      addUnitFloat(target, "シェルト", "#8fe9ff", helpers);
-      burstUnit(target, helpers, "rgba(143,233,255,0.25)");
-      return;
+    if (!started) {
+      return reject(game, "発動できません");
     }
-    if (step.id === "rihasUltimate") {
-      const unit = getUnitById("rihas", helpers);
-      if (unit) {
-        setUltimateReady(unit, helpers, 1);
+    state.pendingWait = {
+      id: step.id,
+      waitType: step.waitType,
+      skillKey: step.skillKey,
+      targetUnitId: step.targetUnitId,
+      before,
+      startedAt: Number.isFinite(game && game.time) ? game.time : 0,
+    };
+    state.selectedSkillKey = null;
+    state.feedback = player && player.aiIntent && player.aiIntent.manual ? "移動してから発動します" : "発動を待っています";
+    return true;
+  }
+
+  function beginWaitUltimate(step, unitId, game, helpers, state) {
+    const unit = getUnitById(unitId, helpers);
+    let started = false;
+    if (unit) {
+      setUltimateReady(unit, helpers, 1);
+    }
+    const before = makeWaitSnapshot(step, unit, helpers);
+    if (typeof helpers.triggerUltimate === "function") {
+      started = helpers.triggerUltimate(unitId);
+    }
+    if (!started) {
+      return reject(game, "発動できません");
+    }
+    state.pendingWait = {
+      id: step.id,
+      waitType: step.waitType,
+      unitId,
+      before,
+      startedAt: Number.isFinite(game && game.time) ? game.time : 0,
+    };
+    state.selectedSkillKey = null;
+    state.feedback = "発動を待っています";
+    return true;
+  }
+
+  function makeWaitSnapshot(step, target, helpers = {}) {
+    const player = helpers.player || null;
+    return {
+      hp: target && Number.isFinite(target.hp) ? target.hp : null,
+      shield: target && Number.isFinite(target.shield) ? target.shield : null,
+      commandBias: target && Number.isFinite(target.commandBias) ? target.commandBias : null,
+      activeCommandBias: target && Number.isFinite(target.activeCommandBias) ? target.activeCommandBias : null,
+      playerCooldown: player && player.cds && Number.isFinite(player.cds[step.skillKey]) ? player.cds[step.skillKey] : 0,
+      ult: target && Number.isFinite(target.ult) ? target.ult : null,
+    };
+  }
+
+  function update(game, helpers = {}) {
+    const state = getState(game);
+    if (!state || !state.active) {
+      return false;
+    }
+    protectTutorialCombatants(state, helpers);
+    if (state.pendingScript && updatePendingScript(game, helpers, state)) {
+      return true;
+    }
+    if (state.pendingWait && updatePendingWait(game, helpers, state)) {
+      return true;
+    }
+    return true;
+  }
+
+  function updatePendingWait(game, helpers, state) {
+    const pending = state.pendingWait;
+    const step = getCurrentStep(state);
+    if (!pending || !step || step.type !== "wait") {
+      state.pendingWait = null;
+      return false;
+    }
+    if (!isPendingWaitComplete(pending, helpers)) {
+      state.feedback = getPendingWaitMessage(pending, helpers);
+      return false;
+    }
+    finishWaitStep(game, helpers, state);
+    return true;
+  }
+
+  function getPendingWaitMessage(pending, helpers = {}) {
+    const player = helpers.player;
+    if (player && player.aiIntent && player.aiIntent.manual) {
+      return "移動してから発動します";
+    }
+    if (player && player.cast) {
+      return "詠唱中です";
+    }
+    return "発動を待っています";
+  }
+
+  function isPendingWaitComplete(pending, helpers = {}) {
+    if (pending.waitType === "ultimate") {
+      const unit = getUnitById(pending.unitId, helpers);
+      if (!unit) {
+        return false;
       }
-      if (typeof helpers.triggerUltimate === "function" && helpers.triggerUltimate("rihas")) {
-        return;
+      const beforeUlt = pending.before && Number.isFinite(pending.before.ult) ? pending.before.ult : 0;
+      return unit.ult < beforeUlt && (unit.actionLock || 0) <= 0 && !unit.cast && !unit.channel;
+    }
+    const player = helpers.player;
+    const target = getUnitById(pending.targetUnitId, helpers);
+    if (!player || !target) {
+      return false;
+    }
+    if (player.aiIntent && player.aiIntent.manual) {
+      return false;
+    }
+    if (player.cast) {
+      return false;
+    }
+    if (pending.skillKey === "heal") {
+      const beforeHp = pending.before && Number.isFinite(pending.before.hp) ? pending.before.hp : 0;
+      return target.hp > beforeHp || ((player.cds && player.cds.heal || 0) > 0 && (player.actionLock || 0) <= 0);
+    }
+    if (pending.skillKey === "shield") {
+      const beforeShield = pending.before && Number.isFinite(pending.before.shield) ? pending.before.shield : 0;
+      return target.shield > beforeShield || ((player.cds && player.cds.shield || 0) > 0 && (player.actionLock || 0) <= 0);
+    }
+    if (pending.skillKey === "commandDefend") {
+      const currentBias = Number.isFinite(target.activeCommandBias) ? target.activeCommandBias : target.commandBias;
+      const beforeBias = pending.before && Number.isFinite(pending.before.activeCommandBias)
+        ? pending.before.activeCommandBias
+        : pending.before && pending.before.commandBias;
+      return currentBias < (Number.isFinite(beforeBias) ? beforeBias : 0)
+        || ((player.cds && player.cds.commandDefend || 0) > 0 && (player.actionLock || 0) <= 0);
+    }
+    return false;
+  }
+
+  function finishWaitStep(game, helpers, state) {
+    state.pendingWait = null;
+    state.index += 1;
+    state.selectedSkillKey = null;
+    state.feedback = "";
+    if (typeof helpers.cancelPlayerAim === "function") {
+      helpers.cancelPlayerAim();
+    } else if (helpers.player) {
+      helpers.player.aim = null;
+    }
+    prepare(game, helpers);
+  }
+
+  function updatePendingScript(game, helpers, state) {
+    const pending = state.pendingScript;
+    if (!pending) {
+      return false;
+    }
+    if (pending.action === "sushiaIceWorld") {
+      const sushia = getUnitById("sushia", helpers);
+      if (sushia && ((sushia.actionLock || 0) > 0 || sushia.cast || sushia.channel)) {
+        return false;
       }
-      if (unit) {
-        unit.ult = 0;
-        for (const enemy of Array.isArray(helpers.enemies) ? helpers.enemies : []) {
-          if (enemy && !enemy.dead) {
-            enemy.forcedTarget = unit;
-            enemy.tauntTimer = 5;
-          }
+      for (const unitId of ["ulpes", "rihas"]) {
+        const ally = getUnitById(unitId, helpers);
+        if (ally) {
+          ally.frozen = Math.max(ally.frozen || 0, 1.2);
+          ally.frozenMax = Math.max(ally.frozenMax || 0, ally.frozen);
+          addUnitFloat(ally, "凍結", "#8fe9ff", helpers);
         }
-        burstUnit(unit, helpers, "rgba(227,122,63,0.18)", 72);
+      }
+      defeatEnemiesExceptLast(helpers, sushia);
+      state.pendingScript = null;
+      state.index += 1;
+      prepare(game, helpers);
+      return true;
+    }
+    state.pendingScript = null;
+    state.index += 1;
+    prepare(game, helpers);
+    return true;
+  }
+
+  function protectTutorialCombatants(state, helpers = {}) {
+    if (!state || !state.active) {
+      return;
+    }
+    for (const unit of getUniqueUnits(helpers)) {
+      keepTutorialUnitAlive(unit);
+    }
+    const enemies = Array.isArray(helpers.enemies) ? helpers.enemies : [];
+    if (!enemies.length) {
+      return;
+    }
+    const afterIceWorld = hasScriptPassed(state, "sushiaIceWorld");
+    if (!afterIceWorld) {
+      for (const enemy of enemies) {
+        keepTutorialUnitAlive(enemy);
       }
       return;
     }
-    if (step.id === "defendSushia") {
-      const target = getUnitById("sushia", helpers);
-      if (target) {
-        target.commandBias = -1;
-        target.activeCommandBias = -1;
-        target.mood = Math.min(68, Number.isFinite(target.mood) ? target.mood : 68);
-        addUnitFloat(target, "防御指示", "#9cc6ff", helpers);
-        burstUnit(target, helpers, "rgba(156,198,255,0.2)");
-      }
-      if (helpers.player) {
-        helpers.player.aim = null;
-      }
+    const keep = getAliveEnemies(helpers)[0] || enemies[enemies.length - 1];
+    keepTutorialUnitAlive(keep);
+  }
+
+  function keepTutorialUnitAlive(unit) {
+    if (!unit) {
       return;
     }
-    if (step.id === "ulpesUltimate") {
-      const unit = getUnitById("ulpes", helpers);
-      if (unit) {
-        setUltimateReady(unit, helpers, 1);
-        unit.ult = 0;
-        burstUnit(unit, helpers, "rgba(244,197,79,0.28)", 86);
-      }
+    if (unit.dead || !Number.isFinite(unit.hp) || unit.hp <= 0) {
+      unit.dead = false;
+      unit.hp = 1;
+      unit.field = true;
+      unit.targetable = true;
+      unit.collidable = true;
+      unit.defeatedBy = null;
+      unit.lootCollected = false;
+      unit.actionLock = 0;
+      unit.actionTotal = 0;
+      unit.cast = null;
+      unit.channel = null;
+      unit.pendingActionQueueKey = null;
     }
+  }
+
+  function readyUnitForTutorialAction(unit) {
+    if (!unit) {
+      return;
+    }
+    unit.actionLock = 0;
+    unit.actionTotal = 0;
+    unit.cast = null;
+    unit.castVisual = null;
+    unit.channel = null;
+    unit.aiIntent = null;
+    unit.aiMoveTarget = null;
+    unit.pendingActionQueueKey = null;
+  }
+
+  function hasScriptPassed(state, action) {
+    const index = STEPS.findIndex((step) => step && step.type === "script" && step.action === action);
+    return index >= 0 && state && state.index > index;
   }
 
   function applyScript(action, game, helpers, state) {
@@ -479,6 +665,7 @@
     }
     if (action === "readyRihasUltimate") {
       const unit = getUnitById("rihas", helpers);
+      readyUnitForTutorialAction(unit);
       setUltimateReady(unit, helpers, 1);
       addUnitFloat(unit, "必殺OK", "#73dfff", helpers);
       return;
@@ -495,8 +682,18 @@
     if (action === "sushiaIceWorld") {
       const sushia = getUnitById("sushia", helpers);
       if (sushia) {
-        sushia.ult = 0;
+        readyUnitForTutorialAction(sushia);
         sushia.mood = 96;
+        setUltimateReady(sushia, helpers, 1);
+        if (typeof helpers.triggerUltimate === "function" && helpers.triggerUltimate("sushia", true)) {
+          state.pendingScript = {
+            action,
+            unitId: "sushia",
+            startedAt: Number.isFinite(game && game.time) ? game.time : 0,
+          };
+          return "pending";
+        }
+        sushia.ult = 0;
         burstUnit(sushia, helpers, "rgba(135,221,255,0.22)", 155);
       }
       for (const unitId of ["ulpes", "rihas"]) {
@@ -519,6 +716,7 @@
         }
       }
       const unit = getUnitById("ulpes", helpers);
+      readyUnitForTutorialAction(unit);
       setUltimateReady(unit, helpers, 1);
       addUnitFloat(unit, "必殺OK", "#73dfff", helpers);
       ensureOneEnemyLeft(helpers);
@@ -719,6 +917,7 @@
     reject,
     isActive,
     shouldPause,
+    update,
     getCurrentStep,
     formatStepText,
     getStepSpeaker,

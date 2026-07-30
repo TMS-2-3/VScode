@@ -204,6 +204,7 @@
         materialsById: {},
         battleRewards: null,
         currentQuest: null,
+        encounterCutin: null,
         battleTutorial: null,
         stageClearTimer: 0,
         reinforcementsSpawned: false,

@@ -46,6 +46,8 @@
       getUltimateCost,
       startPlayerAim,
       usePlayerCommand,
+      castHeal,
+      castShield,
       cancelPlayerAim,
       confirmPlayerAim,
       isPlayerControlLocked,
@@ -2440,6 +2442,12 @@
       if (!playerProfile.done) {
         return false;
       }
+      if (isEncounterCutinActive()) {
+        return false;
+      }
+      if (isBattleTutorialActive()) {
+        return false;
+      }
       if (game.state === "town") {
         return !town.story && !town.panel;
       }
@@ -2499,6 +2507,10 @@
       menu.confirm = null;
       clearMovementKeys();
       return true;
+    }
+
+    function isEncounterCutinActive() {
+      return Boolean(game.encounterCutin && game.encounterCutin.active);
     }
 
     function toggleSystemMenu() {
@@ -3208,6 +3220,11 @@
         }
         return;
       }
+      if (isEncounterCutinActive()) {
+        clearMovementKeys();
+        event.preventDefault();
+        return;
+      }
       if (handleSystemMenuKey(event, key)) {
         return;
       }
@@ -3392,6 +3409,9 @@
         cancelPlayerAim,
         cancelItemAim,
         triggerUltimate,
+        castHeal,
+        castShield,
+        usePlayerCommand,
         healUnit,
         addShield,
         dealDamage,
@@ -3607,6 +3627,10 @@
         }
         return;
       }
+      if (isEncounterCutinActive()) {
+        clearMovementKeys();
+        return;
+      }
       if (handleControlCaptureMouse(event)) {
         return;
       }
@@ -3768,6 +3792,10 @@
         if (scrollNumericState(game, "titleLoadScroll", "titleLoadScrollMax", event.deltaY)) {
           event.preventDefault();
         }
+        return;
+      }
+      if (isEncounterCutinActive()) {
+        event.preventDefault();
         return;
       }
       if (game.state === "town" && town.panel) {

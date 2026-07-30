@@ -67,11 +67,11 @@
   }
 
   function getQuestStatusText(quest) {
+    if (isQuestCompletedForTown(quest)) {
+      return "クリア済み";
+    }
     if (isQuestAcceptedForTown(quest)) {
       return "受注中";
-    }
-    if (isQuestCompletedForTown(quest)) {
-      return "達成済み";
     }
     return "";
   }
@@ -1276,9 +1276,41 @@
     ctx.textBaseline = "middle";
     ctx.fillText(actor.label || "M", actor.x, bodyY + 1);
     ctx.restore();
-    if (actor.alert) {
-      drawArgumentMark(actor.x, bodyY - radius - 16);
+    if (actor.questId) {
+      drawTownQuestPaperMark(actor.x + (actor.alert ? -18 : 0), bodyY - radius - 18, actor.questType);
     }
+    if (actor.alert) {
+      drawArgumentMark(actor.x + (actor.questId ? 18 : 0), bodyY - radius - 16);
+    }
+  }
+
+  function drawTownQuestPaperMark(x, y, questType) {
+    const isStory = questType === "story";
+    const pulse = 0.5 + Math.sin(game.time * 6 + x * 0.01) * 0.12;
+    const w = 18;
+    const h = 22;
+    const left = x - w / 2;
+    const top = y - h / 2;
+    ctx.save();
+    ctx.fillStyle = isStory ? `rgba(255,216,107,${0.86 + pulse * 0.1})` : `rgba(247,255,246,${0.86 + pulse * 0.1})`;
+    ctx.strokeStyle = isStory ? "#4f3810" : "#25352b";
+    ctx.lineWidth = 2;
+    roundRect(left, top, w, h, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = isStory ? "#fff0a8" : "#dfeee3";
+    ctx.beginPath();
+    ctx.moveTo(left + w - 6, top + 1);
+    ctx.lineTo(left + w - 1, top + 6);
+    ctx.lineTo(left + w - 6, top + 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#182018";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("!", x, y + 2);
+    ctx.restore();
   }
 
   function drawTownCharacterSprite(actor) {
@@ -2745,7 +2777,7 @@
       drawQuestButton(bx, by, buttonW, buttonH, type.name, totalQuestCount ? `受注可 ${questCount}件` : "準備中", {
         kind: "selectQuestType",
         type: type.key,
-      }, questCount === 0);
+      }, totalQuestCount === 0);
     }
 
     ctx.textAlign = "right";
@@ -2795,11 +2827,10 @@
           continue;
         }
         const statusText = getQuestStatusText(quest);
-        const disabled = isQuestUnavailableForTown(quest);
         drawQuestButton(listRect.x, rowY, listRect.w, buttonH, `${quest.rank || "-"}  ${quest.name}${statusText ? `  [${statusText}]` : ""}`, statusText || quest.summary || "", {
           kind: "selectQuest",
           questId: quest.id,
-        }, disabled);
+        });
       }
       ctx.restore();
       drawTownScrollbar(listRect, scroll, scrollMax);

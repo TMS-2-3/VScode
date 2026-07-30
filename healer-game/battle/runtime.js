@@ -29,6 +29,7 @@
       spawnRearVanguardWave,
       regenerateHp,
       regenerateMp,
+      getUltimateCost,
       getUltimateChargeRate,
       getMoodNaturalDelta,
       applyCommandMoodDelta,
@@ -39,6 +40,7 @@
       dealDamage,
       canFriendlyFireAffect,
       healUnit,
+      triggerUltimate,
       addGold,
       addItem,
     } = context;
@@ -55,6 +57,28 @@
     function isBattleTutorialPaused() {
       const tutorial = window.HEALER_BATTLE_TUTORIAL;
       return Boolean(game.state === "playing" && tutorial && typeof tutorial.shouldPause === "function" && tutorial.shouldPause(game));
+    }
+
+    function isBattleTutorialActive() {
+      const tutorial = window.HEALER_BATTLE_TUTORIAL;
+      return Boolean(game.state === "playing" && tutorial && typeof tutorial.isActive === "function" && tutorial.isActive(game));
+    }
+
+    function updateBattleTutorial(dt) {
+      const tutorial = window.HEALER_BATTLE_TUTORIAL;
+      if (!tutorial || typeof tutorial.update !== "function" || !tutorial.isActive(game)) {
+        return false;
+      }
+      return tutorial.update(game, {
+        player,
+        party,
+        enemies,
+        battlePx,
+        getUltimateCost,
+        triggerUltimate,
+        addFloat,
+        addBurst,
+      });
     }
 
     function update(dt) {
@@ -98,6 +122,7 @@
       separateUnits(dt);
       clearInvalidPriorityTarget();
       clearInvalidAvoidTarget();
+      updateBattleTutorial(dt);
       collectDefeatedEnemyDrops();
       checkBattleState(dt);
     }
@@ -692,6 +717,9 @@
     }
 
     function checkBattleState(dt) {
+      if (isBattleTutorialActive()) {
+        return;
+      }
       const fieldPartyMembers = getFieldPartyMembers();
       if (fieldPartyMembers.length > 0 && fieldPartyMembers.every((member) => member.dead)) {
         clearBattleActionReservations();

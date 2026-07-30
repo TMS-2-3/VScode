@@ -304,6 +304,9 @@
     if (game.state === "town") {
       townRenderer.drawTown();
       drawEffects();
+      if (drawEncounterCutinOverlay()) {
+        return;
+      }
       if (!playerProfile.done) {
         townRenderer.drawProfileSetup();
       } else {
@@ -327,6 +330,138 @@
     drawResultOverlay();
   }
 
+  function drawEncounterCutinOverlay() {
+    const cutin = game.encounterCutin;
+    if (!cutin || cutin.active !== true) {
+      return false;
+    }
+    const duration = Math.max(0.1, Number(cutin.duration) || 1.25);
+    const timer = Math.max(0, Number(cutin.timer) || 0);
+    const progress = Math.max(0, Math.min(1, timer / duration));
+    const intro = Math.max(0, Math.min(1, progress / 0.28));
+    const outro = Math.max(0, Math.min(1, (1 - progress) / 0.2));
+    const alpha = Math.min(1, intro, outro);
+    const sweep = easeOutCubic(Math.max(0, Math.min(1, progress / 0.42)));
+    const pulse = 1 + Math.sin(progress * Math.PI * 5) * 0.012;
+    const centerX = view.w / 2;
+    const centerY = view.h / 2;
+    const bandH = Math.max(170, view.h * 0.24);
+    const slide = (1 - sweep) * (view.w + 260);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(2, 6, 7, 0.54)";
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    drawEncounterCutinBand(-slide - 90, centerY - bandH / 2, view.w + 220, bandH, "rgba(16, 24, 24, 0.94)");
+    drawEncounterCutinBand(slide - 90, centerY - bandH / 2 + bandH * 0.08, view.w + 220, bandH * 0.84, "rgba(117, 31, 38, 0.88)");
+    drawEncounterCutinBand(-slide * 0.62 - 110, centerY + bandH * 0.34, view.w + 280, 18, "rgba(255, 220, 108, 0.92)");
+    drawEncounterCutinBand(slide * 0.55 - 160, centerY - bandH * 0.48, view.w + 320, 10, "rgba(247, 255, 246, 0.65)");
+
+    ctx.translate(centerX, centerY);
+    ctx.scale(pulse, pulse);
+    drawEncounterCrossedSwords(sweep);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
+    ctx.font = "950 72px 'Segoe UI Black', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(cutin.title || "THE 戦闘！", 5, -12);
+    ctx.fillStyle = "#f7fff6";
+    ctx.fillText(cutin.title || "THE 戦闘！", 0, -18);
+    ctx.font = "900 26px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffe08b";
+    ctx.fillText(cutin.enemyText || "敵影", 0, 42);
+    const subtitle = cutin.symbolText || cutin.subtitle || "敵と遭遇";
+    if (subtitle) {
+      ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillStyle = "rgba(247, 255, 246, 0.86)";
+      drawFittedSystemText(subtitle, 0, 78, Math.max(120, Math.min(720, view.w - 160)), 800, 16, 11, "rgba(247,255,246,0.86)", "center", "middle");
+    }
+    ctx.restore();
+    return true;
+  }
+
+  function drawEncounterCrossedSwords(sweep = 1) {
+    const enter = easeOutCubic(Math.max(0, Math.min(1, sweep)));
+    const offset = (1 - enter) * 190;
+    ctx.save();
+    ctx.globalAlpha *= 0.94;
+    drawEncounterSword(-36 - offset, -10, -42, false);
+    drawEncounterSword(36 + offset, -10, 42, true);
+    ctx.restore();
+  }
+
+  function drawEncounterSword(x, y, angleDeg, flip = false) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angleDeg * Math.PI / 180);
+    ctx.scale(flip ? -1 : 1, 1);
+
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = "#dce8ef";
+    ctx.strokeStyle = "#6f7b84";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -150);
+    ctx.lineTo(16, -26);
+    ctx.lineTo(5, 56);
+    ctx.lineTo(-5, 56);
+    ctx.lineTo(-16, -26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.beginPath();
+    ctx.moveTo(0, -130);
+    ctx.lineTo(5, -25);
+    ctx.lineTo(0, 44);
+    ctx.lineTo(-5, -25);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#ffd86b";
+    ctx.strokeStyle = "#6c4a16";
+    ctx.lineWidth = 2;
+    roundRect(-42, 47, 84, 16, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#5b3422";
+    ctx.strokeStyle = "#2f1c14";
+    ctx.lineWidth = 2;
+    roundRect(-9, 56, 18, 82, 7);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffe6a3";
+    ctx.beginPath();
+    ctx.arc(0, 148, 13, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEncounterCutinBand(x, y, w, h, color) {
+    const skew = Math.max(34, h * 0.42);
+    ctx.beginPath();
+    ctx.moveTo(x + skew, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w - skew, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function easeOutCubic(t) {
+    const n = Math.max(0, Math.min(1, Number(t) || 0));
+    return 1 - Math.pow(1 - n, 3);
+  }
+
   function drawBattleTutorialOverlay() {
     const tutorial = window.HEALER_BATTLE_TUTORIAL;
     if (!tutorial || typeof tutorial.isActive !== "function" || !tutorial.isActive(game)) {
@@ -334,6 +469,9 @@
     }
     const step = tutorial.getCurrentStep(game);
     if (!step) {
+      return;
+    }
+    if (step.type === "script") {
       return;
     }
     const helpers = getBattleTutorialRenderHelpers();

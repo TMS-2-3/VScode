@@ -96,6 +96,7 @@
     const SYMBOL_ENCOUNTER_PLAYER_SPAWN_EXCLUSION_RADIUS = 3;
     const SYMBOL_ENCOUNTER_TRANSFER_EXCLUSION_RADIUS = 2;
     const SYMBOL_ENCOUNTER_RANDOM_ATTEMPTS = 240;
+    const ENCOUNTER_CUTIN_DURATION = 1.25;
     const SYMBOL_ENCOUNTER_DIRECTIONS = [
       { x: 0, y: -1, facing: "up" },
       { x: 1, y: 0, facing: "right" },
@@ -558,6 +559,10 @@
         town.interaction = getTownInteraction();
         return;
       }
+      if (updateEncounterCutin(dt)) {
+        town.interaction = null;
+        return;
+      }
       if (town.story) {
         town.interaction = null;
         return;
@@ -779,9 +784,22 @@
         return "この依頼は受注中です。";
       }
       if (isTownQuestCompletionBlocking(quest)) {
-        return "この依頼は達成済みです。";
+        return "この依頼はクリア済みです。";
       }
       return "";
+    }
+
+    function getTownQuestDisplayOrder(quest) {
+      if (!quest) {
+        return 0;
+      }
+      if (quest.type === "story" && isTownQuestCompleted(quest.id)) {
+        return 2;
+      }
+      if (isTownQuestAccepted(quest.id)) {
+        return 1;
+      }
+      return 0;
     }
 
     function getTownSymbolMapId(tileMap = getTownTileMap()) {
@@ -1073,22 +1091,27 @@
     function getTownMonsterSymbols(tileMap = getTownTileMap()) {
       return ensureTownMapSymbols(tileMap)
         .filter((symbol) => symbol && !symbol.removed)
-        .map((symbol) => ({
-          type: "monsterSymbol",
-          id: symbol.id,
-          mapId: symbol.mapId,
-          configId: symbol.configId,
-          name: symbol.name,
-          label: symbol.label,
-          color: symbol.color,
-          x: symbol.x,
-          y: symbol.y,
-          col: symbol.col,
-          row: symbol.row,
-          facing: symbol.facing || "down",
-          alert: symbol.alert === true,
-          radius: symbol.radius,
-        }));
+        .map((symbol) => {
+          const quest = getQuestById(symbol.questId);
+          return {
+            type: "monsterSymbol",
+            id: symbol.id,
+            mapId: symbol.mapId,
+            configId: symbol.configId,
+            name: symbol.name,
+            label: symbol.label,
+            color: symbol.color,
+            x: symbol.x,
+            y: symbol.y,
+            col: symbol.col,
+            row: symbol.row,
+            facing: symbol.facing || "down",
+            alert: symbol.alert === true,
+            radius: symbol.radius,
+            questId: symbol.questId || null,
+            questType: quest && quest.type || null,
+          };
+        });
     }
 
     function isTownTileBlockedByMapEvent(tileMap, col, row) {
@@ -1647,6 +1670,9 @@
       if (!tileMap || game.state !== "town" || !Array.isArray(symbols) || !symbols.length) {
         return false;
       }
+      if (isEncounterCutinActive()) {
+        return false;
+      }
       const playerTile = getTownPlayerTile(tileMap);
       const engagedSymbols = symbols.filter((symbol) => symbol
         && !symbol.removed
@@ -1682,7 +1708,74 @@
       for (const symbol of symbols) {
         symbol.inBattle = true;
       }
+      startEncounterCutin(quest, symbols);
+    }
+
+    function isEncounterCutinActive() {
+      return Boolean(game.encounterCutin && game.encounterCutin.active);
+    }
+
+    function getEncounterCutinEnemyText(quest, symbols) {
+      const preview = String(quest && quest.enemyPreview || "").trim();
+      if (preview) {
+        return preview;
+      }
+      const names = [];
+      for (const symbol of Array.isArray(symbols) ? symbols : []) {
+        const enemyEntries = Array.isArray(symbol && symbol.enemyEntries) ? symbol.enemyEntries : [];
+        for (const entry of enemyEntries) {
+          const normalized = normalizeTownSymbolEnemyEntry(entry);
+          if (normalized && normalized.name) {
+            names.push(normalized.name);
+          }
+        }
+      }
+      return names.length ? Array.from(new Set(names)).join(" / ") : "敵影";
+    }
+
+    function getEncounterCutinSymbolText(symbols) {
+      const labels = (Array.isArray(symbols) ? symbols : [])
+        .map((symbol) => String(symbol && (symbol.name || symbol.label || symbol.configId) || "").trim())
+        .filter(Boolean);
+      if (!labels.length) {
+        return "";
+      }
+      const unique = Array.from(new Set(labels));
+      return unique.length === 1 ? unique[0] : unique.join(" / ");
+    }
+
+    function startEncounterCutin(quest, symbols) {
+      town.player.gridMove = null;
+      input.keys = input.keys || {};
+      for (const key of TOWN_MOVEMENT_KEYS) {
+        input.keys[key] = false;
+      }
+      game.messageTimer = 0;
+      game.encounterCutin = {
+        active: true,
+        timer: 0,
+        duration: ENCOUNTER_CUTIN_DURATION,
+        quest,
+        title: "THE 戦闘！",
+        subtitle: quest && quest.name ? quest.name : "敵と遭遇",
+        enemyText: getEncounterCutinEnemyText(quest, symbols),
+        symbolText: getEncounterCutinSymbolText(symbols),
+      };
+    }
+
+    function updateEncounterCutin(dt = 0) {
+      if (!isEncounterCutinActive()) {
+        return false;
+      }
+      const cutin = game.encounterCutin;
+      cutin.timer = Math.max(0, Number(cutin.timer) || 0) + Math.max(0, Number(dt) || 0);
+      if (cutin.timer < Math.max(0.1, Number(cutin.duration) || ENCOUNTER_CUTIN_DURATION)) {
+        return true;
+      }
+      const quest = cutin.quest || null;
+      game.encounterCutin = null;
       resetGame(quest);
+      return true;
     }
 
     function buildTownSymbolEncounterQuest(tileMap, symbols) {
@@ -2268,7 +2361,7 @@
         return;
       }
       town.selectedQuest = quest;
-      showBattleGuidePanel(quest);
+      startSelectedQuest();
     }
 
     function selectFirstQuestInPanel() {
@@ -3443,7 +3536,14 @@
     }
 
     function getQuestsByType(typeKey) {
-      return QUEST_DATA.quests.filter((quest) => quest.type === typeKey);
+      return QUEST_DATA.quests
+        .map((quest, index) => ({ quest, index }))
+        .filter((entry) => entry.quest.type === typeKey)
+        .sort((a, b) => {
+          const orderDiff = getTownQuestDisplayOrder(a.quest) - getTownQuestDisplayOrder(b.quest);
+          return orderDiff || a.index - b.index;
+        })
+        .map((entry) => entry.quest);
     }
 
     function showBattleGuidePanel(quest = town.selectedQuest) {
