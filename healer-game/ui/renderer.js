@@ -471,7 +471,11 @@
     if (!step) {
       return;
     }
-    if (step.type === "script") {
+    if (step.type === "script" || step.type === "run") {
+      return;
+    }
+    const state = game.battleTutorial || {};
+    if (step.type === "wait" && state.pendingWait) {
       return;
     }
     const helpers = getBattleTutorialRenderHelpers();

@@ -14,6 +14,9 @@
     sushia: "battle.ultimate.sushia",
     finald: "battle.ultimate.finald",
   };
+  const TUTORIAL_MOOD_MIN = 40;
+  const SUSHIA_DEFEND_MOOD = 80;
+  const SUSHIA_CALM_MOOD = 60;
 
   function line(speaker, text, options = {}) {
     return { type: "line", speaker, text, ...options };
@@ -25,6 +28,10 @@
 
   function script(action) {
     return { type: "script", action };
+  }
+
+  function run(action, options = {}) {
+    return { type: "run", action, ...options };
   }
 
   function waitSkill(id, skillKey, targetUnitId, text, options = {}) {
@@ -55,22 +62,25 @@
     line("リハス", "力の強い俺様ならサポートする必要もないと思うがな！"),
     system("基本的に味方達は自動で戦闘を行います"),
     system("あなたのサポート能力でチームを勝利に導きましょう！"),
+    run("rihasOpeningDamage", { minTime: 2.2, maxTime: 4.2 }),
     line("リハス", "おらぁ！まだまだ！"),
-    script("damageRihas"),
     system("リハスがダメージを受けました", { highlightUnitId: "rihas" }),
     waitSkill("healRihas", "heal", "rihas", "スキルのヒールをリハスに使用して体力を回復させてあげましょう！"),
     line("リハス", "まだまだ余裕だなぁ！雑魚共！！"),
+    run("ulpesRushOut", { minTime: 1.5, maxTime: 3.5 }),
     line("ウルペス", "おいアルジュナ！僕にシールドをくれ！"),
-    waitSkill("shieldUlpes", "shield", "ulpes", "スキルのシェルトを使用してウルペスをシールドで守ってあげましょう！"),
-    system("離れていても近づいてからスキルを打つことができます！"),
+    system("スキルのシェルトを使用してウルペスをシールドで守ってあげましょう！", { highlightUnitId: "ulpes" }),
+    waitSkill("shieldUlpes", "shield", "ulpes", "離れていても近づいてからスキルを打つことができます！"),
     line("ウルペス", "雑魚の攻撃じゃあ僕のシールドは割れないね！"),
     line("アルジュナ", "{pronoun}のシールドなんだけどなぁ、一応。"),
+    run("freeCombatAfterShield", { duration: 5 }),
     line("リハス", "俺様が全員まとめて相手してやる！"),
     script("readyRihasUltimate"),
     system("リハスの必殺ゲージが溜まっています", { highlightUltimateUnitId: "rihas" }),
     system("リハスの必殺技は周囲の敵を挑発することができます", { highlightUltimateUnitId: "rihas" }),
     waitUltimate("rihasUltimate", "rihas", "{rihasUltKey}を押してリハスの必殺技を発動しましょう！"),
     line("リハス", "まとめてかかってこい！"),
+    run("rihasTauntCombat", { minTime: 5.5, maxTime: 7.2 }),
     system("順調に進んでいますね…おや？"),
     line("スシア", "タイン！邪魔よ！そこ貰ったわ！！"),
     script("sushiaOverconfident"),
@@ -83,12 +93,13 @@
     system("調子に乗っている、もしくは調子が低い味方がいると戦況が不利になっていく可能性が高いです", { highlightStatusUnitId: "sushia" }),
     system("調子には常に気を配るようにしましょう", { highlightStatusUnitId: "sushia" }),
     line("スシア", "アイスワールド！！"),
-    script("sushiaIceWorld"),
+    script("startSushiaIceWorld"),
     system("スシアが調子に乗って必殺技を発動しました", { highlightUltimateUnitId: "sushia" }),
     system("スシアの必殺技は広範囲の敵の動きを止めることができます", { highlightUltimateUnitId: "sushia" }),
     system("が、スシアが調子に乗っているため味方にも当たってしまうかもしれません！", { highlightStatusUnitId: "sushia" }),
     line("ウルペス", "なっ！！"),
     line("リハス", "うおっ！？"),
+    run("sushiaIceWorldCombat", { minTime: 13, maxTime: 15.5 }),
     system("スシアの調子を下げてあげましょう", { highlightStatusUnitId: "sushia" }),
     system("防御指示を使ってスシアの行動を防御よりにしてあげましょう", { highlightCommandUnitId: "sushia" }),
     system("防御に集中することで攻撃の手が減り、調子を下げやすくなります", { highlightCommandUnitId: "sushia" }),
@@ -103,7 +114,7 @@
     system("ウルペスの必殺技は敵1体に大ダメージを与えることができます！", { highlightUltimateUnitId: "ulpes" }),
     waitUltimate("ulpesUltimate", "ulpes", "最後の敵にとどめを刺しましょう！"),
     line("ウルペス", "真っ二つ！！"),
-    script("finishBySushia"),
+    run("ulpesFinalThenSushiaShot", { minTime: 1.2, maxTime: 5 }),
   ];
 
   function isTutorialQuest(quest) {
@@ -127,6 +138,9 @@
       selectedSkillKey: null,
       pendingWait: null,
       pendingScript: null,
+      run: null,
+      enemyAliveFloor: null,
+      sushiaMoodDrift: null,
       feedback: "",
       flash: 0,
     };
@@ -260,8 +274,9 @@
     if (!isActive(game)) {
       return false;
     }
+    const state = getState(game);
     const step = getCurrentStep(game);
-    return Boolean(step && step.type === "line");
+    return Boolean(step && (step.type === "line" || (step.type === "wait" && !state.pendingWait)));
   }
 
   function getCurrentStep(gameOrState) {
@@ -297,6 +312,13 @@
         }
         state.index += 1;
         continue;
+      }
+      if (step.type === "run") {
+        if (!state.run || state.run.index !== state.index) {
+          beginRunStep(step, game, helpers, state);
+        }
+        state.mode = "run";
+        return step;
       }
       state.mode = step.type;
       return step;
@@ -473,7 +495,17 @@
     if (!state || !state.active) {
       return false;
     }
+    const dt = Math.max(0, Number.isFinite(helpers.dt) ? helpers.dt : 0);
     protectTutorialCombatants(state, helpers);
+    updateSushiaMoodDrift(state, helpers, dt);
+    const step = getCurrentStep(state);
+    if (step && step.type === "run") {
+      if (!state.run || state.run.index !== state.index) {
+        beginRunStep(step, game, helpers, state);
+      }
+      updateRunStep(game, helpers, state, step);
+      return true;
+    }
     if (state.pendingScript && updatePendingScript(game, helpers, state)) {
       return true;
     }
@@ -549,16 +581,586 @@
   }
 
   function finishWaitStep(game, helpers, state) {
+    const pending = state.pendingWait;
     state.pendingWait = null;
     state.index += 1;
     state.selectedSkillKey = null;
     state.feedback = "";
+    if (pending && pending.id === "defendSushia") {
+      setSushiaMood(helpers, SUSHIA_DEFEND_MOOD, "調子低下");
+      beginSushiaMoodDrift(state, helpers, SUSHIA_CALM_MOOD, 5);
+    }
     if (typeof helpers.cancelPlayerAim === "function") {
       helpers.cancelPlayerAim();
     } else if (helpers.player) {
       helpers.player.aim = null;
     }
     prepare(game, helpers);
+  }
+
+  function beginRunStep(step, game, helpers, state) {
+    state.run = {
+      index: state.index,
+      action: step.action,
+      timer: 0,
+      data: {},
+    };
+    state.feedback = "";
+    state.flash = 0;
+    startRunAction(state.run, step, game, helpers, state);
+  }
+
+  function updateRunStep(game, helpers, state, step) {
+    const runState = state.run;
+    if (!runState) {
+      return false;
+    }
+    const dt = Math.max(0, Number.isFinite(helpers.dt) ? helpers.dt : 0);
+    runState.timer += dt;
+    updateRunAction(runState, step, game, helpers, state, dt);
+    if (!isRunActionComplete(runState, step, helpers, state)) {
+      return false;
+    }
+    finishRunStep(game, helpers, state, step);
+    return true;
+  }
+
+  function finishRunStep(game, helpers, state, step) {
+    if (step && step.action === "ulpesFinalThenSushiaShot") {
+      state.run = null;
+      state.active = false;
+      state.completed = true;
+      state.mode = "done";
+      state.selectedSkillKey = null;
+      game.message = "チュートリアル完了";
+      game.messageTimer = 2;
+      return;
+    }
+    state.run = null;
+    state.index += 1;
+    state.selectedSkillKey = null;
+    state.feedback = "";
+    prepare(game, helpers);
+  }
+
+  function startRunAction(runState, step, game, helpers, state) {
+    const action = step && step.action;
+    if (action === "rihasOpeningDamage") {
+      setEnemyAliveFloor(state, helpers, getAliveEnemies(helpers).length);
+      const rihas = getUnitById("rihas", helpers);
+      if (rihas) {
+        rihas.hp = Math.max(1, rihas.maxHp || rihas.hp || 1);
+        readyUnitForTutorialAction(rihas);
+      }
+      forceEnemiesTarget(rihas, helpers, 3.5);
+      return;
+    }
+    if (action === "ulpesRushOut") {
+      setEnemyAliveFloor(state, helpers, getAliveEnemies(helpers).length);
+      const ulpes = getUnitById("ulpes", helpers);
+      readyUnitForTutorialAction(ulpes);
+      if (ulpes) {
+        ulpes.commandBias = Math.max(ulpes.commandBias || 0, 1);
+        ulpes.activeCommandBias = Math.max(ulpes.activeCommandBias || 0, 1);
+      }
+      clearEnemyForcedTargets(helpers);
+      return;
+    }
+    if (action === "freeCombatAfterShield") {
+      setEnemyAliveFloor(state, helpers, getAliveEnemies(helpers).length);
+      runState.data.sushiaMoodStart = getSushiaMood(helpers);
+      clearEnemyForcedTargets(helpers);
+      return;
+    }
+    if (action === "rihasTauntCombat") {
+      setEnemyAliveFloor(state, helpers, Math.min(3, getAliveEnemies(helpers).length));
+      const rihas = getUnitById("rihas", helpers);
+      runState.data.sushiaMoodStart = getSushiaMood(helpers);
+      forceEnemiesTarget(rihas, helpers, 6);
+      return;
+    }
+    if (action === "sushiaIceWorldCombat") {
+      setEnemyAliveFloor(state, helpers, Math.min(1, getAliveEnemies(helpers).length));
+      runState.data.allyFreezeShown = false;
+      return;
+    }
+    if (action === "ulpesFinalThenSushiaShot") {
+      setEnemyAliveFloor(state, helpers, 1);
+      const target = ensureOneEnemyLeft(helpers);
+      runState.data.target = target;
+      runState.data.phase = "delay";
+      runState.data.shotStarted = false;
+      if (target) {
+        readyUnitForTutorialAction(target);
+        clearTutorialStatuses(target);
+        target.hp = Math.max(2, Math.min(target.hp || 1, Math.round((target.maxHp || 1) * 0.12)));
+        target.actionLock = Math.max(target.actionLock || 0, 1.2);
+        target.aiIntent = null;
+        target.aiMoveTarget = null;
+        addUnitFloat(target, "あと少し", "#ffffff", helpers);
+      }
+    }
+  }
+
+  function updateRunAction(runState, step, game, helpers, state, dt) {
+    const action = runState && runState.action;
+    if (action === "rihasOpeningDamage") {
+      const rihas = getUnitById("rihas", helpers);
+      forceEnemiesTarget(rihas, helpers, 0.6);
+      if (rihas && runState.timer >= getStepMinTime(step, 2.2)) {
+        applyTutorialHpRatio(rihas, 0.7, helpers);
+      }
+      return;
+    }
+    if (action === "ulpesRushOut") {
+      moveUlpesTowardEnemies(runState, step, helpers, dt);
+      return;
+    }
+    if (action === "rihasTauntCombat") {
+      const rihas = getUnitById("rihas", helpers);
+      forceEnemiesTarget(rihas, helpers, 0.8);
+      rampSushiaMood(runState, helpers, 100, 2.2);
+      if (!runState.data.defeatedOne && runState.timer >= 2.2) {
+        defeatEnemiesUntil(helpers, 3, rihas);
+        setSushiaMood(helpers, 100, "調子MAX");
+        runState.data.defeatedOne = true;
+      }
+      return;
+    }
+    if (action === "freeCombatAfterShield") {
+      rampSushiaMood(runState, helpers, 70, getStepDuration(step, 5));
+      return;
+    }
+    if (action === "sushiaIceWorldCombat") {
+      const sushia = getUnitById("sushia", helpers);
+      if (!runState.data.allyFreezeShown && runState.timer >= 5.2) {
+        for (const unitId of ["ulpes", "rihas"]) {
+          const ally = getUnitById(unitId, helpers);
+          if (ally) {
+            ally.frozen = Math.max(ally.frozen || 0, 1.2);
+            ally.frozenMax = Math.max(ally.frozenMax || 0, ally.frozen);
+            addUnitFloat(ally, "凍結", "#8fe9ff", helpers);
+          }
+        }
+        runState.data.allyFreezeShown = true;
+      }
+      if (!runState.data.weakenedForIceWorld && runState.timer >= 7) {
+        weakenEnemiesUntil(helpers, 1, 1);
+        runState.data.weakenedForIceWorld = true;
+      }
+      if (!runState.data.defeatedTwo && runState.timer >= 11.5 && getAliveEnemies(helpers).length > 1) {
+        defeatEnemiesUntil(helpers, 1, sushia);
+        runState.data.defeatedTwo = true;
+      }
+      return;
+    }
+    if (action === "ulpesFinalThenSushiaShot") {
+      updateSushiaFinalShot(runState, helpers, state, dt);
+    }
+  }
+
+  function isRunActionComplete(runState, step, helpers, state) {
+    const timer = runState && runState.timer || 0;
+    const action = runState && runState.action;
+    const maxTime = getStepMaxTime(step, Infinity);
+    if (action === "rihasOpeningDamage") {
+      const rihas = getUnitById("rihas", helpers);
+      const maxHp = Math.max(1, rihas && rihas.maxHp || 1);
+      return (timer >= getStepMinTime(step, 2.2) && rihas && rihas.hp <= maxHp * 0.72) || timer >= maxTime;
+    }
+    if (action === "ulpesRushOut") {
+      const ulpes = getUnitById("ulpes", helpers);
+      const player = helpers.player;
+      const shieldRange = getSkillRange("shield", helpers, toBattlePx(helpers, 230));
+      const farEnough = Boolean(ulpes && player && getDistance(ulpes, player) > shieldRange + toBattlePx(helpers, 24));
+      return (timer >= getStepMinTime(step, 1.5) && farEnough) || timer >= maxTime;
+    }
+    if (action === "freeCombatAfterShield") {
+      return timer >= getStepDuration(step, 5);
+    }
+    if (action === "rihasTauntCombat") {
+      return (timer >= getStepMinTime(step, 5.5) && getAliveEnemies(helpers).length <= 3) || timer >= maxTime;
+    }
+    if (action === "sushiaIceWorldCombat") {
+      return (timer >= getStepMinTime(step, 13) && !hasActiveArea("ice", helpers)) || timer >= maxTime;
+    }
+    if (action === "ulpesFinalThenSushiaShot") {
+      return getAliveEnemies(helpers).length <= 0 || timer >= maxTime;
+    }
+    return timer >= getStepDuration(step, 1);
+  }
+
+  function updateSushiaFinalShot(runState, helpers, state, dt) {
+    const sushia = getUnitById("sushia", helpers);
+    const target = runState.data.target && !runState.data.target.dead
+      ? runState.data.target
+      : getAliveEnemies(helpers)[0] || null;
+    if (!sushia || !target) {
+      defeatRemainingEnemies(helpers, sushia);
+      return;
+    }
+    runState.data.target = target;
+    lockFinalShotActors(sushia, target, helpers);
+    target.actionLock = Math.max(target.actionLock || 0, 0.2);
+    target.aiIntent = null;
+    target.aiMoveTarget = null;
+    if (!runState.data.shotStarted && runState.timer >= 0.45) {
+      startSushiaFinalShot(runState, sushia, target, helpers, state);
+      return;
+    }
+    if (runState.data.phase === "casting") {
+      runState.data.castLeft = Math.max(0, (runState.data.castLeft || 0) - dt);
+      sushia.aimAngle = getAngle(sushia, target);
+      if (runState.data.castLeft <= 0) {
+        fireSushiaFinalProjectile(runState, sushia, target, helpers, state);
+      }
+      return;
+    }
+    if (runState.data.phase === "projectile" && runState.timer >= (runState.data.projectileFallbackAt || 3)) {
+      if (!target.dead && typeof helpers.dealDamage === "function") {
+        helpers.dealDamage(sushia, target, Math.max(1, (target.hp || 1) + (target.maxHp || 1)), { magic: true, damageType: "magic", noUltGain: true });
+      } else if (!target.dead) {
+        defeatEnemy(target, sushia, helpers);
+      }
+      runState.data.phase = "done";
+    }
+  }
+
+  function startSushiaFinalShot(runState, sushia, target, helpers, state) {
+    readyUnitForTutorialAction(sushia);
+    clearTutorialStatuses(target);
+    lockFinalShotActors(sushia, target, helpers, 3.4);
+    setEnemyAliveFloor(state, helpers, 0);
+    if (target) {
+      target.hp = Math.max(1, Math.min(target.hp || 1, 1));
+    }
+    if (helpers.skillSystem && typeof helpers.skillSystem.useSushiaBolts === "function") {
+      runState.data.shotStarted = true;
+      runState.data.phase = "projectile";
+      runState.data.projectileFallbackAt = runState.timer + 3.2;
+      helpers.skillSystem.useSushiaBolts(sushia, target);
+      return;
+    }
+    const cast = 1;
+    runState.data.shotStarted = true;
+    runState.data.phase = "casting";
+    runState.data.castLeft = cast;
+    sushia.actionLock = Math.max(sushia.actionLock || 0, cast + 0.2);
+    sushia.actionTotal = Math.max(sushia.actionTotal || 0, cast + 0.2);
+    sushia.castVisual = { time: cast, total: cast };
+    sushia.aimAngle = getAngle(sushia, target);
+    addUnitFloat(sushia, "魔力弾", "#d9afff", helpers);
+  }
+
+  function fireSushiaFinalProjectile(runState, sushia, target, helpers, state) {
+    runState.data.phase = "projectile";
+    runState.data.projectileFallbackAt = runState.timer + 1.8;
+    setEnemyAliveFloor(state, helpers, 0);
+    sushia.castVisual = null;
+    sushia.actionLock = Math.max(sushia.actionLock || 0, 0.2);
+    const speed = toBattlePx(helpers, 360);
+    const angle = getAngle(sushia, target);
+    const distance = getDistance(sushia, target);
+    const projectiles = Array.isArray(helpers.projectiles) ? helpers.projectiles : null;
+    if (projectiles) {
+      projectiles.push({
+        x: sushia.x,
+        y: sushia.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: toBattlePx(helpers, 6),
+        team: "party",
+        owner: sushia,
+        damage: Math.max(1, (target.hp || 1) + (target.maxHp || 1)),
+        getDamage: (hitTarget) => hitTarget === target ? Math.max(1, (hitTarget.hp || 1) + (hitTarget.maxHp || 1)) : 0,
+        magic: true,
+        dotDamage: false,
+        damageType: "magic",
+        life: Math.max(0.8, distance / Math.max(1, speed) + 0.45),
+        hit: new Set(),
+        pierce: false,
+        affectsAllies: false,
+        color: "#d9afff",
+        onHit: (hitTarget) => {
+          if (hitTarget === target) {
+            runState.data.phase = "done";
+          }
+        },
+      });
+      return;
+    }
+    if (typeof helpers.dealDamage === "function") {
+      helpers.dealDamage(sushia, target, Math.max(1, (target.hp || 1) + (target.maxHp || 1)), { magic: true, damageType: "magic", noUltGain: true });
+    } else {
+      defeatEnemy(target, sushia, helpers);
+    }
+    runState.data.phase = "done";
+  }
+
+  function lockFinalShotActors(sushia, target, helpers = {}, duration = 0.3) {
+    for (const unit of getUniqueUnits(helpers)) {
+      if (!unit || unit === sushia) {
+        continue;
+      }
+      unit.actionLock = Math.max(unit.actionLock || 0, duration);
+      unit.actionTotal = Math.max(unit.actionTotal || 0, unit.actionLock || 0);
+      unit.cast = null;
+      unit.channel = null;
+      unit.aiIntent = null;
+      unit.aiMoveTarget = null;
+    }
+    if (target && !target.dead) {
+      target.actionLock = Math.max(target.actionLock || 0, duration);
+      target.actionTotal = Math.max(target.actionTotal || 0, target.actionLock || 0);
+      target.cast = null;
+      target.channel = null;
+      target.aiIntent = null;
+      target.aiMoveTarget = null;
+    }
+  }
+
+  function moveUlpesTowardEnemies(runState, step, helpers, dt) {
+    const ulpes = getUnitById("ulpes", helpers);
+    const target = getAliveEnemies(helpers)[0] || null;
+    if (!ulpes || !target) {
+      return;
+    }
+    const distance = getDistance(ulpes, target);
+    if (distance <= toBattlePx(helpers, 100)) {
+      return;
+    }
+    const speed = Math.max(toBattlePx(helpers, 120), ulpes.speed || toBattlePx(helpers, 120));
+    moveUnitToward(ulpes, target.x, target.y, speed * dt, helpers);
+  }
+
+  function positionSushiaForIceWorld(sushia, helpers = {}) {
+    if (!sushia) {
+      return;
+    }
+    const enemies = getAliveEnemies(helpers);
+    if (!enemies.length) {
+      return;
+    }
+    const center = enemies.reduce((sum, enemy) => ({
+      x: sum.x + (enemy.x || 0),
+      y: sum.y + (enemy.y || 0),
+    }), { x: 0, y: 0 });
+    center.x /= enemies.length;
+    center.y /= enemies.length;
+    const player = helpers.player || null;
+    const awayX = player ? center.x - player.x : -1;
+    const awayY = player ? center.y - player.y : 0;
+    const d = Math.hypot(awayX, awayY) || 1;
+    sushia.x = center.x - awayX / d * toBattlePx(helpers, 120);
+    sushia.y = center.y - awayY / d * toBattlePx(helpers, 45);
+    sushia.battleFacingIntent = { x: awayX / d, y: awayY / d, timer: 0.4 };
+    clampUnitToBattle(sushia, helpers);
+  }
+
+  function applyTutorialHpRatio(unit, ratio, helpers = {}) {
+    if (!unit) {
+      return;
+    }
+    const maxHp = Math.max(1, unit.maxHp || unit.hp || 1);
+    const nextHp = Math.max(1, Math.round(maxHp * ratio));
+    if (unit.hp <= nextHp) {
+      return;
+    }
+    const before = unit.hp;
+    unit.hp = nextHp;
+    unit.hurt = Math.max(unit.hurt || 0, 0.25);
+    addUnitFloat(unit, `-${Math.max(1, Math.round(before - unit.hp))}`, "#ff4f4f", helpers);
+  }
+
+  function getSushiaMood(helpers = {}) {
+    const sushia = getUnitById("sushia", helpers);
+    return sushia && Number.isFinite(sushia.mood) ? sushia.mood : 50;
+  }
+
+  function setSushiaMood(helpers = {}, mood = 50, label = "") {
+    const sushia = getUnitById("sushia", helpers);
+    if (!sushia || !Number.isFinite(sushia.mood)) {
+      return;
+    }
+    sushia.mood = clampNumber(mood, TUTORIAL_MOOD_MIN, 100);
+    if (label) {
+      addUnitFloat(sushia, label, sushia.mood >= 100 ? "#ff9f43" : "#9cc6ff", helpers);
+    }
+  }
+
+  function rampSushiaMood(runState, helpers = {}, targetMood = 50, duration = 1) {
+    const sushia = getUnitById("sushia", helpers);
+    if (!runState || !sushia || !Number.isFinite(sushia.mood)) {
+      return;
+    }
+    if (!Number.isFinite(runState.data.sushiaMoodStart)) {
+      runState.data.sushiaMoodStart = sushia.mood;
+    }
+    const progress = clampNumber((runState.timer || 0) / Math.max(0.1, duration || 1), 0, 1);
+    const start = runState.data.sushiaMoodStart;
+    sushia.mood = clampNumber(start + (targetMood - start) * progress, TUTORIAL_MOOD_MIN, 100);
+  }
+
+  function beginSushiaMoodDrift(state, helpers = {}, targetMood = 60, duration = 5) {
+    const sushia = getUnitById("sushia", helpers);
+    if (!state || !sushia || !Number.isFinite(sushia.mood)) {
+      return;
+    }
+    state.sushiaMoodDrift = {
+      elapsed: 0,
+      duration: Math.max(0.1, duration || 5),
+      start: clampNumber(sushia.mood, TUTORIAL_MOOD_MIN, 100),
+      target: clampNumber(targetMood, TUTORIAL_MOOD_MIN, 100),
+    };
+  }
+
+  function updateSushiaMoodDrift(state, helpers = {}, dt = 0) {
+    const drift = state && state.sushiaMoodDrift;
+    if (!drift || dt <= 0) {
+      return;
+    }
+    const sushia = getUnitById("sushia", helpers);
+    if (!sushia || !Number.isFinite(sushia.mood)) {
+      state.sushiaMoodDrift = null;
+      return;
+    }
+    drift.elapsed = Math.min(drift.duration, (drift.elapsed || 0) + dt);
+    const progress = clampNumber(drift.elapsed / Math.max(0.1, drift.duration), 0, 1);
+    sushia.mood = clampNumber(drift.start + (drift.target - drift.start) * progress, TUTORIAL_MOOD_MIN, 100);
+    if (progress >= 1) {
+      state.sushiaMoodDrift = null;
+    }
+  }
+
+  function setEnemyAliveFloor(state, helpers = {}, count = 0) {
+    if (!state) {
+      return;
+    }
+    state.enemyAliveFloor = Math.max(0, Math.min(getEnemyList(helpers).length, Math.floor(count)));
+  }
+
+  function defeatEnemiesUntil(helpers = {}, keepCount = 1, source = null) {
+    const alive = getAliveEnemies(helpers);
+    const limit = Math.max(0, Math.floor(keepCount));
+    while (alive.length > limit) {
+      const enemy = alive.shift();
+      defeatEnemy(enemy, source, helpers);
+    }
+    const keep = alive[alive.length - 1] || null;
+    if (keep && limit === 1) {
+      keep.hp = Math.max(1, Math.min(keep.hp || 1, Math.round((keep.maxHp || 1) * 0.18)));
+      addUnitFloat(keep, "残り1体", "#ffffff", helpers);
+    }
+  }
+
+  function weakenEnemiesUntil(helpers = {}, keepCount = 1, hp = 1) {
+    const alive = getAliveEnemies(helpers);
+    const limit = Math.max(0, Math.floor(keepCount));
+    const targetHp = Math.max(1, Math.floor(hp));
+    while (alive.length > limit) {
+      const enemy = alive.shift();
+      if (enemy && !enemy.dead) {
+        enemy.hp = Math.max(1, Math.min(enemy.hp || 1, targetHp));
+      }
+    }
+  }
+
+  function forceEnemiesTarget(target, helpers = {}, duration = 1) {
+    if (!target) {
+      return;
+    }
+    for (const enemy of getAliveEnemies(helpers)) {
+      enemy.forcedTarget = target;
+      enemy.tauntTimer = Math.max(enemy.tauntTimer || 0, duration);
+      if (!enemy.cds || typeof enemy.cds !== "object") {
+        enemy.cds = {};
+      }
+      enemy.cds.attack = Math.min(enemy.cds.attack || 0, 0.15);
+    }
+  }
+
+  function clearEnemyForcedTargets(helpers = {}) {
+    for (const enemy of getEnemyList(helpers)) {
+      if (!enemy) {
+        continue;
+      }
+      enemy.forcedTarget = null;
+      enemy.tauntTimer = 0;
+    }
+  }
+
+  function getSkillRange(skillKey, helpers = {}, fallback = 0) {
+    const skill = findSkill(skillKey, helpers);
+    return Number.isFinite(skill && skill.range) ? skill.range : fallback;
+  }
+
+  function hasActiveArea(type, helpers = {}) {
+    const areas = Array.isArray(helpers.areas) ? helpers.areas : [];
+    return areas.some((area) => area && area.type === type && (area.time || 0) > 0);
+  }
+
+  function moveUnitToward(unit, x, y, amount, helpers = {}) {
+    if (!unit || amount <= 0) {
+      return;
+    }
+    const dx = x - unit.x;
+    const dy = y - unit.y;
+    const d = Math.hypot(dx, dy);
+    if (!d) {
+      return;
+    }
+    const step = Math.min(amount, d);
+    unit.x += dx / d * step;
+    unit.y += dy / d * step;
+    unit.battleFacingIntent = { x: dx / d, y: dy / d, timer: 0.2 };
+    clampUnitToBattle(unit, helpers);
+  }
+
+  function clampUnitToBattle(unit, helpers = {}) {
+    if (!unit || typeof helpers.getBattleBounds !== "function") {
+      return;
+    }
+    const bounds = helpers.getBattleBounds();
+    if (!bounds) {
+      return;
+    }
+    const margin = unit.radius || toBattlePx(helpers, 16);
+    unit.x = clampNumber(unit.x, bounds.left + margin, bounds.right - margin);
+    unit.y = clampNumber(unit.y, bounds.top + margin, bounds.bottom - margin);
+  }
+
+  function getStepDuration(step, fallback) {
+    return Number.isFinite(step && step.duration) ? step.duration : fallback;
+  }
+
+  function getStepMinTime(step, fallback) {
+    return Number.isFinite(step && step.minTime) ? step.minTime : fallback;
+  }
+
+  function getStepMaxTime(step, fallback) {
+    return Number.isFinite(step && step.maxTime) ? step.maxTime : fallback;
+  }
+
+  function getDistance(a, b) {
+    if (!a || !b) {
+      return Infinity;
+    }
+    return Math.hypot((a.x || 0) - (b.x || 0), (a.y || 0) - (b.y || 0));
+  }
+
+  function getAngle(a, b) {
+    if (!a || !b) {
+      return 0;
+    }
+    return Math.atan2((b.y || 0) - (a.y || 0), (b.x || 0) - (a.x || 0));
+  }
+
+  function toBattlePx(helpers = {}, value) {
+    return typeof helpers.battlePx === "function" ? helpers.battlePx(value) : value;
+  }
+
+  function clampNumber(value, min, max) {
+    return Math.max(min, Math.min(max, value));
   }
 
   function updatePendingScript(game, helpers, state) {
@@ -597,20 +1199,35 @@
     }
     for (const unit of getUniqueUnits(helpers)) {
       keepTutorialUnitAlive(unit);
+      clampTutorialMood(unit);
     }
-    const enemies = Array.isArray(helpers.enemies) ? helpers.enemies : [];
+    const enemies = getEnemyList(helpers);
     if (!enemies.length) {
       return;
     }
-    const afterIceWorld = hasScriptPassed(state, "sushiaIceWorld");
-    if (!afterIceWorld) {
-      for (const enemy of enemies) {
-        keepTutorialUnitAlive(enemy);
-      }
+    const floor = Number.isFinite(state.enemyAliveFloor)
+      ? Math.max(0, Math.min(enemies.length, Math.floor(state.enemyAliveFloor)))
+      : enemies.length;
+    if (floor <= 0) {
       return;
     }
-    const keep = getAliveEnemies(helpers)[0] || enemies[enemies.length - 1];
-    keepTutorialUnitAlive(keep);
+    const alive = getAliveEnemies(helpers);
+    for (const enemy of alive) {
+      keepTutorialUnitAlive(enemy);
+    }
+    let missing = Math.max(0, floor - alive.length);
+    if (missing <= 0) {
+      return;
+    }
+    for (const enemy of enemies) {
+      if (missing <= 0) {
+        break;
+      }
+      if (enemy && enemy.dead) {
+        keepTutorialUnitAlive(enemy);
+        missing -= 1;
+      }
+    }
   }
 
   function keepTutorialUnitAlive(unit) {
@@ -631,6 +1248,13 @@
       unit.channel = null;
       unit.pendingActionQueueKey = null;
     }
+  }
+
+  function clampTutorialMood(unit) {
+    if (!unit || unit.team !== "party" || !Number.isFinite(unit.mood)) {
+      return;
+    }
+    unit.mood = Math.max(TUTORIAL_MOOD_MIN, unit.mood);
   }
 
   function readyUnitForTutorialAction(unit) {
@@ -666,6 +1290,9 @@
     if (action === "readyRihasUltimate") {
       const unit = getUnitById("rihas", helpers);
       readyUnitForTutorialAction(unit);
+      if (unit && unit.mood !== null) {
+        unit.mood = Math.max(unit.mood || 0, 60);
+      }
       setUltimateReady(unit, helpers, 1);
       addUnitFloat(unit, "必殺OK", "#73dfff", helpers);
       return;
@@ -673,38 +1300,23 @@
     if (action === "sushiaOverconfident") {
       const unit = getUnitById("sushia", helpers);
       if (unit) {
-        unit.mood = 95;
+        unit.mood = 100;
         setUltimateReady(unit, helpers, 1);
         addUnitFloat(unit, "調子上昇", "#ff9f43", helpers);
       }
       return;
     }
-    if (action === "sushiaIceWorld") {
+    if (action === "startSushiaIceWorld") {
       const sushia = getUnitById("sushia", helpers);
       if (sushia) {
         readyUnitForTutorialAction(sushia);
-        sushia.mood = 96;
+        sushia.mood = 100;
         setUltimateReady(sushia, helpers, 1);
-        if (typeof helpers.triggerUltimate === "function" && helpers.triggerUltimate("sushia", true)) {
-          state.pendingScript = {
-            action,
-            unitId: "sushia",
-            startedAt: Number.isFinite(game && game.time) ? game.time : 0,
-          };
-          return "pending";
-        }
-        sushia.ult = 0;
-        burstUnit(sushia, helpers, "rgba(135,221,255,0.22)", 155);
-      }
-      for (const unitId of ["ulpes", "rihas"]) {
-        const ally = getUnitById(unitId, helpers);
-        if (ally) {
-          ally.frozen = Math.max(ally.frozen || 0, 1.2);
-          ally.frozenMax = Math.max(ally.frozenMax || 0, ally.frozen);
-          addUnitFloat(ally, "凍結", "#8fe9ff", helpers);
+        positionSushiaForIceWorld(sushia, helpers);
+        if (typeof helpers.triggerUltimate === "function") {
+          helpers.triggerUltimate("sushia", true);
         }
       }
-      defeatEnemiesExceptLast(helpers, sushia);
       return;
     }
     if (action === "readyUlpesUltimate") {
@@ -717,6 +1329,9 @@
       }
       const unit = getUnitById("ulpes", helpers);
       readyUnitForTutorialAction(unit);
+      if (unit && unit.mood !== null) {
+        unit.mood = Math.max(unit.mood || 0, 60);
+      }
       setUltimateReady(unit, helpers, 1);
       addUnitFloat(unit, "必殺OK", "#73dfff", helpers);
       ensureOneEnemyLeft(helpers);
@@ -753,7 +1368,7 @@
   function ensureOneEnemyLeft(helpers = {}) {
     const alive = getAliveEnemies(helpers);
     if (!alive.length) {
-      return;
+      return null;
     }
     const keep = alive[alive.length - 1];
     for (const enemy of alive) {
@@ -762,6 +1377,7 @@
       }
     }
     keep.hp = Math.max(1, Math.min(keep.hp || 1, Math.round((keep.maxHp || 1) * 0.12)));
+    return keep;
   }
 
   function defeatRemainingEnemies(helpers = {}, source = null) {
@@ -794,7 +1410,11 @@
   }
 
   function getAliveEnemies(helpers = {}) {
-    return (Array.isArray(helpers.enemies) ? helpers.enemies : []).filter((enemy) => enemy && !enemy.dead);
+    return getEnemyList(helpers).filter((enemy) => enemy && !enemy.dead);
+  }
+
+  function getEnemyList(helpers = {}) {
+    return Array.isArray(helpers.enemies) ? helpers.enemies : [];
   }
 
   function setUltimateReady(unit, helpers = {}, ratio = 1) {

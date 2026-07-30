@@ -70,12 +70,18 @@
         return false;
       }
       return tutorial.update(game, {
+        dt,
         player,
         party,
         enemies,
+        projectiles,
+        areas,
         battlePx,
+        getBattleBounds,
+        skillSystem,
         getUltimateCost,
         triggerUltimate,
+        dealDamage,
         addFloat,
         addBurst,
       });
