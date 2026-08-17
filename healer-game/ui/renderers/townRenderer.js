@@ -88,6 +88,24 @@
       .find((quest) => quest && isQuestAcceptedForTown(quest) && !isQuestCompletedForTown(quest)) || null;
   }
 
+  function getQuestDestinationName(quest) {
+    if (!quest) {
+      return "";
+    }
+    const explicit = String(quest.destinationName || quest.fieldLocation || "").trim();
+    if (explicit) {
+      return explicit;
+    }
+    if (quest.fieldMapId && tileMapSystem && typeof tileMapSystem.getMap === "function") {
+      const map = tileMapSystem.getMap(quest.fieldMapId);
+      const mapName = String(map && (map.name || map.label || map.title) || "").trim();
+      if (mapName) {
+        return mapName;
+      }
+    }
+    return String(quest.recommended || "").trim();
+  }
+
   const EQUIPMENT_RANK_FILTERS = ["D", "C", "B", "A", "S"];
   const EQUIPMENT_SHOP_WEAPON_TYPES = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
   const EQUIPMENT_SHOP_UNITS = [
@@ -714,7 +732,6 @@
     drawTownActiveStoryQuestHud();
     drawTownPanel();
     drawTownReturnFade();
-    drawTownQuestNoticePopup();
   }
 
   function getTownMapTransform() {
@@ -1513,10 +1530,11 @@
       return;
     }
     const title = String(quest.name || "ストーリー依頼");
+    const destination = getQuestDestinationName(quest);
     const x = 18;
     const y = 18;
-    const w = Math.min(view.w - 36, 340);
-    const h = 58;
+    const w = Math.min(view.w - 36, 380);
+    const h = destination ? 80 : 58;
     ctx.save();
     ctx.fillStyle = "rgba(11,18,14,0.76)";
     ctx.strokeStyle = "rgba(247,255,246,0.35)";
@@ -1530,6 +1548,9 @@
     ctx.textBaseline = "alphabetic";
     ctx.fillText("ストーリー依頼 受注中", x + 15, y + 22);
     drawFittedTownText(title, x + 15, y + 46, w - 30, 900, 18, 12, "#f7fff6");
+    if (destination) {
+      drawFittedTownText(`目的地: ${destination}`, x + 15, y + 68, w - 30, 800, 15, 11, "#dce9dc");
+    }
     ctx.restore();
   }
 
@@ -3423,6 +3444,7 @@
       drawTown,
       drawProfileSetup,
       drawTownStoryDialogue,
+      drawTownQuestNoticePopup,
       screenToTownPoint,
     };
   };

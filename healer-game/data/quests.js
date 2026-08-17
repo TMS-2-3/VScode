@@ -44,7 +44,7 @@
         fieldMapId: "kuraku_forest_3",
         fieldTargetCol: 12,
         fieldTargetRow: 2,
-        fieldLocation: "クラク森3",
+        fieldLocation: "北クラク森",
       },
       {
         id: "free_horn_rabbit_001",

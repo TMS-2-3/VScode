@@ -39,7 +39,7 @@
 
     kuraku_forest_1: {
       id: "kuraku_forest_1",
-      name: "クラク森1",
+      name: "西クラク森",
       tileSize: 48,
       width: 33,
       height: 21,
@@ -50,47 +50,6 @@
         object: "tree",
         event: null,
       },
-      questSymbolEncounters: [
-        {
-          id: "story_horn_rabbit_competition",
-          questId: "story_horn_rabbit_competition_001",
-          name: "討伐数対決!?",
-          symbolLabel: "兎",
-          color: "#d9bc64",
-          rank: "D",
-          maxSymbols: 1,
-          enemies: [
-            { name: "ツノウサギA", role: "horn_rabbit", dx: -18, dy: -88 },
-            { name: "ツノウサギB", role: "horn_rabbit", dx: 54, dy: -36 },
-            { name: "ツノウサギC", role: "horn_rabbit", dx: -8, dy: 34 },
-            { name: "ツノウサギD", role: "horn_rabbit", dx: 66, dy: 92 },
-          ],
-        },
-      ],
-      symbolEncounters: [
-        {
-          id: "wild_horn_rabbit",
-          requiresQuestCompleted: "story_horn_rabbit_competition_001",
-          name: "ツノウサギ",
-          symbolLabel: "兎",
-          color: "#d9bc64",
-          rank: "D",
-          maxSymbols: 3,
-          enemyId: "horn_rabbit",
-          enemyCount: 3,
-        },
-        {
-          id: "wild_bud_alraune",
-          requiresQuestCompleted: "story_horn_rabbit_competition_001",
-          name: "つぼみのアルラウネ",
-          symbolLabel: "蕾",
-          color: "#72c874",
-          rank: "D",
-          maxSymbols: 3,
-          enemyId: "bud_alraune",
-          enemyCount: 3,
-        },
-      ],
       layers: [
         {
           id: "ground",
@@ -243,7 +202,7 @@
 
     kuraku_forest_2: {
       id: "kuraku_forest_2",
-      name: "クラク森2",
+      name: "南クラク森",
       tileSize: 48,
       width: 30,
       height: 20,
@@ -254,30 +213,6 @@
         object: "tree",
         event: null,
       },
-      symbolEncounters: [
-        {
-          id: "wild_horn_rabbit",
-          requiresQuestCompleted: "story_horn_rabbit_competition_001",
-          name: "ツノウサギ",
-          symbolLabel: "兎",
-          color: "#d9bc64",
-          rank: "D",
-          maxSymbols: 3,
-          enemyId: "horn_rabbit",
-          enemyCount: 3,
-        },
-        {
-          id: "wild_shadow_wolf",
-          requiresQuestCompleted: "story_horn_rabbit_competition_001",
-          name: "シャドウウルフ",
-          symbolLabel: "狼",
-          color: "#7771c8",
-          rank: "D",
-          maxSymbols: 3,
-          enemyId: "shadow_wolf",
-          enemyCount: 3,
-        },
-      ],
       layers: [
         {
           id: "ground",
@@ -948,7 +883,7 @@
   };
   window.HEALER_TILE_MAPS.kuraku_forest_3 = {
     id: "kuraku_forest_3",
-    name: "クラク森3",
+    name: "北クラク森",
     tileSize: 48,
     width: 25,
     height: 20,
@@ -959,23 +894,6 @@
       object: null,
       event: null,
     },
-    questSymbolEncounters: [
-      {
-        id: "story_path_ahead",
-        questId: "story_path_ahead_001",
-        name: "道の先",
-        symbolLabel: "花",
-        color: "#c86fd8",
-        rank: "D",
-        maxSymbols: 1,
-        spawnCol: 12,
-        spawnRow: 2,
-        battleId: "story_path_ahead_001",
-        enemies: [
-          { name: "フロスティーニ", role: "flostiny", x: 0.5, y: 0.5 },
-        ],
-      },
-    ],
     layers: [
       {
         id: "ground",
@@ -1100,9 +1018,9 @@
   };
   window.HEALER_DEBUG_TILE_MAPS = [
     { id: "startTown01", label: "クラク村" },
-    { id: "kuraku_forest_1", label: "クラク森1" },
-    { id: "kuraku_forest_2", label: "クラク森2" },
+    { id: "kuraku_forest_1", label: "西クラク森" },
+    { id: "kuraku_forest_2", label: "南クラク森" },
     { id: "flower", label: "花マップ" },
-      { id: "kuraku_forest_3", label: "クラク森3" },
+      { id: "kuraku_forest_3", label: "北クラク森" },
 ];
 })();

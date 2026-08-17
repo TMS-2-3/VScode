@@ -1199,6 +1199,7 @@
         moveTimer: Math.random() * SYMBOL_ENCOUNTER_WANDER_INTERVAL,
         chaseTimer: 0,
         radius: Math.max(10, Number(config.radius) || 16),
+        stationary: config.stationary === true || config.fixedPosition === true || config.noMove === true,
         enemyEntries,
       };
     }
@@ -1754,6 +1755,9 @@
           continue;
         }
         updateTownSymbolAlert(symbol, playerTile);
+        if (symbol.stationary === true) {
+          continue;
+        }
         if (symbol.alert) {
           updateTownSymbolChase(tileMap, symbol, playerTile, occupied, elapsed);
         } else {

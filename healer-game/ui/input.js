@@ -3225,6 +3225,12 @@
         event.preventDefault();
         return;
       }
+      if (game.state === "town" && town.questNoticePopup && key === "escape") {
+        town.questNoticePopup = null;
+        clearMovementKeys();
+        event.preventDefault();
+        return;
+      }
       if (handleSystemMenuKey(event, key)) {
         return;
       }

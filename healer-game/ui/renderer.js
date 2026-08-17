@@ -313,6 +313,7 @@
         townRenderer.drawTownStoryDialogue();
       }
       drawSystemMenu();
+      townRenderer.drawTownQuestNoticePopup();
       return;
     }
     drawFloor();
