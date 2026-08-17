@@ -457,6 +457,8 @@
       unit.feelTimer = 0;
       unit.feelMax = 0;
       unit.feelGuardCount = 0;
+      unit.filmInTimer = 0;
+      unit.filmInMax = 0;
       unit.desteStacks = 0;
       unit.regretTimer = 0;
       unit.regretMax = 0;

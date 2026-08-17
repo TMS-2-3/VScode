@@ -62,6 +62,16 @@
       description: "移動速度が-10%、行動速度が-50%低下する。",
       simpleDescription: "移動速度と行動速度が低下する。",
     },
+    buff_film_in: {
+      id: "buff_film_in",
+      name: "被膜",
+      type: "ステータスバフ",
+      label: "膜",
+      color: "#8fd6ff",
+      carryover: false,
+      description: "被ダメージ率が15%低下する。",
+      simpleDescription: "受けるダメージが減少する。",
+    },
     debuff_taunt: {
       id: "debuff_taunt",
       name: "挑発",

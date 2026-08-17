@@ -389,6 +389,16 @@
       return isForcedHostileTarget(source, target);
     }
 
+    function canSingleTargetSupportAffect(source, target) {
+      if (!source || !target || target.dead) {
+        return false;
+      }
+      if (target.team === "party") {
+        return true;
+      }
+      return source !== target && isForcedHostileTarget(source, target);
+    }
+
     function getAutoUltimateEnemyDamageMultiplier(target, automatic) {
       return automatic && target && target.team === "enemy"
         ? (Number.isFinite(ctx.AUTO_ULTIMATE_ENEMY_DAMAGE_MULTIPLIER) ? ctx.AUTO_ULTIMATE_ENEMY_DAMAGE_MULTIPLIER : 0.6)
@@ -891,7 +901,8 @@
       const base = unit && unit.team === "enemy" ? getEnemyActionCooldownBase(unit) : (ctx.ACTION_COOLDOWN_BASE || 7);
       const cooldown = unit.team === "party" && unit.id !== "finald" ? ctx.getCommandActionCooldown(unit, base) : base;
       const actionSpeed = getBaseActionSpeed(unit) + (ctx.getEquipmentStatBonusSum ? ctx.getEquipmentStatBonusSum(unit, "actionSpeed") : 0) + getActionSpeedStatusBonus(unit);
-      return cooldown / Math.max(0.1, 1 + actionSpeed);
+      const tutorialSpeed = unit && Number.isFinite(unit.tutorialActionSpeedMultiplier) ? unit.tutorialActionSpeedMultiplier : 1;
+      return cooldown / Math.max(0.1, (1 + actionSpeed) * tutorialSpeed);
     }
 
     function getBaseActionSpeed(unit) {
@@ -1019,6 +1030,7 @@
         || skill.sleepCleanse
         || Number.isFinite(skill.actionCdSetTo)
         || Number.isFinite(skill.feelDuration)
+        || Number.isFinite(skill.filmInDuration)
         || Number.isFinite(skill.sharpenDuration)
         || Number.isFinite(skill.counterattackDuration)
       ));
@@ -1579,6 +1591,9 @@
             return;
           }
           const dealt = ctx.dealDamage(enemy, target, getEnemySkillDamage(enemy, target, skill), getSkillDamageOptions(skill));
+          if (dealt > 0 && enemy.tutorialOpeningHitUnitId && target.id === enemy.tutorialOpeningHitUnitId) {
+            enemy.tutorialOpeningHitDone = true;
+          }
           if (Number.isFinite(skill.injuryDuration)) {
             applyInjury(enemy, target, skill.injuryDuration);
           }
@@ -2198,6 +2213,26 @@
       return affected;
     }
 
+    function getFilmInDuration(unit, key, skill) {
+      const base = Number.isFinite(skill && skill.filmInDuration) ? skill.filmInDuration : 0;
+      const perLevel = Number.isFinite(skill && skill.filmInDurationPerLevel) ? skill.filmInDurationPerLevel : 0;
+      return Math.max(0, base + perLevel * getSkillActionUpgradeLevel(unit, key, skill));
+    }
+
+    function applyFilmInStatus(source, target, key, skill) {
+      const duration = getFilmInDuration(source, key, skill);
+      if (!target || target.dead || duration <= 0 || !canSingleTargetSupportAffect(source, target) || !ctx.isFieldUnit(target)) {
+        return false;
+      }
+      target.filmInTimer = Math.max(target.filmInTimer || 0, duration);
+      target.filmInMax = Math.max(target.filmInMax || 0, duration);
+      ctx.addFloat("被膜", target.x, target.y - 34, "#8fd6ff");
+      if (ctx.awardSupportUltimate) {
+        ctx.awardSupportUltimate(source, target);
+      }
+      return true;
+    }
+
     function getSleepCleanseTarget(unit, skill) {
       let best = null;
       let bestDistance = Infinity;
@@ -2344,6 +2379,7 @@
       if (skill.sleepCleanse) return usePartySleepCleanse(unit, key, skill, target);
       if (Number.isFinite(skill.actionCdSetTo)) return usePartyActionCdPulse(unit, key, skill, target);
       if (Number.isFinite(skill.feelDuration)) return usePartyFeelBuff(unit, key, skill, target);
+      if (Number.isFinite(skill.filmInDuration)) return usePartyFilmIn(unit, key, skill, target);
       if (Number.isFinite(skill.sharpenDuration)) return usePartySharpenBlade(unit, key, skill);
       if (Number.isFinite(skill.counterattackDuration)) return usePartyCounterattackStance(unit, key, skill);
       if (skill.approach || Number.isFinite(skill.shockRadius)) return useJumpAreaSkill(unit, key, skill, target);
@@ -2561,6 +2597,36 @@
           finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
           if (unit.dead || isActionDisabled(unit)) return;
           applyFeelArea(unit, key, skill, unit.aimAngle || 0);
+        },
+      });
+      return true;
+    }
+
+    function usePartyFilmIn(unit, key, skill, target) {
+      const buffTarget = target || getRandomSupportTarget();
+      if (!skill || !buffTarget || !canSingleTargetSupportAffect(unit, buffTarget) || !ctx.isFieldUnit(buffTarget)) {
+        return false;
+      }
+      beginPartyAction(unit);
+      paySkillCost(unit, skill);
+      const cast = getCastTime(skill.cast, unit);
+      unit.actionLock = cast + ctx.ACTION_GAP;
+      unit.aimAngle = buffTarget === unit ? (unit.aimAngle || 0) : ctx.angleTo(unit, buffTarget);
+      ctx.addTelegraph({
+        type: "circle",
+        x: buffTarget.x,
+        y: buffTarget.y,
+        radius: buffTarget.radius + ctx.battlePx(18),
+        team: "support",
+        time: cast,
+        getPosition: () => ({ x: buffTarget.x, y: buffTarget.y }),
+        resolve: () => {
+          finishPartyAction(unit, getPartySkillCooldowns(unit, key, skill));
+          if (unit.dead || isActionDisabled(unit) || !buffTarget || buffTarget.dead || !canSingleTargetSupportAffect(unit, buffTarget) || !ctx.isFieldUnit(buffTarget)) return;
+          speakSkill(unit, key);
+          applyFilmInStatus(unit, buffTarget, key, skill);
+          ctx.effects.push({ type: "beam", x: unit.x, y: unit.y, x2: buffTarget.x, y2: buffTarget.y, color: "#8fd6ff", time: 0.24, age: 0 });
+          ctx.addBurst(buffTarget.x, buffTarget.y, buffTarget.radius + ctx.battlePx(18), "rgba(143,214,255,0.25)");
         },
       });
       return true;
@@ -3269,6 +3335,7 @@
       if (intent.key === "bomb") return castPlayerBomb(target, options);
       if (isCommandSkill(intent.key)) return usePlayerCommand(intent.key, target, options);
       const skill = getUnitSkill(player, intent.key) || get("finald", intent.key);
+      if (isPlayerSingleTargetSupportSkill(intent.key, skill)) return castPlayerSingleTargetSupportSkill(intent.key, target, options);
       if (isPlayerGenericSingleTargetSkill(intent.key, skill)) return castPlayerGenericSingleTargetSkill(intent.key, target, options);
       return false;
     }
@@ -3289,6 +3356,7 @@
       if (player.aim.type === "bomb") return castPlayerBomb();
       if (isCommandSkill(player.aim.type)) return usePlayerCommand(player.aim.type);
       const skill = getUnitSkill(player, player.aim.type) || get("finald", player.aim.type);
+      if (isPlayerSingleTargetSupportSkill(player.aim.type, skill)) return castPlayerSingleTargetSupportSkill(player.aim.type);
       if (isPlayerGenericSingleTargetSkill(player.aim.type, skill)) return castPlayerGenericSingleTargetSkill(player.aim.type);
       return false;
     }
@@ -3521,6 +3589,48 @@
         !Number.isFinite(skill.arcDeg) &&
         !skill.approach
       );
+    }
+
+    function isPlayerSingleTargetSupportSkill(key, skill) {
+      if (!skill || isCommandSkill(key) || key === "attack" || key === "heal" || key === "shield" || key === "fire" || key === "bomb") {
+        return false;
+      }
+      return skill.target === "ally" && Number.isFinite(skill.filmInDuration);
+    }
+
+    function castPlayerSingleTargetSupportSkill(key, lockedTarget = null, options = {}) {
+      const player = ctx.player;
+      const skill = getUnitSkill(player, key) || get("finald", key);
+      if (isPlayerControlLocked()) {
+        showPlayerControlLocked();
+        return false;
+      }
+      if (!isPlayerSingleTargetSupportSkill(key, skill) || player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) return false;
+      const target = lockedTarget || ctx.game.hover;
+      if (!target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) { ctx.addFloat("対象なし", ctx.input.mouse.x, ctx.input.mouse.y - 12, "#ffffff"); return false; }
+      const rangeState = ensurePlayerSkillRange(key, target, skill, target.radius, { ...options, support: true });
+      if (stopIfPlayerSkillQueued(rangeState)) return true;
+      if (rangeState !== "inRange") return false;
+      if ((player.cds[key] || 0) > 0) { ctx.addFloat("再詠唱中", target.x, target.y - 28, "#ffffff"); return false; }
+      if (!canPaySkillCost(player, skill)) { ctx.addFloat("魔力不足", target.x, target.y - 28, "#ffffff"); return false; }
+      if (!ctx.startPlayerCast(key, { target }, getCastTime(skill.cast, player))) return false;
+      paySkillCost(player, skill);
+      return true;
+    }
+
+    function completePlayerSingleTargetSupportSkill(key, target) {
+      const player = ctx.player;
+      const skill = getUnitSkill(player, key) || get("finald", key);
+      if (!isPlayerSingleTargetSupportSkill(key, skill) || !target || target.dead || target.team !== "party" || !ctx.isFieldUnit(target)) {
+        const origin = ctx.getSupportOrigin();
+        ctx.addFloat("対象なし", origin.x + 26, origin.y - 28, "#ffffff");
+        return;
+      }
+      speakSkill(player, key);
+      applyFilmInStatus(player, target, key, skill);
+      const origin = ctx.getSupportOrigin(target);
+      ctx.effects.push({ type: "beam", x: origin.x, y: origin.y, x2: target.x, y2: target.y, color: "#8fd6ff", time: 0.24, age: 0 });
+      ctx.addBurst(target.x, target.y, target.radius + ctx.battlePx(18), "rgba(143,214,255,0.25)");
     }
 
     function castPlayerGenericSingleTargetSkill(key, lockedTarget = null, options = {}) {
@@ -3785,13 +3895,19 @@
       else if (cast.type === "fire") completePlayerFire(cast.target);
       else if (cast.type === "bomb") completePlayerBomb(cast.target);
       else if (cast.type === "ult") completeFinaldUlt();
-      else completePlayerGenericSingleTargetSkill(cast.type, cast.target);
+      else {
+        const player = ctx.player;
+        const skill = getUnitSkill(player, cast.type) || get("finald", cast.type);
+        if (isPlayerSingleTargetSupportSkill(cast.type, skill)) completePlayerSingleTargetSupportSkill(cast.type, cast.target);
+        else completePlayerGenericSingleTargetSkill(cast.type, cast.target);
+      }
     }
 
     function getPlayerCastCooldown(type) {
-      const skill = get("finald", type);
+      const player = ctx.player;
+      const skill = getUnitSkill(player, type) || get("finald", type);
       if (!skill || typeof skill.cd !== "number") return null;
-      return { key: type, max: skill.cd };
+      return { key: type, max: getSkillCooldown(player, type, skill) };
     }
 
     function triggerUltimate(id, automatic = false) {
@@ -3873,7 +3989,13 @@
     function ultSushia(unit, automatic) {
       const skill = getUnitUltimateEntry(unit).skill || need("sushia", "ult");
       beginPartyAction(unit);
-      const cast = ctx.getSushiaCastTime(automatic ? skill.autoCast : skill.cast, unit);
+      const tutorialCast = unit && Number.isFinite(unit.tutorialUltimateCastOverride)
+        ? Math.max(0, unit.tutorialUltimateCastOverride)
+        : null;
+      unit.tutorialUltimateCastOverride = null;
+      const cast = tutorialCast !== null
+        ? tutorialCast
+        : ctx.getSushiaCastTime(automatic ? skill.autoCast : skill.cast, unit);
       const radius = automatic ? skill.radius : skill.radius + skill.manualRadiusBonus;
       unit.actionLock = cast + ctx.ACTION_GAP;
       ctx.addTelegraph({
@@ -4144,6 +4266,15 @@
           draw.strokeStyle = inRange ? "#9cc6ff" : "rgba(255,255,255,0.45)";
           draw.lineWidth = 3;
           draw.beginPath(); draw.arc(target.x, target.y, target.radius + 18, 0, ctx.TAU); draw.stroke();
+        }
+      } else if (isPlayerSingleTargetSupportSkill(player.aim.type, skill)) {
+        const target = ctx.game.hover;
+        if (target && target.team === "party" && !target.dead) {
+          const inRange = isPointInPlayerRange(target.x, target.y, getPlayerSkillRange(skill), target.radius);
+          movePreview = getPlayerMovePreviewPoint(target, getPlayerSkillRange(skill), target.radius);
+          draw.strokeStyle = inRange ? "#8fd6ff" : "rgba(255,255,255,0.45)";
+          draw.lineWidth = 3;
+          draw.beginPath(); draw.arc(target.x, target.y, target.radius + 15, 0, ctx.TAU); draw.stroke();
         }
       } else if (isPlayerGenericSingleTargetSkill(player.aim.type, skill)) {
         const target = getHoveredEnemy();

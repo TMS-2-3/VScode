@@ -184,6 +184,8 @@
       unit.feelTimer = 0;
       unit.feelMax = 0;
       unit.feelGuardCount = 0;
+      unit.filmInTimer = 0;
+      unit.filmInMax = 0;
       unit.desteStacks = 0;
       unit.regretTimer = 0;
       unit.regretMax = 0;
@@ -202,6 +204,13 @@
       unit.actionSpeedDownTimer = 0;
       unit.actionSpeedDownMax = 0;
       unit.actionSpeedDownRatio = 0;
+      delete unit.tutorialActionSpeedMultiplier;
+      delete unit.tutorialUltimateCastOverride;
+      delete unit.tutorialOpeningLockedCds;
+      delete unit.tutorialOpeningHitUnitId;
+      delete unit.tutorialOpeningHitDone;
+      delete unit.tutorialOpeningId;
+      delete unit.tutorialStableId;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
       unit.goukenHitCounts = {};
@@ -392,6 +401,8 @@
         feelTimer: 0,
         feelMax: 0,
         feelGuardCount: 0,
+        filmInTimer: 0,
+        filmInMax: 0,
         desteStacks: 0,
         noDamage: 999,
         cast: null,

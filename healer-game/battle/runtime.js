@@ -182,6 +182,10 @@
           unit.feelMax = 0;
           unit.feelGuardCount = 0;
         }
+        unit.filmInTimer = Math.max(0, (unit.filmInTimer || 0) - dt);
+        if (unit.filmInTimer <= 0) {
+          unit.filmInMax = 0;
+        }
         unit.sorrowTimer = Math.max(0, (unit.sorrowTimer || 0) - dt);
         if (unit.sorrowTimer <= 0) {
           unit.sorrowMax = 0;
@@ -444,7 +448,7 @@
     }
 
     function isPlayerCastTargetLost(cast) {
-      return Boolean(cast && ["heal", "shield", "fire"].includes(cast.type) && cast.target && cast.target.dead);
+      return Boolean(cast && cast.target && cast.target.dead);
     }
 
     function interruptPlayerCastForTargetLoss() {
@@ -614,6 +618,8 @@
       unit.feelTimer = 0;
       unit.feelMax = 0;
       unit.feelGuardCount = 0;
+      unit.filmInTimer = 0;
+      unit.filmInMax = 0;
       unit.desteStacks = 0;
       unit.regretTimer = 0;
       unit.regretMax = 0;

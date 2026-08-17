@@ -15,6 +15,9 @@
     finald: "battle.ultimate.finald",
   };
   const TUTORIAL_MOOD_MIN = 40;
+  const TUTORIAL_MIN_HP = 30;
+  const TUTORIAL_ACTION_SPEED_MULTIPLIER = 0.5;
+  const TUTORIAL_SUSHIA_ICE_CAST_TIME = 1;
   const SUSHIA_DEFEND_MOOD = 80;
   const SUSHIA_CALM_MOOD = 60;
 
@@ -62,12 +65,12 @@
     line("リハス", "力の強い俺様ならサポートする必要もないと思うがな！"),
     system("基本的に味方達は自動で戦闘を行います"),
     system("あなたのサポート能力でチームを勝利に導きましょう！"),
-    run("rihasOpeningDamage", { minTime: 2.2, maxTime: 4.2 }),
+    run("rihasOpeningDamage", { minTime: 0.8, maxTime: 8.5 }),
     line("リハス", "おらぁ！まだまだ！"),
     system("リハスがダメージを受けました", { highlightUnitId: "rihas" }),
     waitSkill("healRihas", "heal", "rihas", "スキルのヒールをリハスに使用して体力を回復させてあげましょう！"),
     line("リハス", "まだまだ余裕だなぁ！雑魚共！！"),
-    run("ulpesRushOut", { minTime: 1.5, maxTime: 3.5 }),
+    run("ulpesRushOut", { minTime: 1.5, maxTime: 5 }),
     line("ウルペス", "おいアルジュナ！僕にシールドをくれ！"),
     system("スキルのシェルトを使用してウルペスをシールドで守ってあげましょう！", { highlightUnitId: "ulpes" }),
     waitSkill("shieldUlpes", "shield", "ulpes", "離れていても近づいてからスキルを打つことができます！"),
@@ -126,6 +129,7 @@
       return null;
     }
     if (!isTutorialQuest(quest)) {
+      clearTutorialRuntimeModifiers(helpers);
       game.battleTutorial = null;
       return null;
     }
@@ -176,6 +180,8 @@
       unit.itemUseRequest = null;
       unit.itemCast = null;
       unit.cds = {};
+      unit.tutorialActionSpeedMultiplier = TUTORIAL_ACTION_SPEED_MULTIPLIER;
+      unit.tutorialUltimateCastOverride = null;
       if (unit.team === "party" && unit.mood !== null) {
         unit.mood = 50;
         unit.moodActionGain = 0;
@@ -202,6 +208,8 @@
       enemy.aiMoveTarget = null;
       enemy.battleFacingIntent = null;
       enemy.cds = {};
+      enemy.tutorialActionSpeedMultiplier = TUTORIAL_ACTION_SPEED_MULTIPLIER;
+      enemy.tutorialUltimateCastOverride = null;
     }
     game.message = "戦闘チュートリアル";
     game.messageTimer = 2;
@@ -299,6 +307,7 @@
         state.completed = true;
         state.mode = "done";
         state.selectedSkillKey = null;
+        clearTutorialRuntimeModifiers(helpers);
         return null;
       }
       if (step.type === "script") {
@@ -634,7 +643,11 @@
       state.selectedSkillKey = null;
       game.message = "チュートリアル完了";
       game.messageTimer = 2;
+      clearTutorialRuntimeModifiers(helpers);
       return;
+    }
+    if (step && step.action === "rihasOpeningDamage") {
+      clearRihasOpeningHitSetup(helpers);
     }
     state.run = null;
     state.index += 1;
@@ -652,7 +665,7 @@
         rihas.hp = Math.max(1, rihas.maxHp || rihas.hp || 1);
         readyUnitForTutorialAction(rihas);
       }
-      forceEnemiesTarget(rihas, helpers, 3.5);
+      startRihasOpeningHitSetup(runState, rihas, helpers);
       return;
     }
     if (action === "ulpesRushOut") {
@@ -697,7 +710,6 @@
         target.actionLock = Math.max(target.actionLock || 0, 1.2);
         target.aiIntent = null;
         target.aiMoveTarget = null;
-        addUnitFloat(target, "あと少し", "#ffffff", helpers);
       }
     }
   }
@@ -707,9 +719,7 @@
     if (action === "rihasOpeningDamage") {
       const rihas = getUnitById("rihas", helpers);
       forceEnemiesTarget(rihas, helpers, 0.6);
-      if (rihas && runState.timer >= getStepMinTime(step, 2.2)) {
-        applyTutorialHpRatio(rihas, 0.7, helpers);
-      }
+      keepRihasOpeningEnemiesFocused(runState, rihas, helpers);
       return;
     }
     if (action === "ulpesRushOut") {
@@ -764,16 +774,17 @@
     const action = runState && runState.action;
     const maxTime = getStepMaxTime(step, Infinity);
     if (action === "rihasOpeningDamage") {
-      const rihas = getUnitById("rihas", helpers);
-      const maxHp = Math.max(1, rihas && rihas.maxHp || 1);
-      return (timer >= getStepMinTime(step, 2.2) && rihas && rihas.hp <= maxHp * 0.72) || timer >= maxTime;
+      return (timer >= getStepMinTime(step, 0.8) && hasRihasOpeningHits(runState, helpers)) || timer >= maxTime;
     }
     if (action === "ulpesRushOut") {
       const ulpes = getUnitById("ulpes", helpers);
       const player = helpers.player;
-      const shieldRange = getSkillRange("shield", helpers, toBattlePx(helpers, 230));
-      const farEnough = Boolean(ulpes && player && getDistance(ulpes, player) > shieldRange + toBattlePx(helpers, 24));
-      return (timer >= getStepMinTime(step, 1.5) && farEnough) || timer >= maxTime;
+      const shieldRange = getSkillRange("shield", helpers, toBattlePx(helpers, 280));
+      const destination = ulpes ? getUlpesShieldDemoPoint(ulpes, helpers) : null;
+      const farEnough = Boolean(ulpes && player && getDistance(ulpes, player) > shieldRange + toBattlePx(helpers, 15));
+      const reached = Boolean(ulpes && destination && getDistance(ulpes, destination) <= toBattlePx(helpers, 8));
+      const behindEnemies = Boolean(ulpes && isRightOfEnemyGroup(ulpes, helpers));
+      return (timer >= getStepMinTime(step, 1.5) && farEnough && reached && behindEnemies) || timer >= maxTime;
     }
     if (action === "freeCombatAfterShield") {
       return timer >= getStepDuration(step, 5);
@@ -921,16 +932,82 @@
 
   function moveUlpesTowardEnemies(runState, step, helpers, dt) {
     const ulpes = getUnitById("ulpes", helpers);
-    const target = getAliveEnemies(helpers)[0] || null;
-    if (!ulpes || !target) {
+    const destination = ulpes ? getUlpesShieldDemoPoint(ulpes, helpers) : null;
+    if (!ulpes || !destination) {
       return;
     }
-    const distance = getDistance(ulpes, target);
-    if (distance <= toBattlePx(helpers, 100)) {
+    ulpes.aiIntent = null;
+    ulpes.aiMoveTarget = null;
+    if (ulpes.cast || ulpes.channel) {
+      ulpes.cast = null;
+      ulpes.castVisual = null;
+      ulpes.channel = null;
+    }
+    if (getDistance(ulpes, destination) <= toBattlePx(helpers, 8)) {
       return;
     }
-    const speed = Math.max(toBattlePx(helpers, 120), ulpes.speed || toBattlePx(helpers, 120));
-    moveUnitToward(ulpes, target.x, target.y, speed * dt, helpers);
+    const speed = Math.max(toBattlePx(helpers, 150), ulpes.speed || toBattlePx(helpers, 150));
+    moveUnitToward(ulpes, destination.x, destination.y, speed * dt, helpers);
+  }
+
+  function getUlpesShieldDemoPoint(ulpes, helpers = {}) {
+    const enemies = getAliveEnemies(helpers);
+    if (!ulpes || !enemies.length) {
+      return null;
+    }
+    const center = getEnemyGroupCenter(enemies);
+    const player = helpers.player || null;
+    const shieldRange = getSkillRange("shield", helpers, toBattlePx(helpers, 280));
+    const minDistance = shieldRange + toBattlePx(helpers, 15);
+    let x = center.x + toBattlePx(helpers, 130);
+    let y = center.y + toBattlePx(helpers, 18);
+    if (player) {
+      const dx = x - player.x;
+      const dy = y - player.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < minDistance) {
+        x = player.x + dx / d * minDistance;
+        y = player.y + dy / d * minDistance;
+      }
+    }
+    x = Math.max(x, center.x + toBattlePx(helpers, 80));
+    return clampPointToBattle(x, y, ulpes, helpers);
+  }
+
+  function getEnemyGroupCenter(enemies) {
+    const count = Math.max(1, enemies.length);
+    const total = enemies.reduce((sum, enemy) => ({
+      x: sum.x + (enemy && Number.isFinite(enemy.x) ? enemy.x : 0),
+      y: sum.y + (enemy && Number.isFinite(enemy.y) ? enemy.y : 0),
+    }), { x: 0, y: 0 });
+    return {
+      x: total.x / count,
+      y: total.y / count,
+    };
+  }
+
+  function isRightOfEnemyGroup(unit, helpers = {}) {
+    const enemies = getAliveEnemies(helpers);
+    if (!unit || !enemies.length) {
+      return false;
+    }
+    const center = getEnemyGroupCenter(enemies);
+    return unit.x >= center.x + toBattlePx(helpers, 60);
+  }
+
+  function clampPointToBattle(x, y, unit, helpers = {}) {
+    if (typeof helpers.getBattleBounds !== "function") {
+      return { x, y };
+    }
+    const bounds = helpers.getBattleBounds();
+    if (!bounds) {
+      return { x, y };
+    }
+    const margin = unit && unit.radius || toBattlePx(helpers, 16);
+    return {
+      x: clampNumber(x, bounds.left + margin, bounds.right - margin),
+      y: clampNumber(y, bounds.top + margin, bounds.bottom - margin),
+    };
   }
 
   function positionSushiaForIceWorld(sushia, helpers = {}) {
@@ -1048,8 +1125,8 @@
     }
     const keep = alive[alive.length - 1] || null;
     if (keep && limit === 1) {
-      keep.hp = Math.max(1, Math.min(keep.hp || 1, Math.round((keep.maxHp || 1) * 0.18)));
-      addUnitFloat(keep, "残り1体", "#ffffff", helpers);
+      const floor = getTutorialHpFloor(keep);
+      keep.hp = Math.max(floor, Math.min(keep.hp || floor, Math.round((keep.maxHp || 1) * 0.18)));
     }
   }
 
@@ -1075,8 +1152,87 @@
       if (!enemy.cds || typeof enemy.cds !== "object") {
         enemy.cds = {};
       }
-      enemy.cds.attack = Math.min(enemy.cds.attack || 0, 0.15);
     }
+  }
+
+  function startRihasOpeningHitSetup(runState, rihas, helpers = {}) {
+    if (!runState || !rihas) {
+      return;
+    }
+    const enemies = getAliveEnemies(helpers);
+    runState.data.startHp = Number.isFinite(rihas.hp) ? rihas.hp : null;
+    runState.data.openingEnemyIds = enemies.map((enemy, index) => getEnemyTutorialId(enemy, index));
+    forceEnemiesTarget(rihas, helpers, 4);
+    for (let i = 0; i < enemies.length; i += 1) {
+      const enemy = enemies[i];
+      if (!enemy) {
+        continue;
+      }
+      enemy.tutorialOpeningHitUnitId = rihas.id;
+      enemy.tutorialOpeningHitDone = false;
+      enemy.tutorialOpeningId = getEnemyTutorialId(enemy, i);
+      if (!enemy.cds || typeof enemy.cds !== "object") {
+        enemy.cds = {};
+      }
+      enemy.cds.attack = 0;
+    }
+  }
+
+  function keepRihasOpeningEnemiesFocused(runState, rihas, helpers = {}) {
+    if (!runState || !rihas) {
+      return;
+    }
+    for (const enemy of getAliveEnemies(helpers)) {
+      if (!enemy) {
+        continue;
+      }
+      enemy.tutorialOpeningHitUnitId = rihas.id;
+      enemy.tutorialOpeningId = enemy.tutorialOpeningId || getEnemyTutorialId(enemy, getAliveEnemies(helpers).indexOf(enemy));
+    }
+  }
+
+  function hasRihasOpeningHits(runState, helpers = {}) {
+    const rihas = getUnitById("rihas", helpers);
+    if (!runState || !rihas) {
+      return false;
+    }
+    const ids = Array.isArray(runState.data.openingEnemyIds) ? runState.data.openingEnemyIds : [];
+    const enemies = getEnemyList(helpers).filter((enemy) => enemy && ids.includes(enemy.tutorialOpeningId));
+    if (!enemies.length) {
+      return false;
+    }
+    const allHit = enemies.every((enemy) => enemy.dead || enemy.tutorialOpeningHitDone);
+    const tookDamage = Number.isFinite(runState.data.startHp) && Number.isFinite(rihas.hp)
+      ? rihas.hp < runState.data.startHp
+      : true;
+    return allHit && tookDamage;
+  }
+
+  function clearRihasOpeningHitSetup(helpers = {}) {
+    const rihas = getUnitById("rihas", helpers);
+    for (const enemy of getEnemyList(helpers)) {
+      if (!enemy) {
+        continue;
+      }
+      delete enemy.tutorialOpeningLockedCds;
+      delete enemy.tutorialOpeningHitUnitId;
+      delete enemy.tutorialOpeningHitDone;
+      delete enemy.tutorialOpeningId;
+      if (rihas && enemy.forcedTarget === rihas) {
+        enemy.forcedTarget = null;
+        enemy.tauntTimer = 0;
+      }
+    }
+  }
+
+  function getEnemyTutorialId(enemy, index = 0) {
+    if (!enemy) {
+      return `enemy_${index}`;
+    }
+    if (!enemy.tutorialStableId) {
+      enemy.tutorialStableId = `${enemy.id || enemy.role || "enemy"}_${index}_${Math.round((enemy.x || 0) * 10)}_${Math.round((enemy.y || 0) * 10)}`;
+    }
+    return enemy.tutorialStableId;
   }
 
   function clearEnemyForcedTargets(helpers = {}) {
@@ -1212,10 +1368,11 @@
       return;
     }
     const alive = getAliveEnemies(helpers);
-    for (const enemy of alive) {
+    const protectedAlive = alive.slice(Math.max(0, alive.length - floor));
+    for (const enemy of protectedAlive) {
       keepTutorialUnitAlive(enemy);
     }
-    let missing = Math.max(0, floor - alive.length);
+    let missing = Math.max(0, floor - protectedAlive.length);
     if (missing <= 0) {
       return;
     }
@@ -1234,9 +1391,10 @@
     if (!unit) {
       return;
     }
+    const hpFloor = getTutorialHpFloor(unit);
     if (unit.dead || !Number.isFinite(unit.hp) || unit.hp <= 0) {
       unit.dead = false;
-      unit.hp = 1;
+      unit.hp = hpFloor;
       unit.field = true;
       unit.targetable = true;
       unit.collidable = true;
@@ -1247,7 +1405,16 @@
       unit.cast = null;
       unit.channel = null;
       unit.pendingActionQueueKey = null;
+      return;
     }
+    if (unit.hp < hpFloor) {
+      unit.hp = hpFloor;
+    }
+  }
+
+  function getTutorialHpFloor(unit) {
+    const maxHp = Math.max(1, Number.isFinite(unit && unit.maxHp) ? unit.maxHp : unit && unit.hp || 1);
+    return Math.min(maxHp, TUTORIAL_MIN_HP);
   }
 
   function clampTutorialMood(unit) {
@@ -1314,7 +1481,11 @@
         setUltimateReady(sushia, helpers, 1);
         positionSushiaForIceWorld(sushia, helpers);
         if (typeof helpers.triggerUltimate === "function") {
-          helpers.triggerUltimate("sushia", true);
+          sushia.tutorialUltimateCastOverride = TUTORIAL_SUSHIA_ICE_CAST_TIME;
+          const started = helpers.triggerUltimate("sushia", true);
+          if (started === false) {
+            sushia.tutorialUltimateCastOverride = null;
+          }
         }
       }
       return;
@@ -1346,6 +1517,7 @@
         state.mode = "done";
         state.selectedSkillKey = null;
       }
+      clearTutorialRuntimeModifiers(helpers);
       game.message = "チュートリアル完了";
       game.messageTimer = 2;
     }
@@ -1360,8 +1532,8 @@
       }
     }
     if (keep) {
-      keep.hp = Math.max(1, Math.min(keep.hp || 1, Math.round((keep.maxHp || 1) * 0.18)));
-      addUnitFloat(keep, "残り1体", "#ffffff", helpers);
+      const floor = getTutorialHpFloor(keep);
+      keep.hp = Math.max(floor, Math.min(keep.hp || floor, Math.round((keep.maxHp || 1) * 0.18)));
     }
   }
 
@@ -1376,8 +1548,24 @@
         defeatEnemy(enemy, getUnitById("sushia", helpers), helpers);
       }
     }
-    keep.hp = Math.max(1, Math.min(keep.hp || 1, Math.round((keep.maxHp || 1) * 0.12)));
+    const floor = getTutorialHpFloor(keep);
+    keep.hp = Math.max(floor, Math.min(keep.hp || floor, Math.round((keep.maxHp || 1) * 0.12)));
     return keep;
+  }
+
+  function clearTutorialRuntimeModifiers(helpers = {}) {
+    for (const unit of [...getUniqueUnits(helpers), ...getEnemyList(helpers)]) {
+      if (!unit) {
+        continue;
+      }
+      delete unit.tutorialActionSpeedMultiplier;
+      delete unit.tutorialUltimateCastOverride;
+      delete unit.tutorialOpeningLockedCds;
+      delete unit.tutorialOpeningHitUnitId;
+      delete unit.tutorialOpeningHitDone;
+      delete unit.tutorialOpeningId;
+      delete unit.tutorialStableId;
+    }
   }
 
   function defeatRemainingEnemies(helpers = {}, source = null) {

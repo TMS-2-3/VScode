@@ -543,6 +543,9 @@
           bonus += 0.15;
         }
       }
+      if (unit && (unit.filmInTimer || 0) > 0 && statKey === "damageResistance") {
+        bonus += 0.15;
+      }
       if (unit && (unit.feelTimer || 0) > 0 && statKey === "guardChance") {
         bonus += 0.5;
       }

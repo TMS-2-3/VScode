@@ -784,6 +784,10 @@
       const feelMax = Math.max(0.1, unit.feelMax || unit.feelTimer);
       icons.push(makeStatusIcon(unit, "buff_feel", { ratio: unit.feelTimer / feelMax, remaining: unit.feelTimer, stack: unit.feelGuardCount || undefined }));
     }
+    if ((unit.filmInTimer || 0) > 0) {
+      const filmInMax = Math.max(0.1, unit.filmInMax || unit.filmInTimer);
+      icons.push(makeStatusIcon(unit, "buff_film_in", { ratio: unit.filmInTimer / filmInMax, remaining: unit.filmInTimer }));
+    }
     if ((unit.desteStacks || 0) > 0) {
       icons.push(makeStatusIcon(unit, "buff_deste", { ratio: 1, stack: unit.desteStacks, permanent: true, durationless: true, sortPriority: 65 }));
     }
