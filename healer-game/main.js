@@ -276,6 +276,8 @@
         trail: [],
         interaction: null,
         mapNamePopup: null,
+        returnFade: null,
+        questNoticePopup: null,
         symbolEncounters: null,
         acceptedQuestIds: {},
         completedQuestIds: {},

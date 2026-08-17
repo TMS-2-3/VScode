@@ -80,6 +80,14 @@
     return getQuestsByType(typeKey).filter((quest) => !isQuestUnavailableForTown(quest)).length;
   }
 
+  function getActiveStoryQuestForTownField() {
+    if (typeof getQuestsByType !== "function") {
+      return null;
+    }
+    return getQuestsByType("story")
+      .find((quest) => quest && isQuestAcceptedForTown(quest) && !isQuestCompletedForTown(quest)) || null;
+  }
+
   const EQUIPMENT_RANK_FILTERS = ["D", "C", "B", "A", "S"];
   const EQUIPMENT_SHOP_WEAPON_TYPES = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
   const EQUIPMENT_SHOP_UNITS = [
@@ -703,7 +711,10 @@
     }
 
     drawTownMapNamePopup();
+    drawTownActiveStoryQuestHud();
     drawTownPanel();
+    drawTownReturnFade();
+    drawTownQuestNoticePopup();
   }
 
   function getTownMapTransform() {
@@ -1408,6 +1419,117 @@
     ctx.lineWidth = 4;
     ctx.strokeText(title, popupX + popupW / 2, popupY + popupH / 2 + 1);
     ctx.fillText(title, popupX + popupW / 2, popupY + popupH / 2 + 1);
+    ctx.restore();
+  }
+
+  function drawTownReturnFade() {
+    const fade = town && town.returnFade;
+    if (!fade) {
+      return;
+    }
+    const age = Math.max(0, Number(fade.age) || 0);
+    const hold = Math.max(0, Number(fade.hold) || 0);
+    const duration = Math.max(0.01, Number(fade.fade) || 0.85);
+    const alpha = age <= hold ? 1 : Math.max(0, 1 - (age - hold) / duration);
+    if (alpha <= 0) {
+      return;
+    }
+    ctx.save();
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(1, alpha)})`;
+    ctx.fillRect(0, 0, view.w, view.h);
+    ctx.restore();
+  }
+
+  function drawTownQuestNoticePopup() {
+    const popup = town && town.questNoticePopup;
+    if (!popup) {
+      return;
+    }
+    const age = Math.max(0, Number(popup.age) || 0);
+    const hold = Math.max(0, Number(popup.hold) || 2);
+    const fade = Math.max(0.01, Number(popup.fade) || 1);
+    const alpha = age <= hold ? 1 : Math.max(0, 1 - (age - hold) / fade);
+    if (alpha <= 0) {
+      return;
+    }
+
+    const centerX = view.w / 2;
+    const centerY = view.h * 0.42;
+    const bandW = Math.min(view.w - 48, 980);
+    const bandH = Math.min(230, Math.max(170, view.h * 0.22));
+    const bandX = centerX - bandW / 2;
+    const bandY = centerY - bandH / 2;
+    const title = String(popup.title || "依頼");
+    const message = String(popup.message || `${title}を受注しました`);
+    const typeName = String(popup.typeName || "依頼");
+    const questName = String(popup.questName || "");
+
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = "rgba(2, 6, 7, 0.5)";
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    ctx.fillStyle = "rgba(16, 24, 24, 0.94)";
+    roundRect(bandX, bandY, bandW, bandH, 10);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 216, 107, 0.82)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(117, 31, 38, 0.86)";
+    roundRect(bandX + 18, bandY + 18, bandW - 36, bandH - 36, 8);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255, 216, 107, 0.92)";
+    roundRect(bandX + 34, bandY + 38, bandW - 68, 8, 4);
+    ctx.fill();
+    roundRect(bandX + 34, bandY + bandH - 46, bandW - 68, 8, 4);
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffd86b";
+    ctx.fillText(`${typeName} 受注`, centerX, bandY + 62);
+
+    ctx.font = "950 46px 'Segoe UI Black', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillText(questName || title, centerX + 4, centerY + 2);
+    ctx.fillStyle = "#f7fff6";
+    drawFittedTownText(questName || title, centerX, centerY - 2, bandW - 120, 950, 46, 24, "#f7fff6", "center");
+
+    ctx.font = "850 22px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "#ffe08b";
+    drawFittedTownText(message, centerX, bandY + bandH - 72, bandW - 96, 850, 22, 14, "#ffe08b", "center");
+    ctx.restore();
+  }
+
+  function drawTownActiveStoryQuestHud() {
+    if (town.panel || town.story || (game.systemMenu && game.systemMenu.open)) {
+      return;
+    }
+    const quest = getActiveStoryQuestForTownField();
+    if (!quest) {
+      return;
+    }
+    const title = String(quest.name || "ストーリー依頼");
+    const x = 18;
+    const y = 18;
+    const w = Math.min(view.w - 36, 340);
+    const h = 58;
+    ctx.save();
+    ctx.fillStyle = "rgba(11,18,14,0.76)";
+    ctx.strokeStyle = "rgba(247,255,246,0.35)";
+    ctx.lineWidth = 2;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#ffd86b";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("ストーリー依頼 受注中", x + 15, y + 22);
+    drawFittedTownText(title, x + 15, y + 46, w - 30, 900, 18, 12, "#f7fff6");
     ctx.restore();
   }
 

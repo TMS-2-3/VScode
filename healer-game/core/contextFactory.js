@@ -98,7 +98,9 @@
     function createStoryContext() {
       return {
         getPlayerFirstName: callLater("profileSystem", "getPlayerFirstName"),
+        getPlayerLastName: callLater("profileSystem", "getPlayerLastName"),
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
+        getPlayerPronoun: callLater("profileSystem", "getPlayerPronoun"),
       };
     }
 
@@ -573,6 +575,7 @@
         getMeetingStory: callLater("storyData", "getMeetingStory"),
         getQuestAcceptedStory: callLater("storyData", "getQuestAcceptedStory"),
         getQuestEncounterStory: callLater("storyData", "getQuestEncounterStory"),
+        getQuestCompletedStory: callLater("storyData", "getQuestCompletedStory"),
         getKeybindLabel,
         getGold: callLater("walletSystem", "getGold"),
         formatGold: callLater("walletSystem", "formatGold"),

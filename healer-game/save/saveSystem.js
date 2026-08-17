@@ -424,6 +424,8 @@
       town.trail = [];
       town.interaction = null;
       town.mapNamePopup = null;
+      town.returnFade = null;
+      town.questNoticePopup = null;
       town.symbolEncounters = null;
       town.acceptedQuestIds = {};
       town.completedQuestIds = {};
@@ -506,6 +508,8 @@
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;
+      town.returnFade = null;
+      town.questNoticePopup = null;
       town.symbolEncounters = null;
       town.acceptedQuestIds = clonePlain(saved.acceptedQuestIds, {});
       town.completedQuestIds = clonePlain(saved.completedQuestIds, {});

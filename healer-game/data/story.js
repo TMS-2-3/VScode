@@ -2,7 +2,17 @@
   "use strict";
 
   window.createHealerStoryData = function createHealerStoryData(context) {
-    const { getPlayerFirstName, getPlayerFullName } = context;
+    const { getPlayerFirstName, getPlayerLastName, getPlayerFullName, getPlayerPronoun } = context;
+
+    const TUTORIAL_STORY_QUEST_ID = "story_horn_rabbit_competition_001";
+
+    function getPlayerLastNameText() {
+      return typeof getPlayerLastName === "function" ? getPlayerLastName() : "フィナルド";
+    }
+
+    function getPlayerPronounText() {
+      return typeof getPlayerPronoun === "function" ? getPlayerPronoun() : "私";
+    }
 
     function getOpeningStory() {
       const name = getPlayerFirstName();
@@ -42,7 +52,7 @@
     }
 
     function getQuestAcceptedStory(quest) {
-      if (!quest || quest.id !== "story_horn_rabbit_competition_001") {
+      if (!quest || quest.id !== TUTORIAL_STORY_QUEST_ID) {
         return [];
       }
       const name = getPlayerFirstName();
@@ -57,7 +67,7 @@
     }
 
     function getQuestEncounterStory(quest) {
-      if (!quest || quest.id !== "story_horn_rabbit_competition_001") {
+      if (!quest || quest.id !== TUTORIAL_STORY_QUEST_ID) {
         return [];
       }
       return [
@@ -68,11 +78,50 @@
       ];
     }
 
+    function getQuestCompletedStory(quest) {
+      if (!quest || quest.id !== TUTORIAL_STORY_QUEST_ID) {
+        return [];
+      }
+      const name = getPlayerFirstName();
+      const lastName = getPlayerLastNameText();
+      const pronoun = getPlayerPronounText();
+      return [
+        { speaker: "スシア", text: "それで、みんなは何体倒せたのかな？" },
+        { speaker: "リハス", text: "俺様が１体も倒せなかったなんて" },
+        { speaker: "ウルペス", text: "僕が…負けたなんて" },
+        { speaker: name, text: `${pronoun}も１体も倒せなかった…` },
+        { speaker: "スシア", text: `${lastName}は白魔法士だから当然じゃない？` },
+        { speaker: "リハス", text: "認めよう…スシア…" },
+        { speaker: "リハス", text: "俺様くらいは強いんだな" },
+        { speaker: "スシア", text: "上から目線でどうも" },
+        { speaker: "ウルペス", text: "あぁ、そうだな" },
+        { speaker: "ウルペス", text: "僕の次くらいには強いな" },
+        { speaker: "スシア", text: "トゥルスの次とか光栄で仕方がないワネー" },
+        { speaker: "スシア", text: "まあ、みんなセンスはあるんじゃない？" },
+        { speaker: name, text: "(まだみんなプライドがあるけど仲良くなれそうでよかった…)" },
+        { speaker: name, text: "みんな！改めて、これからよろしくね！" },
+        { speaker: "ウルペス", text: "あぁ！僕達で魔王を討伐するぞー！" },
+        { speaker: "リハス", text: "俺様に任せな！" },
+        { speaker: "スシア", text: "そうね、頑張りましょ" },
+        { speaker: "ウルペス", text: "早速提案なんだが" },
+        { speaker: "ウルペス", text: "森を少し歩いた所に僕が住んでいた村があるんだ" },
+        { speaker: "ウルペス", text: "そこの近くの洞窟の奥には伝説の剣があるという噂を昔から聞いているんだ" },
+        { speaker: "ウルペス", text: "魔王討伐に向かうならいい剣が欲しいからな" },
+        { speaker: "ウルペス", text: "まずはそこによってからいかないか？" },
+        { speaker: "リハス", text: "伝説の剣か…ワクワクするなぁ！" },
+        { speaker: "スシア", text: "魔王城に向かうのにも森を歩く必要はあるし、いいと思うわ" },
+        { speaker: name, text: `うん、${pronoun}も賛成するよ` },
+        { speaker: "ウルペス", text: "そうと決まれば、早速出発だ！" },
+        { speaker: name, text: "準備も忘れないようにしよう" },
+      ];
+    }
+
     return {
       getOpeningStory,
       getMeetingStory,
       getQuestAcceptedStory,
       getQuestEncounterStory,
+      getQuestCompletedStory,
     };
   };
 })();

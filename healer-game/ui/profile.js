@@ -72,6 +72,10 @@
       return `${getPlayerFirstName()}・${getPlayerLastName()}`;
     }
 
+    function getPlayerPronoun() {
+      return playerProfile.pronoun || DEFAULT_PRONOUN;
+    }
+
     function clampProfileName(value) {
       return Array.from((value || "").trim()).slice(0, PROFILE_NAME_MAX_LENGTH).join("");
     }
@@ -263,6 +267,7 @@
       getPlayerFirstName,
       getPlayerLastName,
       getPlayerFullName,
+      getPlayerPronoun,
       clampProfileName,
       clampProfilePronoun,
       handleProfileSetupKey,

@@ -32,6 +32,7 @@
       getMeetingStory,
       getQuestAcceptedStory,
       getQuestEncounterStory,
+      getQuestCompletedStory,
       getKeybindLabel,
       getGold,
       formatGold,
@@ -56,6 +57,15 @@
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const INN_REST_COST = 100;
+    const TUTORIAL_STORY_QUEST_ID = "story_horn_rabbit_competition_001";
+    const STORY_PATH_AHEAD_QUEST_ID = "story_path_ahead_001";
+    const TUTORIAL_STORY_RETURN_MAP_ID = "startTown01";
+    const TUTORIAL_STORY_RETURN_COL = 19;
+    const TUTORIAL_STORY_RETURN_ROW = 17;
+    const TOWN_RETURN_FADE_HOLD = 0.35;
+    const TOWN_RETURN_FADE_DURATION = 0.85;
+    const TOWN_QUEST_NOTICE_HOLD = 2;
+    const TOWN_QUEST_NOTICE_FADE = 1;
     const TOWN_WALK_ANIMATION_SEQUENCE = [2, 1, 3, 1];
     const TOWN_WALK_FRAME_INTERVAL = 0.16;
     const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
@@ -127,6 +137,58 @@
       popup.age = Math.max(0, Number(popup.age) || 0) + Math.max(0, Number(dt) || 0);
       if (popup.age >= 4) {
         town.mapNamePopup = null;
+      }
+    }
+
+    function startTownReturnFade() {
+      town.returnFade = {
+        age: 0,
+        hold: TOWN_RETURN_FADE_HOLD,
+        fade: TOWN_RETURN_FADE_DURATION,
+      };
+    }
+
+    function updateTownReturnFade(dt = 0) {
+      const fade = town.returnFade;
+      if (!fade) {
+        return;
+      }
+      fade.age = Math.max(0, Number(fade.age) || 0) + Math.max(0, Number(dt) || 0);
+      const hold = Math.max(0, Number(fade.hold) || 0);
+      const duration = Math.max(0.01, Number(fade.fade) || TOWN_RETURN_FADE_DURATION);
+      if (fade.age >= hold + duration) {
+        town.returnFade = null;
+      }
+    }
+
+    function showTownQuestNoticePopup(quest, options = {}) {
+      if (!quest) {
+        return;
+      }
+      const type = getQuestType(quest.type);
+      const typeName = options.typeName || type && type.name || "依頼";
+      const questName = String(options.questName || quest.name || "依頼");
+      town.questNoticePopup = {
+        age: 0,
+        hold: Math.max(0, Number(options.hold) || TOWN_QUEST_NOTICE_HOLD),
+        fade: Math.max(0.01, Number(options.fade) || TOWN_QUEST_NOTICE_FADE),
+        typeName,
+        questName,
+        title: options.title || `${typeName}「${questName}」`,
+        message: options.message || `${typeName}「${questName}」を受注しました`,
+      };
+    }
+
+    function updateTownQuestNoticePopup(dt = 0) {
+      const popup = town.questNoticePopup;
+      if (!popup) {
+        return;
+      }
+      popup.age = Math.max(0, Number(popup.age) || 0) + Math.max(0, Number(dt) || 0);
+      const hold = Math.max(0, Number(popup.hold) || TOWN_QUEST_NOTICE_HOLD);
+      const fade = Math.max(0.01, Number(popup.fade) || TOWN_QUEST_NOTICE_FADE);
+      if (popup.age >= hold + fade) {
+        town.questNoticePopup = null;
       }
     }
 
@@ -446,6 +508,12 @@
       const completedSymbolEncounter = returningFromBattle && game.state === "won"
         ? completedQuest && completedQuest.symbolEncounter
         : null;
+      const completedTutorialStoryEncounter = Boolean(
+        completedSymbolEncounter && completedSymbolEncounter.questId === TUTORIAL_STORY_QUEST_ID
+      );
+      const completedStoryQuest = completedSymbolEncounter && completedSymbolEncounter.questId
+        ? getQuestById(completedSymbolEncounter.questId) || completedQuest
+        : completedQuest;
       if (returningFromBattle) {
         savePartyHp();
         savePartyStatuses();
@@ -463,19 +531,26 @@
       game.currentQuest = null;
       game.message = "はじまりの町";
       game.messageTimer = 4;
-      if (completedSymbolEncounter && completedSymbolEncounter.mapId) {
+      if (completedTutorialStoryEncounter) {
+        town.mapId = TUTORIAL_STORY_RETURN_MAP_ID;
+      } else if (completedSymbolEncounter && completedSymbolEncounter.mapId) {
         town.mapId = completedSymbolEncounter.mapId;
       }
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;
       town.mapNamePopup = null;
+      town.returnFade = null;
+      town.questNoticePopup = null;
       player.aim = null;
       town.player.gridMove = null;
       if (getTownTileMap() || town.buildings.length === 0) {
         setupTown();
       }
-      if (completedSymbolEncounter && Number.isFinite(completedSymbolEncounter.returnCol) && Number.isFinite(completedSymbolEncounter.returnRow)) {
+      if (completedTutorialStoryEncounter) {
+        placeTownPlayerAtTile(getTownTileMap(), TUTORIAL_STORY_RETURN_COL, TUTORIAL_STORY_RETURN_ROW);
+        town.player.facing = "up";
+      } else if (completedSymbolEncounter && Number.isFinite(completedSymbolEncounter.returnCol) && Number.isFinite(completedSymbolEncounter.returnRow)) {
         placeTownPlayerAtTile(getTownTileMap(), completedSymbolEncounter.returnCol, completedSymbolEncounter.returnRow);
       } else if (!town.introDone) {
         const inn = getTownBuilding("inn");
@@ -503,6 +578,15 @@
         return;
       }
       beginOpeningStory();
+      if (completedTutorialStoryEncounter && !town.story) {
+        const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
+        if (Array.isArray(storyLines) && storyLines.length > 0) {
+          startTownReturnFade();
+          startTownStory(`questCompleted:${TUTORIAL_STORY_QUEST_ID}`, storyLines, () => {
+            acceptNextStoryQuestAfterTutorial();
+          });
+        }
+      }
     }
 
     function setupTown() {
@@ -554,6 +638,8 @@
 
     function updateTown(dt = 0) {
       updateTownMapNamePopup(dt);
+      updateTownReturnFade(dt);
+      updateTownQuestNoticePopup(dt);
       if (!playerProfile.done) {
         updateProfileNameInput();
         town.interaction = getTownInteraction();
@@ -564,6 +650,10 @@
         return;
       }
       if (town.story) {
+        town.interaction = null;
+        return;
+      }
+      if (town.questNoticePopup) {
         town.interaction = null;
         return;
       }
@@ -741,6 +831,14 @@
       return ensureTownCompletedQuestState()[String(questId)] === true;
     }
 
+    function isTownQuestEnabled(quest) {
+      return Boolean(quest && (
+        quest.enabled !== false
+        || isTownQuestAccepted(quest.id)
+        || isTownQuestCompleted(quest.id)
+      ));
+    }
+
     function isTownSymbolWildUnlocked(config) {
       const questId = getTownRequiredCompletedQuestIdFromSymbolConfig(config);
       return !questId || isTownQuestCompleted(questId);
@@ -752,6 +850,22 @@
       }
       ensureTownAcceptedQuestState()[String(quest.id)] = true;
       return true;
+    }
+
+    function acceptNextStoryQuestAfterTutorial() {
+      const quest = getQuestById(STORY_PATH_AHEAD_QUEST_ID);
+      if (!quest || isTownQuestCompleted(quest.id)) {
+        game.message = "クラク村に戻ってきました。";
+        game.messageTimer = 4;
+        return;
+      }
+      acceptTownQuest(quest);
+      showTownQuestNoticePopup(quest);
+      if (getTownMapId() === quest.fieldMapId) {
+        ensureTownMapSymbols(getTownTileMap());
+      }
+      game.message = `${quest.name}を受けました。${quest.fieldLocation || "出現場所"}へ向かいましょう。`;
+      game.messageTimer = 5;
     }
 
     function clearTownAcceptedQuest(questId) {
@@ -773,12 +887,15 @@
     }
 
     function isTownQuestUnavailable(quest) {
-      return Boolean(quest && (isTownQuestAccepted(quest.id) || isTownQuestCompletionBlocking(quest)));
+      return Boolean(quest && (!isTownQuestEnabled(quest) || isTownQuestAccepted(quest.id) || isTownQuestCompletionBlocking(quest)));
     }
 
     function getTownQuestUnavailableMessage(quest) {
       if (!quest) {
         return "依頼データが見つからない";
+      }
+      if (!isTownQuestEnabled(quest)) {
+        return "この依頼はまだ受けられません。";
       }
       if (isTownQuestAccepted(quest.id)) {
         return "この依頼は受注中です。";
@@ -856,6 +973,7 @@
           config
           && config.enabled !== false
           && isTownQuestAccepted(getTownQuestIdFromSymbolConfig(config))
+          && isTownQuestEnabled(getQuestById(getTownQuestIdFromSymbolConfig(config)))
         ));
       return activeWildConfigs.concat(activeQuestConfigs);
     }
@@ -1026,6 +1144,32 @@
       return null;
     }
 
+    function getTownFixedSymbolSpawnTile(tileMap, config, mapState) {
+      if (!tileMap || !config) {
+        return null;
+      }
+      const rawCol = config.spawnCol ?? config.fixedCol ?? config.tileCol ?? config.col;
+      const rawRow = config.spawnRow ?? config.fixedRow ?? config.tileRow ?? config.row;
+      const col = Math.floor(Number(rawCol));
+      const row = Math.floor(Number(rawRow));
+      if (!Number.isFinite(col) || !Number.isFinite(row)) {
+        return null;
+      }
+      const width = Math.max(0, Math.floor(Number(tileMap.width) || 0));
+      const height = Math.max(0, Math.floor(Number(tileMap.height) || 0));
+      if (col < 0 || row < 0 || col >= width || row >= height) {
+        return null;
+      }
+      if (!isTownGridTilePassable(tileMap, col, row)) {
+        return null;
+      }
+      const occupied = getTownSymbolOccupiedTiles(mapState);
+      if (occupied.has(getTownSymbolTileKey(col, row))) {
+        return null;
+      }
+      return { col, row };
+    }
+
     function makeTownMonsterSymbol(tileMap, mapId, config, configIndex, spawnTile) {
       const state = ensureTownSymbolEncounterState();
       const configId = getTownSymbolConfigId(config, configIndex);
@@ -1077,7 +1221,7 @@
         const maxCount = getTownSymbolMaxCount(config);
         let currentCount = mapState.symbols.filter((symbol) => symbol.configId === configId).length;
         while (currentCount < maxCount) {
-          const spawnTile = findTownSymbolSpawnTile(tileMap, mapState);
+          const spawnTile = getTownFixedSymbolSpawnTile(tileMap, config, mapState) || findTownSymbolSpawnTile(tileMap, mapState);
           if (!spawnTile) {
             break;
           }
@@ -1516,6 +1660,47 @@
       return applyTownGuidedStepMove(tileMap, guided);
     }
 
+    function getTownBackStepFromFacing(facing) {
+      if (facing === "up") return { x: 0, y: 1, facing: "down" };
+      if (facing === "down") return { x: 0, y: -1, facing: "up" };
+      if (facing === "left") return { x: 1, y: 0, facing: "right" };
+      if (facing === "right") return { x: -1, y: 0, facing: "left" };
+      return { x: 0, y: -1, facing: "up" };
+    }
+
+    function getTutorialTransferBlock(transfer) {
+      if (!transfer || isTownQuestCompleted(TUTORIAL_STORY_QUEST_ID)) {
+        return null;
+      }
+      const currentMapId = getTownMapId();
+      const accepted = isTownQuestAccepted(TUTORIAL_STORY_QUEST_ID);
+      if (town.meetingDone && currentMapId === "startTown01" && transfer.targetMap === "kuraku_forest_1" && !accepted) {
+        return {
+          id: "tutorialQuestRequired",
+          text: "依頼を受けよう！",
+        };
+      }
+      if (currentMapId === "kuraku_forest_1" && transfer.targetMap === "kuraku_forest_2" && accepted) {
+        return {
+          id: "tutorialQuestAreaLimit",
+          text: "依頼のモンスターはこの付近にいるはずだ！",
+        };
+      }
+      return null;
+    }
+
+    function runTownTransferBlock(tileMap, block) {
+      if (!block || !block.text) {
+        return false;
+      }
+      const backStep = getTownBackStepFromFacing(town.player && town.player.facing);
+      town.player.gridMove = null;
+      startTownStory(`transferBlock:${block.id || "default"}`, [{ text: block.text }], () => {
+        startTownGridMove(getTownTileMap() || tileMap, backStep);
+      });
+      return true;
+    }
+
     function handleTownStepEvents(tileMap) {
       if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function") {
         return false;
@@ -1532,6 +1717,10 @@
         const transfer = getTownMapTransferData(event);
         if (!transfer) {
           continue;
+        }
+        const block = getTutorialTransferBlock(transfer);
+        if (runTownTransferBlock(tileMap, block)) {
+          return true;
         }
         const options = {};
         if (Number.isFinite(transfer.targetCol) && Number.isFinite(transfer.targetRow)) {
@@ -3538,7 +3727,7 @@
     function getQuestsByType(typeKey) {
       return QUEST_DATA.quests
         .map((quest, index) => ({ quest, index }))
-        .filter((entry) => entry.quest.type === typeKey)
+        .filter((entry) => entry.quest.type === typeKey && isTownQuestEnabled(entry.quest))
         .sort((a, b) => {
           const orderDiff = getTownQuestDisplayOrder(a.quest) - getTownQuestDisplayOrder(b.quest);
           return orderDiff || a.index - b.index;

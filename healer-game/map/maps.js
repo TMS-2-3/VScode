@@ -959,6 +959,23 @@
       object: null,
       event: null,
     },
+    questSymbolEncounters: [
+      {
+        id: "story_path_ahead",
+        questId: "story_path_ahead_001",
+        name: "道の先",
+        symbolLabel: "花",
+        color: "#c86fd8",
+        rank: "D",
+        maxSymbols: 1,
+        spawnCol: 12,
+        spawnRow: 2,
+        battleId: "story_path_ahead_001",
+        enemies: [
+          { name: "フロスティーニ", role: "flostiny", x: 0.5, y: 0.5 },
+        ],
+      },
+    ],
     layers: [
       {
         id: "ground",
@@ -966,7 +983,7 @@
         tiles: [
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
@@ -1018,7 +1035,7 @@
         tiles: [
           "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
           "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
-          "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, null, null, null, null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
+          "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", null, "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree", "tree",
           "tree", "tree", "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree", "tree", "tree", "tree",
           "tree", "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree", "tree", "tree",
           "tree", "tree", "tree", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "tree", "tree", "tree", "tree",
@@ -1066,19 +1083,19 @@
       }
     ],
     events: [
-      {
-        id: "forest3_to_forest2",
-        name: "クラク森2へ",
-        type: "mapTransfer",
-        trigger: "step",
-        x: 24,
-        y: 19,
-        width: 1,
-        height: 1,
-        targetMap: "kuraku_forest_2",
-        targetCol: 24,
-        targetRow: 1,
-      },
+            {
+                    "id": "forest3_to_forest2",
+                    "name": "クラク森2へ",
+                    "type": "mapTransfer",
+                    "trigger": "step",
+                    "x": 24,
+                    "y": 19,
+                    "width": 1,
+                    "height": 1,
+                    "targetMap": "kuraku_forest_2",
+                    "targetCol": 24,
+                    "targetRow": 1
+            }
     ],
   };
   window.HEALER_DEBUG_TILE_MAPS = [
