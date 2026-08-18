@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   "use strict";
 
   window.createHealerRenderer = function createHealerRenderer(context) {
@@ -371,8 +371,8 @@
     ctx.fillText(cutin.title || "THE 戦闘！", 0, -18);
     ctx.font = "900 26px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffe08b";
-    ctx.fillText(cutin.enemyText || "敵影", 0, 42);
-    const subtitle = cutin.symbolText || cutin.subtitle || "敵と遭遇";
+    ctx.fillText(cutin.enemyText || "魔物の気配", 0, 42);
+    const subtitle = cutin.symbolText || cutin.subtitle || "魔物と遭遇";
     if (subtitle) {
       ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillStyle = "rgba(247, 255, 246, 0.86)";

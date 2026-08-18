@@ -315,7 +315,7 @@
         const dy = Number.isFinite(entry.dy) ? entry.dy : fallbackDy;
         const x = Number.isFinite(entry.x) ? bounds.left + bounds.width * entry.x : baseX + battlePx(dx);
         const y = Number.isFinite(entry.y) ? bounds.top + bounds.height * entry.y : baseY + battlePx(dy);
-        const enemy = makeEnemy(entry.name || `敵${index + 1}`, x, y, role);
+        const enemy = makeEnemy(entry.name || `魔物${index + 1}`, x, y, role);
         const point = clampBattlePoint(enemy.x, enemy.y, enemy.radius);
         enemy.x = point.x;
         enemy.y = point.y;
@@ -453,7 +453,7 @@
 
       enemies.length = 0;
       if (!spawnQuestEnemies(quest, bounds)) {
-        game.message = "敵データが設定されていません";
+        game.message = "魔物データが設定されていません";
         game.messageTimer = 4;
       }
       if (typeof preloadBattleEffects === "function") {

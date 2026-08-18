@@ -1554,7 +1554,7 @@
       { label: "状況", value: game.message || "-" },
       { label: "依頼", value: questName },
       { label: "時間", value: formatBattleTime(game.time) },
-      { label: "敵", value: `${aliveEnemies}/${enemies.length}` },
+      { label: "魔物", value: `${aliveEnemies}/${enemies.length}` },
       { label: "狙い", value: targetName },
     ];
     const rowH = Math.max(18, Math.min(22, h / Math.max(1, lines.length)));
@@ -1899,4 +1899,3 @@
     };
   };
 })();
-

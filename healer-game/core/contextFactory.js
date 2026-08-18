@@ -101,6 +101,7 @@
         getPlayerLastName: callLater("profileSystem", "getPlayerLastName"),
         getPlayerFullName: callLater("profileSystem", "getPlayerFullName"),
         getPlayerPronoun: callLater("profileSystem", "getPlayerPronoun"),
+        getTileMap: callLater("tileMapSystem", "getMap"),
       };
     }
 
@@ -559,6 +560,7 @@
         tileMapSystem: systems.tileMapSystem,
         TOWN_DATA,
         STATUS_DATA,
+        ENEMY_DEFS,
         EQUIPMENT_DATA,
         MATERIAL_DATA,
         QUEST_DATA,

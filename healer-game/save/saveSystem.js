@@ -179,6 +179,9 @@
           player: clonePlain(town.player, {}),
           acceptedQuestIds: clonePlain(town.acceptedQuestIds, {}),
           completedQuestIds: clonePlain(town.completedQuestIds, {}),
+          encounterStorySeenQuestIds: clonePlain(town.encounterStorySeenQuestIds, {}),
+          freeQuestRollsById: clonePlain(town.freeQuestRollsById, {}),
+          enemyVictoryByRole: clonePlain(town.enemyVictoryByRole, {}),
         },
         playerProfile: clonePlain(playerProfile, {}),
       };
@@ -429,6 +432,9 @@
       town.symbolEncounters = null;
       town.acceptedQuestIds = {};
       town.completedQuestIds = {};
+      town.encounterStorySeenQuestIds = {};
+      town.freeQuestRollsById = {};
+      town.enemyVictoryByRole = {};
       town.panel = null;
       town.selectedQuest = null;
       town.story = null;
@@ -513,6 +519,9 @@
       town.symbolEncounters = null;
       town.acceptedQuestIds = clonePlain(saved.acceptedQuestIds, {});
       town.completedQuestIds = clonePlain(saved.completedQuestIds, {});
+      town.encounterStorySeenQuestIds = clonePlain(saved.encounterStorySeenQuestIds, {});
+      town.freeQuestRollsById = clonePlain(saved.freeQuestRollsById, {});
+      town.enemyVictoryByRole = clonePlain(saved.enemyVictoryByRole, {});
       if (saved.player && typeof saved.player === "object") {
         Object.assign(town.player, clonePlain(saved.player, {}));
       }

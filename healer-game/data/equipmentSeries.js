@@ -71,8 +71,8 @@
           5: {
             name: "ハントアイ",
             guaranteedCritHpRatio: 0.2,
-            simpleDescription: "HPが低い敵に攻撃をする時、会心が発生する",
-            description: "HPが20%以下の敵に対する攻撃が必ず会心になる",
+            simpleDescription: "HPが低い魔物に攻撃をする時、会心が発生する",
+            description: "HPが20%以下の魔物に対する攻撃が必ず会心になる",
           },
         },
       },

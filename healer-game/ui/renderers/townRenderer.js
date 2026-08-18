@@ -42,6 +42,8 @@
       getKeybindLabel,
     } = context;
 
+  const MAX_ACCEPTED_FREE_QUESTS = 3;
+
   function getActionLabel(actionId, fallback) {
     return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
   }
@@ -62,8 +64,26 @@
     return Boolean(quest && quest.type === "story" && town && town.completedQuestIds && town.completedQuestIds[quest.id] === true);
   }
 
+  function getAcceptedFreeQuestCountForTown(ignoreQuestId = "") {
+    const ignoredId = String(ignoreQuestId || "");
+    if (!town || !town.acceptedQuestIds || typeof getQuestsByType !== "function") {
+      return 0;
+    }
+    const acceptedIds = new Set(Object.keys(town.acceptedQuestIds).filter((questId) => questId && questId !== ignoredId && town.acceptedQuestIds[questId] === true));
+    return getQuestsByType("free").filter((quest) => quest && acceptedIds.has(quest.id)).length;
+  }
+
+  function isFreeQuestAcceptLimitReachedForTown(quest) {
+    return Boolean(
+      quest
+      && quest.type === "free"
+      && !isQuestAcceptedForTown(quest)
+      && getAcceptedFreeQuestCountForTown(quest.id) >= MAX_ACCEPTED_FREE_QUESTS
+    );
+  }
+
   function isQuestUnavailableForTown(quest) {
-    return isQuestAcceptedForTown(quest) || isQuestCompletedForTown(quest);
+    return isQuestAcceptedForTown(quest) || isQuestCompletedForTown(quest) || isFreeQuestAcceptLimitReachedForTown(quest);
   }
 
   function getQuestStatusText(quest) {
@@ -72,6 +92,9 @@
     }
     if (isQuestAcceptedForTown(quest)) {
       return "受注中";
+    }
+    if (isFreeQuestAcceptLimitReachedForTown(quest)) {
+      return "受注上限";
     }
     return "";
   }
@@ -88,13 +111,38 @@
       .find((quest) => quest && isQuestAcceptedForTown(quest) && !isQuestCompletedForTown(quest)) || null;
   }
 
+  function getAcceptedFreeQuestsForTownField() {
+    if (typeof getQuestsByType !== "function") {
+      return [];
+    }
+    return getQuestsByType("free")
+      .filter((quest) => quest && isQuestAcceptedForTown(quest));
+  }
+
+  function getAcceptedFreeQuestsForReplacePanel() {
+    const panelEntries = town && town.panel && Array.isArray(town.panel.acceptedFreeQuests)
+      ? town.panel.acceptedFreeQuests
+      : [];
+    const entries = panelEntries.length
+      ? panelEntries
+      : getAcceptedFreeQuestsForTownField();
+    return entries
+      .map((entry) => {
+        const quest = entry && entry.id && typeof getQuestById === "function" ? getQuestById(entry.id) : null;
+        const name = String(quest && quest.name || entry && entry.name || "フリー依頼").trim();
+        const destination = getQuestDestinationName(quest) || String(entry && (entry.destinationName || entry.fieldLocation) || "").trim();
+        return {
+          id: entry && entry.id || quest && quest.id || "",
+          name,
+          destination,
+        };
+      })
+      .filter((entry) => entry.id);
+  }
+
   function getQuestDestinationName(quest) {
     if (!quest) {
       return "";
-    }
-    const explicit = String(quest.destinationName || quest.fieldLocation || "").trim();
-    if (explicit) {
-      return explicit;
     }
     if (quest.fieldMapId && tileMapSystem && typeof tileMapSystem.getMap === "function") {
       const map = tileMapSystem.getMap(quest.fieldMapId);
@@ -102,6 +150,10 @@
       if (mapName) {
         return mapName;
       }
+    }
+    const explicit = String(quest.destinationName || quest.fieldLocation || "").trim();
+    if (explicit) {
+      return explicit;
     }
     return String(quest.recommended || "").trim();
   }
@@ -1525,16 +1577,32 @@
     if (town.panel || town.story || (game.systemMenu && game.systemMenu.open)) {
       return;
     }
-    const quest = getActiveStoryQuestForTownField();
-    if (!quest) {
+    const activeStoryQuest = getActiveStoryQuestForTownField();
+    const entries = [];
+    if (activeStoryQuest) {
+      entries.push({
+        label: "ストーリー依頼 受注中",
+        name: String(activeStoryQuest.name || "ストーリー依頼"),
+        destination: getQuestDestinationName(activeStoryQuest),
+        color: "#ffd86b",
+      });
+    }
+    for (const quest of getAcceptedFreeQuestsForTownField()) {
+      entries.push({
+        label: "フリー依頼 受注中",
+        name: String(quest.name || "フリー依頼"),
+        destination: getQuestDestinationName(quest),
+        color: "#f7fff6",
+      });
+    }
+    if (entries.length === 0) {
       return;
     }
-    const title = String(quest.name || "ストーリー依頼");
-    const destination = getQuestDestinationName(quest);
     const x = 18;
     const y = 18;
     const w = Math.min(view.w - 36, 380);
-    const h = destination ? 80 : 58;
+    const rowH = 58;
+    const h = 16 + entries.length * rowH;
     ctx.save();
     ctx.fillStyle = "rgba(11,18,14,0.76)";
     ctx.strokeStyle = "rgba(247,255,246,0.35)";
@@ -1542,14 +1610,18 @@
     roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = "#ffd86b";
-    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText("ストーリー依頼 受注中", x + 15, y + 22);
-    drawFittedTownText(title, x + 15, y + 46, w - 30, 900, 18, 12, "#f7fff6");
-    if (destination) {
-      drawFittedTownText(`目的地: ${destination}`, x + 15, y + 68, w - 30, 800, 15, 11, "#dce9dc");
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      const rowY = y + 14 + i * rowH;
+      ctx.fillStyle = entry.color;
+      ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText(entry.label, x + 15, rowY + 12);
+      drawFittedTownText(entry.name, x + 15, rowY + 36, w - 30, 900, 18, 12, "#f7fff6");
+      if (entry.destination) {
+        drawFittedTownText(`場所: ${entry.destination}`, x + 15, rowY + 56, w - 30, 800, 15, 11, "#dce9dc");
+      }
     }
     ctx.restore();
   }
@@ -2988,8 +3060,12 @@
 
   function drawQuestDecisionPanel() {
     const quest = getQuestById(town.panel.questId);
+    const isAcceptedFreeQuest = Boolean(quest && quest.type === "free" && isQuestAcceptedForTown(quest));
+    const isAbandonConfirming = isAcceptedFreeQuest && Boolean(town.panel && town.panel.abandonConfirm);
+    const isAcceptLimitReached = Boolean(quest && isFreeQuestAcceptLimitReachedForTown(quest));
+    const isReplaceChoosing = Boolean(quest && town.panel && town.panel.replaceQuestId === quest.id);
     const w = Math.min(720, view.w - 32);
-    const h = 360;
+    const h = isReplaceChoosing ? 430 : 360;
     const x = (view.w - w) / 2;
     const y = view.h - h - 28;
     drawPanel(x, y, w, h);
@@ -3011,13 +3087,55 @@
     ctx.fillStyle = "#ffd86b";
     ctx.font = "800 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(`${quest.rank || "-"}  ${quest.name}`, x + 26, y + 82);
+
+    if (isReplaceChoosing) {
+      const messageLines = [
+        `フリー依頼は同時に${MAX_ACCEPTED_FREE_QUESTS}つまでです。`,
+        `${quest.name}を受けるには、受注中の依頼を1つ破棄してください。`,
+      ];
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      let messageY = y + 118;
+      for (const line of messageLines) {
+        ctx.fillText(line, x + 26, messageY);
+        messageY += 22;
+      }
+      const abandonQuests = getAcceptedFreeQuestsForReplacePanel();
+      const rowX = x + 26;
+      const rowW = w - 52;
+      const rowH = 54;
+      const rowGap = 10;
+      const rowStartY = y + 174;
+      for (let i = 0; i < abandonQuests.length; i += 1) {
+        const entry = abandonQuests[i];
+        const rowY = rowStartY + i * (rowH + rowGap);
+        drawQuestButton(rowX, rowY, rowW, rowH, `破棄して受注: ${entry.name}`, entry.destination ? `場所: ${entry.destination}` : "場所: -", {
+          kind: "replaceFreeQuest",
+          abandonQuestId: entry.id,
+        });
+      }
+      if (abandonQuests.length === 0) {
+        ctx.fillStyle = "#ffb4a8";
+        ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+        ctx.fillText("破棄できる受注中フリー依頼がありません。", rowX, rowStartY + 24);
+      }
+      drawTextButton(x + 24, y + h - 60, 130, 38, "戻る", { kind: "backToQuestList", type: quest.type });
+      drawTextButton(x + w - 214, y + h - 60, 190, 38, "受注をやめる", { kind: "cancelReplaceFreeQuest" }, true);
+      ctx.textAlign = "right";
+      ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(`${getBackLabel()}  閉じる`, x + w - 24, y + h - 76);
+      return;
+    }
+
     ctx.fillStyle = "#dce9dc";
     ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const fieldLocation = getQuestDestinationName(quest);
     const lines = [
       quest.summary,
-      `目的: ${quest.objective || "敵を全滅させる"}`,
-      `敵情報: ${quest.enemyPreview || "不明"}`,
-      quest.fieldLocation ? `出現場所: ${quest.fieldLocation}` : null,
+      `目的: ${quest.objective || "魔物を全滅させる"}`,
+      `魔物情報: ${quest.enemyPreview || "不明"}`,
+      fieldLocation ? `出現場所: ${fieldLocation}` : null,
       `推奨: ${quest.recommended || "-"}`,
       `報酬: ${quest.reward || "未定"}`,
     ].filter(Boolean);
@@ -3033,11 +3151,25 @@
     if (statusText || town.panel.message) {
       ctx.fillStyle = statusText ? "#ffd86b" : "#ffb4a8";
       ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText(statusText ? `状態: ${statusText}` : town.panel.message, x + 26, y + h - 82);
+      const message = isAbandonConfirming && town.panel.message
+        ? town.panel.message
+        : statusText
+          ? `状態: ${statusText}`
+          : town.panel.message;
+      ctx.fillText(message, x + 26, y + h - 82);
     }
 
     drawTextButton(x + 24, y + h - 60, 130, 38, "戻る", { kind: "backToQuestList", type: quest.type });
-    drawTextButton(x + w - 214, y + h - 60, 190, 38, statusText ? "受注不可" : "この依頼を受ける", { kind: "confirmQuest" }, true, Boolean(statusText));
+    if (isAbandonConfirming) {
+      drawTextButton(x + w - 390, y + h - 60, 160, 38, "やめる", { kind: "cancelAbandonQuest" });
+      drawTextButton(x + w - 214, y + h - 60, 190, 38, "破棄する", { kind: "confirmAbandonQuest" }, true);
+    } else if (isAcceptedFreeQuest) {
+      drawTextButton(x + w - 214, y + h - 60, 190, 38, "受注を破棄", { kind: "promptAbandonQuest" }, true);
+    } else if (isAcceptLimitReached) {
+      drawTextButton(x + w - 214, y + h - 60, 190, 38, "受注枠を空ける", { kind: "confirmQuest" }, true);
+    } else {
+      drawTextButton(x + w - 214, y + h - 60, 190, 38, statusText ? "受注不可" : "この依頼を受ける", { kind: "confirmQuest" }, true, Boolean(statusText));
+    }
     ctx.textAlign = "right";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffffff";

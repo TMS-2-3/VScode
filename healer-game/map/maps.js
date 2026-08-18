@@ -160,6 +160,34 @@
           ],
         }
       ],
+      symbolEncounters: [
+        {
+          id: "wild_horn_rabbit",
+          name: "ツノウサギ",
+          symbolLabel: "兎",
+          color: "#d2b16a",
+          enemyId: "horn_rabbit",
+          enemyCountMin: 2,
+          enemyCountMax: 4,
+          maxSymbols: 3,
+          objective: "ツノウサギを討伐する",
+          reward: "魔物ドロップ",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+        },
+        {
+          id: "wild_bud_alraune",
+          name: "つぼみのアルラウネ",
+          symbolLabel: "蕾",
+          color: "#76a96a",
+          enemyId: "bud_alraune",
+          enemyCountMin: 2,
+          enemyCountMax: 4,
+          maxSymbols: 3,
+          objective: "つぼみのアルラウネを討伐する",
+          reward: "魔物ドロップ",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+        },
+      ],
       events: [
               {
                       "id": "forest_to_start_town",
@@ -318,6 +346,34 @@
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           ],
         }
+      ],
+      symbolEncounters: [
+        {
+          id: "wild_bud_alraune",
+          name: "つぼみのアルラウネ",
+          symbolLabel: "蕾",
+          color: "#76a96a",
+          enemyId: "bud_alraune",
+          enemyCountMin: 2,
+          enemyCountMax: 4,
+          maxSymbols: 3,
+          objective: "つぼみのアルラウネを討伐する",
+          reward: "魔物ドロップ",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+        },
+        {
+          id: "wild_shadow_wolf",
+          name: "シャドウウルフ",
+          symbolLabel: "狼",
+          color: "#59617d",
+          enemyId: "shadow_wolf",
+          enemyCountMin: 2,
+          enemyCountMax: 4,
+          maxSymbols: 3,
+          objective: "シャドウウルフを討伐する",
+          reward: "魔物ドロップ",
+          requiresQuestCompleted: "story_horn_rabbit_competition_001",
+        },
       ],
       events: [
               {

@@ -17,6 +17,7 @@
       tileMapSystem,
       TOWN_DATA,
       STATUS_DATA,
+      ENEMY_DEFS,
       EQUIPMENT_DATA,
       MATERIAL_DATA,
       QUEST_DATA,
@@ -66,6 +67,7 @@
     const TOWN_RETURN_FADE_DURATION = 0.85;
     const TOWN_QUEST_NOTICE_HOLD = 2;
     const TOWN_QUEST_NOTICE_FADE = 1;
+    const MAX_ACCEPTED_FREE_QUESTS = 3;
     const TOWN_WALK_ANIMATION_SEQUENCE = [2, 1, 3, 1];
     const TOWN_WALK_FRAME_INTERVAL = 0.16;
     const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
@@ -517,6 +519,9 @@
       if (returningFromBattle) {
         savePartyHp();
         savePartyStatuses();
+        if (game.state === "won") {
+          recordTownEnemyVictoriesFromBattle(completedQuest, enemies);
+        }
       }
       projectiles.length = 0;
       telegraphs.length = 0;
@@ -585,6 +590,11 @@
           startTownStory(`questCompleted:${TUTORIAL_STORY_QUEST_ID}`, storyLines, () => {
             acceptNextStoryQuestAfterTutorial();
           });
+        }
+      } else if (completedSymbolEncounter && completedStoryQuest && completedStoryQuest.type === "story" && !town.story) {
+        const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
+        if (Array.isArray(storyLines) && storyLines.length > 0) {
+          startTownStory(`questCompleted:${completedStoryQuest.id}`, storyLines);
         }
       }
     }
@@ -801,6 +811,350 @@
       return town.completedQuestIds;
     }
 
+    function ensureTownEncounterStorySeenState() {
+      if (!town.encounterStorySeenQuestIds || typeof town.encounterStorySeenQuestIds !== "object" || Array.isArray(town.encounterStorySeenQuestIds)) {
+        town.encounterStorySeenQuestIds = {};
+      }
+      return town.encounterStorySeenQuestIds;
+    }
+
+    function ensureTownFreeQuestRollState() {
+      if (!town.freeQuestRollsById || typeof town.freeQuestRollsById !== "object" || Array.isArray(town.freeQuestRollsById)) {
+        town.freeQuestRollsById = {};
+      }
+      return town.freeQuestRollsById;
+    }
+
+    function ensureTownEnemyVictoryState() {
+      if (!town.enemyVictoryByRole || typeof town.enemyVictoryByRole !== "object" || Array.isArray(town.enemyVictoryByRole)) {
+        town.enemyVictoryByRole = {};
+      }
+      return town.enemyVictoryByRole;
+    }
+
+    function markTownEnemyVictory(role) {
+      const key = String(role || "").trim();
+      if (!key) {
+        return;
+      }
+      ensureTownEnemyVictoryState()[key] = true;
+    }
+
+    function getTownQuestRequiredEnemyVictory(quest) {
+      const role = quest && (
+        quest.requiresEnemyVictory
+        || quest.requiredEnemyVictory
+        || quest.requiredEnemyVictoryRole
+        || quest.requiredEnemyRole
+        || quest.unlockEnemyId
+      );
+      return role ? String(role) : "";
+    }
+
+    function isTownEnemyVictoryUnlocked(role) {
+      const key = String(role || "").trim();
+      return !key || ensureTownEnemyVictoryState()[key] === true;
+    }
+
+    function recordTownEnemyVictoriesFromBattle(quest, battleEnemies) {
+      const roles = new Set();
+      const addRole = (role) => {
+        const key = String(role || "").trim();
+        if (key) {
+          roles.add(key);
+        }
+      };
+      if (Array.isArray(battleEnemies)) {
+        for (const enemy of battleEnemies) {
+          if (enemy && enemy.team === "enemy") {
+            addRole(enemy.role || enemy.enemyId || enemy.type || enemy.id);
+          }
+        }
+      }
+      if (Array.isArray(quest && quest.enemies)) {
+        for (const entry of quest.enemies) {
+          addRole(entry && (entry.role || entry.enemyId || entry.type || entry.id));
+        }
+      }
+      if (Array.isArray(quest && quest.fieldEnemies)) {
+        for (const entry of quest.fieldEnemies) {
+          addRole(entry && (entry.role || entry.enemyId || entry.type || entry.id));
+        }
+      }
+      addRole(quest && (quest.fieldEnemyId || quest.enemyId || quest.role));
+      for (const role of roles) {
+        markTownEnemyVictory(role);
+      }
+    }
+
+    function getTownRawQuestById(questId) {
+      const id = String(questId || "");
+      return QUEST_DATA && Array.isArray(QUEST_DATA.quests)
+        ? QUEST_DATA.quests.find((quest) => quest && quest.id === id) || null
+        : null;
+    }
+
+    function getTownQuestMapName(mapId) {
+      if (!mapId || !tileMapSystem || typeof tileMapSystem.getMap !== "function") {
+        return "";
+      }
+      const map = tileMapSystem.getMap(mapId);
+      return String(map && (map.name || map.label || map.title) || "").trim();
+    }
+
+    function getTownQuestMapPool(quest) {
+      const rawPool = Array.isArray(quest && quest.fieldMapPool)
+        ? quest.fieldMapPool
+        : Array.isArray(quest && quest.fieldMaps)
+          ? quest.fieldMaps
+          : null;
+      const pool = rawPool
+        ? rawPool.map((entry) => String(entry || "").trim()).filter(Boolean)
+        : [];
+      if (pool.length > 0) {
+        return pool;
+      }
+      const mapId = String(quest && quest.fieldMapId || "").trim();
+      return mapId ? [mapId] : [];
+    }
+
+    function isTownFreeQuestRollable(quest) {
+      return Boolean(quest && quest.type === "free" && (
+        getTownQuestMapPool(quest).length > 0
+        || quest.rewardRollEnemyId
+        || quest.rewardSourceEnemyId
+      ));
+    }
+
+    function chooseTownQuestMapId(quest) {
+      const pool = getTownQuestMapPool(quest);
+      if (pool.length === 0) {
+        return String(quest && quest.fieldMapId || "").trim();
+      }
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    function normalizeTownDropChance(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return 1;
+      }
+      return clamp(numeric > 1 ? numeric / 100 : numeric, 0, 1);
+    }
+
+    function normalizeTownDropReward(drop) {
+      if (!drop) {
+        return null;
+      }
+      const amount = Math.max(0, Math.floor(Number(drop.amount ?? drop.count ?? 1) || 0));
+      if (amount <= 0) {
+        return null;
+      }
+      if (drop.type === "currency" || drop.key === "gold" || drop.currency === "gold") {
+        return {
+          type: "currency",
+          key: drop.key || drop.currency || "gold",
+          name: drop.name || "お金",
+          amount,
+        };
+      }
+      if (drop.type === "material") {
+        return {
+          type: "material",
+          key: drop.key || drop.id || drop.name || "material",
+          name: drop.name || drop.id || drop.key || "素材",
+          count: amount,
+        };
+      }
+      return {
+        type: "item",
+        key: drop.key || drop.id || drop.name || "item",
+        name: drop.name || drop.id || drop.key || "アイテム",
+        count: amount,
+      };
+    }
+
+    function isTownQuestRewardDropAllowed(quest, drop) {
+      const reward = normalizeTownDropReward(drop);
+      if (!reward) {
+        return false;
+      }
+      if (reward.type === "currency") {
+        return quest.rewardRollIncludeCurrency === true;
+      }
+      if (reward.type === "material") {
+        return quest.rewardRollIncludeMaterials !== false;
+      }
+      return quest.rewardRollIncludeItems === true;
+    }
+
+    function getTownQuestRewardPool(quest) {
+      const enemyId = String(quest && (quest.rewardSourceEnemyId || quest.rewardRollEnemyId || quest.fieldEnemyId) || "").trim();
+      const enemy = enemyId && ENEMY_DEFS ? ENEMY_DEFS[enemyId] : null;
+      const drops = Array.isArray(enemy && enemy.drops) ? enemy.drops : [];
+      return drops
+        .map((drop) => ({
+          reward: normalizeTownDropReward(drop),
+          weight: normalizeTownDropChance(drop && drop.chance),
+          drop,
+        }))
+        .filter((entry) => entry.reward && entry.weight > 0 && isTownQuestRewardDropAllowed(quest, entry.drop));
+    }
+
+    function pickTownWeightedReward(pool) {
+      const totalWeight = pool.reduce((sum, entry) => sum + Math.max(0, entry.weight || 0), 0);
+      if (totalWeight <= 0) {
+        return null;
+      }
+      let roll = Math.random() * totalWeight;
+      for (const entry of pool) {
+        roll -= Math.max(0, entry.weight || 0);
+        if (roll <= 0) {
+          return { ...entry.reward };
+        }
+      }
+      return pool.length ? { ...pool[pool.length - 1].reward } : null;
+    }
+
+    function getTownRewardMergeKey(reward) {
+      return `${reward && reward.type || "item"}:${reward && reward.key || reward && reward.name || ""}`;
+    }
+
+    function mergeTownRewardEntries(entries) {
+      const merged = [];
+      for (const reward of Array.isArray(entries) ? entries : []) {
+        if (!reward) {
+          continue;
+        }
+        const key = getTownRewardMergeKey(reward);
+        const existing = merged.find((entry) => getTownRewardMergeKey(entry) === key);
+        if (existing) {
+          if (reward.type === "currency") {
+            existing.amount = (existing.amount || 0) + (reward.amount || 0);
+          } else {
+            existing.count = (existing.count || 0) + (reward.count || 0);
+          }
+          continue;
+        }
+        merged.push({ ...reward });
+      }
+      return merged;
+    }
+
+    function rollTownQuestRewards(quest) {
+      const count = Math.max(0, Math.floor(Number(quest && quest.rewardRollCount) || 0));
+      if (count <= 0) {
+        return [];
+      }
+      const pool = getTownQuestRewardPool(quest);
+      const rewards = [];
+      for (let i = 0; i < count; i += 1) {
+        const reward = pickTownWeightedReward(pool);
+        if (reward) {
+          rewards.push(reward);
+        }
+      }
+      return mergeTownRewardEntries(rewards);
+    }
+
+    function formatTownQuestRewardEntries(entries) {
+      const rewards = mergeTownRewardEntries(entries);
+      if (!rewards.length) {
+        return "";
+      }
+      return rewards.map((reward) => {
+        if (reward.type === "currency") {
+          return formatGoldSafe(reward.amount || 0);
+        }
+        return `${reward.name || reward.key || "報酬"} x${Math.max(0, reward.count || reward.amount || 0)}`;
+      }).join(" / ");
+    }
+
+    function cloneTownRewardEntries(entries) {
+      return Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : [];
+    }
+
+    function rollTownFreeQuest(quest) {
+      if (!isTownFreeQuestRollable(quest)) {
+        return null;
+      }
+      const rolls = ensureTownFreeQuestRollState();
+      const fieldMapId = chooseTownQuestMapId(quest);
+      const rewards = rollTownQuestRewards(quest);
+      const rewardText = formatTownQuestRewardEntries(rewards);
+      const mapName = getTownQuestMapName(fieldMapId);
+      const roll = {
+        fieldMapId,
+        fieldLocation: mapName || fieldMapId,
+        rewards,
+        reward: rewardText || quest.reward || "未定",
+        rolledAt: Date.now(),
+      };
+      rolls[quest.id] = roll;
+      return roll;
+    }
+
+    function ensureTownFreeQuestRoll(quest) {
+      if (!isTownFreeQuestRollable(quest)) {
+        return null;
+      }
+      const rolls = ensureTownFreeQuestRollState();
+      const current = rolls[quest.id];
+      if (current && typeof current === "object" && current.fieldMapId) {
+        current.rewards = cloneTownRewardEntries(current.rewards);
+        current.reward = current.reward || formatTownQuestRewardEntries(current.rewards) || quest.reward || "未定";
+        current.fieldLocation = current.fieldLocation || getTownQuestMapName(current.fieldMapId) || current.fieldMapId;
+        return current;
+      }
+      return rollTownFreeQuest(quest);
+    }
+
+    function getTownQuestView(quest) {
+      if (!quest) {
+        return null;
+      }
+      const requiredQuestId = getTownRequiredCompletedQuestIdFromSymbolConfig(quest);
+      if (requiredQuestId && !isTownQuestCompleted(requiredQuestId) && !isTownQuestAccepted(quest.id) && !isTownQuestCompleted(quest.id)) {
+        return quest;
+      }
+      const requiredEnemyRole = getTownQuestRequiredEnemyVictory(quest);
+      if (requiredEnemyRole && !isTownEnemyVictoryUnlocked(requiredEnemyRole) && !isTownQuestAccepted(quest.id) && !isTownQuestCompleted(quest.id)) {
+        return quest;
+      }
+      if (!isTownFreeQuestRollable(quest)) {
+        return quest;
+      }
+      const roll = ensureTownFreeQuestRoll(quest);
+      if (!roll) {
+        return quest;
+      }
+      return {
+        ...quest,
+        fieldMapId: roll.fieldMapId || quest.fieldMapId,
+        fieldLocation: roll.fieldLocation || quest.fieldLocation,
+        reward: roll.reward || quest.reward,
+        rewards: cloneTownRewardEntries(roll.rewards),
+        rolledAt: roll.rolledAt || null,
+      };
+    }
+
+    function shouldPlayTownQuestEncounterStory(quest) {
+      if (!quest || !quest.id) {
+        return false;
+      }
+      if (quest.encounterStoryOnce === true && ensureTownEncounterStorySeenState()[String(quest.id)] === true) {
+        return false;
+      }
+      return true;
+    }
+
+    function markTownQuestEncounterStorySeen(quest) {
+      if (!quest || !quest.id || quest.encounterStoryOnce !== true) {
+        return;
+      }
+      ensureTownEncounterStorySeenState()[String(quest.id)] = true;
+    }
+
     function getTownQuestIdFromSymbolConfig(config) {
       const questId = config && (config.questId || config.quest || config.questKey);
       return questId ? String(questId) : "";
@@ -831,12 +1185,28 @@
       return ensureTownCompletedQuestState()[String(questId)] === true;
     }
 
+    function isTownAcceptedFreeQuest(quest) {
+      return Boolean(quest && quest.type === "free" && isTownQuestAccepted(quest.id));
+    }
+
     function isTownQuestEnabled(quest) {
-      return Boolean(quest && (
-        quest.enabled !== false
-        || isTownQuestAccepted(quest.id)
-        || isTownQuestCompleted(quest.id)
-      ));
+      if (!quest) {
+        return false;
+      }
+      const accepted = isTownQuestAccepted(quest.id);
+      const completed = isTownQuestCompleted(quest.id);
+      if (quest.enabled === false && !accepted && !completed) {
+        return false;
+      }
+      const requiredQuestId = getTownRequiredCompletedQuestIdFromSymbolConfig(quest);
+      if (requiredQuestId && !isTownQuestCompleted(requiredQuestId) && !accepted && !completed) {
+        return false;
+      }
+      const requiredEnemyRole = getTownQuestRequiredEnemyVictory(quest);
+      if (requiredEnemyRole && !isTownEnemyVictoryUnlocked(requiredEnemyRole) && !accepted && !completed) {
+        return false;
+      }
+      return true;
     }
 
     function isTownSymbolWildUnlocked(config) {
@@ -852,6 +1222,20 @@
       return true;
     }
 
+    function getTownQuestDestinationName(quest) {
+      if (!quest) {
+        return "";
+      }
+      if (quest.fieldMapId && tileMapSystem && typeof tileMapSystem.getMap === "function") {
+        const map = tileMapSystem.getMap(quest.fieldMapId);
+        const mapName = String(map && (map.name || map.label || map.title) || "").trim();
+        if (mapName) {
+          return mapName;
+        }
+      }
+      return String(quest.destinationName || quest.fieldLocation || quest.recommended || "").trim();
+    }
+
     function acceptNextStoryQuestAfterTutorial() {
       const quest = getQuestById(STORY_PATH_AHEAD_QUEST_ID);
       if (!quest || isTownQuestCompleted(quest.id)) {
@@ -864,7 +1248,7 @@
       if (getTownMapId() === quest.fieldMapId) {
         ensureTownMapSymbols(getTownTileMap());
       }
-      game.message = `${quest.name}を受けました。${quest.fieldLocation || "出現場所"}へ向かいましょう。`;
+      game.message = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
       game.messageTimer = 5;
     }
 
@@ -875,19 +1259,73 @@
       delete ensureTownAcceptedQuestState()[String(questId)];
     }
 
+    function clearTownQuestSymbols(questId) {
+      const id = String(questId || "");
+      if (!id) {
+        return;
+      }
+      const state = ensureTownSymbolEncounterState();
+      const maps = state.byMapId && typeof state.byMapId === "object" ? state.byMapId : {};
+      for (const mapState of Object.values(maps)) {
+        if (!mapState || !Array.isArray(mapState.symbols)) {
+          continue;
+        }
+        mapState.symbols = mapState.symbols.filter((symbol) => symbol && symbol.questId !== id);
+      }
+      if (state.pendingBattle && state.pendingBattle.questId === id) {
+        state.pendingBattle = null;
+      }
+    }
+
     function completeTownQuest(questId) {
       if (!questId) {
         return;
       }
       ensureTownCompletedQuestState()[String(questId)] = true;
+      const quest = getTownRawQuestById(questId);
+      if (quest && quest.type === "free") {
+        rollTownFreeQuest(quest);
+      }
     }
 
     function isTownQuestCompletionBlocking(quest) {
       return Boolean(quest && quest.type === "story" && isTownQuestCompleted(quest.id));
     }
 
+    function getTownAcceptedFreeQuestCount(ignoreQuestId = "") {
+      const ignoredId = String(ignoreQuestId || "");
+      return Object.keys(ensureTownAcceptedQuestState())
+        .filter((questId) => questId && questId !== ignoredId)
+        .filter((questId) => {
+          const quest = getTownRawQuestById(questId);
+          return Boolean(quest && quest.type === "free" && isTownQuestAccepted(questId));
+        })
+        .length;
+    }
+
+    function getTownAcceptedFreeQuestViews() {
+      return Object.keys(ensureTownAcceptedQuestState())
+        .filter((questId) => isTownQuestAccepted(questId))
+        .map((questId) => getQuestById(questId))
+        .filter((quest) => isTownAcceptedFreeQuest(quest));
+    }
+
+    function isTownFreeQuestAcceptLimitReached(quest) {
+      return Boolean(
+        quest
+        && quest.type === "free"
+        && !isTownQuestAccepted(quest.id)
+        && getTownAcceptedFreeQuestCount(quest.id) >= MAX_ACCEPTED_FREE_QUESTS
+      );
+    }
+
     function isTownQuestUnavailable(quest) {
-      return Boolean(quest && (!isTownQuestEnabled(quest) || isTownQuestAccepted(quest.id) || isTownQuestCompletionBlocking(quest)));
+      return Boolean(quest && (
+        !isTownQuestEnabled(quest)
+        || isTownQuestAccepted(quest.id)
+        || isTownQuestCompletionBlocking(quest)
+        || isTownFreeQuestAcceptLimitReached(quest)
+      ));
     }
 
     function getTownQuestUnavailableMessage(quest) {
@@ -902,6 +1340,9 @@
       }
       if (isTownQuestCompletionBlocking(quest)) {
         return "この依頼はクリア済みです。";
+      }
+      if (isTownFreeQuestAcceptLimitReached(quest)) {
+        return `フリー依頼を同時に受注できるのは${MAX_ACCEPTED_FREE_QUESTS}つまでです。`;
       }
       return "";
     }
@@ -946,6 +1387,67 @@
       return state.byMapId[key];
     }
 
+    function getTownFieldQuestSymbolConfig(quest) {
+      if (!quest || !quest.id || !quest.fieldMapId) {
+        return null;
+      }
+      const fieldEnemies = Array.isArray(quest.fieldEnemies)
+        ? quest.fieldEnemies.map((entry) => ({ ...entry })).filter(Boolean)
+        : null;
+      const fieldEnemyId = String(quest.fieldEnemyId || quest.enemyId || quest.role || "").trim();
+      if ((!fieldEnemies || fieldEnemies.length === 0) && !fieldEnemyId) {
+        return null;
+      }
+      const fieldEnemyCount = Math.max(1, Math.floor(Number(quest.fieldEnemyCount ?? quest.enemyCount ?? 1) || 1));
+      const rawCol = quest.fieldTargetCol ?? quest.fieldSpawnCol ?? quest.spawnCol ?? quest.fixedCol;
+      const rawRow = quest.fieldTargetRow ?? quest.fieldSpawnRow ?? quest.spawnRow ?? quest.fixedRow;
+      const hasFixedTile = Number.isFinite(Number(rawCol)) && Number.isFinite(Number(rawRow));
+      const config = {
+        id: `quest_${quest.id}`,
+        questId: quest.id,
+        battleId: quest.battleId || quest.id,
+        name: quest.name || "依頼シンボル",
+        label: quest.name || "依頼シンボル",
+        symbolLabel: quest.symbolLabel || "依",
+        color: quest.symbolColor || (quest.type === "story" ? "#ffd86b" : "#f7fff6"),
+        rank: quest.rank || "D",
+        objective: quest.objective || "魔物を全滅させる",
+        enemyPreview: quest.enemyPreview || null,
+        reward: quest.reward || null,
+        rewards: cloneTownRewardEntries(quest.rewards),
+        maxSymbols: 1,
+        radius: quest.symbolRadius || 16,
+      };
+      if (fieldEnemies && fieldEnemies.length > 0) {
+        config.enemies = fieldEnemies;
+      } else {
+        config.enemyId = fieldEnemyId;
+        config.enemyCount = fieldEnemyCount;
+      }
+      if (hasFixedTile) {
+        config.spawnCol = Math.floor(Number(rawCol));
+        config.spawnRow = Math.floor(Number(rawRow));
+        config.stationary = quest.stationarySymbol !== false;
+      }
+      return config;
+    }
+
+    function getTownAcceptedFieldQuestSymbolConfigs(tileMap, existingQuestIds) {
+      const mapId = getTownSymbolMapId(tileMap);
+      if (!mapId || !QUEST_DATA || !Array.isArray(QUEST_DATA.quests)) {
+        return [];
+      }
+      return QUEST_DATA.quests
+        .map((quest) => getTownQuestView(quest))
+        .filter((quest) => quest
+          && quest.fieldMapId === mapId
+          && isTownQuestAccepted(quest.id)
+          && isTownQuestEnabled(quest)
+          && !existingQuestIds.has(quest.id))
+        .map((quest) => getTownFieldQuestSymbolConfig(quest))
+        .filter(Boolean);
+    }
+
     function getTownSymbolEncounterConfigs(tileMap = getTownTileMap()) {
       const wildConfigs = [];
       const questConfigs = [];
@@ -961,6 +1463,14 @@
           }
         }
       }
+      const existingQuestIds = new Set();
+      for (const config of questConfigs.concat(wildConfigs)) {
+        const questId = getTownQuestIdFromSymbolConfig(config);
+        if (questId) {
+          existingQuestIds.add(questId);
+        }
+      }
+      questConfigs.push(...getTownAcceptedFieldQuestSymbolConfigs(tileMap, existingQuestIds));
       const activeWildConfigs = wildConfigs.filter((config) => (
         config
         && config.enabled !== false
@@ -996,7 +1506,32 @@
       return Math.max(0, Math.min(SYMBOL_ENCOUNTER_MAX_PER_CONFIG, value));
     }
 
+    function getTownSymbolRandomEnemyCountRange(config) {
+      const range = Array.isArray(config && config.enemyCountRange)
+        ? config.enemyCountRange
+        : null;
+      const rawMin = range
+        ? range[0]
+        : config && (config.enemyCountMin ?? config.minEnemyCount ?? config.minEnemies);
+      const rawMax = range
+        ? range[1]
+        : config && (config.enemyCountMax ?? config.maxEnemyCount ?? config.maxEnemies);
+      if (!Number.isFinite(Number(rawMin)) || !Number.isFinite(Number(rawMax))) {
+        return null;
+      }
+      const a = Math.max(1, Math.floor(Number(rawMin)));
+      const b = Math.max(1, Math.floor(Number(rawMax)));
+      return {
+        min: Math.min(a, b),
+        max: Math.max(a, b),
+      };
+    }
+
     function getTownSymbolEnemyCount(config) {
+      const range = getTownSymbolRandomEnemyCountRange(config);
+      if (range) {
+        return range.min + Math.floor(Math.random() * (range.max - range.min + 1));
+      }
       const value = Math.floor(Number(config && (config.enemyCount ?? config.enemyCountPerSymbol ?? config.battleCount)) || 3);
       return Math.max(1, value);
     }
@@ -1043,6 +1578,37 @@
       }
       const enemyCount = getTownSymbolEnemyCount(config);
       return Array.from({ length: enemyCount }, () => ({ role: ids[0] }));
+    }
+
+    function getTownSymbolEnemyEntryLabel(entry, fallback = "") {
+      if (!entry) {
+        return fallback;
+      }
+      const role = String(entry.role || "").trim();
+      return String(entry.name || entry.label || fallback || role || "魔物").trim();
+    }
+
+    function buildTownSymbolEnemyPreview(config, enemyEntries) {
+      if (!Array.isArray(enemyEntries) || enemyEntries.length === 0) {
+        return config && config.enemyPreview || null;
+      }
+      const singleRole = enemyEntries[0] && enemyEntries[0].role;
+      const allSameRole = singleRole && enemyEntries.every((entry) => entry && entry.role === singleRole);
+      if (allSameRole) {
+        const name = String(config && (config.enemyName || config.name || config.label) || getTownSymbolEnemyEntryLabel(enemyEntries[0], singleRole)).trim();
+        return `${name} x${enemyEntries.length}`;
+      }
+      const counts = new Map();
+      const order = [];
+      for (const entry of enemyEntries) {
+        const label = getTownSymbolEnemyEntryLabel(entry);
+        if (!counts.has(label)) {
+          counts.set(label, 0);
+          order.push(label);
+        }
+        counts.set(label, counts.get(label) + 1);
+      }
+      return order.map((label) => `${label} x${counts.get(label)}`).join(" / ");
     }
 
     function getTownSymbolLabel(config) {
@@ -1175,6 +1741,9 @@
       const configId = getTownSymbolConfigId(config, configIndex);
       const center = getTownTileCenter(tileMap, spawnTile.col, spawnTile.row);
       const enemyEntries = resolveTownSymbolEnemyEntries(config);
+      const enemyPreview = getTownSymbolRandomEnemyCountRange(config)
+        ? buildTownSymbolEnemyPreview(config, enemyEntries)
+        : (config.enemyPreview || buildTownSymbolEnemyPreview(config, enemyEntries));
       return {
         type: "monsterSymbol",
         id: `${mapId}:${configId}:${state.nextId++}`,
@@ -1187,7 +1756,7 @@
         questId: getTownQuestIdFromSymbolConfig(config) || null,
         battleId: config.battleId || null,
         objective: config.objective || null,
-        enemyPreview: config.enemyPreview || null,
+        enemyPreview,
         reward: config.reward || null,
         rewards: Array.isArray(config.rewards) ? config.rewards.map((entry) => ({ ...entry })) : null,
         col: spawnTile.col,
@@ -1200,6 +1769,7 @@
         chaseTimer: 0,
         radius: Math.max(10, Number(config.radius) || 16),
         stationary: config.stationary === true || config.fixedPosition === true || config.noMove === true,
+        enemyCount: enemyEntries.length,
         enemyEntries,
       };
     }
@@ -1684,7 +2254,7 @@
       if (currentMapId === "kuraku_forest_1" && transfer.targetMap === "kuraku_forest_2" && accepted) {
         return {
           id: "tutorialQuestAreaLimit",
-          text: "依頼のモンスターはこの付近にいるはずだ！",
+          text: "依頼の魔物はこの付近にいるはずだ！",
         };
       }
       return null;
@@ -1883,8 +2453,11 @@
       if (!quest) {
         return false;
       }
-      const storyLines = typeof getQuestEncounterStory === "function" ? getQuestEncounterStory(quest) : [];
+      const storyLines = shouldPlayTownQuestEncounterStory(quest) && typeof getQuestEncounterStory === "function"
+        ? getQuestEncounterStory(quest)
+        : [];
       if (Array.isArray(storyLines) && storyLines.length > 0) {
+        markTownQuestEncounterStorySeen(quest);
         town.player.gridMove = null;
         startTownStory(`questEncounter:${quest.id}`, storyLines, () => {
           beginTownSymbolEncounterBattle(quest, symbols);
@@ -1923,7 +2496,7 @@
           }
         }
       }
-      return names.length ? Array.from(new Set(names)).join(" / ") : "敵影";
+      return names.length ? Array.from(new Set(names)).join(" / ") : "魔物の気配";
     }
 
     function getEncounterCutinSymbolText(symbols) {
@@ -1950,7 +2523,7 @@
         duration: ENCOUNTER_CUTIN_DURATION,
         quest,
         title: "THE 戦闘！",
-        subtitle: quest && quest.name ? quest.name : "敵と遭遇",
+        subtitle: quest && quest.name ? quest.name : "魔物と遭遇",
         enemyText: getEncounterCutinEnemyText(quest, symbols),
         symbolText: getEncounterCutinSymbolText(symbols),
       };
@@ -2005,7 +2578,7 @@
         type: questTemplate && questTemplate.type || "symbolEncounter",
         rank: questTemplate && questTemplate.rank || primarySymbol && primarySymbol.rank || "D",
         name: questTemplate && questTemplate.name || primaryName,
-        objective: questTemplate && questTemplate.objective || primarySymbol && primarySymbol.objective || "敵を全滅させる",
+        objective: questTemplate && questTemplate.objective || primarySymbol && primarySymbol.objective || "魔物を全滅させる",
         enemyPreview: questTemplate && questTemplate.enemyPreview || primarySymbol && primarySymbol.enemyPreview || enemiesForBattle.map((entry) => entry.role).join(" / "),
         reward: questTemplate && questTemplate.reward || primarySymbol && primarySymbol.reward || "",
         rewards: questTemplate && questTemplate.rewards || primarySymbol && primarySymbol.rewards || null,
@@ -2544,6 +3117,25 @@
         game.messageTimer = 3;
         return;
       }
+      if (town.panel && town.panel.abandonConfirm === true) {
+        confirmFreeQuestAbandon();
+        return;
+      }
+      if (town.panel && town.panel.replaceQuestId) {
+        const message = "破棄するフリー依頼を選んでください。";
+        town.panel.message = message;
+        game.message = message;
+        game.messageTimer = 3;
+        return;
+      }
+      if (isTownAcceptedFreeQuest(quest)) {
+        promptFreeQuestAbandon();
+        return;
+      }
+      if (isTownFreeQuestAcceptLimitReached(quest)) {
+        promptFreeQuestReplace(quest);
+        return;
+      }
       if (isTownQuestUnavailable(quest)) {
         const message = getTownQuestUnavailableMessage(quest);
         if (town.panel) {
@@ -2561,13 +3153,101 @@
       if (!town.panel || !Array.isArray(town.panel.quests) || town.panel.quests.length === 0) {
         return;
       }
-      const quest = town.panel.quests.find((entry) => entry && !isTownQuestUnavailable(entry));
+      const quest = town.panel.quests.find((entry) => entry && (isTownAcceptedFreeQuest(entry) || !isTownQuestUnavailable(entry)));
       if (!quest) {
         game.message = "受けられる依頼がありません。";
         game.messageTimer = 3;
         return;
       }
       showQuestDecisionPanel(quest.id);
+    }
+
+    function promptFreeQuestAbandon() {
+      const quest = town.selectedQuest || getQuestById(town.panel && town.panel.questId);
+      if (!isTownAcceptedFreeQuest(quest)) {
+        return;
+      }
+      town.selectedQuest = quest;
+      if (town.panel) {
+        town.panel.abandonConfirm = true;
+        town.panel.replaceQuestId = null;
+        town.panel.message = `${quest.name}の受注を破棄しますか？`;
+      }
+    }
+
+    function cancelFreeQuestAbandon() {
+      if (!town.panel) {
+        return;
+      }
+      town.panel.abandonConfirm = false;
+      town.panel.message = "";
+    }
+
+    function confirmFreeQuestAbandon() {
+      const quest = town.selectedQuest || getQuestById(town.panel && town.panel.questId);
+      if (!isTownAcceptedFreeQuest(quest)) {
+        cancelFreeQuestAbandon();
+        return;
+      }
+      clearTownAcceptedQuest(quest.id);
+      clearTownQuestSymbols(quest.id);
+      const message = `${quest.name}の受注を破棄しました。`;
+      showQuestListPanel("free");
+      game.message = message;
+      game.messageTimer = 3;
+      if (town.panel) {
+        town.panel.message = message;
+      }
+    }
+
+    function promptFreeQuestReplace(quest) {
+      if (!quest || quest.type !== "free" || isTownQuestAccepted(quest.id)) {
+        return;
+      }
+      town.selectedQuest = quest;
+      if (town.panel) {
+        town.panel.abandonConfirm = false;
+        town.panel.replaceQuestId = quest.id;
+        town.panel.acceptedFreeQuests = getTownAcceptedFreeQuestViews().map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          destinationName: getTownQuestDestinationName(entry),
+        }));
+        town.panel.message = `フリー依頼は${MAX_ACCEPTED_FREE_QUESTS}つまでです。破棄する依頼を選んでください。`;
+      }
+    }
+
+    function cancelFreeQuestReplace() {
+      if (!town.panel) {
+        return;
+      }
+      town.panel.replaceQuestId = null;
+      town.panel.acceptedFreeQuests = [];
+      town.panel.message = "";
+    }
+
+    function acceptTownQuestAfterAbandon(abandonQuestId) {
+      const newQuestId = town.panel && town.panel.replaceQuestId || town.selectedQuest && town.selectedQuest.id;
+      const newQuest = getQuestById(newQuestId);
+      const abandonQuest = getQuestById(abandonQuestId);
+      if (!newQuest || newQuest.type !== "free" || isTownQuestAccepted(newQuest.id) || !isTownQuestEnabled(newQuest)) {
+        game.message = "受ける依頼データが見つかりません。";
+        game.messageTimer = 3;
+        return;
+      }
+      if (!isTownAcceptedFreeQuest(abandonQuest)) {
+        game.message = "破棄する依頼を選んでください。";
+        game.messageTimer = 3;
+        return;
+      }
+      clearTownAcceptedQuest(abandonQuest.id);
+      clearTownQuestSymbols(abandonQuest.id);
+      acceptTownQuest(newQuest);
+      closeTownPanel();
+      ensureTownMapSymbols(getTownTileMap());
+      const destination = getTownQuestDestinationName(newQuest) || "出現場所";
+      game.message = `${abandonQuest.name}を破棄し、${newQuest.name}を受けました。${destination}へ向かいましょう。`;
+      game.messageTimer = 5;
     }
 
     function runTownPanelAction(action) {
@@ -2580,6 +3260,16 @@
         showQuestDecisionPanel(action.questId);
       } else if (action.kind === "confirmQuest") {
         confirmSelectedQuest();
+      } else if (action.kind === "promptAbandonQuest") {
+        promptFreeQuestAbandon();
+      } else if (action.kind === "confirmAbandonQuest") {
+        confirmFreeQuestAbandon();
+      } else if (action.kind === "cancelAbandonQuest") {
+        cancelFreeQuestAbandon();
+      } else if (action.kind === "replaceFreeQuest") {
+        acceptTownQuestAfterAbandon(action.abandonQuestId);
+      } else if (action.kind === "cancelReplaceFreeQuest") {
+        cancelFreeQuestReplace();
       } else if (action.kind === "backToQuestTypes") {
         showQuestTypePanel();
       } else if (action.kind === "backToQuestList") {
@@ -2646,7 +3336,7 @@
         if (getTownMapId() === quest.fieldMapId) {
           ensureTownMapSymbols(getTownTileMap());
         }
-        const acceptedMessage = `${quest.name}を受けました。${quest.fieldLocation || "出現場所"}へ向かいましょう。`;
+        const acceptedMessage = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
         const storyLines = typeof getQuestAcceptedStory === "function" ? getQuestAcceptedStory(quest) : [];
         if (Array.isArray(storyLines) && storyLines.length > 0) {
           startTownStory(`questAccepted:${quest.id}`, storyLines, () => {
@@ -3725,12 +4415,13 @@
     }
 
     function getQuestById(questId) {
-      return QUEST_DATA.quests.find((quest) => quest.id === questId) || null;
+      return getTownQuestView(getTownRawQuestById(questId));
     }
 
     function getQuestsByType(typeKey) {
       return QUEST_DATA.quests
-        .map((quest, index) => ({ quest, index }))
+        .map((quest, index) => ({ quest: getTownQuestView(quest), index }))
+        .filter((entry) => entry.quest)
         .filter((entry) => entry.quest.type === typeKey && isTownQuestEnabled(entry.quest))
         .sort((a, b) => {
           const orderDiff = getTownQuestDisplayOrder(a.quest) - getTownQuestDisplayOrder(b.quest);
@@ -3766,9 +4457,9 @@
             title: "依頼内容",
             lines: [
               `ランク: ${quest.rank || "-"}`,
-              `目的: ${quest.objective || "敵を全滅させる"}`,
-              `敵情報: ${quest.enemyPreview || "不明"}`,
-              quest.fieldLocation ? `出現場所: ${quest.fieldLocation}` : null,
+              `目的: ${quest.objective || "魔物を全滅させる"}`,
+              `魔物情報: ${quest.enemyPreview || "不明"}`,
+              getTownQuestDestinationName(quest) ? `出現場所: ${getTownQuestDestinationName(quest)}` : null,
               `報酬: ${quest.reward || "未定"}`,
             ].filter(Boolean),
           } : null,
@@ -3785,8 +4476,8 @@
               "移動は自動。基本距離を保ち、危険な予兆もできる範囲で避ける。",
               "射程外のスキルは発動位置まで移動予約し、射程内で詠唱を始める。",
               `構え中は${fireLabel}で発動、${cancelLabel}でキャンセル。`,
-              "ヒール/シェルトはカーソル上の味方、攻撃スキルは敵や地点を狙う。",
-              "指示スキルは通常スキル枠にセットし、味方への指示や敵へのフォーカスに使う。",
+              "ヒール/シェルトはカーソル上の味方、攻撃スキルは魔物や地点を狙う。",
+              "指示スキルは通常スキル枠にセットし、味方への指示や魔物へのフォーカスに使う。",
             ],
           },
           {
@@ -3795,7 +4486,7 @@
               `左5枠: ${skillLabels} / 必殺: ${ultLabels.finald} / ページ切替: ${pageLabel}`,
               `${fireLabel}: 発動 / ${cancelLabel}: 構えキャンセル / アイテム: ${itemLabels}`,
               `右上メニューまたは${menuLabel}: 設定・装備確認。戦闘中は時間停止。`,
-              `${ultLabels.ulpes}/${ultLabels.rihas}/${ultLabels.sushia}: 仲間の必殺技 / 勝利条件: 敵全滅`,
+              `${ultLabels.ulpes}/${ultLabels.rihas}/${ultLabels.sushia}: 仲間の必殺技 / 勝利条件: 魔物全滅`,
             ],
           },
           {
