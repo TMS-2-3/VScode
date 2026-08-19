@@ -3286,6 +3286,10 @@
         focusItemShopQuantity(action.itemId);
       } else if (action.kind === "adjustItemShopQuantity") {
         adjustItemShopQuantity(action.itemId, action.delta);
+      } else if (action.kind === "selectItemShopCategory") {
+        selectItemShopCategory(action.category);
+      } else if (action.kind === "selectItemShopItem") {
+        selectItemShopItem(action.itemId);
       } else if (action.kind === "selectEquipmentShopTab") {
         selectEquipmentShopTab(action.tab);
       } else if (action.kind === "openEquipmentShopFilter") {
@@ -3304,6 +3308,8 @@
         setEquipmentShopSort(action.sortKey, action.sortDir);
       } else if (action.kind === "clearEquipmentShopFilters") {
         clearEquipmentShopFilters();
+      } else if (action.kind === "selectEquipmentShopItem") {
+        selectEquipmentShopItem(action.itemId, action.equipmentRef);
       } else if (action.kind === "craftEquipment") {
         craftEquipment(action.itemId);
       } else if (action.kind === "upgradeEquipment") {
@@ -3476,6 +3482,8 @@
         scrollMax: 0,
         buyQuantities: {},
         buyQuantityFocusItemId: null,
+        selectedItemShopCategory: null,
+        selectedItemShopItemId: null,
         message: "",
         clickTargets: [],
       };
@@ -3553,6 +3561,27 @@
       return 1;
     }
 
+    function selectItemShopCategory(category) {
+      if (!town.panel || town.panel.action !== "itemShop") {
+        return;
+      }
+      town.panel.selectedItemShopCategory = category || null;
+      town.panel.selectedItemShopItemId = null;
+      town.panel.scroll = 0;
+      town.panel.scrollMax = 0;
+      town.panel.buyQuantityFocusItemId = null;
+      town.panel.buyQuantityFreshFocus = false;
+    }
+
+    function selectItemShopItem(itemId) {
+      if (!town.panel || town.panel.action !== "itemShop") {
+        return;
+      }
+      town.panel.selectedItemShopItemId = itemId || null;
+      town.panel.buyQuantityFocusItemId = null;
+      town.panel.buyQuantityFreshFocus = false;
+    }
+
     function showEquipmentShopPanel(shopKind) {
       const isWeapon = shopKind === "weapon";
       town.panel = {
@@ -3575,6 +3604,8 @@
       town.panel.tab = tab === "reset" ? "reset" : tab === "upgrade" ? "upgrade" : "craft";
       town.panel.scroll = 0;
       town.panel.scrollMax = 0;
+      town.panel.selectedEquipmentShopItemId = null;
+      town.panel.selectedEquipmentShopItemRef = null;
       town.panel.message = "";
       town.panel.upgradeResult = null;
       town.panel.confirmation = null;
@@ -3722,6 +3753,14 @@
       town.panel.filterScroll = 0;
       town.panel.filterScrollMax = 0;
       town.panel.message = "";
+    }
+
+    function selectEquipmentShopItem(itemId, equipmentRef = null) {
+      if (!town.panel || town.panel.action !== "equipmentShop") {
+        return;
+      }
+      town.panel.selectedEquipmentShopItemId = itemId || null;
+      town.panel.selectedEquipmentShopItemRef = equipmentRef || itemId || null;
     }
 
     function applyEquipmentShopFilterWindow() {
