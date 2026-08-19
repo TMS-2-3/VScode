@@ -32,7 +32,6 @@
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const BATTLE_START_ULTIMATE_RATIO = 0.5;
-    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury", "debuff_poison", "debuff_wound"];
 
     function getCarriedHp(unit) {
       const savedHp = game.partyHpById && game.partyHpById[unit.id];
@@ -288,9 +287,6 @@
     }
 
     function isStatusCarryover(statusId) {
-      if (!CARRYOVER_STATUS_IDS.includes(statusId)) {
-        return false;
-      }
       const status = STATUS_DATA && STATUS_DATA[statusId];
       const values = status ? [status.carryover, status.inherit, status.battleCarryover, status["引き継ぎ"]] : [];
       return values.some((value) => value === true || value === "あり" || value === "有" || value === "true" || value === "yes");

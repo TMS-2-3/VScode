@@ -567,7 +567,7 @@
       return applySnapshot(snapshot, saveId);
     }
 
-    function importFileText(text) {
+    function importFileText(text, options = {}) {
       let parsed = null;
       try {
         parsed = JSON.parse(String(text || ""));
@@ -578,17 +578,19 @@
       if (!snapshot) {
         return { ok: false, message: "このセーブファイルは利用できません。" };
       }
-      const stored = storeImportedSnapshot(snapshot);
-      const result = applySnapshot(snapshot, stored.ok ? snapshot.id : null);
+      const shouldRegister = options && options.register === true;
+      const stored = shouldRegister ? storeImportedSnapshot(snapshot) : { ok: false };
+      const registeredSaveId = shouldRegister && stored.ok ? snapshot.id : null;
+      const result = applySnapshot(snapshot, registeredSaveId);
       if (!result.ok) {
         return result;
       }
       return {
         ...result,
-        id: stored.ok ? snapshot.id : null,
-        message: stored.ok
-          ? `${snapshot.name} をファイルから読み込みました。`
-          : `${snapshot.name} をファイルから読み込みました。ブラウザ保存には登録できませんでした。`,
+        id: registeredSaveId,
+        message: shouldRegister && !stored.ok
+          ? `${snapshot.name} をファイルから読み込みました。ブラウザ保存には登録できませんでした。`
+          : `${snapshot.name} をファイルから読み込みました。`,
       };
     }
 

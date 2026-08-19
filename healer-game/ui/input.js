@@ -268,9 +268,10 @@
       const registry = Array.isArray(window.HEALER_DEBUG_TILE_MAPS)
         ? window.HEALER_DEBUG_TILE_MAPS
         : [
-          { id: "startTown01", label: "始まりの町" },
-          { id: "forestTest01", label: "森テスト1" },
-          { id: "forest2", label: "森テスト2" },
+          { id: "startTown01", label: "クラク村" },
+          { id: "kuraku_forest_1", label: "西クラク森" },
+          { id: "kuraku_forest_2", label: "南クラク森" },
+          { id: "kuraku_forest_3", label: "北クラク森" },
           { id: "flower", label: "花マップ" },
         ];
       return registry.filter((entry) => entry && entry.id && maps[entry.id]);

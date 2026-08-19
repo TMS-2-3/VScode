@@ -72,7 +72,6 @@
     const TOWN_WALK_FRAME_INTERVAL = 0.16;
     const TOWN_MOVEMENT_KEYS = ["w", "a", "s", "d"];
     const TOWN_FOLLOWER_SPRITE_HEIGHT = 72;
-    const CARRYOVER_STATUS_IDS = ["buff_itaminasi", "buff_warmup", "debuff_taunt", "debuff_freeze", "debuff_burn", "debuff_sleep", "debuff_Injury", "debuff_poison", "debuff_wound"];
     const EQUIPMENT_SHOP_RANK_FILTERS = ["D", "C", "B", "A", "S"];
     const EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
     const EQUIPMENT_SHOP_UNIT_FILTERS = ["ulpes", "rihas", "sushia", "finald"];
@@ -492,9 +491,6 @@
     }
 
     function isStatusCarryover(statusId) {
-      if (!CARRYOVER_STATUS_IDS.includes(statusId)) {
-        return false;
-      }
       const status = STATUS_DATA && STATUS_DATA[statusId];
       const values = status ? [status.carryover, status.inherit, status.battleCarryover, status["引き継ぎ"]] : [];
       return values.some((value) => value === true || value === "あり" || value === "有" || value === "true" || value === "yes");
@@ -1324,7 +1320,6 @@
         !isTownQuestEnabled(quest)
         || isTownQuestAccepted(quest.id)
         || isTownQuestCompletionBlocking(quest)
-        || isTownFreeQuestAcceptLimitReached(quest)
       ));
     }
 
@@ -3221,9 +3216,16 @@
       if (!town.panel) {
         return;
       }
+      const message = "フリー依頼の受注をやめました。";
+      showQuestListPanel("free");
+      game.message = message;
+      game.messageTimer = 3;
+      if (!town.panel) {
+        return;
+      }
       town.panel.replaceQuestId = null;
       town.panel.acceptedFreeQuests = [];
-      town.panel.message = "";
+      town.panel.message = message;
     }
 
     function acceptTownQuestAfterAbandon(abandonQuestId) {
@@ -3321,6 +3323,10 @@
 
     function startSelectedQuest() {
       const quest = town.selectedQuest || getQuestById(town.panel && town.panel.questId);
+      if (isTownFreeQuestAcceptLimitReached(quest)) {
+        promptFreeQuestReplace(quest);
+        return;
+      }
       if (isTownQuestUnavailable(quest)) {
         const message = getTownQuestUnavailableMessage(quest);
         if (town.panel) {

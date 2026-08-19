@@ -111,7 +111,7 @@
           { speaker: "ウルペス", text: "そうだぞ、一体あの雑魚のどこが不気味だったんだ？" },
           { speaker: "スシア", text: "それもそうね、気のせいだったと思うわ" },
           { speaker: "ウルペス", text: "この先が僕が住んでいた村だ" },
-          { speaker: "ウルペス", text: "早く行こう！" },
+          { speaker: "ウルペス", text: "早く行くぞ！" },
         ];
       }
       if (quest.id !== TUTORIAL_STORY_QUEST_ID) {

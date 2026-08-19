@@ -83,7 +83,7 @@
   }
 
   function isQuestUnavailableForTown(quest) {
-    return isQuestAcceptedForTown(quest) || isQuestCompletedForTown(quest) || isFreeQuestAcceptLimitReachedForTown(quest);
+    return isQuestAcceptedForTown(quest) || isQuestCompletedForTown(quest);
   }
 
   function getQuestStatusText(quest) {
@@ -2500,7 +2500,9 @@
   function isCurrentEquipmentShopFilterDefaultForTown(shopKind) {
     const filters = ensureEquipmentShopFiltersForTown();
     const defaults = createDefaultEquipmentShopFiltersForTown();
-    return getEquipmentShopFilterSnapshotForTown(shopKind, filters) === getEquipmentShopFilterSnapshotForTown(shopKind, defaults);
+    const currentSnapshot = getEquipmentShopFilterSnapshotForTown(shopKind, filters);
+    const defaultSnapshot = getEquipmentShopFilterSnapshotForTown(shopKind, defaults);
+    return currentSnapshot === defaultSnapshot;
   }
 
   function ensureEquipmentShopFiltersForTown() {

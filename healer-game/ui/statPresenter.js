@@ -8,7 +8,6 @@
       getMoodIncomingDamageMultiplier,
       getCommandOutgoingDamageMultiplier,
       getCommandIncomingDamageMultiplier,
-      getMoodCooldownMultiplier,
       getMoodCastTimeMultiplier,
       getCastSpeed,
       getSushiaCastTime,
@@ -24,6 +23,7 @@
       getEffectiveMagic,
       getEffectiveDefense,
       getEffectiveMagicDefense,
+      getEffectiveStat,
       getEffectiveMoveSpeed,
       getUltimateChargeRate: getBattleUltimateChargeRate,
       getEffectiveGuardChance,
@@ -41,7 +41,7 @@
       const outgoing = getUnitOutgoingDamageMultiplier(unit, includeBattleState);
       const incoming = getUnitIncomingDamageMultiplier(unit, includeBattleState);
       const castSpeed = getUnitCastSpeed(unit);
-      const skillSpeed = 1 - getMoodCooldownMultiplierSafe(unit);
+      const skillSpeed = getUnitCooldownReduction(unit, includeBattleState);
       return [
         { label: "攻撃力", value: formatNumber(callNumber(getEffectiveAttack, unit, 0)) },
         { label: "魔力", value: formatNumber(callNumber(getEffectiveMagic, unit, 0)) },
@@ -78,11 +78,23 @@
       }
       const config = includeBattleState && unit.id !== "finald" ? getCommandBiasConfig(unit.activeCommandBias || 0) : null;
       const actionCdMultiplier = config && Number.isFinite(config.actionCd) && config.actionCd > 0 ? config.actionCd : 1;
-      return Math.max(0, 1 + getUnitActionSpeedBonus(unit)) / actionCdMultiplier;
+      return Math.max(0, 1 + getUnitActionSpeedBonus(unit, includeBattleState)) / actionCdMultiplier;
     }
 
-    function getUnitActionSpeedBonus(unit) {
+    function getUnitActionSpeedBonus(unit, includeBattleState = true) {
+      if (includeBattleState && typeof getEffectiveStat === "function") {
+        return callNumber2(getEffectiveStat, unit, "actionSpeed", 0);
+      }
       const equipment = typeof getEquipmentStatBonusSum === "function" ? getEquipmentStatBonusSum(unit, "actionSpeed") : 0;
+      const passive = typeof hasPassive === "function" && hasPassive(unit, "number_of_times") ? 0.5 : 0;
+      return equipment + passive;
+    }
+
+    function getUnitCooldownReduction(unit, includeBattleState = true) {
+      if (includeBattleState && typeof getEffectiveStat === "function") {
+        return callNumber2(getEffectiveStat, unit, "cooldownReduction", 0);
+      }
+      const equipment = typeof getEquipmentStatBonusSum === "function" ? getEquipmentStatBonusSum(unit, "cooldownReduction") : 0;
       const passive = typeof hasPassive === "function" && hasPassive(unit, "number_of_times") ? 0.5 : 0;
       return equipment + passive;
     }
@@ -180,10 +192,6 @@
       return typeof getMoodCastTimeMultiplier === "function" ? getMoodCastTimeMultiplier(unit) : 1;
     }
 
-    function getMoodCooldownMultiplierSafe(unit) {
-      return typeof getMoodCooldownMultiplier === "function" ? getMoodCooldownMultiplier(unit) : 1;
-    }
-
     function hasPassiveSafe(unit, key) {
       return typeof hasPassive === "function" ? hasPassive(unit, key) : false;
     }
@@ -193,6 +201,14 @@
         return fallback;
       }
       const value = fn(unit);
+      return Number.isFinite(value) ? value : fallback;
+    }
+
+    function callNumber2(fn, unit, arg, fallback = 0) {
+      if (typeof fn !== "function") {
+        return fallback;
+      }
+      const value = fn(unit, arg);
       return Number.isFinite(value) ? value : fallback;
     }
 
