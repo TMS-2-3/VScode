@@ -476,6 +476,41 @@
         line-height: 1.5;
       }
 
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(20, 24, 18, 0.46);
+      }
+
+      .new-map-dialog {
+        width: min(520px, 100%);
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: 0 18px 48px rgba(20, 24, 18, 0.22);
+      }
+
+      .new-map-dialog h2 {
+        margin-top: 0;
+        font-size: 18px;
+      }
+
+      .new-map-dialog-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .new-map-dialog select {
+        margin-top: 4px;
+      }
+
       .hidden {
         display: none;
       }
@@ -634,6 +669,20 @@
       </aside>
     </div>
 
+    <div id="new-map-dialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="new-map-dialog-title">
+      <div class="new-map-dialog">
+        <h2 id="new-map-dialog-title">新規作成</h2>
+        <p class="small-note">新しい編集用マップを作ります。作成しただけでは `maps.js` には保存されません。</p>
+        <button id="create-blank-map-button" class="wide-button primary" type="button">新しく作る</button>
+        <label for="new-map-reference-select">参照するマップ</label>
+        <select id="new-map-reference-select"></select>
+        <div class="new-map-dialog-actions">
+          <button id="create-reference-map-button" type="button">参照</button>
+          <button id="cancel-new-map-button" type="button">閉じる</button>
+        </div>
+      </div>
+    </div>
+
     <script src="tile.js"></script>
     <script src="maps.js"></script>
     <script>
@@ -677,6 +726,9 @@
       const HISTORY_LIMIT = 20;
       const DRAG_SCROLL_EDGE_SIZE = 56;
       const DRAG_SCROLL_MAX_SPEED = 24;
+      const NEW_MAP_DEFAULT_WIDTH = 35;
+      const NEW_MAP_DEFAULT_HEIGHT = 30;
+      const NEW_MAP_DEFAULT_TILE_SIZE = 48;
 
       const mapSelect = document.getElementById("map-select");
       const mapIdInput = document.getElementById("map-id");
@@ -709,6 +761,8 @@
       const mapTitle = document.getElementById("map-title");
       const mapSizeLabel = document.getElementById("map-size-label");
       const exportText = document.getElementById("export-text");
+      const newMapDialog = document.getElementById("new-map-dialog");
+      const newMapReferenceSelect = document.getElementById("new-map-reference-select");
       const draftFileInput = document.createElement("input");
       draftFileInput.type = "file";
       draftFileInput.accept = ".json,application/json";
@@ -865,6 +919,43 @@
         return String(value || "map01").trim().replace(/[^A-Za-z0-9_]/g, "_") || "map01";
       }
 
+      function getSourceMapList() {
+        return Object.values(sourceMaps)
+          .filter((map) => map && map.id);
+      }
+
+      function toFullWidthNumber(value) {
+        return String(Math.max(1, Math.floor(Number(value) || 1))).replace(/[0-9]/g, (digit) => {
+          return String.fromCharCode(0xff10 + Number(digit));
+        });
+      }
+
+      function getUsedNewMapValues() {
+        const ids = new Set();
+        const names = new Set();
+        getSourceMapList().forEach((map) => {
+          ids.add(sanitizeId(map.id));
+          names.add(String(map.name || map.id || ""));
+        });
+        if (state.map && state.map.id) {
+          ids.add(sanitizeId(state.map.id));
+          names.add(String(state.map.name || state.map.id || ""));
+        }
+        return { ids, names };
+      }
+
+      function createUniqueNewMapIdentity() {
+        const used = getUsedNewMapValues();
+        let index = 1;
+        while (used.ids.has(`new_map${index}`) || used.names.has(`新規作成${toFullWidthNumber(index)}`)) {
+          index += 1;
+        }
+        return {
+          id: `new_map${index}`,
+          name: `新規作成${toFullWidthNumber(index)}`,
+        };
+      }
+
       function makeBlankLayer(id, name, width, height, fill) {
         return {
           id,
@@ -953,20 +1044,35 @@
       }
 
       function createNewMap() {
+        const identity = createUniqueNewMapIdentity();
+        const defaultTile = defs[defaultTileSelect.value] ? defaultTileSelect.value : "grass";
         return normalizeMap({
-          id: sanitizeId(mapIdInput.value || "smallMap01"),
-          name: mapNameInput.value || "小マップ01",
-          tileSize: Number(tileSizeInput.value) || 48,
-          width: Number(mapWidthInput.value) || 8,
-          height: Number(mapHeightInput.value) || 15,
-          defaultTile: defaultTileSelect.value || "grass",
+          id: identity.id,
+          name: identity.name,
+          tileSize: NEW_MAP_DEFAULT_TILE_SIZE,
+          width: NEW_MAP_DEFAULT_WIDTH,
+          height: NEW_MAP_DEFAULT_HEIGHT,
+          defaultTile,
           marginTiles: {
-            ground: defaultTileSelect.value || "grass",
+            ground: defaultTile,
             terrain: null,
             object: null,
             event: null,
           },
           layers: [],
+          events: [],
+        });
+      }
+
+      function createNewMapFromReference(referenceMapId) {
+        const sourceMap = sourceMaps[referenceMapId];
+        if (!sourceMap) return null;
+        const identity = createUniqueNewMapIdentity();
+        const source = createSerializableMap(normalizeMap(sourceMap));
+        return normalizeMap({
+          ...source,
+          id: identity.id,
+          name: identity.name,
           events: [],
         });
       }
@@ -1696,16 +1802,71 @@
 
       function renderMapSelect() {
         mapSelect.innerHTML = "";
-        const newOption = document.createElement("option");
-        newOption.value = "__new";
-        newOption.textContent = "新規 8x15";
-        mapSelect.appendChild(newOption);
-        Object.values(sourceMaps).forEach((map) => {
+        const sourceMapList = getSourceMapList();
+        if (state.map && state.map.id && !sourceMaps[state.map.id]) {
+          const draftOption = document.createElement("option");
+          draftOption.value = "__draft";
+          draftOption.textContent = `編集中: ${state.map.name || state.map.id}`;
+          mapSelect.appendChild(draftOption);
+        }
+        sourceMapList.forEach((map) => {
           const option = document.createElement("option");
           option.value = map.id;
           option.textContent = map.name || map.id;
           mapSelect.appendChild(option);
         });
+        if (mapSelect.options.length === 0) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "マップなし";
+          option.disabled = true;
+          mapSelect.appendChild(option);
+        }
+      }
+
+      function syncMapSelectValue() {
+        renderMapSelect();
+        if (!state.map || !state.map.id) {
+          mapSelect.value = "";
+          return;
+        }
+        mapSelect.value = sourceMaps[state.map.id] ? state.map.id : "__draft";
+      }
+
+      function renderNewMapReferenceOptions() {
+        newMapReferenceSelect.innerHTML = "";
+        getSourceMapList().forEach((map) => {
+          const option = document.createElement("option");
+          option.value = map.id;
+          option.textContent = map.name || map.id;
+          newMapReferenceSelect.appendChild(option);
+        });
+        newMapReferenceSelect.disabled = newMapReferenceSelect.options.length === 0;
+      }
+
+      function openNewMapDialog() {
+        renderNewMapReferenceOptions();
+        newMapDialog.classList.remove("hidden");
+      }
+
+      function closeNewMapDialog() {
+        newMapDialog.classList.add("hidden");
+      }
+
+      function openCreatedNewMap(map, message) {
+        if (!map) {
+          setStatus("新規マップを作成できませんでした。");
+          return;
+        }
+        finishPendingHistoryEntry();
+        state.map = map;
+        state.sourceMapId = null;
+        syncInputsFromMap();
+        syncMapSelectValue();
+        resetHistory();
+        renderAll();
+        closeNewMapDialog();
+        setStatus(message || `${state.map.name} を作成しました。まだ maps.js には保存されていません。`);
       }
 
       function renderDefaultTiles() {
@@ -1998,7 +2159,7 @@ ${baseIndent}}`;
         if (!snapshot) return;
         state.pendingHistorySnapshot = null;
         state.map = normalizeMap(snapshot);
-        mapSelect.value = sourceMaps[state.map.id] ? state.map.id : "__new";
+        syncMapSelectValue();
         const choices = getPaletteTiles();
         if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
         syncInputsFromMap();
@@ -2089,21 +2250,25 @@ ${baseIndent}}`;
       }
 
       function loadMapById(mapId) {
-        if (mapId === "__new") {
-          state.map = createNewMap();
-          state.sourceMapId = null;
-          mapSelect.value = "__new";
-        } else {
-          state.map = normalizeMap(sourceMaps[mapId]);
-          state.sourceMapId = mapId;
-          mapSelect.value = mapId;
+        if (mapId === "__draft") {
+          syncMapSelectValue();
+          setStatus(state.map ? `${state.map.name} を表示中です。` : "編集中の新規マップはありません。");
+          return;
         }
+        const sourceMap = sourceMaps[mapId] || getSourceMapList()[0] || null;
+        if (!sourceMap) {
+          openCreatedNewMap(createNewMap(), "既存マップがないため、新規マップを作成しました。");
+          return;
+        }
+        state.map = normalizeMap(sourceMap);
+        state.sourceMapId = sourceMap.id;
+        syncMapSelectValue();
         const choices = getPaletteTiles();
         if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
         syncInputsFromMap();
         resetHistory();
         renderAll();
-        setStatus(mapId === "__new" ? "新規編集マップを開きました。" : `${state.map.name} を読み込みました。`);
+        setStatus(`${state.map.name} を読み込みました。`);
       }
 
       function saveRecord() {
@@ -2176,13 +2341,13 @@ ${baseIndent}}`;
           console.error(error);
         }
 
-        state.map = createNewMap();
-        state.sourceMapId = null;
-        mapSelect.value = "__new";
-        syncInputsFromMap();
-        resetHistory();
-        renderAll();
-        setStatus(`${mapName} を削除して、新規マップへ戻しました。`);
+        const firstMap = getSourceMapList()[0];
+        if (firstMap) {
+          loadMapById(firstMap.id);
+          setStatus(`${mapName} を削除して、${state.map.name} を読み込みました。`);
+        } else {
+          openCreatedNewMap(createNewMap(), `${mapName} を削除して、新規マップを作成しました。`);
+        }
       }
 
       function loadLocal() {
@@ -2194,6 +2359,7 @@ ${baseIndent}}`;
           }
           state.map = normalizeMap(JSON.parse(raw));
           state.sourceMapId = sourceMaps[state.map.id] ? state.map.id : null;
+          syncMapSelectValue();
           syncInputsFromMap();
           resetHistory();
           renderAll();
@@ -2598,6 +2764,7 @@ ${baseIndent}}`;
             const raw = await file.text();
             state.map = normalizeMap(parseRecordPayload(raw));
             state.sourceMapId = sourceMaps[state.map.id] ? state.map.id : null;
+            syncMapSelectValue();
             syncInputsFromMap();
             resetHistory();
             renderAll();
@@ -2610,15 +2777,31 @@ ${baseIndent}}`;
           }
         });
 
-        mapSelect.addEventListener("change", () => loadMapById(mapSelect.value));
-        document.getElementById("new-map-button").addEventListener("click", () => {
-          state.map = createNewMap();
-          state.sourceMapId = null;
-          mapSelect.value = "__new";
-          syncInputsFromMap();
-          resetHistory();
-          renderAll();
-          setStatus("新規マップを作成しました。まだ maps.js には保存されていません。");
+        mapSelect.addEventListener("change", () => {
+          if (!mapSelect.value) return;
+          loadMapById(mapSelect.value);
+        });
+        document.getElementById("new-map-button").addEventListener("click", openNewMapDialog);
+        document.getElementById("create-blank-map-button").addEventListener("click", () => {
+          openCreatedNewMap(createNewMap(), null);
+        });
+        document.getElementById("create-reference-map-button").addEventListener("click", () => {
+          const referenceMapId = newMapReferenceSelect.value;
+          const referenceMap = sourceMaps[referenceMapId];
+          const map = createNewMapFromReference(referenceMapId);
+          const referenceName = referenceMap && (referenceMap.name || referenceMap.id);
+          openCreatedNewMap(map, referenceName ? `${referenceName} を参照して ${map ? map.name : "新規マップ"} を作成しました。` : null);
+        });
+        document.getElementById("cancel-new-map-button").addEventListener("click", closeNewMapDialog);
+        newMapDialog.addEventListener("click", (event) => {
+          if (event.target === newMapDialog) {
+            closeNewMapDialog();
+          }
+        });
+        window.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !newMapDialog.classList.contains("hidden")) {
+            closeNewMapDialog();
+          }
         });
         document.getElementById("resize-button").addEventListener("click", resizeMapFromInputs);
         document.querySelectorAll("[data-tool]").forEach((button) => {
@@ -2757,7 +2940,12 @@ ${baseIndent}}`;
         renderDefaultTiles();
         renderMapSelect();
         initEvents();
-        loadMapById("__new");
+        const firstMap = getSourceMapList()[0];
+        if (firstMap) {
+          loadMapById(firstMap.id);
+        } else {
+          openCreatedNewMap(createNewMap(), "既存マップがないため、新規マップを作成しました。");
+        }
       }
 
       init();

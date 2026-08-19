@@ -5,38 +5,6 @@
 
   window.HEALER_TILE_MAPS = {
 
-    // Template only. Copy this when adding a new map.
-
-    template: {
-
-      id: "template",
-
-      name: "テンプレート",
-
-      tileSize: 48,
-
-      width: 0,
-
-      height: 0,
-
-      defaultTile: "grass",
-
-      layers: [
-
-        { id: "ground", name: "地面", tiles: [] },
-
-        { id: "object", name: "配置物", tiles: [] },
-
-        { id: "event", name: "イベント", tiles: [] },
-
-      ],
-
-      events: [],
-
-    },
-
-
-
     kuraku_forest_1: {
       id: "kuraku_forest_1",
       name: "西クラク森",
@@ -939,7 +907,7 @@
   };
   window.HEALER_TILE_MAPS.kuraku_forest_3 = {
     id: "kuraku_forest_3",
-    name: "北クラク森",
+    name: "花畑",
     tileSize: 48,
     width: 25,
     height: 20,
@@ -961,12 +929,12 @@
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+          "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+          "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
-          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
+          "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "flowerMeadow", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
           "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass", "test_grass",
@@ -1077,6 +1045,6 @@
     { id: "kuraku_forest_1", label: "西クラク森" },
     { id: "kuraku_forest_2", label: "南クラク森" },
     { id: "flower", label: "花マップ" },
-      { id: "kuraku_forest_3", label: "北クラク森" },
+      { id: "kuraku_forest_3", label: "花畑" },
 ];
 })();
