@@ -722,6 +722,20 @@
       passable: true,
       tags: ["ground", "cave", "rock", "variation"],
     },
+    caveFloorCracked01: {
+      id: "caveFloorCracked01",
+      name: "Cave Floor Cracked 01",
+      image: "map/img_tile/cave/cave_floor_cracked_01.png",
+      passable: true,
+      tags: ["ground", "cave", "rock", "cracked"],
+    },
+    caveFloorWet01: {
+      id: "caveFloorWet01",
+      name: "Cave Floor Wet 01",
+      image: "map/img_tile/cave/cave_floor_wet_01.png",
+      passable: true,
+      tags: ["ground", "cave", "rock", "wet", "variation"],
+    },
     caveWall01: {
       id: "caveWall01",
       name: "Cave Wall 01",
