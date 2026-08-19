@@ -680,8 +680,129 @@
     },
   ];
 
+  const SIDE_VIEW_BUILDING_GROUPS = [
+    {
+      category: "decorative",
+      categoryLabel: "Decor",
+      direction: "left",
+      directionLabel: "Left",
+      items: [
+        ["01_cottage_thatch", 326, 292],
+        ["02_log_cabin", 269, 256],
+        ["03_stone_cottage_blue", 219, 300],
+        ["04_wooden_shed", 208, 198],
+        ["05_barn_red", 259, 293],
+        ["06_watermill_house", 271, 279],
+        ["07_windmill", 244, 292],
+        ["08_watchtower", 233, 298],
+        ["09_church", 269, 299],
+        ["10_shrine", 233, 260],
+        ["11_ruined_hut", 309, 252],
+        ["12_ruined_stone_house", 248, 282],
+        ["13_townhouse_2story", 255, 287],
+        ["14_stone_workshop", 244, 263],
+        ["15_magic_round_tower", 269, 300],
+        ["16_snowy_log_cabin", 281, 261],
+      ],
+    },
+    {
+      category: "decorative",
+      categoryLabel: "Decor",
+      direction: "right",
+      directionLabel: "Right",
+      items: [
+        ["01_cottage_thatch", 305, 245],
+        ["02_log_cabin", 265, 256],
+        ["03_stone_cottage_blue", 289, 256],
+        ["04_wooden_shed", 291, 225],
+        ["05_barn_red", 290, 242],
+        ["06_watermill_house", 377, 253],
+        ["07_windmill", 371, 256],
+        ["08_watchtower", 265, 256],
+        ["09_church", 299, 256],
+        ["10_shrine", 357, 240],
+        ["11_ruined_hut", 315, 240],
+        ["12_ruined_stone_house", 359, 256],
+        ["13_townhouse_2story", 289, 245],
+        ["14_stone_workshop", 371, 241],
+        ["15_magic_round_tower", 303, 256],
+        ["16_snowy_log_cabin", 275, 244],
+      ],
+    },
+    {
+      category: "area_matched",
+      categoryLabel: "Area",
+      direction: "left",
+      directionLabel: "Left",
+      items: [
+        ["01_grand_stone_hall", 304, 300],
+        ["02_stone_townhouse", 267, 281],
+        ["03_red_roof_house", 289, 258],
+        ["04_bakery", 277, 267],
+        ["05_farmhouse_with_field", 309, 300],
+        ["06_round_straw_hut", 311, 285],
+        ["07_forest_lodge", 299, 300],
+        ["08_hide_shack", 281, 286],
+        ["09_mountain_fort", 314, 299],
+        ["10_snowy_house", 305, 286],
+        ["11_desert_dome_house", 296, 282],
+        ["12_desert_tower", 288, 296],
+        ["13_swamp_shack", 308, 300],
+        ["14_lakeside_house", 294, 292],
+        ["15_demon_gate", 230, 300],
+        ["16_demon_castle", 277, 300],
+      ],
+    },
+    {
+      category: "area_matched",
+      categoryLabel: "Area",
+      direction: "right",
+      directionLabel: "Right",
+      items: [
+        ["01_grand_stone_hall", 252, 280],
+        ["02_stone_townhouse", 295, 280],
+        ["03_red_roof_house", 332, 247],
+        ["04_bakery", 334, 250],
+        ["05_farmhouse_with_field", 302, 281],
+        ["06_round_straw_hut", 343, 281],
+        ["07_forest_lodge", 333, 281],
+        ["08_hide_shack", 312, 281],
+        ["09_mountain_fort", 299, 281],
+        ["10_snowy_house", 314, 281],
+        ["11_desert_dome_house", 342, 281],
+        ["12_desert_tower", 318, 281],
+        ["13_swamp_shack", 299, 280],
+        ["14_lakeside_house", 302, 266],
+        ["15_demon_gate", 342, 268],
+        ["16_demon_castle", 336, 280],
+      ],
+    },
+  ];
+
   function padTileNumber(value) {
     return String(value).padStart(2, "0");
+  }
+
+  function toPascalCase(value) {
+    return String(value)
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join("");
+  }
+
+  function toReadableSideViewName(value) {
+    return String(value)
+      .split("_")
+      .filter(Boolean)
+      .map((part) => (/^\d+$/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+      .join(" ");
+  }
+
+  function getSideViewFootprintWidth(drawWidth) {
+    if (drawWidth >= 336) return 5;
+    if (drawWidth >= 240) return 4;
+    return 3;
   }
 
   function createGeneratedGroundTiles() {
@@ -707,7 +828,41 @@
     return defs;
   }
 
-  Object.assign(window.HEALER_TILE_DEFS, createGeneratedGroundTiles(), {
+  function createSideViewBuildingDefs() {
+    const defs = {};
+    const tileSize = 48;
+    const footprintHeight = 2;
+
+    SIDE_VIEW_BUILDING_GROUPS.forEach((group) => {
+      group.items.forEach(([fileStem, drawWidth, drawHeight]) => {
+        const prefix = group.category === "decorative" ? "decorSide" : "areaSide";
+        const directionPart = group.direction === "left" ? "Left" : "Right";
+        const id = `${prefix}${directionPart}${toPascalCase(fileStem)}`;
+        const footprintWidth = getSideViewFootprintWidth(drawWidth);
+        const drawOffsetX = Math.round((footprintWidth * tileSize - drawWidth) / 2);
+        const drawOffsetY = footprintHeight * tileSize - drawHeight;
+
+        defs[id] = {
+          id,
+          name: `${group.categoryLabel} ${group.directionLabel} ${toReadableSideViewName(fileStem)}`,
+          image: `map/img_tile/building_drafts_20260715_000000/side_views/${group.category}/${group.direction}/${fileStem}.png`,
+          passable: false,
+          tags: ["object", "building", "sideView", group.category, group.direction, "decoration", "block"],
+          drawWidth,
+          drawHeight,
+          drawOffsetX,
+          drawOffsetY,
+          footprintWidth,
+          footprintHeight,
+          placementAnchor: "bottomCenter",
+        };
+      });
+    });
+
+    return defs;
+  }
+
+  Object.assign(window.HEALER_TILE_DEFS, createGeneratedGroundTiles(), createSideViewBuildingDefs(), {
     caveFloor01: {
       id: "caveFloor01",
       name: "Cave Floor 01",
