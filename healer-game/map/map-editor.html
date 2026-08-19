@@ -715,6 +715,8 @@
         redoStack: [],
         pendingHistorySnapshot: null,
         sourceMapId: null,
+        activeDraftMapId: null,
+        draftMaps: {},
         dragClientX: null,
         dragClientY: null,
         autoScrollFrameId: 0,
@@ -729,6 +731,7 @@
       const NEW_MAP_DEFAULT_WIDTH = 35;
       const NEW_MAP_DEFAULT_HEIGHT = 30;
       const NEW_MAP_DEFAULT_TILE_SIZE = 48;
+      const DRAFT_MAP_SELECT_PREFIX = "draft:";
 
       const mapSelect = document.getElementById("map-select");
       const mapIdInput = document.getElementById("map-id");
@@ -924,6 +927,34 @@
           .filter((map) => map && map.id);
       }
 
+      function getDraftMapList() {
+        return Object.values(state.draftMaps || {})
+          .filter((map) => map && map.id);
+      }
+
+      function getDraftMapSelectValue(mapId) {
+        return `${DRAFT_MAP_SELECT_PREFIX}${sanitizeId(mapId)}`;
+      }
+
+      function getDraftMapIdFromSelectValue(value) {
+        const text = String(value || "");
+        return text.startsWith(DRAFT_MAP_SELECT_PREFIX)
+          ? sanitizeId(text.slice(DRAFT_MAP_SELECT_PREFIX.length))
+          : "";
+      }
+
+      function rememberCurrentDraftMap() {
+        if (!state.map || !state.activeDraftMapId) return;
+        const serializable = createSerializableMap(state.map);
+        const nextId = sanitizeId(serializable.id);
+        serializable.id = nextId;
+        if (state.activeDraftMapId !== nextId) {
+          delete state.draftMaps[state.activeDraftMapId];
+        }
+        state.draftMaps[nextId] = normalizeMap(serializable);
+        state.activeDraftMapId = nextId;
+      }
+
       function toFullWidthNumber(value) {
         return String(Math.max(1, Math.floor(Number(value) || 1))).replace(/[0-9]/g, (digit) => {
           return String.fromCharCode(0xff10 + Number(digit));
@@ -934,6 +965,10 @@
         const ids = new Set();
         const names = new Set();
         getSourceMapList().forEach((map) => {
+          ids.add(sanitizeId(map.id));
+          names.add(String(map.name || map.id || ""));
+        });
+        getDraftMapList().forEach((map) => {
           ids.add(sanitizeId(map.id));
           names.add(String(map.name || map.id || ""));
         });
@@ -1803,16 +1838,16 @@
       function renderMapSelect() {
         mapSelect.innerHTML = "";
         const sourceMapList = getSourceMapList();
-        if (state.map && state.map.id && !sourceMaps[state.map.id]) {
-          const draftOption = document.createElement("option");
-          draftOption.value = "__draft";
-          draftOption.textContent = `編集中: ${state.map.name || state.map.id}`;
-          mapSelect.appendChild(draftOption);
-        }
         sourceMapList.forEach((map) => {
           const option = document.createElement("option");
           option.value = map.id;
           option.textContent = map.name || map.id;
+          mapSelect.appendChild(option);
+        });
+        getDraftMapList().forEach((map) => {
+          const option = document.createElement("option");
+          option.value = getDraftMapSelectValue(map.id);
+          option.textContent = `編集中: ${map.name || map.id}`;
           mapSelect.appendChild(option);
         });
         if (mapSelect.options.length === 0) {
@@ -1830,7 +1865,9 @@
           mapSelect.value = "";
           return;
         }
-        mapSelect.value = sourceMaps[state.map.id] ? state.map.id : "__draft";
+        mapSelect.value = state.activeDraftMapId
+          ? getDraftMapSelectValue(state.activeDraftMapId)
+          : state.map.id;
       }
 
       function renderNewMapReferenceOptions() {
@@ -1859,8 +1896,10 @@
           return;
         }
         finishPendingHistoryEntry();
-        state.map = map;
+        state.map = normalizeMap(map);
         state.sourceMapId = null;
+        state.activeDraftMapId = state.map.id;
+        rememberCurrentDraftMap();
         syncInputsFromMap();
         syncMapSelectValue();
         resetHistory();
@@ -1900,7 +1939,7 @@
           return;
         }
 
-        const isSourceMap = !!sourceMaps[state.map.id];
+        const isSourceMap = !state.activeDraftMapId && !!sourceMaps[state.map.id];
         editorMode.textContent = isSourceMap
           ? "現在の表示: maps.js にある既存マップを編集中です。反映には JS書き出し後の差し替えが必要です。"
           : "現在の表示: ブラウザ上の新規マップです。まだ maps.js には登録されていません。";
@@ -1995,7 +2034,9 @@
         });
         const changed = !snapshotsEqual(snapshot, createHistorySnapshot());
         clearDuplicateSelection();
+        rememberCurrentDraftMap();
         syncInputsFromMap();
+        syncMapSelectValue();
         if (shouldRender) renderAll();
         if (changed) commitHistoryEntry(snapshot);
         return changed;
@@ -2159,6 +2200,7 @@ ${baseIndent}}`;
         if (!snapshot) return;
         state.pendingHistorySnapshot = null;
         state.map = normalizeMap(snapshot);
+        rememberCurrentDraftMap();
         syncMapSelectValue();
         const choices = getPaletteTiles();
         if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
@@ -2250,9 +2292,26 @@ ${baseIndent}}`;
       }
 
       function loadMapById(mapId) {
-        if (mapId === "__draft") {
+        finishPendingHistoryEntry();
+        rememberCurrentDraftMap();
+        const draftMapId = getDraftMapIdFromSelectValue(mapId);
+        if (draftMapId) {
+          const draftMap = state.draftMaps[draftMapId];
+          if (!draftMap) {
+            syncMapSelectValue();
+            setStatus("編集中の新規マップが見つかりません。");
+            return;
+          }
+          state.map = normalizeMap(draftMap);
+          state.sourceMapId = null;
+          state.activeDraftMapId = draftMapId;
           syncMapSelectValue();
-          setStatus(state.map ? `${state.map.name} を表示中です。` : "編集中の新規マップはありません。");
+          const choices = getPaletteTiles();
+          if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
+          syncInputsFromMap();
+          resetHistory();
+          renderAll();
+          setStatus(`${state.map.name} を開きました。`);
           return;
         }
         const sourceMap = sourceMaps[mapId] || getSourceMapList()[0] || null;
@@ -2262,6 +2321,7 @@ ${baseIndent}}`;
         }
         state.map = normalizeMap(sourceMap);
         state.sourceMapId = sourceMap.id;
+        state.activeDraftMapId = null;
         syncMapSelectValue();
         const choices = getPaletteTiles();
         if (!choices.includes(state.selectedTile)) state.selectedTile = choices[0] || "";
@@ -2341,9 +2401,17 @@ ${baseIndent}}`;
           console.error(error);
         }
 
+        if (state.activeDraftMapId) {
+          delete state.draftMaps[state.activeDraftMapId];
+          state.activeDraftMapId = null;
+        }
         const firstMap = getSourceMapList()[0];
         if (firstMap) {
           loadMapById(firstMap.id);
+          setStatus(`${mapName} を削除して、${state.map.name} を読み込みました。`);
+        } else if (getDraftMapList().length > 0) {
+          const draft = getDraftMapList()[0];
+          loadMapById(getDraftMapSelectValue(draft.id));
           setStatus(`${mapName} を削除して、${state.map.name} を読み込みました。`);
         } else {
           openCreatedNewMap(createNewMap(), `${mapName} を削除して、新規マップを作成しました。`);
@@ -2358,7 +2426,14 @@ ${baseIndent}}`;
             return;
           }
           state.map = normalizeMap(JSON.parse(raw));
-          state.sourceMapId = sourceMaps[state.map.id] ? state.map.id : null;
+          if (sourceMaps[state.map.id]) {
+            state.sourceMapId = state.map.id;
+            state.activeDraftMapId = null;
+          } else {
+            state.sourceMapId = null;
+            state.activeDraftMapId = state.map.id;
+            rememberCurrentDraftMap();
+          }
           syncMapSelectValue();
           syncInputsFromMap();
           resetHistory();
@@ -2690,6 +2765,7 @@ ${baseIndent}}`;
 
         const safeId = sanitizeId(state.map.id);
         const previousMapId = state.sourceMapId || safeId;
+        const appliedDraftMapId = state.activeDraftMapId;
         const renameText = previousMapId !== safeId ? `\n${previousMapId} から ${safeId} へIDを変更します。` : "";
         const ok = window.confirm(`${state.map.name || safeId} (${safeId}) を選択した maps.js に直接適用します。${renameText}\nよろしいですか？`);
         if (!ok) {
@@ -2715,6 +2791,11 @@ ${baseIndent}}`;
           }
           sourceMaps[safeId] = normalizeMap(createSerializableMap(state.map));
           state.sourceMapId = safeId;
+          if (appliedDraftMapId) {
+            delete state.draftMaps[appliedDraftMapId];
+          }
+          delete state.draftMaps[safeId];
+          state.activeDraftMapId = null;
           renderMapSelect();
           mapSelect.value = safeId;
           updateEditorMode();
@@ -2763,7 +2844,14 @@ ${baseIndent}}`;
           try {
             const raw = await file.text();
             state.map = normalizeMap(parseRecordPayload(raw));
-            state.sourceMapId = sourceMaps[state.map.id] ? state.map.id : null;
+            if (sourceMaps[state.map.id]) {
+              state.sourceMapId = state.map.id;
+              state.activeDraftMapId = null;
+            } else {
+              state.sourceMapId = null;
+              state.activeDraftMapId = state.map.id;
+              rememberCurrentDraftMap();
+            }
             syncMapSelectValue();
             syncInputsFromMap();
             resetHistory();
