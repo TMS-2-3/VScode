@@ -391,12 +391,16 @@
         box-shadow: 0 0 0 1px rgba(37, 43, 35, 0.4);
         overflow: visible;
         cursor: crosshair;
+        touch-action: none;
+        user-select: none;
       }
 
       .map-image {
         position: absolute;
         object-fit: cover;
         pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
         image-rendering: auto;
       }
 
@@ -711,6 +715,7 @@
         duplicateCurrentCell: null,
         duplicateSelection: null,
         duplicateHoverCell: null,
+        activePointerId: null,
         undoStack: [],
         redoStack: [],
         pendingHistorySnapshot: null,
@@ -1316,6 +1321,28 @@
 
       function getCellFromEvent(event) {
         return getCellFromClientPoint(event.clientX, event.clientY);
+      }
+
+      function isPrimaryLeftPointer(event) {
+        return event.button === 0 && event.isPrimary !== false;
+      }
+
+      function isActiveEditorPointer(event) {
+        return state.activePointerId === null || state.activePointerId === event.pointerId;
+      }
+
+      function captureEditorPointer(event) {
+        state.activePointerId = event.pointerId;
+        if (surface.setPointerCapture) {
+          surface.setPointerCapture(event.pointerId);
+        }
+      }
+
+      function releaseEditorPointer(event) {
+        if (event && surface.hasPointerCapture && surface.hasPointerCapture(event.pointerId)) {
+          surface.releasePointerCapture(event.pointerId);
+        }
+        state.activePointerId = null;
       }
 
       function updateCursorForCell(cell) {
@@ -2928,24 +2955,28 @@ ${baseIndent}}`;
           const cell = getCellFromEvent(event);
           if (!cell) return;
           if (state.tool === "duplicate") {
-            event.preventDefault();
             if (state.duplicateSelection) {
+              if (event.button !== 0 && event.button !== 2) return;
+              event.preventDefault();
               pasteDuplicateSelection(cell, event.button === 2);
               return;
             }
-            if (event.button !== 0) return;
+            if (!isPrimaryLeftPointer(event)) return;
+            event.preventDefault();
             state.isPointerDown = true;
             state.lastPaintKey = "";
             state.duplicateStartCell = cell;
             state.duplicateCurrentCell = cell;
-            surface.setPointerCapture(event.pointerId);
+            captureEditorPointer(event);
             startDragAutoScroll(event);
             renderRangePreview(cell, cell);
             return;
           }
+          if (!isPrimaryLeftPointer(event)) return;
+          event.preventDefault();
           state.isPointerDown = true;
           state.lastPaintKey = "";
-          surface.setPointerCapture(event.pointerId);
+          captureEditorPointer(event);
           startDragAutoScroll(event);
           if (state.tool === "range") {
             state.rangeStartCell = cell;
@@ -2956,14 +2987,19 @@ ${baseIndent}}`;
           paintCell(cell);
         });
         surface.addEventListener("pointermove", (event) => {
+          if (!isActiveEditorPointer(event)) return;
           if (state.isPointerDown) {
+            event.preventDefault();
             rememberDragPointer(event);
             if (canAutoScrollDrag()) scheduleDragAutoScroll();
           }
           updateSurfacePointerFromClient(event.clientX, event.clientY);
         });
         surface.addEventListener("pointerup", (event) => {
+          if (!isActiveEditorPointer(event)) return;
+          event.preventDefault();
           stopDragAutoScroll();
+          releaseEditorPointer(event);
           if (state.tool === "duplicate") {
             if (state.isPointerDown && state.duplicateStartCell && !state.duplicateSelection) {
               const cell = getCellFromEvent(event) || state.duplicateCurrentCell;
@@ -3000,7 +3036,22 @@ ${baseIndent}}`;
           finishPendingHistoryEntry();
           clearRangePreview();
         });
-        surface.addEventListener("pointercancel", () => {
+        surface.addEventListener("pointercancel", (event) => {
+          if (!isActiveEditorPointer(event)) return;
+          event.preventDefault();
+          releaseEditorPointer(event);
+          state.isPointerDown = false;
+          stopDragAutoScroll();
+          state.lastPaintKey = "";
+          finishPendingHistoryEntry();
+          clearRangePreview();
+          if (state.tool === "duplicate" && !state.duplicateSelection) {
+            clearDuplicateSelection();
+          }
+        });
+        surface.addEventListener("lostpointercapture", (event) => {
+          if (state.activePointerId !== event.pointerId) return;
+          state.activePointerId = null;
           state.isPointerDown = false;
           stopDragAutoScroll();
           state.lastPaintKey = "";
