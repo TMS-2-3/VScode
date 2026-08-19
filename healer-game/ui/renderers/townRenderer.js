@@ -15,6 +15,11 @@
       playerProfile,
       profileClickTargets,
       COLORS,
+      CHARACTER_DEFS,
+      BASE_CRIT_CHANCE,
+      BASE_CRIT_DAMAGE_RATE,
+      MOOD_BASELINE,
+      STATUS_DATA,
       EQUIPMENT_DATA,
       MATERIAL_DATA,
       itemSystem,
@@ -24,6 +29,10 @@
       getEquipmentBaseItemId,
       getEquipmentOwnedCount: getEquipmentOwnedCountFromSystem,
       getEquipmentUpgradeLevel: getEquipmentUpgradeLevelFromSystem,
+      getEffectiveStat,
+      normalizeEquipment,
+      normalizeLoadout,
+      getDefaultLoadout,
       getGold,
       formatGold,
       getPlayerFirstName,
@@ -43,6 +52,14 @@
     } = context;
 
   const MAX_ACCEPTED_FREE_QUESTS = 3;
+  const INN_PARTY_UNIT_ORDER = ["finald", "ulpes", "rihas", "sushia"];
+  const ITEM_SHOP_CATEGORIES = [
+    { key: "healing", label: "回復" },
+    { key: "mp", label: "MP回復" },
+    { key: "mood", label: "調子" },
+    { key: "support", label: "戦闘補助" },
+    { key: "other", label: "その他" },
+  ];
 
   function getActionLabel(actionId, fallback) {
     return typeof getKeybindLabel === "function" ? getKeybindLabel(actionId) || fallback : fallback;
@@ -160,6 +177,7 @@
 
   const EQUIPMENT_RANK_FILTERS = ["D", "C", "B", "A", "S"];
   const EQUIPMENT_SHOP_WEAPON_TYPES = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
+  const WEAPON_CRAFT_GRID_SLOTS = EQUIPMENT_SHOP_WEAPON_TYPES.map((type) => ({ key: type, label: type }));
   const EQUIPMENT_SHOP_UNITS = [
     { id: "ulpes", label: "ウルペス" },
     { id: "rihas", label: "リハス" },
@@ -183,6 +201,7 @@
     { key: "hands", label: "手" },
     { key: "accessory", label: "アクセサリ" },
   ];
+  const ARMOR_CRAFT_GRID_SLOTS = ARMOR_SLOT_FILTERS;
   const ARMOR_BASIC_STAT_FILTERS = [
     { key: "maxHp", label: "HP" },
     { key: "maxMp", label: "MP" },
@@ -1684,13 +1703,11 @@
   }
 
   function drawInnPanel() {
-    const w = Math.min(900, Math.max(320, view.w - 48));
-    const h = Math.min(420, Math.max(260, view.h - 72));
-    const x = (view.w - w) / 2;
-    const y = (view.h - h) / 2;
+    const { x, y, w, h } = getTownFacilityPageRect();
     const cost = Number.isFinite(town.panel.cost) ? town.panel.cost : 100;
     const restLocked = Boolean(game.innRestUsedUntilBattle);
     const canPay = getGoldValue() >= cost;
+    const members = getInnPartyMembers();
     drawPanel(x, y, w, h);
 
     ctx.textAlign = "left";
@@ -1705,16 +1722,277 @@
     ctx.fillStyle = "#dce9dc";
     ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(restLocked ? "次の戦闘後まで再度利用できません。" : `全員を全回復します。料金は${formatGoldSafe(cost)}です。`, x + 26, y + 84);
-    ctx.fillText("HP/MPと戦闘不能、簡易的な状態異常を回復します。", x + 26, y + 112);
+    ctx.fillText("HP/MPと戦闘不能、簡易的な状態異常を回復します。", x + 26, y + 108);
+
+    drawInnStatusComparison(members, x, y, w, h);
     if (town.panel.message) {
       ctx.fillStyle = isTownPanelErrorMessage(town.panel.message) ? "#ffb4a8" : "#ffd86b";
       ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText(town.panel.message, x + 26, y + 148);
+      ctx.fillText(town.panel.message, x + 26, y + h - 72);
     }
 
     drawTextButton(x + 26, y + h - 60, 132, 38, "閉じる", { kind: "close" });
     drawTextButton(x + w - 190, y + h - 60, 164, 38, "泊まる", { kind: "confirmInnRest" }, true, restLocked || !canPay);
     drawPanelFooter(x, y, w, h);
+  }
+
+  function drawInnStatusComparison(members, panelX, panelY, panelW, panelH) {
+    const contentX = panelX + 24;
+    const contentY = panelY + 136;
+    const contentW = panelW - 48;
+    const contentH = Math.max(110, panelH - 220);
+    const gap = 18;
+    const columnW = (contentW - gap) / 2;
+    const currentRect = { x: contentX, y: contentY, w: columnW, h: contentH };
+    const afterRect = { x: contentX + columnW + gap, y: contentY, w: columnW, h: contentH };
+    drawInnStatusColumn("現在の状態", members, currentRect, false);
+    drawInnStatusColumn("泊まった後", members, afterRect, true);
+  }
+
+  function drawInnStatusColumn(title, members, rect, afterRest) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(title, rect.x + 16, rect.y + 28);
+
+    if (!members.length) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("パーティーメンバーがいません。", rect.x + 16, rect.y + 64);
+      ctx.restore();
+      return;
+    }
+
+    const rowGap = 10;
+    const rowH = Math.max(82, Math.min(112, Math.floor((rect.h - 52 - rowGap * Math.max(0, members.length - 1)) / members.length)));
+    for (let i = 0; i < members.length; i += 1) {
+      const rowY = rect.y + 46 + i * (rowH + rowGap);
+      if (rowY + rowH > rect.y + rect.h - 8) {
+        break;
+      }
+      drawInnMemberRow(members[i], rect.x + 12, rowY, rect.w - 24, rowH, afterRest);
+    }
+    ctx.restore();
+  }
+
+  function drawInnMemberRow(member, x, y, w, h, afterRest) {
+    const name = getInnMemberName(member);
+    const dead = isInnMemberIncapacitated(member);
+    const maxHp = getInnMemberMaxResource(member, "maxHp");
+    const maxMp = getInnMemberMaxResource(member, "maxMp");
+    const currentHp = afterRest ? maxHp : getInnMemberCurrentResource(member, "hp", maxHp);
+    const currentMp = afterRest ? maxMp : getInnMemberCurrentResource(member, "mp", maxMp);
+    const statusChips = afterRest ? [] : getInnMemberStatusChips(member);
+    ctx.save();
+    ctx.fillStyle = dead && !afterRest ? "rgba(255,120,110,0.1)" : "rgba(255,255,255,0.075)";
+    ctx.strokeStyle = dead && !afterRest ? "rgba(255,120,110,0.42)" : "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const nameW = Math.min(118, Math.max(78, w * 0.24));
+    drawFittedTownText(name, x + 14, y + 25, nameW, 900, 16, 11, dead && !afterRest ? "#ffb4a8" : "#f7fff6");
+    if (afterRest && dead) {
+      ctx.fillStyle = "#8ff0a4";
+      ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("戦闘不能解除", x + 14, y + 46);
+    }
+
+    const barX = x + nameW + 24;
+    const barW = Math.max(116, w - nameW - 40);
+    drawInnResourceBar("HP", currentHp, maxHp, barX, y + 14, barW, COLORS.hp || "#72df82");
+    drawInnResourceBar("MP", currentMp, maxMp, barX, y + 42, barW, COLORS.mp || "#73a7ff");
+    drawInnStatusChips(afterRest ? [{ name: "状態なし", color: "#5d6864", empty: true }] : statusChips, barX, y + 70, barW, h - 76);
+    ctx.restore();
+  }
+
+  function drawInnResourceBar(label, current, max, x, y, w, color) {
+    const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(label, x, y + 11);
+    ctx.textAlign = "right";
+    ctx.fillText(`${formatInnNumber(current)} / ${formatInnNumber(max)}`, x + w, y + 11);
+    const barY = y + 15;
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    roundRect(x, barY, w, 8, 4);
+    ctx.fill();
+    ctx.fillStyle = color;
+    roundRect(x, barY, w * ratio, 8, 4);
+    ctx.fill();
+  }
+
+  function drawInnStatusChips(chips, x, y, w, h) {
+    const list = Array.isArray(chips) && chips.length ? chips : [{ name: "状態なし", color: "#5d6864", empty: true }];
+    let cursorX = x;
+    let cursorY = y;
+    const maxY = y + Math.max(18, h);
+    for (const chip of list.slice(0, 8)) {
+      const label = chip.name || "状態";
+      ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      const chipW = Math.min(Math.max(44, ctx.measureText(label).width + 18), Math.max(44, w));
+      if (cursorX + chipW > x + w && cursorX > x) {
+        cursorX = x;
+        cursorY += 23;
+      }
+      if (cursorY + 18 > maxY) {
+        break;
+      }
+      ctx.fillStyle = chip.empty ? "rgba(255,255,255,0.08)" : chip.color || "#d4e4d5";
+      roundRect(cursorX, cursorY, chipW, 18, 9);
+      ctx.fill();
+      ctx.fillStyle = chip.empty ? "#dce9dc" : "#111814";
+      ctx.textBaseline = "middle";
+      drawFittedTownText(label, cursorX + chipW / 2, cursorY + 9.5, chipW - 10, 800, 11, 8, chip.empty ? "#dce9dc" : "#111814", "center");
+      cursorX += chipW + 6;
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+
+  function getInnPartyMembers() {
+    const availableIds = new Set(["finald"]);
+    const livePartyIds = Array.isArray(party)
+      ? party.map((member) => member && member.id).filter((id) => id && id !== "finald")
+      : [];
+    if (livePartyIds.length > 0) {
+      livePartyIds.forEach((id) => availableIds.add(id));
+    } else if (town && town.meetingDone) {
+      INN_PARTY_UNIT_ORDER.forEach((id) => availableIds.add(id));
+    }
+    return INN_PARTY_UNIT_ORDER
+      .filter((unitId) => availableIds.has(unitId))
+      .map((unitId) => getInnDisplayUnit(unitId))
+      .filter(Boolean);
+  }
+
+  function getInnDisplayUnit(unitId) {
+    const live = getInnLiveUnit(unitId);
+    if (live) {
+      return live;
+    }
+    const def = getInnCharacterDef(unitId);
+    if (!def) {
+      return null;
+    }
+    const critChance = Number.isFinite(def.critChance) ? def.critChance : Number.isFinite(BASE_CRIT_CHANCE) ? BASE_CRIT_CHANCE : 0;
+    const critDamage = Number.isFinite(def.critDamage) ? def.critDamage : Number.isFinite(BASE_CRIT_DAMAGE_RATE) ? BASE_CRIT_DAMAGE_RATE : 0;
+    const unit = {
+      ...def,
+      skillOwner: def.skillOwner || def.id,
+      hp: def.maxHp || 100,
+      mp: def.maxMp || 0,
+      critChance,
+      critDamage,
+      baseStats: {
+        ...(def.baseStats || {}),
+        critChance,
+        critDamage,
+      },
+      mood: def.id === "finald" ? null : Number.isFinite(MOOD_BASELINE) ? MOOD_BASELINE : 50,
+      ult: 0,
+      cds: {},
+      activeCommandBias: 0,
+    };
+    const storedEquipment = game.partyEquipmentById && game.partyEquipmentById[unitId] || def.equipment || {};
+    const storedLoadout = game.partyLoadoutById && game.partyLoadoutById[unitId] || null;
+    unit.equipment = typeof normalizeEquipment === "function" ? normalizeEquipment(storedEquipment, unit) : { ...storedEquipment };
+    unit.loadout = storedLoadout && typeof normalizeLoadout === "function"
+      ? normalizeLoadout(unit.skillOwner || unit.id, storedLoadout)
+      : typeof getDefaultLoadout === "function"
+        ? getDefaultLoadout(unit.skillOwner || unit.id)
+        : { passive: null, active: [] };
+    unit.dead = Boolean(game.partyDeadById && game.partyDeadById[unit.id]);
+    unit.hp = getInnMemberCurrentResource(unit, "hp", getInnMemberMaxResource(unit, "maxHp"));
+    unit.mp = getInnMemberCurrentResource(unit, "mp", getInnMemberMaxResource(unit, "maxMp"));
+    return unit;
+  }
+
+  function getInnLiveUnit(unitId) {
+    if (player && player.id === unitId) {
+      return player;
+    }
+    return Array.isArray(party) ? party.find((member) => member && member.id === unitId) || null : null;
+  }
+
+  function getInnCharacterDef(unitId) {
+    if (unitId === "finald") {
+      return CHARACTER_DEFS && CHARACTER_DEFS.player ? CHARACTER_DEFS.player : null;
+    }
+    const allies = CHARACTER_DEFS && Array.isArray(CHARACTER_DEFS.allies) ? CHARACTER_DEFS.allies : [];
+    return allies.find((member) => member && member.id === unitId) || null;
+  }
+
+  function getInnMemberName(member) {
+    if (!member) {
+      return "";
+    }
+    if (member.id === "finald" && typeof getPlayerFirstName === "function") {
+      return getPlayerFirstName() || member.name || "アルジュナ";
+    }
+    return member.name || member.label || member.id;
+  }
+
+  function getInnMemberMaxResource(member, key) {
+    const fallback = Math.max(key === "maxHp" ? 1 : 0, Number.isFinite(member && member[key]) ? member[key] : 0);
+    const value = typeof getEffectiveStat === "function" ? getEffectiveStat(member, key) : fallback;
+    const minimum = key === "maxHp" ? 1 : 0;
+    return Math.max(minimum, Math.round(Number.isFinite(value) ? value : fallback));
+  }
+
+  function getInnMemberCurrentResource(member, key, max) {
+    const saved = key === "hp"
+      ? game.partyHpById && Number(game.partyHpById[member.id])
+      : game.partyMpById && Number(game.partyMpById[member.id]);
+    const current = Number.isFinite(saved) ? saved : Number.isFinite(member && member[key]) ? member[key] : max;
+    return Math.max(0, Math.min(max, Math.round(Number.isFinite(current) ? current : max)));
+  }
+
+  function isInnMemberIncapacitated(member) {
+    return Boolean(member && (
+      member.dead
+      || member.hp <= 0
+      || game.partyDeadById && game.partyDeadById[member.id]
+    ));
+  }
+
+  function getInnMemberStatusChips(member) {
+    const chips = [];
+    if (isInnMemberIncapacitated(member)) {
+      chips.push(getInnStatusChip("incapacitated"));
+    }
+    const saved = game.partyStatusById && member && game.partyStatusById[member.id];
+    if (saved && typeof saved === "object") {
+      for (const statusId of Object.keys(saved)) {
+        if (statusId === "incapacitated" && chips.some((chip) => chip.id === "incapacitated")) {
+          continue;
+        }
+        chips.push(getInnStatusChip(statusId, saved[statusId]));
+      }
+    }
+    return chips.filter(Boolean);
+  }
+
+  function getInnStatusChip(statusId, state = null) {
+    const statusData = STATUS_DATA || window.HEALER_STATUS_DATA || {};
+    const status = statusData[statusId] || statusData[String(statusId || "").replace(/^Injury$/, "debuff_Injury")] || {};
+    const stacks = state && Number.isFinite(state.stacks) && state.stacks > 1 ? ` x${Math.floor(state.stacks)}` : "";
+    return {
+      id: statusId,
+      name: `${status.name || statusId}${stacks}`,
+      color: status.color || "#d4e4d5",
+    };
+  }
+
+  function formatInnNumber(value) {
+    return String(Math.max(0, Math.round(Number.isFinite(value) ? value : 0)));
   }
 
   function getTownFacilityPageRect() {
@@ -1733,6 +2011,10 @@
   function drawItemShopPanel() {
     const { x, y, w, h } = getTownFacilityPageRect();
     const items = getShopItems();
+    const groups = buildItemShopCategoryGroups(items);
+    const selectedGroup = getSelectedItemShopCategoryGroup(groups);
+    const selectedItems = selectedGroup ? selectedGroup.items : [];
+    const selectedItem = getSelectedItemShopItem(selectedItems);
     drawPanel(x, y, w, h);
 
     ctx.textAlign = "left";
@@ -1751,27 +2033,7 @@
       ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillText("今は販売中のアイテムがありません。", x + 26, y + 92);
     } else {
-      const listRect = { x: x + 24, y: y + 78, w: w - 48, h: Math.max(120, h - 158) };
-      const rowH = 86;
-      const gap = 10;
-      const contentH = items.length * rowH + Math.max(0, items.length - 1) * gap;
-      const scrollMax = Math.max(0, contentH - listRect.h);
-      const scroll = Math.max(0, Math.min(scrollMax, town.panel.scroll || 0));
-      town.panel.scroll = scroll;
-      town.panel.scrollMax = scrollMax;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
-      ctx.clip();
-      for (let i = 0; i < items.length; i += 1) {
-        const rowY = listRect.y + i * (rowH + gap) - scroll;
-        if (rowY + rowH < listRect.y || rowY > listRect.y + listRect.h) {
-          continue;
-        }
-        drawShopItemRow(items[i], listRect.x, rowY, listRect.w, rowH);
-      }
-      ctx.restore();
-      drawTownScrollbar(listRect, scroll, scrollMax);
+      drawItemShopLayout(groups, selectedGroup, selectedItems, selectedItem, x, y, w, h);
     }
 
     if (town.panel.message) {
@@ -1781,6 +2043,347 @@
     }
     drawTextButton(x + 24, y + h - 50, 130, 34, "閉じる", { kind: "close" });
     drawPanelFooter(x, y, w, h);
+  }
+
+  function drawItemShopLayout(groups, selectedGroup, selectedItems, selectedItem, panelX, panelY, panelW, panelH) {
+    const contentX = panelX + 24;
+    const contentY = panelY + 78;
+    const contentW = panelW - 48;
+    const contentH = Math.max(120, panelH - 158);
+    const gap = 16;
+    let categoryW = Math.min(206, Math.max(138, Math.floor(contentW * 0.17)));
+    let detailW = Math.min(420, Math.max(300, Math.floor(contentW * 0.34)));
+    let listW = contentW - categoryW - detailW - gap * 2;
+    if (listW < 220) {
+      listW = Math.max(180, Math.floor(contentW * 0.34));
+      detailW = Math.max(250, contentW - categoryW - listW - gap * 2);
+    }
+    if (contentW < 760) {
+      categoryW = Math.max(96, Math.floor(contentW * 0.22));
+      listW = Math.max(120, Math.floor(contentW * 0.38));
+      detailW = Math.max(1, contentW - categoryW - listW - gap * 2);
+    }
+    const categoryRect = { x: contentX, y: contentY, w: categoryW, h: contentH };
+    const listRect = { x: categoryRect.x + categoryRect.w + gap, y: contentY, w: listW, h: contentH };
+    const detailRect = { x: listRect.x + listRect.w + gap, y: contentY, w: Math.max(1, contentX + contentW - (listRect.x + listRect.w + gap)), h: contentH };
+    drawItemShopCategoryList(groups, selectedGroup, categoryRect);
+    drawItemShopItemList(selectedItems, selectedItem, listRect);
+    drawItemShopDetail(selectedItem, detailRect);
+  }
+
+  function buildItemShopCategoryGroups(items) {
+    const groups = ITEM_SHOP_CATEGORIES.map((category) => ({
+      ...category,
+      items: [],
+    }));
+    const byKey = new Map(groups.map((group) => [group.key, group]));
+    for (const item of items) {
+      const key = getItemShopCategoryKey(item);
+      const group = byKey.get(key) || byKey.get("other");
+      if (group) {
+        group.items.push(item);
+      }
+    }
+    return groups;
+  }
+
+  function getItemShopCategoryKey(item) {
+    if (!item) {
+      return "other";
+    }
+    if (Number.isFinite(item.healFlat) && item.healFlat > 0) {
+      return "healing";
+    }
+    if (Number.isFinite(item.mpFlat) && item.mpFlat > 0) {
+      return "mp";
+    }
+    if (Number.isFinite(item.moodDelta) && item.moodDelta !== 0) {
+      return "mood";
+    }
+    if (
+      item.baseStatBuffs && typeof item.baseStatBuffs === "object"
+      || item.statusIds && Array.isArray(item.statusIds) && item.statusIds.length > 0
+      || item.buffs && typeof item.buffs === "object"
+    ) {
+      return "support";
+    }
+    return "other";
+  }
+
+  function getSelectedItemShopCategoryGroup(groups) {
+    const selectedKey = town.panel && town.panel.selectedItemShopCategory;
+    const selected = groups.find((group) => group.key === selectedKey && group.items.length > 0)
+      || groups.find((group) => group.items.length > 0)
+      || groups[0]
+      || null;
+    if (town.panel && selected) {
+      if (town.panel.selectedItemShopCategory !== selected.key) {
+        town.panel.scroll = 0;
+        town.panel.scrollMax = 0;
+        town.panel.selectedItemShopItemId = null;
+      }
+      town.panel.selectedItemShopCategory = selected.key;
+    }
+    return selected;
+  }
+
+  function getSelectedItemShopItem(items) {
+    const selectedId = town.panel && town.panel.selectedItemShopItemId;
+    const selected = items.find((item) => item && item.id === selectedId) || items[0] || null;
+    if (town.panel) {
+      town.panel.selectedItemShopItemId = selected ? selected.id : null;
+    }
+    return selected;
+  }
+
+  function drawItemShopCategoryList(groups, selectedGroup, rect) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("カテゴリ", rect.x + 14, rect.y + 26);
+    const rowH = 42;
+    const gap = 8;
+    for (let i = 0; i < groups.length; i += 1) {
+      const group = groups[i];
+      const rowY = rect.y + 44 + i * (rowH + gap);
+      if (rowY + rowH > rect.y + rect.h - 8) {
+        break;
+      }
+      const selected = Boolean(selectedGroup && group.key === selectedGroup.key);
+      const disabled = group.items.length <= 0;
+      town.panel.clickTargets.push({
+        x: rect.x + 10,
+        y: rowY,
+        w: rect.w - 20,
+        h: rowH,
+        action: disabled ? { kind: "noop" } : { kind: "selectItemShopCategory", category: group.key },
+      });
+      ctx.fillStyle = selected ? "rgba(255,216,107,0.24)" : disabled ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.08)";
+      ctx.strokeStyle = selected ? "#ffd86b" : "rgba(255,255,255,0.14)";
+      ctx.lineWidth = selected ? 2 : 1;
+      roundRect(rect.x + 10, rowY, rect.w - 20, rowH, 8);
+      ctx.fill();
+      ctx.stroke();
+      drawFittedTownText(group.label, rect.x + 22, rowY + 26, rect.w - 76, 850, 14, 10, disabled ? "rgba(220,233,220,0.45)" : "#f7fff6");
+      ctx.fillStyle = disabled ? "rgba(220,233,220,0.35)" : "#ffd86b";
+      ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(String(group.items.length), rect.x + rect.w - 24, rowY + 26);
+      ctx.textAlign = "left";
+    }
+    ctx.restore();
+  }
+
+  function drawItemShopItemList(items, selectedItem, rect) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("商品", rect.x + 14, rect.y + 26);
+    ctx.restore();
+
+    const viewport = { x: rect.x, y: rect.y + 40, w: rect.w, h: Math.max(42, rect.h - 40) };
+    const rowH = 68;
+    const gap = 8;
+    const contentH = items.length * rowH + Math.max(0, items.length - 1) * gap;
+    const scrollMax = Math.max(0, contentH - viewport.h);
+    const scroll = Math.max(0, Math.min(scrollMax, town.panel.scroll || 0));
+    town.panel.scroll = scroll;
+    town.panel.scrollMax = scrollMax;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(viewport.x, viewport.y, viewport.w, viewport.h);
+    ctx.clip();
+    if (!items.length) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("このカテゴリの商品はありません。", rect.x + 14, viewport.y + 32);
+    }
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      const rowY = viewport.y + i * (rowH + gap) - scroll;
+      if (rowY + rowH < viewport.y || rowY > viewport.y + viewport.h) {
+        continue;
+      }
+      const selected = Boolean(selectedItem && item && selectedItem.id === item.id);
+      town.panel.clickTargets.push({
+        x: rect.x + 10,
+        y: rowY,
+        w: rect.w - 20,
+        h: rowH,
+        action: { kind: "selectItemShopItem", itemId: item.id },
+      });
+      ctx.fillStyle = selected ? "rgba(255,216,107,0.25)" : "rgba(255,255,255,0.075)";
+      ctx.strokeStyle = selected ? "#ffd86b" : "rgba(255,255,255,0.16)";
+      ctx.lineWidth = selected ? 2 : 1;
+      roundRect(rect.x + 10, rowY, rect.w - 20, rowH, 8);
+      ctx.fill();
+      ctx.stroke();
+      drawFittedTownText(item.name || item.id, rect.x + 24, rowY + 26, Math.max(44, rect.w - 150), 900, 16, 11, selected ? "#fff6c2" : "#f7fff6");
+      drawFittedTownText(item.simpleDescription || item.description || "アイテム", rect.x + 24, rowY + 49, rect.w - 42, 700, 12, 9, "#dce9dc");
+      ctx.fillStyle = "#ffd86b";
+      ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(formatGoldSafe(getItemShopPrice(item)), rect.x + rect.w - 24, rowY + 27);
+      ctx.textAlign = "left";
+    }
+    ctx.restore();
+    drawTownScrollbar(viewport, scroll, scrollMax);
+  }
+
+  function drawItemShopDetail(item, rect) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("選択中のアイテム", rect.x + 16, rect.y + 26);
+
+    if (!item) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("左の一覧からアイテムを選択してください。", rect.x + 16, rect.y + 64);
+      ctx.restore();
+      return;
+    }
+
+    const detailX = rect.x + 16;
+    const detailW = Math.max(60, rect.w - 32);
+    const price = getItemShopPrice(item);
+    const inventory = getItemInventoryCountForTown(item);
+    const equipped = getItemEquippedCountForTown(item);
+    const quantity = getItemShopBuyQuantity(item.id);
+    const totalPrice = price * quantity;
+    const focused = town.panel && town.panel.buyQuantityFocusItemId === item.id;
+    const canBuy = price > 0 && quantity > 0 && getGoldValue() >= totalPrice;
+
+    drawFittedTownText(item.name || item.id, detailX, rect.y + 56, detailW, 900, 22, 14, "#f7fff6");
+    ctx.fillStyle = "#ffd86b";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText([item.rank, item.kind, item.useTiming].filter(Boolean).join(" / ") || "アイテム", detailX, rect.y + 82);
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const descriptionLines = wrapCanvasText(item.description || item.simpleDescription || "説明なし", detailW);
+    let cursorY = rect.y + 112;
+    for (const line of descriptionLines.slice(0, 4)) {
+      ctx.fillText(line, detailX, cursorY);
+      cursorY += 18;
+    }
+
+    cursorY += 8;
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("効果", detailX, cursorY);
+    cursorY += 20;
+    const effectEntries = getItemShopEffectEntriesForTown(item);
+    const valueX = detailX + Math.min(detailW, 188);
+    for (const entry of effectEntries.slice(0, 8)) {
+      drawFittedTownText(entry.label, detailX, cursorY, Math.max(60, valueX - detailX - 12), 700, 13, 10, "#dce9dc");
+      ctx.fillStyle = entry.negative ? "#ffb4a8" : "#8ff0a4";
+      ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(entry.value, valueX, cursorY);
+      ctx.textAlign = "left";
+      cursorY += 18;
+    }
+
+    cursorY += 8;
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("所持", detailX, cursorY);
+    cursorY += 20;
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(`持ち物 ${inventory} / 装備中 ${equipped}`, detailX, cursorY);
+    cursorY += 20;
+    ctx.fillText(`単価 ${formatGoldSafe(price)}`, detailX, cursorY);
+    ctx.restore();
+
+    const controlsY = rect.y + rect.h - 54;
+    const buyX = rect.x + rect.w - 96;
+    ctx.save();
+    ctx.fillStyle = canBuy ? "#ffd86b" : "rgba(220,233,220,0.55)";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`合計 ${formatGoldSafe(totalPrice)}`, detailX, controlsY + 18);
+    ctx.restore();
+    drawTextButton(buyX, controlsY, 74, 36, "購入", { kind: "buyItem", itemId: item.id }, true, !canBuy);
+    drawTextButton(buyX - 46, controlsY, 34, 36, "+", { kind: "adjustItemShopQuantity", itemId: item.id, delta: 1 }, false);
+    drawQuantityField(buyX - 96, controlsY, 44, 36, quantity, focused, { kind: "focusItemShopQuantity", itemId: item.id });
+    drawTextButton(buyX - 138, controlsY, 34, 36, "-", { kind: "adjustItemShopQuantity", itemId: item.id, delta: -1 }, false, quantity <= 1);
+  }
+
+  function getItemShopEffectEntriesForTown(item) {
+    const entries = [];
+    if (!item) {
+      return entries;
+    }
+    if (Number.isFinite(item.healFlat) && item.healFlat !== 0) {
+      entries.push({ label: "HP回復", value: formatSignedTownNumber(item.healFlat), negative: item.healFlat < 0 });
+    }
+    if (Number.isFinite(item.mpFlat) && item.mpFlat !== 0) {
+      entries.push({ label: "MP回復", value: formatSignedTownNumber(item.mpFlat), negative: item.mpFlat < 0 });
+    }
+    if (Number.isFinite(item.moodDelta) && item.moodDelta !== 0) {
+      entries.push({ label: "調子", value: formatSignedTownNumber(item.moodDelta), negative: item.moodDelta < 0 });
+    }
+    if (item.baseStatBuffs && typeof item.baseStatBuffs === "object") {
+      for (const [key, value] of Object.entries(item.baseStatBuffs)) {
+        if (Number.isFinite(value) && value !== 0) {
+          entries.push({ label: `基礎${getTownStatLabel(key)}`, value: formatSignedTownNumber(value), negative: value < 0 });
+        }
+      }
+    }
+    if (!entries.length) {
+      entries.push({ label: "効果", value: item.simpleDescription || "なし", negative: false });
+    }
+    if (Number.isFinite(item.cast) && item.cast > 0) {
+      entries.push({ label: "使用時間", value: `${formatTownDecimal(item.cast)}秒`, negative: false });
+    }
+    if (Number.isFinite(item.reuseCd) && item.reuseCd > 0) {
+      entries.push({ label: "再使用", value: `${formatTownDecimal(item.reuseCd)}秒`, negative: false });
+    }
+    if (Number.isFinite(item.battleMaxCount) || Number.isFinite(item.maxCount)) {
+      entries.push({ label: "装備上限", value: String(Math.max(1, Math.floor(Number.isFinite(item.battleMaxCount) ? item.battleMaxCount : item.maxCount))), negative: false });
+    }
+    return entries;
+  }
+
+  function getItemShopPrice(item) {
+    return Math.max(0, Math.floor(Number.isFinite(item && item.price) ? item.price : 0));
+  }
+
+  function getItemInventoryCountForTown(item) {
+    return itemSystem && typeof itemSystem.getItemInventoryCount === "function"
+      ? itemSystem.getItemInventoryCount(item.id)
+      : itemSystem && typeof itemSystem.getItemOwnedCount === "function" ? itemSystem.getItemOwnedCount(item.id) : 0;
+  }
+
+  function getItemEquippedCountForTown(item) {
+    return itemSystem && typeof itemSystem.getItemEquippedCount === "function" ? itemSystem.getItemEquippedCount(item.id) : 0;
+  }
+
+  function formatTownDecimal(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return "0";
+    }
+    return Number.isInteger(numeric) ? String(numeric) : String(Math.round(numeric * 10) / 10);
   }
 
   function drawShopItemRow(item, x, y, w, h) {
@@ -1896,6 +2499,8 @@
         ctx.fillText(`${label}の${action}データはまだありません。`, x + 26, listTop + 28);
         ctx.fillText("装備データにレシピを追加すると、ここに候補が表示されます。", x + 26, listTop + 56);
       }
+    } else if (shopKind === "armor" || shopKind === "weapon") {
+      drawArmorCraftGridPanel(rows, shopKind, tab, x, y, w, h, listTop);
     } else {
       const listRect = { x: x + 24, y: listTop, w: w - 48, h: Math.max(96, y + h - 78 - listTop) };
       const rowH = getEquipmentShopRowHeight(tab);
@@ -2113,6 +2718,431 @@
       && context.input.mouse.x <= x + w
       && context.input.mouse.y >= y
       && context.input.mouse.y <= y + h;
+  }
+
+  function drawArmorCraftGridPanel(rows, shopKind, tab, panelX, panelY, panelW, panelH, listTop) {
+    const contentX = panelX + 24;
+    const contentW = panelW - 48;
+    const contentH = Math.max(96, panelY + panelH - 78 - listTop);
+    const gap = 18;
+    let listW = Math.floor(contentW * 0.64);
+    let detailW = contentW - listW - gap;
+    if (detailW < 330 && contentW > 640) {
+      detailW = 330;
+      listW = contentW - detailW - gap;
+    }
+    if (contentW <= 640) {
+      listW = Math.floor(contentW * 0.58);
+      detailW = contentW - listW - gap;
+    }
+
+    const listRect = {
+      x: contentX,
+      y: listTop,
+      w: Math.max(180, Math.min(listW, Math.max(180, contentW - gap - 120))),
+      h: contentH,
+    };
+    const detailRect = {
+      x: contentX + listRect.w + gap,
+      y: listTop,
+      w: Math.max(1, contentW - listRect.w - gap),
+      h: contentH,
+    };
+    const selectedItem = getSelectedArmorCraftItem(rows);
+    const groups = buildArmorCraftGroups(rows, shopKind);
+    drawArmorCraftGridList(groups, selectedItem, shopKind, tab, listRect);
+    drawArmorCraftDetail(selectedItem, shopKind, tab, detailRect);
+  }
+
+  function getSelectedArmorCraftItem(rows) {
+    const selectedRef = town.panel && (town.panel.selectedEquipmentShopItemRef || town.panel.selectedEquipmentShopItemId);
+    const selected = rows.find((item) => {
+      if (!item || !selectedRef) {
+        return false;
+      }
+      return getEquipmentRefForTown(item) === selectedRef || item.id === selectedRef;
+    }) || rows[0] || null;
+    if (town.panel) {
+      town.panel.selectedEquipmentShopItemId = selected && selected.id || null;
+      town.panel.selectedEquipmentShopItemRef = selected ? getEquipmentRefForTown(selected) : null;
+    }
+    return selected;
+  }
+
+  function buildArmorCraftGroups(rows, shopKind) {
+    const groups = [];
+    const groupByKey = new Map();
+    for (const item of rows) {
+      if (!item) {
+        continue;
+      }
+      const seriesKey = item.series || "no_series";
+      let group = groupByKey.get(seriesKey);
+      if (!group) {
+        group = {
+          key: seriesKey,
+          name: getEquipmentSeriesNameForTown(seriesKey),
+          slots: {},
+        };
+        groupByKey.set(seriesKey, group);
+        groups.push(group);
+      }
+      const columnKey = getEquipmentShopGridColumnKey(item, shopKind);
+      if (!group.slots[columnKey]) {
+        group.slots[columnKey] = [];
+      }
+      group.slots[columnKey].push(item);
+    }
+    return groups;
+  }
+
+  function getEquipmentSeriesNameForTown(seriesKey) {
+    const series = EQUIPMENT_DATA && EQUIPMENT_DATA.series ? EQUIPMENT_DATA.series[seriesKey] : null;
+    return series && series.name || seriesKey || "シリーズなし";
+  }
+
+  function getEquipmentShopGridColumns(shopKind) {
+    return shopKind === "weapon" ? WEAPON_CRAFT_GRID_SLOTS : ARMOR_CRAFT_GRID_SLOTS;
+  }
+
+  function getEquipmentShopGridColumnKey(item, shopKind) {
+    if (!item) {
+      return shopKind === "weapon" ? "unknown_weapon" : "unknown_slot";
+    }
+    return shopKind === "weapon" ? item.weaponType || "unknown_weapon" : item.slot || "unknown_slot";
+  }
+
+  function drawArmorCraftGridList(groups, selectedItem, shopKind, tab, rect) {
+    const columns = getEquipmentShopGridColumns(shopKind);
+    const headerH = 30;
+    const compactGrid = rect.w < 560;
+    const seriesW = compactGrid
+      ? Math.max(70, Math.floor(rect.w * 0.28))
+      : Math.min(188, Math.max(118, Math.floor(rect.w * 0.2)));
+    const colGap = 6;
+    const slotCount = columns.length;
+    const slotW = Math.max(12, Math.floor((rect.w - seriesW - colGap * slotCount - 8) / slotCount));
+    const rowH = 78;
+    const rowGap = 8;
+    const listBottom = rect.y + rect.h;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("シリーズ", rect.x + 10, rect.y + 15);
+    for (let i = 0; i < slotCount; i += 1) {
+      const slot = columns[i];
+      const slotX = rect.x + seriesW + colGap + i * (slotW + colGap);
+      drawFittedTownText(slot.label, slotX + slotW / 2, rect.y + 15, slotW - 4, 800, 12, 8, "#dce9dc", "center");
+    }
+    ctx.restore();
+
+    const viewport = {
+      x: rect.x,
+      y: rect.y + headerH + 6,
+      w: rect.w,
+      h: Math.max(42, rect.h - headerH - 6),
+    };
+    const contentH = groups.length * rowH + Math.max(0, groups.length - 1) * rowGap;
+    const scrollMax = Math.max(0, contentH - viewport.h);
+    const scroll = Math.max(0, Math.min(scrollMax, town.panel.scroll || 0));
+    town.panel.scroll = scroll;
+    town.panel.scrollMax = scrollMax;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(viewport.x, viewport.y, viewport.w, viewport.h);
+    ctx.clip();
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const group = groups[groupIndex];
+      const rowY = viewport.y + groupIndex * (rowH + rowGap) - scroll;
+      if (rowY + rowH < viewport.y || rowY > listBottom) {
+        continue;
+      }
+      ctx.fillStyle = groupIndex % 2 === 0 ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.025)";
+      roundRect(rect.x + 2, rowY, rect.w - 8, rowH, 8);
+      ctx.fill();
+      drawFittedTownText(group.name, rect.x + 12, rowY + 31, seriesW - 18, 900, 15, 10, "#f7fff6");
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      const groupCountLabel = shopKind === "weapon" ? "種" : "部位";
+      ctx.fillText(`${getArmorCraftGroupItemCount(group)}${groupCountLabel}`, rect.x + 12, rowY + 56);
+
+      for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+        const slot = columns[slotIndex];
+        const slotX = rect.x + seriesW + colGap + slotIndex * (slotW + colGap);
+        drawArmorCraftGridCell(group.slots[slot.key] || [], selectedItem, tab, slotX, rowY + 8, slotW, rowH - 16);
+      }
+    }
+    ctx.restore();
+    drawTownScrollbar(viewport, scroll, scrollMax);
+  }
+
+  function getArmorCraftGroupItemCount(group) {
+    return Object.values(group.slots || {}).reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0);
+  }
+
+  function drawArmorCraftGridCell(items, selectedItem, tab, x, y, w, h) {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!list.length) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.035)";
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      roundRect(x, y, w, h, 7);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    const gap = 4;
+    const itemH = Math.max(22, Math.floor((h - gap * (list.length - 1)) / list.length));
+    for (let i = 0; i < list.length; i += 1) {
+      const item = list[i];
+      const itemRef = getEquipmentRefForTown(item);
+      const cellY = y + i * (itemH + gap);
+      const selected = Boolean(selectedItem && item && getEquipmentRefForTown(selectedItem) === itemRef);
+      town.panel.clickTargets.push({
+        x,
+        y: cellY,
+        w,
+        h: itemH,
+        action: { kind: "selectEquipmentShopItem", itemId: item.id, equipmentRef: itemRef },
+      });
+      ctx.save();
+      ctx.fillStyle = selected ? "rgba(255,216,107,0.25)" : "rgba(255,255,255,0.075)";
+      ctx.strokeStyle = selected ? "#ffd86b" : "rgba(255,255,255,0.16)";
+      ctx.lineWidth = selected ? 2 : 1;
+      roundRect(x, cellY, w, itemH, 7);
+      ctx.fill();
+      ctx.stroke();
+      drawFittedTownText(getEquipmentShopItemName(item, tab), x + 6, cellY + Math.max(15, itemH / 2 + 5), w - 12, 900, 12, 8, selected ? "#fff6c2" : "#f7fff6");
+      ctx.restore();
+    }
+  }
+
+  function drawArmorCraftDetail(item, shopKind, tab, rect) {
+    const equipmentLabel = shopKind === "weapon" ? "武器" : "防具";
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.055)";
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(`選択中の${equipmentLabel}`, rect.x + 16, rect.y + 26);
+
+    if (!item) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText(`左の一覧から${equipmentLabel}を選択してください。`, rect.x + 16, rect.y + 64);
+      ctx.restore();
+      return;
+    }
+
+    const baseId = getEquipmentBaseIdForTown(item);
+    const itemRef = getEquipmentRefForTown(item);
+    const owned = getEquipmentOwnedCount(baseId);
+    const currentLevel = getEquipmentUpgradeLevel(tab === "upgrade" || tab === "reset" ? itemRef : baseId);
+    const upgradeRecipe = getUpgradeRecipe(item);
+    const baseRecipe = tab === "upgrade" || tab === "reset" ? upgradeRecipe : getCraftRecipe(item);
+    const maxLevel = Number.isFinite(upgradeRecipe && upgradeRecipe.maxLevel) ? upgradeRecipe.maxLevel : 5;
+    const recipe = tab === "upgrade" ? getUpgradeCostForLevel(upgradeRecipe, currentLevel) : baseRecipe;
+    const isMax = tab === "upgrade" && currentLevel >= maxLevel;
+    const needsOwned = (tab === "upgrade" || tab === "reset") && !isEquipmentOwned(item);
+    const enabled = tab === "reset"
+      ? !needsOwned && currentLevel > 0
+      : Boolean(recipe) && !isMax && !needsOwned;
+    const seriesName = getEquipmentSeriesNameForTown(item.series);
+    const categoryName = shopKind === "weapon" ? item.weaponType || "武器種なし" : getEquipmentSlotName(item.slot);
+    const detailX = rect.x + 16;
+    const detailW = Math.max(60, rect.w - 32);
+    drawFittedTownText(getEquipmentShopItemName(item, tab), detailX, rect.y + 56, detailW, 900, 22, 14, "#f7fff6");
+    ctx.fillStyle = "#ffd86b";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText(`${item.rank || "-"} / ${seriesName} / ${categoryName}`, detailX, rect.y + 82);
+    ctx.fillStyle = enabled ? "#ffd86b" : "rgba(220,233,220,0.55)";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const stateText = tab === "reset"
+      ? needsOwned ? "未所持" : currentLevel <= 0 ? "+0 / リセット済み" : `+${currentLevel} -> +0`
+      : tab === "upgrade"
+        ? needsOwned ? "未所持" : isMax ? `+${currentLevel} / 最大` : `+${currentLevel} -> +${currentLevel + 1}`
+        : `所持 ${owned}`;
+    ctx.fillText(stateText, detailX, rect.y + 104);
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const descriptionLines = wrapCanvasText(item.simpleDescription || item.description || "説明なし", detailW);
+    let cursorY = rect.y + 134;
+    for (const line of descriptionLines.slice(0, 3)) {
+      ctx.fillText(line, detailX, cursorY);
+      cursorY += 18;
+    }
+
+    cursorY += 8;
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("ステータス", detailX, cursorY);
+    cursorY += 20;
+    const statEntries = getEquipmentItemStatEntriesForTown(item);
+    if (!statEntries.length) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("ステータスなし", detailX, cursorY);
+      cursorY += 20;
+    } else {
+      const statValueX = detailX + Math.min(detailW, 188);
+      for (const entry of statEntries.slice(0, 8)) {
+        ctx.fillStyle = "#dce9dc";
+        ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+        drawFittedTownText(entry.label, detailX, cursorY, Math.max(48, statValueX - detailX - 12), 700, 13, 10, "#dce9dc");
+        ctx.fillStyle = entry.negative ? "#ffb4a8" : "#8ff0a4";
+        ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(entry.value, statValueX, cursorY);
+        ctx.textAlign = "left";
+        cursorY += 18;
+      }
+    }
+
+    cursorY += 8;
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillText("必要素材", detailX, cursorY);
+    cursorY += 20;
+    const requirementEntries = getRecipeRequirementEntriesForTown(recipe, tab);
+    const requirementValueX = detailX + Math.min(detailW, 230);
+    for (const entry of requirementEntries.slice(0, 6)) {
+      drawFittedTownText(entry.label, detailX, cursorY, Math.max(60, requirementValueX - detailX - 14), 700, 13, 10, "#dce9dc");
+      drawRecipeRequirementValue(entry, requirementValueX, cursorY);
+      cursorY += 18;
+    }
+    ctx.fillStyle = "#ffd86b";
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const equippedText = getEquipmentEquippedTextForTown(item);
+    ctx.fillText(equippedText || `所持 ${owned}`, detailX, Math.min(rect.y + rect.h - 66, cursorY + 8));
+    ctx.restore();
+
+    const buttonLabel = tab === "reset" ? "リセット" : tab === "upgrade" ? "強化" : shopKind === "weapon" ? "生成" : "製作";
+    drawTextButton(rect.x + rect.w - 130, rect.y + rect.h - 52, 104, 36, buttonLabel, {
+      kind: tab === "reset" ? "resetEquipmentUpgrade" : tab === "upgrade" ? "upgradeEquipment" : "craftEquipment",
+      itemId: baseId,
+      equipmentRef: itemRef,
+    }, true, !enabled);
+  }
+
+  function getEquipmentItemStatEntriesForTown(item) {
+    const entries = [];
+    if (!item) {
+      return entries;
+    }
+    for (const [key, value] of Object.entries(item.flatStatBonuses || {})) {
+      if (Number.isFinite(value) && value !== 0) {
+        entries.push({
+          label: getTownStatLabel(key),
+          value: formatSignedTownNumber(value),
+          negative: value < 0,
+        });
+      }
+    }
+    for (const [key, value] of Object.entries(item.statBonuses || {})) {
+      if (Number.isFinite(value) && value !== 0) {
+        const displayValue = isReductionStatKey(key) ? -value : value;
+        entries.push({
+          label: getTownStatLabel(key),
+          value: formatTownStatPercent(key, value, true),
+          negative: displayValue < 0,
+        });
+      }
+    }
+    return entries;
+  }
+
+  function getRecipeRequirementEntriesForTown(recipe, tab) {
+    if (tab === "reset") {
+      return [{ label: "なし", value: "無料", enough: true }];
+    }
+    if (!recipe) {
+      return [{ label: "未設定", value: "-", enough: false }];
+    }
+    const entries = [];
+    const gold = getRecipeGoldCost(recipe);
+    if (gold > 0) {
+      const ownedGold = getGoldValue();
+      const requiredText = formatGoldSafe(gold);
+      const ownedText = formatGoldSafe(ownedGold);
+      entries.push({
+        label: "所持金",
+        requiredText,
+        ownedText,
+        value: `${requiredText}/${ownedText}`,
+        enough: ownedGold >= gold,
+      });
+    }
+    for (const [key, rawCount] of Object.entries(getRecipeMaterials(recipe))) {
+      const numericCount = Number(rawCount);
+      const required = Math.max(0, Math.floor(Number.isFinite(numericCount) ? numericCount : 0));
+      if (required <= 0) {
+        continue;
+      }
+      const owned = getMaterialOwnedCountForTown(key);
+      entries.push({
+        label: getMaterialNameForTown(key),
+        requiredText: String(required),
+        ownedText: String(owned),
+        value: `${required}/${owned}`,
+        enough: owned >= required,
+      });
+    }
+    return entries.length ? entries : [{ label: "なし", value: "無料", enough: true }];
+  }
+
+  function drawRecipeRequirementValue(entry, rightX, y) {
+    ctx.save();
+    ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const requiredText = entry && entry.requiredText;
+    const ownedText = entry && entry.ownedText;
+    if (!requiredText || !ownedText) {
+      ctx.fillStyle = entry && entry.enough ? "#8ff0a4" : "#ffb4a8";
+      ctx.textAlign = "right";
+      ctx.fillText(entry && entry.value || "", rightX, y);
+      ctx.restore();
+      return;
+    }
+
+    const separator = "/";
+    const requiredW = ctx.measureText(requiredText).width;
+    const separatorW = ctx.measureText(separator).width;
+    const ownedW = ctx.measureText(ownedText).width;
+    let cursorX = rightX - requiredW - separatorW - ownedW;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#dce9dc";
+    ctx.fillText(requiredText, cursorX, y);
+    cursorX += requiredW;
+    ctx.fillText(separator, cursorX, y);
+    cursorX += separatorW;
+    ctx.fillStyle = entry.enough ? "#8ff0a4" : "#ffb4a8";
+    ctx.fillText(ownedText, cursorX, y);
+    ctx.restore();
+  }
+
+  function getMaterialNameForTown(key) {
+    const material = MATERIAL_DATA && MATERIAL_DATA.materials ? MATERIAL_DATA.materials[key] : null;
+    return material && material.name ? material.name : key === "kari_dorop" ? "仮素材" : key || "素材";
+  }
+
+  function getMaterialOwnedCountForTown(key) {
+    const store = game.materialsById && typeof game.materialsById === "object" ? game.materialsById : {};
+    const amount = Number(store[key]);
+    return Math.max(0, Math.floor(Number.isFinite(amount) ? amount : 0));
   }
 
   function drawEquipmentShopRow(item, tab, x, y, w, h) {
