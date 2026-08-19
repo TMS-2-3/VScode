@@ -293,7 +293,7 @@
 
       function renderMap(map) {
         mapName.textContent = map.name || map.id;
-        mapNote.textContent = map.id === "template" ? "雛形は width/height が 0 のため、表示グリッドはありません。" : "";
+        mapNote.textContent = "";
         mapSize.textContent = `${map.width} x ${map.height} / ${map.tileSize}px`;
 
         mapWrap.innerHTML = "";
@@ -426,7 +426,7 @@
           mapSelect.appendChild(option);
         }
 
-        mapSelect.value = mapList.find((map) => map.id !== "template")?.id || mapList[0].id;
+        mapSelect.value = mapList[0].id;
         mapSelect.addEventListener("change", renderSelectedMap);
         renderSelectedMap();
       }
