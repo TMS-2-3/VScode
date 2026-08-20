@@ -799,12 +799,6 @@
       .join(" ");
   }
 
-  function getSideViewFootprintWidth(drawWidth) {
-    if (drawWidth >= 336) return 5;
-    if (drawWidth >= 240) return 4;
-    return 3;
-  }
-
   function createGeneratedGroundTiles() {
     const defs = {};
 
@@ -830,17 +824,21 @@
 
   function createSideViewBuildingDefs() {
     const defs = {};
-    const tileSize = 48;
+    const maxDrawWidth = 144;
+    const maxDrawHeight = 96;
+    const footprintWidth = 3;
     const footprintHeight = 2;
 
     SIDE_VIEW_BUILDING_GROUPS.forEach((group) => {
-      group.items.forEach(([fileStem, drawWidth, drawHeight]) => {
+      group.items.forEach(([fileStem, sourceWidth, sourceHeight]) => {
         const prefix = group.category === "decorative" ? "decorSide" : "areaSide";
         const directionPart = group.direction === "left" ? "Left" : "Right";
         const id = `${prefix}${directionPart}${toPascalCase(fileStem)}`;
-        const footprintWidth = getSideViewFootprintWidth(drawWidth);
-        const drawOffsetX = Math.round((footprintWidth * tileSize - drawWidth) / 2);
-        const drawOffsetY = footprintHeight * tileSize - drawHeight;
+        const scale = Math.min(maxDrawWidth / sourceWidth, maxDrawHeight / sourceHeight, 1);
+        const drawWidth = Math.max(1, Math.round(sourceWidth * scale));
+        const drawHeight = Math.max(1, Math.round(sourceHeight * scale));
+        const drawOffsetX = Math.round((maxDrawWidth - drawWidth) / 2);
+        const drawOffsetY = maxDrawHeight - drawHeight;
 
         defs[id] = {
           id,
@@ -951,12 +949,12 @@
       image: "map/img_tile/city_objects_front/city_request_office_front.png",
       passable: false,
       tags: ["object", "building", "requestOffice", "city", "block"],
-      drawWidth: 192,
-      drawHeight: 240,
+      drawWidth: 144,
+      drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
-      footprintWidth: 4,
-      footprintHeight: 5,
+      footprintWidth: 3,
+      footprintHeight: 2,
       placementAnchor: "bottomCenter",
     },
     cityArmorShopFront: {
@@ -965,12 +963,12 @@
       image: "map/img_tile/city_objects_front/city_armor_shop_front.png",
       passable: false,
       tags: ["object", "building", "shop", "armor", "city", "block"],
-      drawWidth: 192,
-      drawHeight: 240,
+      drawWidth: 144,
+      drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
-      footprintWidth: 4,
-      footprintHeight: 5,
+      footprintWidth: 3,
+      footprintHeight: 2,
       placementAnchor: "bottomCenter",
     },
     cityInnFront: {
@@ -979,12 +977,12 @@
       image: "map/img_tile/city_objects_front/city_inn_front.png",
       passable: false,
       tags: ["object", "building", "inn", "city", "block"],
-      drawWidth: 192,
-      drawHeight: 240,
+      drawWidth: 144,
+      drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
-      footprintWidth: 4,
-      footprintHeight: 5,
+      footprintWidth: 3,
+      footprintHeight: 2,
       placementAnchor: "bottomCenter",
     },
     cityWeaponShopFront: {
@@ -993,12 +991,12 @@
       image: "map/img_tile/city_objects_front/city_weapon_shop_front.png",
       passable: false,
       tags: ["object", "building", "shop", "weapon", "city", "block"],
-      drawWidth: 192,
-      drawHeight: 240,
+      drawWidth: 144,
+      drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
-      footprintWidth: 4,
-      footprintHeight: 5,
+      footprintWidth: 3,
+      footprintHeight: 2,
       placementAnchor: "bottomCenter",
     },
     cityItemShopFront: {
@@ -1007,12 +1005,12 @@
       image: "map/img_tile/city_objects_front/city_item_shop_front.png",
       passable: false,
       tags: ["object", "building", "shop", "item", "city", "block"],
-      drawWidth: 192,
-      drawHeight: 240,
+      drawWidth: 144,
+      drawHeight: 96,
       drawOffsetX: 0,
       drawOffsetY: 0,
-      footprintWidth: 4,
-      footprintHeight: 5,
+      footprintWidth: 3,
+      footprintHeight: 2,
       placementAnchor: "bottomCenter",
     },
   });
