@@ -25,6 +25,7 @@
       MATERIAL_DATA,
       QUEST_DATA,
       TOWN_DATA,
+      NPC_DATA,
     } = data;
 
     const {
@@ -345,6 +346,7 @@
         confirmProfileName: callLater("profileSystem", "confirmProfileName"),
         getTownBuilding: callLater("townController", "getTownBuilding"),
         getTownEventActors: callLater("townController", "getTownEventActors"),
+        getTownNpcActors: callLater("townController", "getTownNpcActors"),
         getTownMonsterSymbols: callLater("townController", "getTownMonsterSymbols"),
         getQuestTypes: callLater("townController", "getQuestTypes"),
         getQuestsByType: callLater("townController", "getQuestsByType"),
@@ -564,6 +566,7 @@
         EQUIPMENT_DATA,
         MATERIAL_DATA,
         QUEST_DATA,
+        NPC_DATA,
         TOWN_WIDTH,
         TOWN_HEIGHT,
         resetGame: callLater("battleSetup", "resetGame"),

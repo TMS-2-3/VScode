@@ -16,6 +16,7 @@
       profileClickTargets,
       COLORS,
       CHARACTER_DEFS,
+      SKILL_DATA,
       BASE_CRIT_CHANCE,
       BASE_CRIT_DAMAGE_RATE,
       MOOD_BASELINE,
@@ -44,6 +45,7 @@
       confirmProfileName,
       getTownBuilding,
       getTownEventActors,
+      getTownNpcActors,
       getTownMonsterSymbols,
       getQuestTypes,
       getQuestsByType,
@@ -274,6 +276,24 @@
     return images;
   }
 
+  function ensureTownWalkImageSet(imageKey, spritePath) {
+    if (!imageKey || !spritePath || typeof Image !== "function") {
+      return;
+    }
+    if (townWalkImages[imageKey]) {
+      return;
+    }
+    townWalkImages[imageKey] = {};
+    for (const direction of TOWN_WALK_DIRECTIONS) {
+      townWalkImages[imageKey][direction] = {};
+      for (const frame of TOWN_WALK_FRAMES) {
+        const image = new Image();
+        image.src = `img/char/${spritePath}/walk/${direction}_${String(frame).padStart(2, "0")}.png`;
+        townWalkImages[imageKey][direction][frame] = image;
+      }
+    }
+  }
+
   function createProfileAppearanceImages() {
     const images = {};
     if (typeof Image !== "function") {
@@ -287,10 +307,11 @@
     return images;
   }
 
-  function getTownWalkImage(unitId, facing, frame) {
+  function getTownWalkImage(unitId, facing, frame, spritePath = null) {
     const imageKey = unitId === "finald"
       ? playerProfile.gender === "女の子" ? "arjunaFemale" : "arjunaMale"
       : unitId;
+    ensureTownWalkImageSet(imageKey, spritePath);
     const direction = TOWN_WALK_DIRECTIONS.includes(facing) ? facing : "down";
     const normalizedFrame = TOWN_WALK_FRAMES.includes(frame) ? frame : 1;
     return townWalkImages[imageKey] && townWalkImages[imageKey][direction] && townWalkImages[imageKey][direction][normalizedFrame] || null;
@@ -1212,6 +1233,32 @@
     if (!building || town.interaction !== building || town.panel) {
       return;
     }
+    if (building.type === "npc") {
+      const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
+      const x = Number(building.x) || 0;
+      const y = Number(building.y) || 0;
+      const footY = y + (getTownTileMap() ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 17);
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,255,255,${0.56 + pulse * 0.28})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(x, footY, 25, 12, 0, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(17,23,20,0.86)";
+      ctx.strokeStyle = "#f7fff6";
+      ctx.lineWidth = 2;
+      roundRect(x - 44, y - 76, 88, 30, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#f7fff6";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      drawFittedTownText(getInteractLabel(), x, y - 61, 74, 800, 15, 9, "#f7fff6", "center");
+      ctx.restore();
+      return;
+    }
+    if (!Number.isFinite(building.x) || !Number.isFinite(building.y) || !Number.isFinite(building.w) || !Number.isFinite(building.h)) {
+      return;
+    }
     const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
     ctx.strokeStyle = `rgba(255,255,255,${0.62 + pulse * 0.3})`;
     ctx.lineWidth = 5;
@@ -1230,6 +1277,10 @@
 
   function getTownEventCharacterActors() {
     return typeof getTownEventActors === "function" ? getTownEventActors() : [];
+  }
+
+  function getTownNpcCharacterActors() {
+    return typeof getTownNpcActors === "function" ? getTownNpcActors() : [];
   }
 
   function getTownMonsterSymbolActors() {
@@ -1268,6 +1319,7 @@
         actors.push(follower);
       }
     }
+    actors.push(...getTownNpcCharacterActors());
     actors.push(...getTownMonsterSymbolActors());
     actors.sort((a, b) => a.y - b.y);
     for (const actor of actors) {
@@ -1306,6 +1358,7 @@
         actors.push(follower);
       }
     }
+    actors.push(...getTownNpcCharacterActors());
     actors.push(...getTownMonsterSymbolActors());
     return actors;
   }
@@ -1413,7 +1466,7 @@
   }
 
   function drawTownCharacterSprite(actor) {
-    const image = getTownWalkImage(actor.id, actor.facing, actor.walkFrame);
+    const image = getTownWalkImage(actor.spriteId || actor.id, actor.facing, actor.walkFrame, actor.spritePath || null);
     if (!isTownImageReady(image)) {
       return false;
     }
@@ -2982,7 +3035,7 @@
     ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const descriptionLines = wrapCanvasText(item.simpleDescription || item.description || "説明なし", detailW);
     let cursorY = rect.y + 134;
-    for (const line of descriptionLines.slice(0, 3)) {
+    for (const line of descriptionLines.slice(0, 2)) {
       ctx.fillText(line, detailX, cursorY);
       cursorY += 18;
     }
@@ -3013,6 +3066,11 @@
       }
     }
 
+    if (shopKind === "weapon") {
+      cursorY = drawWeaponNormalAttackDetailForTown(item, detailX, cursorY + 8, detailW, rect.y + rect.h - 86);
+    }
+    cursorY = drawEquipmentSetEffectDetailForTown(item, detailX, cursorY + 8, detailW, rect.y + rect.h - 86);
+
     cursorY += 8;
     ctx.fillStyle = "#f7fff6";
     ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -3037,6 +3095,122 @@
       itemId: baseId,
       equipmentRef: itemRef,
     }, true, !enabled);
+  }
+
+  function getTownDescription(source) {
+    if (!source) {
+      return "";
+    }
+    const detail = game && game.settings && game.settings.tooltipDescriptionMode === "detail";
+    return detail
+      ? source.description || source.simpleDescription || source.tooltip || source.helpText || ""
+      : source.simpleDescription || source.description || source.tooltip || source.helpText || "";
+  }
+
+  function getSkillByIdForTown(skillId) {
+    const id = String(skillId || "").trim();
+    if (!id || !SKILL_DATA) {
+      return null;
+    }
+    for (const ownerSkills of Object.values(SKILL_DATA)) {
+      if (!ownerSkills || typeof ownerSkills !== "object") {
+        continue;
+      }
+      for (const skill of Object.values(ownerSkills)) {
+        if (skill && String(skill.id || "") === id) {
+          return skill;
+        }
+      }
+    }
+    return null;
+  }
+
+  function drawEquipmentDetailSectionTitleForTown(title, x, y, maxY) {
+    if (y + 18 > maxY) {
+      return null;
+    }
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(title, x, y);
+    return y + 20;
+  }
+
+  function drawWeaponNormalAttackDetailForTown(item, x, y, w, maxY) {
+    if (!item || item.slot !== "weapon" || !item.normalAttackSkillId) {
+      return y;
+    }
+    let cursorY = drawEquipmentDetailSectionTitleForTown("通常攻撃", x, y, maxY);
+    if (cursorY === null) {
+      return y;
+    }
+    const skill = getSkillByIdForTown(item.normalAttackSkillId);
+    if (!skill || cursorY > maxY) {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText("説明なし", x, cursorY);
+      return cursorY + 16;
+    }
+    if (cursorY > maxY) {
+      return cursorY;
+    }
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const lines = wrapCanvasText(getTownDescription(skill) || "説明なし", w);
+    for (const line of lines.slice(0, 2)) {
+      if (cursorY > maxY) {
+        break;
+      }
+      ctx.fillText(line, x, cursorY);
+      cursorY += 16;
+    }
+    return cursorY;
+  }
+
+  function getEquipmentSetEffectEntriesForTown(item) {
+    const seriesKey = item && item.series;
+    const series = seriesKey && EQUIPMENT_DATA && EQUIPMENT_DATA.series ? EQUIPMENT_DATA.series[seriesKey] : null;
+    const effects = series && series.setEffects;
+    if (!effects || typeof effects !== "object") {
+      return [];
+    }
+    return Object.entries(effects)
+      .map(([threshold, effect]) => ({
+        threshold: Math.max(0, Math.floor(Number(threshold) || 0)),
+        effect,
+      }))
+      .filter((entry) => entry.threshold > 0 && entry.effect)
+      .sort((a, b) => a.threshold - b.threshold);
+  }
+
+  function drawEquipmentSetEffectDetailForTown(item, x, y, w, maxY) {
+    const entries = getEquipmentSetEffectEntriesForTown(item);
+    if (!entries.length) {
+      return y;
+    }
+    let cursorY = drawEquipmentDetailSectionTitleForTown("セット効果", x, y, maxY);
+    if (cursorY === null) {
+      return y;
+    }
+    for (const entry of entries.slice(0, 3)) {
+      if (cursorY > maxY) {
+        break;
+      }
+      const effect = entry.effect;
+      const description = getTownDescription(effect) || "説明なし";
+      const text = `${entry.threshold}セット ${effect.name || "セット効果"}: ${description}`;
+      const lines = wrapCanvasText(text, w);
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      for (const line of lines.slice(0, 2)) {
+        if (cursorY > maxY) {
+          break;
+        }
+        ctx.fillText(line, x, cursorY);
+        cursorY += 16;
+      }
+    }
+    return cursorY;
   }
 
   function getEquipmentItemStatEntriesForTown(item) {

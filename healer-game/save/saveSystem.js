@@ -430,6 +430,7 @@
       town.returnFade = null;
       town.questNoticePopup = null;
       town.symbolEncounters = null;
+      town.npcActorsByMapId = {};
       town.acceptedQuestIds = {};
       town.completedQuestIds = {};
       town.encounterStorySeenQuestIds = {};
@@ -517,6 +518,7 @@
       town.returnFade = null;
       town.questNoticePopup = null;
       town.symbolEncounters = null;
+      town.npcActorsByMapId = {};
       town.acceptedQuestIds = clonePlain(saved.acceptedQuestIds, {});
       town.completedQuestIds = clonePlain(saved.completedQuestIds, {});
       town.encounterStorySeenQuestIds = clonePlain(saved.encounterStorySeenQuestIds, {});

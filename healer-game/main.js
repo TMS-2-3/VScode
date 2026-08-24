@@ -49,6 +49,7 @@
     QUEST_DATA: window.HEALER_QUEST_DATA,
     FACILITY_DATA: window.HEALER_FACILITY_DATA,
     TOWN_DATA: window.HEALER_TOWN_DATA,
+    NPC_DATA: window.HEALER_NPC_DATA,
   };
   const CONFIG = window.HEALER_CONFIG;
   const BALANCE = window.HEALER_BALANCE;
@@ -279,6 +280,7 @@
         returnFade: null,
         questNoticePopup: null,
         symbolEncounters: null,
+        npcActorsByMapId: {},
         acceptedQuestIds: {},
         completedQuestIds: {},
         encounterStorySeenQuestIds: {},

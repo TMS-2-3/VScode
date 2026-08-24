@@ -21,6 +21,7 @@
       EQUIPMENT_DATA,
       MATERIAL_DATA,
       QUEST_DATA,
+      NPC_DATA,
       TOWN_WIDTH,
       TOWN_HEIGHT,
       resetGame,
@@ -108,6 +109,7 @@
     const SYMBOL_ENCOUNTER_TRANSFER_EXCLUSION_RADIUS = 2;
     const SYMBOL_ENCOUNTER_RANDOM_ATTEMPTS = 240;
     const ENCOUNTER_CUTIN_DURATION = 1.25;
+    const TOWN_NPC_WANDER_INTERVAL = 2;
     const SYMBOL_ENCOUNTER_DIRECTIONS = [
       { x: 0, y: -1, facing: "up" },
       { x: 1, y: 0, facing: "right" },
@@ -238,6 +240,7 @@
       }
       town.mapId = mapId;
       resetTownSymbolsForMapEntry(mapId);
+      resetTownNpcsForMapEntry(mapId);
       showTownMapNamePopup(tileMap, mapId);
       town.panel = null;
       town.selectedQuest = null;
@@ -254,6 +257,7 @@
       initializeTownFollowers(true);
       resetTownTrail();
       ensureTownMapSymbols(tileMap);
+      ensureTownMapNpcs(tileMap);
       town.interaction = getTownInteraction();
       updateTownCamera();
       return true;
@@ -569,6 +573,7 @@
         ensureTownSymbolEncounterState().pendingBattle = null;
       }
       ensureTownMapSymbols();
+      ensureTownMapNpcs();
       initializeTownFollowers(true);
       resetTownTrail();
       town.interaction = getTownInteraction();
@@ -665,6 +670,7 @@
       }
       updateTownMovement(dt);
       updateTownFollowers(dt);
+      updateTownNpcs(getTownTileMap(), dt);
       updateTownSymbolEncounters(getTownTileMap(), dt);
       town.interaction = getTownInteraction();
     }
@@ -791,6 +797,13 @@
         town.symbolEncounters.nextId = 1;
       }
       return town.symbolEncounters;
+    }
+
+    function ensureTownNpcState() {
+      if (!town.npcActorsByMapId || typeof town.npcActorsByMapId !== "object" || Array.isArray(town.npcActorsByMapId)) {
+        town.npcActorsByMapId = {};
+      }
+      return town.npcActorsByMapId;
     }
 
     function ensureTownAcceptedQuestState() {
@@ -1382,6 +1395,235 @@
       return state.byMapId[key];
     }
 
+    function getTownNpcMapState(mapId = getTownSymbolMapId()) {
+      const state = ensureTownNpcState();
+      const key = String(mapId || "town");
+      if (!state[key] || typeof state[key] !== "object") {
+        state[key] = { actors: [] };
+      }
+      const mapState = state[key];
+      if (!Array.isArray(mapState.actors)) {
+        mapState.actors = [];
+      }
+      return mapState;
+    }
+
+    function resetTownNpcsForMapEntry(mapId = getTownSymbolMapId()) {
+      const state = ensureTownNpcState();
+      const key = String(mapId || "town");
+      state[key] = { actors: [] };
+      return state[key];
+    }
+
+    function getTownNpcDataEntries() {
+      const entries = NPC_DATA && NPC_DATA.npcs;
+      if (Array.isArray(entries)) {
+        return entries;
+      }
+      if (entries && typeof entries === "object") {
+        return Object.values(entries);
+      }
+      return [];
+    }
+
+    function getTownNpcConfigId(config, index = 0) {
+      const id = String(config && (config.id || config.npcId || config.actorId || config.name) || "").trim();
+      return id || `npc_${index}`;
+    }
+
+    function getTownNpcConfigMapId(config, fallbackMapId) {
+      return String(config && (config.mapId || config.map || config.fieldMapId) || fallbackMapId || "").trim();
+    }
+
+    function isTownNpcConfigActive(config) {
+      if (!config || config.enabled === false) {
+        return false;
+      }
+      if (config.requiresProfileDone === true && !playerProfile.done) {
+        return false;
+      }
+      if (config.requiresMeetingDone === true && !town.meetingDone) {
+        return false;
+      }
+      if (config.disabledWhenMeetingDone === true && town.meetingDone) {
+        return false;
+      }
+      const requiredQuest = config.requiresQuestAccepted || config.requiredQuestAccepted || null;
+      if (requiredQuest && !isTownQuestAccepted(requiredQuest)) {
+        return false;
+      }
+      const requiredCompletedQuest = config.requiresQuestCompleted || config.requiredQuestCompleted || null;
+      if (requiredCompletedQuest && !isTownQuestCompleted(requiredCompletedQuest)) {
+        return false;
+      }
+      const disabledQuest = config.disabledWhenQuestCompleted || config.disableWhenQuestCompleted || null;
+      if (disabledQuest && isTownQuestCompleted(disabledQuest)) {
+        return false;
+      }
+      return true;
+    }
+
+    function parseTownMapCell(cell) {
+      const text = String(cell || "").trim();
+      if (!text) {
+        return null;
+      }
+      const excelMatch = /^([A-Za-z]+)(\d+)$/.exec(text);
+      if (excelMatch) {
+        let col = 0;
+        const letters = excelMatch[1].toUpperCase();
+        for (let i = 0; i < letters.length; i += 1) {
+          col = col * 26 + (letters.charCodeAt(i) - 64);
+        }
+        return {
+          col: col - 1,
+          row: Math.max(0, Math.floor(Number(excelMatch[2]) || 1) - 1),
+        };
+      }
+      const pairMatch = /^(-?\d+)\s*[,/:\s]\s*(-?\d+)$/.exec(text);
+      if (pairMatch) {
+        return {
+          col: Math.floor(Number(pairMatch[1])),
+          row: Math.floor(Number(pairMatch[2])),
+        };
+      }
+      return null;
+    }
+
+    function getTownNpcConfigTile(config, tileMap) {
+      const parsed = parseTownMapCell(config && (config.cell || config.tile || config.position || config.coord));
+      const col = parsed ? parsed.col : Math.floor(Number(config && (config.col ?? config.x ?? config.spawnCol ?? config.tileCol)));
+      const row = parsed ? parsed.row : Math.floor(Number(config && (config.row ?? config.y ?? config.spawnRow ?? config.tileRow)));
+      const width = Math.max(0, Math.floor(Number(tileMap && tileMap.width) || 0));
+      const height = Math.max(0, Math.floor(Number(tileMap && tileMap.height) || 0));
+      if (!Number.isFinite(col) || !Number.isFinite(row) || col < 0 || row < 0 || col >= width || row >= height) {
+        return null;
+      }
+      if (!isTownGridTilePassable(tileMap, col, row)) {
+        return null;
+      }
+      return { col, row };
+    }
+
+    function getTownNpcConfigs(tileMap = getTownTileMap()) {
+      const mapId = getTownSymbolMapId(tileMap);
+      const configs = [];
+      for (const config of getTownNpcDataEntries()) {
+        if (getTownNpcConfigMapId(config, mapId) === mapId) {
+          configs.push(config);
+        }
+      }
+      if (tileMap) {
+        for (const key of ["npcs", "townNpcs", "npcActors"]) {
+          if (Array.isArray(tileMap[key])) {
+            configs.push(...tileMap[key].map((config) => ({ ...config, mapId })));
+          }
+        }
+      }
+      return configs.filter(isTownNpcConfigActive);
+    }
+
+    function getTownNpcWanderInterval(config) {
+      const wander = config && config.wander;
+      const raw = wander && typeof wander === "object"
+        ? wander.interval ?? wander.seconds ?? wander.time
+        : config && (config.wanderInterval ?? config.moveInterval);
+      return Math.max(0.1, Number(raw) || TOWN_NPC_WANDER_INTERVAL);
+    }
+
+    function isTownNpcStationary(config) {
+      const wander = config && config.wander;
+      return config && (config.stationary === true || config.noMove === true)
+        || wander === false
+        || wander && typeof wander === "object" && wander.enabled === false;
+    }
+
+    function makeTownNpcActor(tileMap, mapId, config, configIndex) {
+      const tile = getTownNpcConfigTile(config, tileMap);
+      if (!tile) {
+        return null;
+      }
+      const configId = getTownNpcConfigId(config, configIndex);
+      const center = getTownTileCenter(tileMap, tile.col, tile.row);
+      const spriteId = String(config.spriteId || config.characterId || config.unitId || "").trim();
+      const spritePath = String(config.spritePath || config.imageFolder || config.folder || "").trim();
+      const labelSource = String(config.label || config.name || configId || "N");
+      return {
+        type: "npc",
+        id: `${mapId}:npc:${configId}`,
+        mapId,
+        configId,
+        npcId: configId,
+        name: String(config.name || config.label || configId),
+        label: labelSource.slice(0, 2),
+        color: config.color || "#f7fff6",
+        spriteId: spriteId || null,
+        spritePath: spritePath || null,
+        spriteHeight: Math.max(32, Number(config.spriteHeight) || TOWN_FOLLOWER_SPRITE_HEIGHT),
+        col: tile.col,
+        row: tile.row,
+        x: center.x,
+        y: center.y,
+        facing: config.facing || config.direction || "down",
+        walkFrame: 1,
+        walkFrameIndex: -1,
+        walkTimer: 0,
+        moveTimer: Math.random() * getTownNpcWanderInterval(config),
+        wanderInterval: getTownNpcWanderInterval(config),
+        stationary: isTownNpcStationary(config),
+        rawConfig: config,
+      };
+    }
+
+    function ensureTownMapNpcs(tileMap = getTownTileMap()) {
+      if (!tileMap) {
+        return [];
+      }
+      const mapId = getTownSymbolMapId(tileMap);
+      const mapState = getTownNpcMapState(mapId);
+      const configs = getTownNpcConfigs(tileMap);
+      if (configs.length === 0) {
+        mapState.actors = [];
+        return mapState.actors;
+      }
+      const activeIds = new Set(configs.map((config, index) => getTownNpcConfigId(config, index)));
+      mapState.actors = mapState.actors.filter((actor) => actor && activeIds.has(actor.configId));
+      configs.forEach((config, index) => {
+        const configId = getTownNpcConfigId(config, index);
+        if (mapState.actors.some((actor) => actor && actor.configId === configId)) {
+          return;
+        }
+        const actor = makeTownNpcActor(tileMap, mapId, config, index);
+        if (actor) {
+          mapState.actors.push(actor);
+        }
+      });
+      return mapState.actors;
+    }
+
+    function getTownNpcActors(tileMap = getTownTileMap()) {
+      return ensureTownMapNpcs(tileMap)
+        .filter((actor) => actor && !actor.removed)
+        .map((actor) => ({
+          type: "npc",
+          id: actor.id,
+          npcId: actor.npcId,
+          mapId: actor.mapId,
+          name: actor.name,
+          label: actor.label,
+          color: actor.color,
+          spriteId: actor.spriteId,
+          spritePath: actor.spritePath,
+          spriteHeight: actor.spriteHeight,
+          x: actor.x,
+          y: actor.y,
+          col: actor.col,
+          row: actor.row,
+          facing: actor.facing || "down",
+          walkFrame: actor.walkFrame || 1,
+        }));
+    }
+
     function getTownFieldQuestSymbolConfig(quest) {
       if (!quest || !quest.id || !quest.fieldMapId) {
         return null;
@@ -1663,6 +1905,25 @@
       return occupied;
     }
 
+    function getTownNpcOccupiedTiles(mapState, ignoreNpcId = null) {
+      const occupied = new Set();
+      for (const actor of Array.isArray(mapState && mapState.actors) ? mapState.actors : []) {
+        if (!actor || actor.removed || actor.id === ignoreNpcId) {
+          continue;
+        }
+        occupied.add(getTownSymbolTileKey(actor.col, actor.row));
+      }
+      return occupied;
+    }
+
+    function isTownTileBlockedByNpc(tileMap, col, row, ignoreNpcId = null) {
+      if (!tileMap) {
+        return false;
+      }
+      const mapState = getTownNpcMapState(getTownSymbolMapId(tileMap));
+      return getTownNpcOccupiedTiles(mapState, ignoreNpcId).has(getTownSymbolTileKey(col, row));
+    }
+
     function isTownSymbolSpawnTileAllowed(tileMap, col, row, occupied, transferTiles) {
       if (!isTownGridTilePassable(tileMap, col, row)) {
         return false;
@@ -1837,7 +2098,7 @@
       });
     }
 
-    function isTownGridTilePassable(tileMap, col, row) {
+    function isTownGridTilePassable(tileMap, col, row, options = {}) {
       if (!tileMap) {
         return false;
       }
@@ -1846,6 +2107,9 @@
         return false;
       }
       if (isTownTileBlockedByMapEvent(tileMap, col, row)) {
+        return false;
+      }
+      if (!options.ignoreNpcs && isTownTileBlockedByNpc(tileMap, col, row, options.ignoreNpcId || null)) {
         return false;
       }
       const tileSize = getTownTileSize(tileMap);
@@ -1948,6 +2212,77 @@
       }
       actor.walkFrame = TOWN_WALK_ANIMATION_SEQUENCE[actor.walkFrameIndex] || 1;
     }
+
+    function updateTownNpcs(tileMap = getTownTileMap(), dt = 0) {
+      if (!tileMap) {
+        return;
+      }
+      const actors = ensureTownMapNpcs(tileMap);
+      if (!actors.length || game.state !== "town" || !playerProfile.done || town.panel || town.story || (game.systemMenu && game.systemMenu.open)) {
+        for (const actor of actors) {
+          updateTownActorWalkAnimation(actor, dt, false);
+        }
+        return;
+      }
+      const elapsed = Math.min(0.5, Math.max(0, Number(dt) || 0));
+      if (elapsed <= 0) {
+        return;
+      }
+      const mapState = getTownNpcMapState(getTownSymbolMapId(tileMap));
+      const occupied = getTownNpcOccupiedTiles(mapState);
+      const playerTile = getTownPlayerTile(tileMap);
+      for (const actor of actors) {
+        if (!actor || actor.removed || actor.stationary === true) {
+          updateTownActorWalkAnimation(actor, elapsed, false);
+          continue;
+        }
+        let moved = false;
+        actor.moveTimer = (Number.isFinite(actor.moveTimer) ? actor.moveTimer : 0) + elapsed;
+        const interval = Math.max(0.1, Number(actor.wanderInterval) || TOWN_NPC_WANDER_INTERVAL);
+        while (actor.moveTimer >= interval) {
+          actor.moveTimer -= interval;
+          const directions = shuffleTownSymbolDirections(SYMBOL_ENCOUNTER_DIRECTIONS);
+          for (const step of directions) {
+            if (tryMoveTownNpc(tileMap, actor, step, occupied, playerTile)) {
+              moved = true;
+              break;
+            }
+          }
+        }
+        updateTownActorWalkAnimation(actor, elapsed, moved);
+      }
+    }
+
+    function tryMoveTownNpc(tileMap, actor, step, occupied, playerTile) {
+      if (!tileMap || !actor || !step || (!step.x && !step.y)) {
+        return false;
+      }
+      const targetCol = actor.col + step.x;
+      const targetRow = actor.row + step.y;
+      const fromKey = getTownSymbolTileKey(actor.col, actor.row);
+      const targetKey = getTownSymbolTileKey(targetCol, targetRow);
+      if (occupied && occupied.has(targetKey)) {
+        return false;
+      }
+      if (playerTile && playerTile.col === targetCol && playerTile.row === targetRow) {
+        return false;
+      }
+      if (!isTownGridTilePassable(tileMap, targetCol, targetRow, { ignoreNpcId: actor.id })) {
+        return false;
+      }
+      const center = getTownTileCenter(tileMap, targetCol, targetRow);
+      if (occupied) {
+        occupied.delete(fromKey);
+        occupied.add(targetKey);
+      }
+      actor.col = targetCol;
+      actor.row = targetRow;
+      actor.x = center.x;
+      actor.y = center.y;
+      actor.facing = step.facing || actor.facing || "down";
+      return true;
+    }
+
     function updateTownMovement(dt) {
       const keys = input.keys || {};
       updateTownMovementInputOrder(keys);
@@ -2910,14 +3245,129 @@
       return { x: 0, y: 1 };
     }
 
+    function getOppositeTownFacing(facing) {
+      if (facing === "left") return "right";
+      if (facing === "right") return "left";
+      if (facing === "up") return "down";
+      return "up";
+    }
+
+    function getTownDynamicNpcInteraction(tileMap, col, row) {
+      const actor = ensureTownMapNpcs(tileMap).find((candidate) => candidate
+        && !candidate.removed
+        && candidate.col === col
+        && candidate.row === row);
+      if (!actor) {
+        return null;
+      }
+      return {
+        id: "townNpc",
+        type: "npc",
+        npcId: actor.npcId,
+        name: actor.name || actor.npcId || "NPC",
+        x: actor.x,
+        y: actor.y,
+        actor,
+      };
+    }
+
+    function normalizeTownNpcDialogueEntry(entry, config) {
+      if (typeof entry === "string") {
+        return { speaker: config && config.speaker || config && config.name || undefined, text: entry };
+      }
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const text = String(entry.text || entry.message || entry.line || "");
+      if (!text) {
+        return null;
+      }
+      return {
+        speaker: entry.speaker || entry.name || config && config.speaker || undefined,
+        text,
+      };
+    }
+
+    function normalizeTownNpcDialogue(config) {
+      const source = config && (config.dialogue || config.lines || config.talk || config.message);
+      const entries = Array.isArray(source) ? source : source ? [source] : [];
+      return entries
+        .map((entry) => normalizeTownNpcDialogueEntry(entry, config))
+        .filter(Boolean);
+    }
+
+    function runTownNpcAction(action, actor, config) {
+      if (!action) {
+        return;
+      }
+      if (typeof action === "string") {
+        game.message = action;
+        game.messageTimer = 3;
+        return;
+      }
+      const kind = String(action.kind || action.type || action.action || "").trim();
+      if (kind === "message") {
+        game.message = String(action.text || action.message || "");
+        game.messageTimer = Math.max(0, Number(action.timer) || 3);
+      } else if (kind === "acceptQuest") {
+        const quest = getQuestById(action.questId || action.id);
+        if (quest && acceptTownQuest(quest)) {
+          showTownQuestNoticePopup(quest);
+          if (quest.fieldMapId === getTownMapId()) {
+            ensureTownMapSymbols(getTownTileMap());
+          }
+        }
+      } else if (kind === "custom" && typeof action.run === "function") {
+        action.run({ actor, config, game, town, startTownStory, getQuestById, acceptTownQuest });
+      }
+    }
+
+    function runTownNpcActions(actor, config) {
+      if (typeof config.onInteract === "function") {
+        config.onInteract({ actor, config, game, town, startTownStory, getQuestById, acceptTownQuest });
+      }
+      const actions = Array.isArray(config.actions)
+        ? config.actions
+        : config.action
+          ? [config.action]
+          : [];
+      for (const action of actions) {
+        runTownNpcAction(action, actor, config);
+      }
+    }
+
+    function runTownNpcInteraction(target) {
+      const actor = target && target.actor;
+      const config = actor && actor.rawConfig || {};
+      if (!actor) {
+        return;
+      }
+      actor.facing = getOppositeTownFacing(town.player.facing || "down");
+      const lines = normalizeTownNpcDialogue(config);
+      if (lines.length > 0) {
+        startTownStory(`npc:${actor.npcId || actor.id}`, lines, () => {
+          runTownNpcActions(actor, config);
+        });
+        return;
+      }
+      runTownNpcActions(actor, config);
+    }
+
     function getTownNpcInteractionFromTileMap(tileMap) {
-      if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function" || town.meetingDone) {
+      if (!tileMap) {
         return null;
       }
       const tile = getTownPlayerTile(tileMap);
       const dir = getTownFacingDelta(town.player.facing || "down");
       const targetCol = tile.col + dir.x;
       const targetRow = tile.row + dir.y;
+      const npc = getTownDynamicNpcInteraction(tileMap, targetCol, targetRow);
+      if (npc) {
+        return npc;
+      }
+      if (!tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function" || town.meetingDone) {
+        return null;
+      }
       const events = tileMapSystem.getEventsAtTile(tileMap, targetCol, targetRow, "interact");
       for (const event of events) {
         const raw = getTownRawMapEvent(event) || {};
@@ -3040,6 +3490,11 @@
 
       const target = getTownInteraction();
       if (!target) {
+        return;
+      }
+
+      if (target.type === "npc") {
+        runTownNpcInteraction(target);
         return;
       }
 
@@ -4598,6 +5053,7 @@
       makeTownBuilding,
       getTownBuilding,
       getTownEventActors,
+      getTownNpcActors,
       getTownMonsterSymbols,
       updateTown,
       updateTownCamera,
