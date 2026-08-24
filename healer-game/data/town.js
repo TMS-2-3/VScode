@@ -4,6 +4,7 @@
   window.HEALER_TOWN_DATA = {
     width: 1600,
     height: 1100,
+    tileMapId: "kuraku_village",
     player: { x: 800, y: 940, radius: 15, speed: 235, color: "#57c7c9" },
     buildings: [
       { id: "inn", name: "宿屋", sign: "宿", x: 170, y: 150, w: 250, h: 170, wall: "#f0c978", roof: "#b95143" },

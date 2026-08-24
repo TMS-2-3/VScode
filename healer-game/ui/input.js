@@ -268,7 +268,7 @@
       const registry = Array.isArray(window.HEALER_DEBUG_TILE_MAPS)
         ? window.HEALER_DEBUG_TILE_MAPS
         : [
-          { id: "startTown01", label: "クラク村" },
+          { id: "kuraku_village", label: "クラク村" },
           { id: "kuraku_forest_1", label: "西クラク森" },
           { id: "kuraku_forest_2", label: "南クラク森" },
           { id: "kuraku_forest_3", label: "北クラク森" },

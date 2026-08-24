@@ -67,7 +67,11 @@
     throw new Error(`healer-game load error. modules: ${missingModules.join(", ") || "none"} / data: ${missingData.join(", ") || "none"}`);
   }
 
-  const townTileMapId = data.TOWN_DATA.tileMapId || (TILE_MAPS.startTown01 ? "startTown01" : null);
+  const townTileMapId = [
+    data.TOWN_DATA.tileMapId,
+    "kuraku_village",
+    "startTown01",
+  ].find((mapId) => mapId && TILE_MAPS[mapId]) || Object.keys(TILE_MAPS)[0] || null;
   if (townTileMapId && TILE_MAPS[townTileMapId]) {
     const townTileMap = TILE_MAPS[townTileMapId];
     const townTileSize = Math.max(1, Math.floor(Number(townTileMap.tileSize) || 48));

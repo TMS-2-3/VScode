@@ -5,7 +5,7 @@
     npcs: [
       {
         id: "kuraku_villager_equipment_001",
-        mapId: "startTown01",
+        mapId: "kuraku_village",
         name: "村人",
         label: "村",
         color: "#f7fff6",
@@ -21,7 +21,7 @@
       /*
       {
         id: "kuraku_villager_001",
-        mapId: "startTown01",
+        mapId: "kuraku_village",
         name: "村人",
         label: "村",
         color: "#f7fff6",

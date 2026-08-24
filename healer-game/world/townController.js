@@ -61,7 +61,7 @@
     const INN_REST_COST = 100;
     const TUTORIAL_STORY_QUEST_ID = "story_horn_rabbit_competition_001";
     const STORY_PATH_AHEAD_QUEST_ID = "story_path_ahead_001";
-    const TUTORIAL_STORY_RETURN_MAP_ID = "startTown01";
+    const TUTORIAL_STORY_RETURN_MAP_ID = "kuraku_village";
     const TUTORIAL_STORY_RETURN_COL = 19;
     const TUTORIAL_STORY_RETURN_ROW = 17;
     const TOWN_RETURN_FADE_HOLD = 0.35;
@@ -2575,7 +2575,7 @@
       }
       const currentMapId = getTownMapId();
       const accepted = isTownQuestAccepted(TUTORIAL_STORY_QUEST_ID);
-      if (town.meetingDone && currentMapId === "startTown01" && transfer.targetMap === "kuraku_forest_1" && !accepted) {
+      if (town.meetingDone && currentMapId === TUTORIAL_STORY_RETURN_MAP_ID && transfer.targetMap === "kuraku_forest_1" && !accepted) {
         return {
           id: "tutorialQuestRequired",
           text: "依頼を受けよう！",
