@@ -470,6 +470,23 @@
       return unitOrOwner.equipment && unitOrOwner.equipment.weapon || null;
     }
 
+    function canUseSkillWithEquipment(unit, skill) {
+      if (!skill || !unit || typeof unit !== "object") {
+        return true;
+      }
+      if (skill.category === "通常攻撃") {
+        return true;
+      }
+      const weapon = getEquippedWeapon(unit, getKnownOwner(getOwnerKey(unit)));
+      if (Array.isArray(skill.requiredWeaponItemIds) && skill.requiredWeaponItemIds.length) {
+        return Boolean(weapon && skill.requiredWeaponItemIds.includes(weapon.id));
+      }
+      if (Array.isArray(skill.requiredWeapons) && skill.requiredWeapons.length) {
+        return Boolean(weapon && skill.requiredWeapons.includes(weapon.weaponType));
+      }
+      return true;
+    }
+
     function hasPassive(unit, key) {
       if (!unit) {
         return false;
@@ -483,17 +500,7 @@
     }
 
     function canUsePassiveWithEquipment(unit, passive) {
-      if (!passive || !unit || typeof unit !== "object") {
-        return true;
-      }
-      const weapon = getEquippedWeapon(unit, getKnownOwner(getOwnerKey(unit)));
-      if (Array.isArray(passive.requiredWeaponItemIds) && passive.requiredWeaponItemIds.length) {
-        return Boolean(weapon && passive.requiredWeaponItemIds.includes(weapon.id));
-      }
-      if (Array.isArray(passive.requiredWeapons) && passive.requiredWeapons.length) {
-        return Boolean(weapon && passive.requiredWeapons.includes(weapon.weaponType));
-      }
-      return true;
+      return canUseSkillWithEquipment(unit, passive);
     }
 
     function getEquippedPassive(unit) {
@@ -659,6 +666,7 @@
       getEquippedActiveSkillKeys,
       isActiveSkillEquipped,
       getEquippedActiveSkills,
+      canUseSkillWithEquipment,
       hasPassive,
       getEquippedPassive,
       getEquippedUltimateSkillKey,

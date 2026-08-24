@@ -946,6 +946,9 @@
     const lines = [];
     const description = formatDescriptionText(getTooltipDescription(skill), unit, skill);
     pushTooltipText(lines, description || "説明文は未設定");
+    if (entry.unavailableText) {
+      lines.push(`使用不可: ${entry.unavailableText}`);
+    }
     const relatedStatuses = getReferencedStatuses(description, skill.statusIds);
     if (relatedStatuses.length) {
       lines.push("");
@@ -1311,6 +1314,8 @@
         key: entry.key || "ult",
         skill: entry.skill,
         level: Number.isFinite(entry.level) ? entry.level : getSkillLevelForDisplay(unit, entry.key || "ult"),
+        unavailable: Boolean(entry.unavailable),
+        unavailableText: entry.unavailableText || "",
       };
     }
     const owner = unit.skillOwner || unit.id;
@@ -1326,18 +1331,19 @@
     const ready = Boolean(unit && ratio >= 1);
     const moodLocked = Boolean(unit && unit.id !== "finald" && unit.mood !== null && unit.mood < 40);
     const hardDisabled = !unit || unit.dead || unit.frozen > 0 || (unit.sleepTimer || 0) > 0;
-    const disabled = hardDisabled || moodLocked;
+    const equipmentLocked = Boolean(entry.unavailable);
+    const disabled = hardDisabled || moodLocked || equipmentLocked;
     const available = ready && !disabled;
     const key = unit ? getBattleActionLabel(getUltimateActionId(unit.id), ULTIMATE_KEYS[unit.id]) : "";
 
     ctx.fillStyle = available
       ? "#f2ffff"
-      : moodLocked
+      : moodLocked || equipmentLocked
         ? "rgba(74,61,66,0.78)"
         : "rgba(247,255,246,0.62)";
     ctx.strokeStyle = available
       ? "rgba(115,223,255,0.98)"
-      : moodLocked
+      : moodLocked || equipmentLocked
         ? "rgba(255,107,107,0.76)"
         : hardDisabled
           ? "rgba(255,107,107,0.62)"
@@ -1361,7 +1367,7 @@
     }
 
     const iconR = Math.min(w * 0.21, h * 0.17, 15);
-    ctx.fillStyle = available ? "#73dfff" : moodLocked ? "rgba(255,107,107,0.72)" : "rgba(115,223,255,0.58)";
+    ctx.fillStyle = available ? "#73dfff" : moodLocked || equipmentLocked ? "rgba(255,107,107,0.72)" : "rgba(115,223,255,0.58)";
     ctx.strokeStyle = "rgba(9,14,13,0.5)";
     ctx.lineWidth = 1.1;
     ctx.beginPath();
@@ -1374,12 +1380,15 @@
     ctx.textBaseline = "middle";
     ctx.fillText(skill ? getSkillIconLabel(skill) : "必", x + w / 2, y + h * 0.34 + 0.5);
 
-    const mainTextColor = moodLocked ? "#ffe4e4" : "#102018";
-    const subTextColor = moodLocked ? "#ffd0d0" : "#4c6758";
+    const mainTextColor = moodLocked || equipmentLocked ? "#ffe4e4" : "#102018";
+    const subTextColor = moodLocked || equipmentLocked ? "#ffd0d0" : "#4c6758";
     drawFittedText(skill ? skill.name : "必殺技", x + w / 2, y + h * 0.6, w - 10, 900, 11, 8, mainTextColor, "center");
     drawFittedText(skill && skill.skillType ? skill.skillType : "必殺技", x + w / 2, y + h * 0.78, w - 10, 800, 10, 7, subTextColor, "center");
     drawSkillLevelBadge(x + w - 5, y + h - 5, entry.level || 0);
     drawUltimateStateBadge(x, y, w, h, available, moodLocked);
+    if (equipmentLocked) {
+      drawUnavailableMark({ x, y, w, h });
+    }
 
     if (unit) {
       statusUiButtons.push({
@@ -1395,7 +1404,9 @@
         skill,
         level: entry.level || 0,
         gauge: true,
-        text: moodLocked ? "調子不足" : ready ? "OK" : "準備中",
+        text: equipmentLocked ? entry.unavailableText || "必要武器不足" : moodLocked ? "調子不足" : ready ? "OK" : "準備中",
+        unavailable: equipmentLocked,
+        unavailableText: entry.unavailableText || "",
       }, x, y, w, h);
     }
   }
@@ -1434,6 +1445,20 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, bx + badgeW / 2, by + badgeH / 2 + 0.5);
+    ctx.restore();
+  }
+
+  function drawUnavailableMark(rect) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(196,42,42,0.92)";
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(rect.x + 12, rect.y + 12);
+    ctx.lineTo(rect.x + rect.w - 12, rect.y + rect.h - 12);
+    ctx.moveTo(rect.x + rect.w - 12, rect.y + 12);
+    ctx.lineTo(rect.x + 12, rect.y + rect.h - 12);
+    ctx.stroke();
     ctx.restore();
   }
   function drawItemPanel(x, y, w, h) {
@@ -1675,29 +1700,35 @@
         }
         continue;
       }
-      ctx.fillStyle = "#f7fff6";
-      ctx.strokeStyle = skill.command
+      const unavailable = Boolean(skill.unavailable);
+      ctx.fillStyle = unavailable ? "rgba(74,61,66,0.78)" : "#f7fff6";
+      ctx.strokeStyle = unavailable
+        ? "rgba(255,107,107,0.76)"
+        : skill.command
         ? (skill.commandDelta < 0 ? "rgba(86,140,255,0.78)" : "rgba(255,185,67,0.78)")
         : "rgba(8,14,12,0.64)";
-      ctx.lineWidth = skill.command ? 1.8 : 1.5;
+      ctx.lineWidth = unavailable ? 1.8 : skill.command ? 1.8 : 1.5;
       roundRect(sx, itemY, itemW, itemH, 8);
       ctx.fill();
       ctx.stroke();
       const shadowRatio = clamp(skill.cd / Math.max(0.1, skill.max), 0, 1);
       drawSkillCooldownShadow(sx, itemY, itemW, itemH, shadowRatio);
       drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);
-      ctx.fillStyle = "#102018";
+      ctx.fillStyle = unavailable ? "#ffe4e4" : "#102018";
       ctx.font = `800 ${itemW < 92 ? 11 : 12}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineWidth = 2.5;
-      ctx.strokeStyle = "rgba(247,255,246,0.86)";
+      ctx.strokeStyle = unavailable ? "rgba(40,12,12,0.7)" : "rgba(247,255,246,0.86)";
       ctx.strokeText(skill.name, sx + itemW / 2, nameY);
       ctx.fillText(skill.name, sx + itemW / 2, nameY);
       if (skill.skillType) {
-        drawFittedText(skill.skillType, sx + itemW / 2, typeY, itemW - 10, 800, itemW < 92 ? 9 : 10, 7, "#4c6758", "center");
+        drawFittedText(skill.skillType, sx + itemW / 2, typeY, itemW - 10, 800, itemW < 92 ? 9 : 10, 7, unavailable ? "#ffd0d0" : "#4c6758", "center");
       }
       drawSkillLevelBadge(sx + itemW - 5, itemY + itemH - 5, skill.level || 0);
+      if (unavailable) {
+        drawUnavailableMark({ x: sx, y: itemY, w: itemW, h: itemH });
+      }
       statusUiButtons.push({
         action: !skill.command ? "playerSkill" : "playerCommand",
         skillKey: skill.key,

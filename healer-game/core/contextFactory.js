@@ -270,6 +270,7 @@
         getEquippedActiveSkills: callLater("loadoutSystem", "getEquippedActiveSkills"),
         getEquippedUltimateSkillKey: callLater("loadoutSystem", "getEquippedUltimateSkillKey"),
         getEquippedUltimateSkill: callLater("loadoutSystem", "getEquippedUltimateSkill"),
+        canUseSkillWithEquipment: callLater("loadoutSystem", "canUseSkillWithEquipment"),
         getSkillLevel: callLater("loadoutSystem", "getSkillLevel"),
       };
     }

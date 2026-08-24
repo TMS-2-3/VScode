@@ -58,6 +58,7 @@
       });
       const ultimateEntry = getUnitUltimateEntry(player);
       const ult = ultimateEntry.skill || need("finald", "ult");
+      const ultimateUnavailableText = getSkillUnavailableText(player, ultimateEntry.key || "ult", ult);
       entries[PLAYER_ULTIMATE_SLOT_INDEX] = {
         key: ultimateEntry.key || "ult",
         input: getSlotInputLabel(PLAYER_ULTIMATE_SLOT_INDEX),
@@ -68,6 +69,8 @@
         skill: ult,
         level: getSkillUpgradeLevel(player, ultimateEntry.key || "ult", ult),
         gauge: true,
+        unavailable: Boolean(ultimateUnavailableText),
+        unavailableText: ultimateUnavailableText,
       };
       return entries;
     }
@@ -253,6 +256,38 @@
 
     function isSkillEquipped(unit, key) {
       return !ctx.isActiveSkillEquipped || ctx.isActiveSkillEquipped(unit, key);
+    }
+
+    function canUseSkillWithEquipment(unit, key, skill = null) {
+      if (typeof ctx.canUseSkillWithEquipment !== "function") {
+        return true;
+      }
+      return ctx.canUseSkillWithEquipment(unit, skill || getUnitSkill(unit, key));
+    }
+
+    function canUseEquippedSkill(unit, key, skill = null) {
+      return isSkillEquipped(unit, key) && canUseSkillWithEquipment(unit, key, skill);
+    }
+
+    function getSkillUnavailableText(unit, key, skill = null) {
+      if (!isSkillEquipped(unit, key)) {
+        return "未セット";
+      }
+      if (!canUseSkillWithEquipment(unit, key, skill)) {
+        return "必要武器不足";
+      }
+      return "";
+    }
+
+    function showSkillUnavailable(unit, key, skill = null) {
+      const text = getSkillUnavailableText(unit, key, skill);
+      if (!text || !ctx.addFloat) {
+        return;
+      }
+      const origin = unit && unit.id === "finald" && ctx.getSupportOrigin ? ctx.getSupportOrigin() : unit || ctx.player;
+      if (origin) {
+        ctx.addFloat(text, origin.x + ctx.battlePx(26), origin.y - ctx.battlePx(28), "#ffffff");
+      }
     }
 
     function isUltimateKey(owner, key) {
@@ -887,6 +922,9 @@
         return false;
       }
       const skill = getUnitSkill(unit, key);
+      if (!canUseSkillWithEquipment(unit, key, skill)) {
+        return false;
+      }
       if (!canPaySkillCost(unit, skill)) {
         return false;
       }
@@ -1061,7 +1099,7 @@
     }
 
     function canQueuePartySkill(unit, key, skill) {
-      if (!unit || !key || !skill || isCommandSkill(key) || !isSkillEquipped(unit, key) || !canPaySkillCost(unit, skill)) {
+      if (!unit || !key || !skill || isCommandSkill(key) || !canUseEquippedSkill(unit, key, skill) || !canPaySkillCost(unit, skill)) {
         return false;
       }
       if (key === "attack" && (unit.cds.attack || 0) > 0) {
@@ -1188,12 +1226,12 @@
       const candidates = [];
       if (enemy.role === "caster") {
         const skill = need("enemy", "casterLine");
-        if (isSkillEquipped(enemy, "casterLine") && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "casterLine", skill, target, range: skill.length, use: () => enemyLineAttack(enemy, target) });
+        if (canUseEquippedSkill(enemy, "casterLine", skill) && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "casterLine", skill, target, range: skill.length, use: () => enemyLineAttack(enemy, target) });
       } else if (enemy.role === "elite") {
         const skill = need("enemy", "heavySlam");
-        if (isSkillEquipped(enemy, "heavySlam") && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "heavySlam", skill, target, range: Infinity, use: () => enemyHeavySlam(enemy, target) });
-        if (isSkillEquipped(enemy, "attack")) candidates.push({ key: "attack", skill: attack, target, range: attack.eliteRange, use: () => enemyBite(enemy, target) });
-      } else if (isSkillEquipped(enemy, "attack")) {
+        if (canUseEquippedSkill(enemy, "heavySlam", skill) && (enemy.cds.skill || 0) <= 0) candidates.push({ key: "heavySlam", skill, target, range: Infinity, use: () => enemyHeavySlam(enemy, target) });
+        if (canUseEquippedSkill(enemy, "attack", attack)) candidates.push({ key: "attack", skill: attack, target, range: attack.eliteRange, use: () => enemyBite(enemy, target) });
+      } else if (canUseEquippedSkill(enemy, "attack", attack)) {
         candidates.push({ key: "attack", skill: attack, target, range: attack.bruteRange, use: () => enemyBite(enemy, target) });
       }
       chooseEnemyAction(enemy, candidates);
@@ -3140,8 +3178,13 @@
         ctx.addFloat("未セット", origin.x + 26, origin.y - 28, "#ffffff");
         return false;
       }
+      const equippedSkill = getUnitSkill(player, type);
+      if (!canUseSkillWithEquipment(player, type, equippedSkill)) {
+        showSkillUnavailable(player, type, equippedSkill);
+        return false;
+      }
       if (isCommandSkill(type)) {
-        const skill = get("finald", type);
+        const skill = equippedSkill || get("finald", type);
         if (!skill || (player.cds[type] || 0) > 0) {
           const origin = ctx.getSupportOrigin();
           ctx.addFloat("再指示中", origin.x + 26, origin.y - 28, "#ffffff");
@@ -3329,12 +3372,17 @@
         player.aimAngle = intent.aimAngle;
       }
       if (intent.key === "attack") return firePlayerShot(target, options);
+      const intendedSkill = getUnitSkill(player, intent.key) || get("finald", intent.key);
+      if (!canUseSkillWithEquipment(player, intent.key, intendedSkill)) {
+        showSkillUnavailable(player, intent.key, intendedSkill);
+        return false;
+      }
       if (intent.key === "heal") return castHeal(target, options);
       if (intent.key === "shield") return castShield(target, options);
       if (intent.key === "fire") return castPlayerFire(target, options);
       if (intent.key === "bomb") return castPlayerBomb(target, options);
       if (isCommandSkill(intent.key)) return usePlayerCommand(intent.key, target, options);
-      const skill = getUnitSkill(player, intent.key) || get("finald", intent.key);
+      const skill = intendedSkill;
       if (isPlayerSingleTargetSupportSkill(intent.key, skill)) return castPlayerSingleTargetSupportSkill(intent.key, target, options);
       if (isPlayerGenericSingleTargetSkill(intent.key, skill)) return castPlayerGenericSingleTargetSkill(intent.key, target, options);
       return false;
@@ -3350,12 +3398,18 @@
       if (!player.aim || player.dead || player.channel || player.cast || isActionDisabled(player)) return false;
       ctx.game.hover = ctx.getHoveredPartyMember();
       if (player.aim.type === "attack") return firePlayerShot();
+      const aimedSkill = getUnitSkill(player, player.aim.type) || get("finald", player.aim.type);
+      if (!canUseSkillWithEquipment(player, player.aim.type, aimedSkill)) {
+        showSkillUnavailable(player, player.aim.type, aimedSkill);
+        player.aim = null;
+        return false;
+      }
       if (player.aim.type === "heal") return castHeal();
       if (player.aim.type === "shield") return castShield();
       if (player.aim.type === "fire") return castPlayerFire();
       if (player.aim.type === "bomb") return castPlayerBomb();
       if (isCommandSkill(player.aim.type)) return usePlayerCommand(player.aim.type);
-      const skill = getUnitSkill(player, player.aim.type) || get("finald", player.aim.type);
+      const skill = aimedSkill;
       if (isPlayerSingleTargetSupportSkill(player.aim.type, skill)) return castPlayerSingleTargetSupportSkill(player.aim.type);
       if (isPlayerGenericSingleTargetSkill(player.aim.type, skill)) return castPlayerGenericSingleTargetSkill(player.aim.type);
       return false;
@@ -3735,6 +3789,10 @@
         ctx.addFloat("未セット", origin.x + 26, origin.y - 28, "#ffffff");
         return false;
       }
+      if (!canUseSkillWithEquipment(player, key, skill)) {
+        showSkillUnavailable(player, key, skill);
+        return false;
+      }
       if (player.dead || player.channel || player.cast || isActionDisabled(player) || player.actionLock > 0) {
         return false;
       }
@@ -3917,6 +3975,13 @@
         return false;
       }
       if (!unit || unit.dead || isActionDisabled(unit) || !canUseUltimate(unit) || unit.actionLock > 0 || unit.cast || unit.channel) return false;
+      const ultimateEntry = getUnitUltimateEntry(unit);
+      const ultimateKey = ultimateEntry.key || "ult";
+      const ultimateSkill = ultimateEntry.skill;
+      if (!canUseSkillWithEquipment(unit, ultimateKey, ultimateSkill)) {
+        showSkillUnavailable(unit, ultimateKey, ultimateSkill);
+        return false;
+      }
       if (unit.id !== "finald" && unit.mood !== null && unit.mood < 40) { ctx.addFloat("不調", unit.x, unit.y - 34, "#cfd5e6"); return false; }
       if (id !== "finald") spendUltimate(unit);
       if (id === "ulpes") ultUlpes(unit, automatic);
@@ -4387,6 +4452,7 @@
           }
           const command = isCommandSkill(key);
           const positioned = command && isSelfCenteredPlayerSkill(skill);
+          const unavailableText = getSkillUnavailableText(player, key, skill);
           return {
             key,
             name: skill.name,
@@ -4399,6 +4465,8 @@
             command,
             commandDelta: command ? (skill.avoidTarget ? -1 : skill.commandDelta) : 0,
             level: getSkillUpgradeLevel(player, key, skill),
+            unavailable: Boolean(unavailableText),
+            unavailableText,
           };
         })
         .filter(Boolean);
@@ -4413,8 +4481,15 @@
         : Object.entries(DATA[owner] || {}).filter(([key]) => !isUltimateKey(owner, key)).map(([key, skill]) => ({ key, skill }));
       const ultimateEntry = getUnitUltimateEntry(unit);
       return [
-        ...activeEntries.map((entry) => ({ ...entry, level: getSkillUpgradeLevel(unit, entry.key, entry.skill) })),
-        ...(ultimateEntry.skill ? [{ ...ultimateEntry, level: getSkillUpgradeLevel(unit, ultimateEntry.key || "ult", ultimateEntry.skill) }] : []),
+        ...activeEntries.map((entry) => {
+          const unavailableText = getSkillUnavailableText(unit, entry.key, entry.skill);
+          return { ...entry, level: getSkillUpgradeLevel(unit, entry.key, entry.skill), unavailable: Boolean(unavailableText), unavailableText };
+        }),
+        ...(ultimateEntry.skill ? (() => {
+          const key = ultimateEntry.key || "ult";
+          const unavailableText = getSkillUnavailableText(unit, key, ultimateEntry.skill);
+          return [{ ...ultimateEntry, level: getSkillUpgradeLevel(unit, key, ultimateEntry.skill), unavailable: Boolean(unavailableText), unavailableText }];
+        })() : []),
       ];
     }
 
