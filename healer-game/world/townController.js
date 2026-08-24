@@ -179,6 +179,7 @@
         questName,
         title: options.title || `${typeName}「${questName}」`,
         message: options.message || `${typeName}「${questName}」を受注しました`,
+        onComplete: typeof options.onComplete === "function" ? options.onComplete : null,
       };
     }
 
@@ -191,7 +192,11 @@
       const hold = Math.max(0, Number(popup.hold) || TOWN_QUEST_NOTICE_HOLD);
       const fade = Math.max(0.01, Number(popup.fade) || TOWN_QUEST_NOTICE_FADE);
       if (popup.age >= hold + fade) {
+        const onComplete = typeof popup.onComplete === "function" ? popup.onComplete : null;
         town.questNoticePopup = null;
+        if (onComplete) {
+          onComplete();
+        }
       }
     }
 
@@ -1452,7 +1457,11 @@
       if (requiredQuest && !isTownQuestAccepted(requiredQuest)) {
         return false;
       }
-      const requiredCompletedQuest = config.requiresQuestCompleted || config.requiredQuestCompleted || null;
+      const requiredCompletedQuest = config.requiresQuestCompleted
+        || config.requiredQuestCompleted
+        || config.requiredCompletedQuestId
+        || config.requiresCompletedQuestId
+        || null;
       if (requiredCompletedQuest && !isTownQuestCompleted(requiredCompletedQuest)) {
         return false;
       }
@@ -3806,14 +3815,22 @@
         const acceptedMessage = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
         const storyLines = typeof getQuestAcceptedStory === "function" ? getQuestAcceptedStory(quest) : [];
         if (Array.isArray(storyLines) && storyLines.length > 0) {
-          startTownStory(`questAccepted:${quest.id}`, storyLines, () => {
-            game.message = acceptedMessage;
-            game.messageTimer = 5;
+          showTownQuestNoticePopup(quest, {
+            onComplete: () => {
+              startTownStory(`questAccepted:${quest.id}`, storyLines, () => {
+                game.message = acceptedMessage;
+                game.messageTimer = 5;
+              });
+            },
           });
           return;
         }
-        game.message = acceptedMessage;
-        game.messageTimer = 5;
+        showTownQuestNoticePopup(quest, {
+          onComplete: () => {
+            game.message = acceptedMessage;
+            game.messageTimer = 5;
+          },
+        });
         return;
       }
       resetGame(quest);

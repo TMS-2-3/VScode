@@ -11,6 +11,7 @@
         color: "#f7fff6",
         cell: "T7",
         facing: "down",
+        requiresQuestCompleted: "story_horn_rabbit_competition_001",
         wander: { enabled: true, interval: 2 },
         dialogue: [
           { speaker: "村人", text: "武器や防具を作るのも大事なことだよ" },
