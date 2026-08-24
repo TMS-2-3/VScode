@@ -221,6 +221,8 @@
     }
     unit.forcedTarget = null;
     unit.tauntTimer = 0;
+    unit.tutorialForcedTarget = null;
+    unit.tutorialForcedTargetTimer = 0;
     unit.frozen = 0;
     unit.frozenMax = 0;
     unit.sleepTimer = 0;
@@ -1147,8 +1149,8 @@
       return;
     }
     for (const enemy of getAliveEnemies(helpers)) {
-      enemy.forcedTarget = target;
-      enemy.tauntTimer = Math.max(enemy.tauntTimer || 0, duration);
+      enemy.tutorialForcedTarget = target;
+      enemy.tutorialForcedTargetTimer = Math.max(enemy.tutorialForcedTargetTimer || 0, duration);
       if (!enemy.cds || typeof enemy.cds !== "object") {
         enemy.cds = {};
       }
@@ -1175,6 +1177,10 @@
         enemy.cds = {};
       }
       enemy.cds.attack = 0;
+      if (enemy.forcedTarget === rihas) {
+        enemy.forcedTarget = null;
+        enemy.tauntTimer = 0;
+      }
     }
   }
 
@@ -1218,6 +1224,10 @@
       delete enemy.tutorialOpeningHitUnitId;
       delete enemy.tutorialOpeningHitDone;
       delete enemy.tutorialOpeningId;
+      if (rihas && enemy.tutorialForcedTarget === rihas) {
+        enemy.tutorialForcedTarget = null;
+        enemy.tutorialForcedTargetTimer = 0;
+      }
       if (rihas && enemy.forcedTarget === rihas) {
         enemy.forcedTarget = null;
         enemy.tauntTimer = 0;
@@ -1242,6 +1252,8 @@
       }
       enemy.forcedTarget = null;
       enemy.tauntTimer = 0;
+      enemy.tutorialForcedTarget = null;
+      enemy.tutorialForcedTargetTimer = 0;
     }
   }
 
@@ -1565,6 +1577,8 @@
       delete unit.tutorialOpeningHitDone;
       delete unit.tutorialOpeningId;
       delete unit.tutorialStableId;
+      delete unit.tutorialForcedTarget;
+      delete unit.tutorialForcedTargetTimer;
     }
   }
 

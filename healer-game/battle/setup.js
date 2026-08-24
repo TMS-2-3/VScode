@@ -156,6 +156,8 @@
       unit.stackCooldown = 0;
       unit.forcedTarget = null;
       unit.tauntTimer = 0;
+      unit.tutorialForcedTarget = null;
+      unit.tutorialForcedTargetTimer = 0;
       unit.frozen = 0;
       unit.frozenMax = 0;
       unit.burnTimer = 0;
@@ -210,6 +212,8 @@
       delete unit.tutorialOpeningHitDone;
       delete unit.tutorialOpeningId;
       delete unit.tutorialStableId;
+      delete unit.tutorialForcedTarget;
+      delete unit.tutorialForcedTargetTimer;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
       unit.goukenHitCounts = {};

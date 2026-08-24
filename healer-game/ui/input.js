@@ -3227,7 +3227,12 @@
         return;
       }
       if (game.state === "town" && town.questNoticePopup && key === "escape") {
+        const popup = town.questNoticePopup;
+        const onComplete = typeof popup.onComplete === "function" ? popup.onComplete : null;
         town.questNoticePopup = null;
+        if (onComplete) {
+          onComplete();
+        }
         clearMovementKeys();
         event.preventDefault();
         return;

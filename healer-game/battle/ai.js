@@ -365,6 +365,10 @@
       return Boolean(source && target && source !== target && source.forcedTarget === target && source.tauntTimer > 0 && !target.dead);
     }
 
+    function isTutorialForcedTarget(source, target) {
+      return Boolean(source && target && source !== target && source.tutorialForcedTarget === target && source.tutorialForcedTargetTimer > 0 && !target.dead);
+    }
+
     function getPartyPreferredRange(unit) {
       const bias = clampCommandBias(unit ? unit.commandBias : 0);
       return getPreferredRangeForBias(unit, bias) * getMoodPreferredRangeMultiplier(unit);
@@ -701,10 +705,13 @@
       if (!enemy || enemy.dead) {
         return null;
       }
-      if (enemy.forcedTarget && !enemy.forcedTarget.dead) {
+      const targets = getTargetablePartyMembers();
+      if (isForcedHostileTarget(enemy, enemy.forcedTarget) && targets.includes(enemy.forcedTarget)) {
         return enemy.forcedTarget;
       }
-      const targets = getTargetablePartyMembers();
+      if (isTutorialForcedTarget(enemy, enemy.tutorialForcedTarget) && targets.includes(enemy.tutorialForcedTarget)) {
+        return enemy.tutorialForcedTarget;
+      }
       if (enemy.role === "horn_rabbit") {
         return getLowestHpTargetBelowRatio(targets, 0.4) || nearestAlive(enemy, targets);
       }

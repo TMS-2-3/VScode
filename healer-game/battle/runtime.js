@@ -262,6 +262,13 @@
           }
         }
 
+        if (unit.tutorialForcedTargetTimer > 0) {
+          unit.tutorialForcedTargetTimer -= dt;
+          if (unit.tutorialForcedTargetTimer <= 0) {
+            unit.tutorialForcedTarget = null;
+          }
+        }
+
         updateBurn(unit, dt);
         updatePoison(unit, dt);
         if (enforceIncapacitatedState(unit)) {
@@ -654,6 +661,8 @@
       unit.stackCooldown = 0;
       unit.forcedTarget = null;
       unit.tauntTimer = 0;
+      unit.tutorialForcedTarget = null;
+      unit.tutorialForcedTargetTimer = 0;
       unit.delayedDamageQueue = [];
       unit.goukenHitCounts = {};
       unit.chocolateLilyCharging = false;
