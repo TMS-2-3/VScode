@@ -490,6 +490,8 @@
       unit.stackCooldown = 0;
       unit.forcedTarget = null;
       unit.tauntTimer = 0;
+      unit.tutorialForcedTarget = null;
+      unit.tutorialForcedTargetTimer = 0;
       unit.delayedDamageQueue = [];
       unit.goukenHitCounts = {};
       unit.chocolateLilyCharging = false;
@@ -612,9 +614,6 @@
       bonus -= getCommonDamageResistance(target);
       bonus -= getDamageTypeResistance(target, options);
       bonus += getFocusIncomingDamageBonus(target);
-      if (source && source.team === "enemy" && hasPassive(target, "painless") && source.forcedTarget === target && source.tauntTimer > 0) {
-        bonus += multiplierToBonus(0.6);
-      }
       if (hasPassive(target, "painless")) {
         bonus += multiplierToBonus(getRihasPassiveIncomingMultiplier(target));
       }

@@ -366,9 +366,9 @@
     ctx.textBaseline = "middle";
     ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
     ctx.font = "950 72px 'Segoe UI Black', 'Yu Gothic UI', sans-serif";
-    ctx.fillText(cutin.title || "THE 戦闘！", 5, -12);
+    ctx.fillText(cutin.title || "戦闘開始", 5, -12);
     ctx.fillStyle = "#f7fff6";
-    ctx.fillText(cutin.title || "THE 戦闘！", 0, -18);
+    ctx.fillText(cutin.title || "戦闘開始", 0, -18);
     ctx.font = "900 26px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#ffe08b";
     ctx.fillText(cutin.enemyText || "魔物の気配", 0, 42);

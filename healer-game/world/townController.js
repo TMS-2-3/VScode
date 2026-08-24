@@ -1258,12 +1258,15 @@
         return;
       }
       acceptTownQuest(quest);
-      showTownQuestNoticePopup(quest);
       if (getTownMapId() === quest.fieldMapId) {
         ensureTownMapSymbols(getTownTileMap());
       }
-      game.message = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
-      game.messageTimer = 5;
+      showTownQuestNoticePopup(quest, {
+        onComplete: () => {
+          game.message = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
+          game.messageTimer = 5;
+        },
+      });
     }
 
     function clearTownAcceptedQuest(questId) {
@@ -2861,7 +2864,7 @@
         timer: 0,
         duration: ENCOUNTER_CUTIN_DURATION,
         quest,
-        title: "THE 戦闘！",
+        title: "戦闘開始",
         subtitle: quest && quest.name ? quest.name : "魔物と遭遇",
         enemyText: getEncounterCutinEnemyText(quest, symbols),
         symbolText: getEncounterCutinSymbolText(symbols),
@@ -3712,8 +3715,12 @@
       closeTownPanel();
       ensureTownMapSymbols(getTownTileMap());
       const destination = getTownQuestDestinationName(newQuest) || "出現場所";
-      game.message = `${abandonQuest.name}を破棄し、${newQuest.name}を受けました。${destination}へ向かいましょう。`;
-      game.messageTimer = 5;
+      showTownQuestNoticePopup(newQuest, {
+        onComplete: () => {
+          game.message = `${abandonQuest.name}を破棄し、${newQuest.name}を受けました。${destination}へ向かいましょう。`;
+          game.messageTimer = 5;
+        },
+      });
     }
 
     function runTownPanelAction(action) {
