@@ -1287,6 +1287,10 @@
     return typeof getTownMonsterSymbols === "function" ? getTownMonsterSymbols() : [];
   }
 
+  function getTownStoryCharacterActors() {
+    return Array.isArray(town && town.storyActors) ? town.storyActors.filter(Boolean) : [];
+  }
+
   function drawTownCharacters() {
     if (!playerProfile.done) {
       return;
@@ -1301,8 +1305,11 @@
       walkFrame: town.player.walkFrame || 1,
       spriteHeight: town.player.spriteHeight || 72,
     }];
+    const storyActors = getTownStoryCharacterActors();
     const eventActors = getTownEventCharacterActors();
-    if (!town.meetingDone && eventActors.length > 0) {
+    if (storyActors.length > 0) {
+      actors.push(...storyActors);
+    } else if (!town.meetingDone && eventActors.length > 0) {
       actors.push(...eventActors);
     } else if (!town.meetingDone) {
       const guild = getTownBuilding("guild");
@@ -1341,8 +1348,11 @@
       walkFrame: town.player.walkFrame || 1,
       spriteHeight: town.player.spriteHeight || 72,
     }];
+    const storyActors = getTownStoryCharacterActors();
     const eventActors = getTownEventCharacterActors();
-    if (!town.meetingDone && eventActors.length > 0) {
+    if (storyActors.length > 0) {
+      actors.push(...storyActors);
+    } else if (!town.meetingDone && eventActors.length > 0) {
       actors.push(...eventActors);
     } else if (!town.meetingDone) {
       const guild = getTownBuilding("guild");

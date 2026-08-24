@@ -490,6 +490,8 @@
       unit.stackCooldown = 0;
       unit.forcedTarget = null;
       unit.tauntTimer = 0;
+      unit.tutorialForcedTarget = null;
+      unit.tutorialForcedTargetTimer = 0;
       unit.delayedDamageQueue = [];
       unit.goukenHitCounts = {};
       unit.chocolateLilyCharging = false;

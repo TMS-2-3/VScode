@@ -439,6 +439,7 @@
       town.panel = null;
       town.selectedQuest = null;
       town.story = null;
+      town.storyActors = null;
       town.introDone = false;
       town.meetingDone = false;
 
@@ -512,6 +513,7 @@
       town.introDone = saved.introDone === true;
       town.meetingDone = saved.meetingDone === true;
       town.story = null;
+      town.storyActors = null;
       town.panel = null;
       town.selectedQuest = null;
       town.interaction = null;

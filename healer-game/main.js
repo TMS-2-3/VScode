@@ -293,6 +293,7 @@
         panel: null,
         selectedQuest: null,
         story: null,
+        storyActors: null,
         introDone: false,
         meetingDone: false,
       },

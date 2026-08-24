@@ -62,8 +62,10 @@
     const TUTORIAL_STORY_QUEST_ID = "story_horn_rabbit_competition_001";
     const STORY_PATH_AHEAD_QUEST_ID = "story_path_ahead_001";
     const TUTORIAL_STORY_RETURN_MAP_ID = "kuraku_village";
-    const TUTORIAL_STORY_RETURN_COL = 19;
-    const TUTORIAL_STORY_RETURN_ROW = 17;
+    const TUTORIAL_STORY_CIRCLE_PLAYER_COL = 19;
+    const TUTORIAL_STORY_CIRCLE_PLAYER_ROW = 11;
+    const TUTORIAL_STORY_AFTER_COL = 19;
+    const TUTORIAL_STORY_AFTER_ROW = 12;
     const TOWN_RETURN_FADE_HOLD = 0.35;
     const TOWN_RETURN_FADE_DURATION = 0.85;
     const TOWN_QUEST_NOTICE_HOLD = 2;
@@ -280,6 +282,48 @@
       town.player.gridMove = null;
       clampTownPlayer();
       return true;
+    }
+
+    function makeTownStoryActor(tileMap, id, label, color, col, row, facing) {
+      const center = getTownTileCenter(tileMap, col, row);
+      return {
+        id,
+        label,
+        color,
+        x: center.x,
+        y: center.y,
+        facing: facing || "down",
+        walkFrame: 1,
+        walkFrameIndex: -1,
+        walkTimer: 0,
+        spriteHeight: Number.isFinite(town.player && town.player.spriteHeight) ? town.player.spriteHeight : TOWN_FOLLOWER_SPRITE_HEIGHT,
+      };
+    }
+
+    function setupTutorialCompletionStoryActors() {
+      const tileMap = getTownTileMap();
+      if (!tileMap || getTownMapId() !== TUTORIAL_STORY_RETURN_MAP_ID) {
+        town.storyActors = null;
+        return;
+      }
+      town.storyActors = [
+        makeTownStoryActor(tileMap, "sushia", "ス", "#b985ee", 19, 9, "down"),
+        makeTownStoryActor(tileMap, "ulpes", "ウ", "#f4c54f", 18, 10, "right"),
+        makeTownStoryActor(tileMap, "rihas", "リ", "#e37a3f", 20, 10, "left"),
+      ];
+    }
+
+    function finishTutorialCompletionStoryPlacement() {
+      town.storyActors = null;
+      const tileMap = getTownTileMap();
+      if (tileMap) {
+        placeTownPlayerAtTile(tileMap, TUTORIAL_STORY_AFTER_COL, TUTORIAL_STORY_AFTER_ROW);
+      }
+      town.player.facing = "down";
+      initializeTownFollowers(true);
+      resetTownTrail();
+      town.interaction = getTownInteraction();
+      updateTownCamera();
     }
 
     function getTownBuildingTemplateById(id) {
@@ -547,14 +591,16 @@
       town.mapNamePopup = null;
       town.returnFade = null;
       town.questNoticePopup = null;
+      town.storyActors = null;
       player.aim = null;
       town.player.gridMove = null;
       if (getTownTileMap() || town.buildings.length === 0) {
         setupTown();
       }
       if (completedTutorialStoryEncounter) {
-        placeTownPlayerAtTile(getTownTileMap(), TUTORIAL_STORY_RETURN_COL, TUTORIAL_STORY_RETURN_ROW);
+        placeTownPlayerAtTile(getTownTileMap(), TUTORIAL_STORY_CIRCLE_PLAYER_COL, TUTORIAL_STORY_CIRCLE_PLAYER_ROW);
         town.player.facing = "up";
+        setupTutorialCompletionStoryActors();
       } else if (completedSymbolEncounter && Number.isFinite(completedSymbolEncounter.returnCol) && Number.isFinite(completedSymbolEncounter.returnRow)) {
         placeTownPlayerAtTile(getTownTileMap(), completedSymbolEncounter.returnCol, completedSymbolEncounter.returnRow);
       } else if (!town.introDone) {
@@ -589,8 +635,12 @@
         if (Array.isArray(storyLines) && storyLines.length > 0) {
           startTownReturnFade();
           startTownStory(`questCompleted:${TUTORIAL_STORY_QUEST_ID}`, storyLines, () => {
+            finishTutorialCompletionStoryPlacement();
             acceptNextStoryQuestAfterTutorial();
           });
+        } else {
+          finishTutorialCompletionStoryPlacement();
+          acceptNextStoryQuestAfterTutorial();
         }
       } else if (completedSymbolEncounter && completedStoryQuest && completedStoryQuest.type === "story" && !town.story) {
         const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
@@ -2852,7 +2902,7 @@
         timer: 0,
         duration: ENCOUNTER_CUTIN_DURATION,
         quest,
-        title: "THE 戦闘！",
+        title: "戦闘開始",
         subtitle: quest && quest.name ? quest.name : "魔物と遭遇",
         enemyText: getEncounterCutinEnemyText(quest, symbols),
         symbolText: getEncounterCutinSymbolText(symbols),
