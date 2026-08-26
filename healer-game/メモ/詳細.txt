@@ -1139,8 +1139,8 @@ elite / 大魔物
 - 頭
 - 胴
 - 手
-- 足
-- 靴
+- 腰
+- 脚
 - アクセサリ
 
 現行データ上のキー:
@@ -1148,7 +1148,7 @@ elite / 大魔物
 - head
 - body
 - hands
-- legs
+- waist
 - feet
 - accessory
 

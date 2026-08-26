@@ -12,6 +12,16 @@
     const armorRandomTotals = { D: 0.3, C: 0.6, B: 0.9, A: 1.2, S: 1.5 };
     const armorRandomNegativeMaxCounts = { D: 0, C: 0, B: 1, A: 1, S: 2 };
     const accessoryRandomCounts = { D: 1, C: 2, B: 3, A: 4, S: 5 };
+    const legacyEquipmentSlotKeyMap = {
+      legs: "waist",
+    };
+    const legacyEquipmentItemIdMap = {
+      kari_zubon: "kari_waist",
+      horn_rabbit_leggings: "horn_rabbit_waist",
+      bud_alraune_leggings: "bud_alraune_waist",
+      shadow_wolf_leggings: "shadow_wolf_waist",
+      flostiny_leggings: "flostiny_waist",
+    };
     const armorRandomStatKeys = ["maxHp", "maxMp", "attack", "magic", "defense", "magicDefense"];
     const accessoryRandomOptions = [
       { label: "会心率+10%", statBonuses: { critChance: 0.1 } },
@@ -38,6 +48,7 @@
         return;
       }
       ensureEquipmentStores();
+      migrateLegacyEquipmentIdsAndSlots();
       migrateLegacyInventoryCounts();
       migrateLegacyPartyEquipmentRefs();
       syncEquipmentInventoryCounts();
@@ -65,6 +76,70 @@
       }
       if (!game.equipmentUpgradeRollsById || typeof game.equipmentUpgradeRollsById !== "object") {
         game.equipmentUpgradeRollsById = {};
+      }
+    }
+
+    function migrateLegacyEquipmentIdsAndSlots() {
+      migrateEquipmentStoreKeys(game.equipmentInventoryById, "sum");
+      migrateEquipmentStoreKeys(game.equipmentUpgradeById, "max");
+      migrateEquipmentStoreKeys(game.equipmentRandomSeedsById, "keep");
+      migrateEquipmentStoreKeys(game.equipmentRandomStatsById, "keep");
+      migrateEquipmentStoreKeys(game.equipmentUpgradeRollsById, "keep");
+      migrateEquipmentInstances();
+      migratePartyEquipmentSlots();
+    }
+
+    function migrateEquipmentStoreKeys(store, mode = "keep") {
+      if (!store || typeof store !== "object") {
+        return;
+      }
+      for (const [oldId, newId] of Object.entries(legacyEquipmentItemIdMap)) {
+        if (!Object.prototype.hasOwnProperty.call(store, oldId)) {
+          continue;
+        }
+        if (mode === "sum") {
+          store[newId] = Math.max(0, Math.floor(Number(store[newId]) || 0)) + Math.max(0, Math.floor(Number(store[oldId]) || 0));
+        } else if (mode === "max") {
+          store[newId] = Math.max(Math.floor(Number(store[newId]) || 0), Math.floor(Number(store[oldId]) || 0));
+        } else if (!Object.prototype.hasOwnProperty.call(store, newId)) {
+          store[newId] = store[oldId];
+        }
+        delete store[oldId];
+      }
+    }
+
+    function migrateEquipmentInstances() {
+      const instances = game.equipmentInstancesById && typeof game.equipmentInstancesById === "object"
+        ? game.equipmentInstancesById
+        : {};
+      for (const instance of Object.values(instances)) {
+        if (!instance || !instance.itemId) {
+          continue;
+        }
+        instance.itemId = getCanonicalEquipmentItemId(instance.itemId);
+      }
+    }
+
+    function migratePartyEquipmentSlots() {
+      if (!game.partyEquipmentById || typeof game.partyEquipmentById !== "object") {
+        return;
+      }
+      for (const equipment of Object.values(game.partyEquipmentById)) {
+        if (!equipment || typeof equipment !== "object") {
+          continue;
+        }
+        for (const [slotKey, ref] of Object.entries({ ...equipment })) {
+          const canonicalSlotKey = getCanonicalEquipmentSlotKey(slotKey);
+          const canonicalRef = getCanonicalEquipmentRef(ref);
+          if (canonicalSlotKey !== slotKey) {
+            if (!equipment[canonicalSlotKey]) {
+              equipment[canonicalSlotKey] = canonicalRef;
+            }
+            delete equipment[slotKey];
+          } else {
+            equipment[slotKey] = canonicalRef;
+          }
+        }
       }
     }
 
@@ -265,6 +340,33 @@
       return null;
     }
 
+    function getCanonicalEquipmentItemId(itemId) {
+      return itemId && legacyEquipmentItemIdMap[itemId] ? legacyEquipmentItemIdMap[itemId] : itemId;
+    }
+
+    function getCanonicalEquipmentSlotKey(slotKey) {
+      return slotKey && legacyEquipmentSlotKeyMap[slotKey] ? legacyEquipmentSlotKeyMap[slotKey] : slotKey;
+    }
+
+    function getCanonicalEquipmentRef(ref) {
+      if (!ref) {
+        return ref;
+      }
+      if (typeof ref === "string") {
+        return getCanonicalEquipmentItemId(ref);
+      }
+      if (typeof ref === "object") {
+        const next = { ...ref };
+        for (const key of ["id", "itemId", "baseItemId", "refId"]) {
+          if (next[key]) {
+            next[key] = getCanonicalEquipmentItemId(next[key]);
+          }
+        }
+        return next;
+      }
+      return ref;
+    }
+
     function getEquipmentBaseItemId(itemOrId) {
       if (!itemOrId) {
         return null;
@@ -272,16 +374,17 @@
       const ref = getEquipmentItemRef(itemOrId);
       const instance = getEquipmentInstanceRaw(ref);
       if (instance) {
-        return instance.itemId;
+        return getCanonicalEquipmentItemId(instance.itemId);
       }
       if (typeof itemOrId === "object") {
-        return itemOrId.itemId || itemOrId.baseItemId || itemOrId.id || ref;
+        return getCanonicalEquipmentItemId(itemOrId.itemId || itemOrId.baseItemId || itemOrId.id || ref);
       }
-      return ref;
+      return getCanonicalEquipmentItemId(ref);
     }
 
     function getBaseItem(itemId) {
-      return itemId && EQUIPMENT_DATA.items ? EQUIPMENT_DATA.items[itemId] || null : null;
+      const canonicalId = getCanonicalEquipmentItemId(itemId);
+      return canonicalId && EQUIPMENT_DATA.items ? EQUIPMENT_DATA.items[canonicalId] || null : null;
     }
 
     function makeEquipmentInstanceId(itemId) {

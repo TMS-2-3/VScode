@@ -76,7 +76,7 @@
     const EQUIPMENT_SHOP_RANK_FILTERS = ["D", "C", "B", "A", "S"];
     const EQUIPMENT_SHOP_WEAPON_TYPE_FILTERS = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
     const EQUIPMENT_SHOP_UNIT_FILTERS = ["ulpes", "rihas", "sushia", "finald"];
-    const EQUIPMENT_SHOP_ARMOR_SLOT_FILTERS = ["head", "body", "legs", "feet", "hands", "accessory"];
+    const EQUIPMENT_SHOP_ARMOR_SLOT_FILTERS = ["head", "body", "hands", "waist", "feet", "accessory"];
     const EQUIPMENT_SHOP_ARMOR_BASIC_STAT_FILTERS = ["maxHp", "maxMp", "attack", "magic", "defense", "magicDefense"];
     const EQUIPMENT_SHOP_ARMOR_DETAIL_STAT_FILTERS = [
       "critChance", "critDamage", "guardChance", "guardDamageReduction", "damageBoost", "damageResistance",
@@ -4476,8 +4476,8 @@
         head: "頭",
         body: "胴",
         hands: "手",
-        legs: "足",
-        feet: "靴",
+        waist: "腰",
+        feet: "脚",
         accessory: "アクセサリ",
       };
       return labels[slot] || slot || "装備";

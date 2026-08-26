@@ -198,9 +198,9 @@
   const ARMOR_SLOT_FILTERS = [
     { key: "head", label: "頭" },
     { key: "body", label: "胴" },
-    { key: "legs", label: "脚" },
-    { key: "feet", label: "靴" },
     { key: "hands", label: "手" },
+    { key: "waist", label: "腰" },
+    { key: "feet", label: "脚" },
     { key: "accessory", label: "アクセサリ" },
   ];
   const ARMOR_CRAFT_GRID_SLOTS = ARMOR_SLOT_FILTERS;

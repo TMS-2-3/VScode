@@ -354,8 +354,8 @@
       { key: "head", name: "頭", allowsElement: false, hasSpecialEffect: false },
       { key: "body", name: "胴", allowsElement: false, hasSpecialEffect: false },
       { key: "hands", name: "手", allowsElement: false, hasSpecialEffect: false },
-      { key: "legs", name: "足", allowsElement: false, hasSpecialEffect: false },
-      { key: "feet", name: "靴", allowsElement: false, hasSpecialEffect: false },
+      { key: "waist", name: "腰", allowsElement: false, hasSpecialEffect: false },
+      { key: "feet", name: "脚", allowsElement: false, hasSpecialEffect: false },
       { key: "accessory", name: "アクセサリ", allowsElement: false, hasSpecialEffect: true },
     ],
     setThresholds: seriesData.setThresholds,
@@ -427,7 +427,7 @@
       kari_hue: makeKariWeapon("kari_hue", "仮の楽器", "楽器", ["finald"], "magic", "shock"),
       kari_atama: makeKariArmor("kari_atama", "仮ヘルメット", "head", { maxHp: 0.05 }),
       kari_huku: makeKariArmor("kari_huku", "仮服", "body", { defense: 0.03 }),
-      kari_zubon: makeKariArmor("kari_zubon", "仮レギンス", "legs", { magicDefense: 0.03 }),
+      kari_waist: makeKariArmor("kari_waist", "仮ベルト", "waist", { magicDefense: 0.03 }),
       kari_kutu: makeKariArmor("kari_kutu", "仮ブーツ", "feet", { attack: 0.03 }),
       kari_te: makeKariArmor("kari_te", "仮グローブ", "hands", { magic: 0.03 }),
       kari_akuse: makeKariAccessory("kari_akuse", "仮ネックレス", { damageResistance: 0.1 }),
@@ -521,15 +521,15 @@
         { horn_rabbit_fur: 2 },
         "ツノウサギの毛皮を元に作られた暖かい胴装備"
       ),
-      horn_rabbit_leggings: makeHornRabbitArmor(
-        "horn_rabbit_leggings",
-        "ツサギレギンス",
-        "legs",
+      horn_rabbit_waist: makeHornRabbitArmor(
+        "horn_rabbit_waist",
+        "ツサギベルト",
+        "waist",
         { magic: 0.05 },
         100,
         { horn_rabbit_fur: 3, horn_rabbit_corner: 1 },
         { horn_rabbit_fur: 1, horn_rabbit_corner: 1 },
-        "ツノウサギの毛皮を元に作られた暖かい足装備"
+        "ツノウサギの毛皮を元に作られた暖かい腰装備"
       ),
       horn_rabbit_boots: makeHornRabbitArmor(
         "horn_rabbit_boots",
@@ -539,7 +539,7 @@
         100,
         { horn_rabbit_fur: 2, horn_rabbit_tooth: 2 },
         { horn_rabbit_fur: 1, horn_rabbit_tooth: 1 },
-        "ツノウサギの毛皮を元に作られた暖かい靴装備"
+        "ツノウサギの毛皮を元に作られた暖かい脚装備"
       ),
       horn_rabbit_glove: makeHornRabbitArmor(
         "horn_rabbit_glove",
@@ -647,14 +647,14 @@
         { alraune_leaf: 1, alraune_ivy: 1 },
         "アルラウネの葉を元に作られた胴装備"
       ),
-      bud_alraune_leggings: makeAlrauneArmor(
-        "bud_alraune_leggings",
-        "アルラレギンス",
-        "legs",
+      bud_alraune_waist: makeAlrauneArmor(
+        "bud_alraune_waist",
+        "アルラベルト",
+        "waist",
         { maxHp: 0.05, attack: 0.03 },
         { alraune_leaf: 2, alraune_ivy: 2 },
         { alraune_leaf: 1, alraune_ivy: 1 },
-        "アルラウネの葉を元に作られた足装備"
+        "アルラウネの葉を元に作られた腰装備"
       ),
       bud_alraune_boots: makeAlrauneArmor(
         "bud_alraune_boots",
@@ -663,7 +663,7 @@
         { maxHp: 0.1 },
         { alraune_leaf: 2, alraune_bud: 2 },
         { alraune_leaf: 1, alraune_bud: 1 },
-        "アルラウネの葉を元に作られた靴装備"
+        "アルラウネの葉を元に作られた脚装備"
       ),
       bud_alraune_glove: makeAlrauneArmor(
         "bud_alraune_glove",
@@ -750,14 +750,14 @@
         { shadow_wolf_fur: 2 },
         "シャドウウルフの毛皮を元に作られた胴装備"
       ),
-      shadow_wolf_leggings: makeShadowWolfArmor(
-        "shadow_wolf_leggings",
-        "影狼脚",
-        "legs",
+      shadow_wolf_waist: makeShadowWolfArmor(
+        "shadow_wolf_waist",
+        "影狼帯",
+        "waist",
         { maxHp: 0.05 },
         { shadow_wolf_fur: 4 },
         { shadow_wolf_fur: 2 },
-        "シャドウウルフの毛皮を元に作られた足装備"
+        "シャドウウルフの毛皮を元に作られた腰装備"
       ),
       shadow_wolf_boots: makeShadowWolfArmor(
         "shadow_wolf_boots",
@@ -766,7 +766,7 @@
         { attack: 0.05 },
         { shadow_wolf_fur: 2, shadow_wolf_nail: 2 },
         { shadow_wolf_fur: 1, shadow_wolf_nail: 1 },
-        "シャドウウルフの毛皮を元に作られた靴装備"
+        "シャドウウルフの毛皮を元に作られた脚装備"
       ),
       shadow_wolf_glove: makeShadowWolfArmor(
         "shadow_wolf_glove",
@@ -873,14 +873,14 @@
         { flostiny_moss: 1, flostiny_flower: 1 },
         "フロスティーニ素材で作られた胴装備"
       ),
-      flostiny_leggings: makeFlostinyArmor(
-        "flostiny_leggings",
-        "ディスティニレギンス",
-        "legs",
+      flostiny_waist: makeFlostinyArmor(
+        "flostiny_waist",
+        "ディスティニベルト",
+        "waist",
         { maxHp: 0.05, attack: 0.1, magic: 0.1 },
         { flostiny_moss: 2, flostiny_flower: 1, flostiny_vine: 2 },
         { flostiny_moss: 1, flostiny_vine: 1 },
-        "フロスティーニ素材で作られた足装備"
+        "フロスティーニ素材で作られた腰装備"
       ),
       flostiny_boots: makeFlostinyArmor(
         "flostiny_boots",
@@ -889,7 +889,7 @@
         { maxHp: 0.05, attack: 0.1, magic: 0.1 },
         { flostiny_moss: 2, flostiny_flower: 1, flostiny_vine: 2 },
         { flostiny_moss: 1, flostiny_vine: 1 },
-        "フロスティーニ素材で作られた靴装備"
+        "フロスティーニ素材で作られた脚装備"
       ),
       flostiny_glove: makeFlostinyArmor(
         "flostiny_glove",

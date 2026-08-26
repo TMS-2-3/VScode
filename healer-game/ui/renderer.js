@@ -124,7 +124,7 @@
     const battleSpriteStates = new Map();
     const equipmentCharacterArtImages = createEquipmentCharacterArtImages();
     const equipmentSlotLayout = {
-      left: ["head", "body", "legs"],
+      left: ["head", "body", "waist"],
       right: ["hands", "feet", "accessory"],
       weapon: "weapon",
     };
@@ -5216,8 +5216,8 @@
       head: "頭",
       body: "胴",
       hands: "手",
-      legs: "足",
-      feet: "靴",
+      waist: "腰",
+      feet: "脚",
       accessory: "飾",
     };
     return slotLabels[item.slot] || String(item.name || item.id || "?").slice(0, 1);
@@ -5229,7 +5229,7 @@
       head: "#5f7280",
       body: "#68785d",
       hands: "#8a6a4d",
-      legs: "#766985",
+      waist: "#766985",
       feet: "#5f6f6b",
       accessory: "#8b7445",
     };
