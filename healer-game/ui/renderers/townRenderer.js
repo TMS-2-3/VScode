@@ -3072,6 +3072,13 @@
     ctx.fillStyle = "#ffd86b";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(`${item.rank || "-"} / ${seriesName} / ${categoryName}`, detailX, rect.y + 82);
+    let infoY = rect.y + 104;
+    if (shopKind === "weapon") {
+      ctx.fillStyle = "#dce9dc";
+      ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      drawFittedTownText(`装備可能者: ${getWeaponAllowedUnitLabelsForTown(item)}`, detailX, infoY, detailW, 800, 13, 10, "#dce9dc");
+      infoY += 20;
+    }
     ctx.fillStyle = enabled ? "#ffd86b" : "rgba(220,233,220,0.55)";
     ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const stateText = tab === "reset"
@@ -3079,11 +3086,11 @@
       : tab === "upgrade"
         ? needsOwned ? "未所持" : isMax ? `+${currentLevel} / 最大` : `+${currentLevel} -> +${currentLevel + 1}`
         : `所持 ${owned}`;
-    ctx.fillText(stateText, detailX, rect.y + 104);
+    ctx.fillText(stateText, detailX, infoY);
     ctx.fillStyle = "#dce9dc";
     ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const descriptionLines = wrapCanvasText(item.simpleDescription || item.description || "説明なし", detailW);
-    let cursorY = rect.y + 134;
+    let cursorY = infoY + 30;
     for (const line of descriptionLines.slice(0, 2)) {
       ctx.fillText(line, detailX, cursorY);
       cursorY += 18;
@@ -3858,6 +3865,16 @@
       return item.allowedUnitIds;
     }
     return WEAPON_ALLOWED_UNIT_FALLBACK[item && item.weaponType] || [];
+  }
+
+  function getWeaponAllowedUnitLabelsForTown(item) {
+    const labels = getWeaponAllowedUnitIdsForTown(item)
+      .map((unitId) => {
+        const entry = EQUIPMENT_SHOP_UNITS.find((unit) => unit.id === unitId);
+        return entry ? entry.label : String(unitId || "").trim();
+      })
+      .filter(Boolean);
+    return labels.length ? labels.join(" / ") : "-";
   }
 
   function matchArmorShopFilters(item, filters) {
