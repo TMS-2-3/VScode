@@ -33,6 +33,7 @@
       skillSystem,
       itemSystem,
       saveSystem,
+      enemySpriteSystem,
       getGold,
       formatGold,
       getBattleBounds,
@@ -122,6 +123,8 @@
     const battleWalkWarmQueue = [];
     let battleWalkWarmScheduled = false;
     const battleSpriteStates = new Map();
+    const enemySpriteStates = new Map();
+    const ENEMY_SPRITE_TURN_COOLDOWN = 0.3;
     const equipmentCharacterArtImages = createEquipmentCharacterArtImages();
     const equipmentSlotLayout = {
       left: ["head", "body", "waist"],
@@ -1538,7 +1541,8 @@
     }
 
     const drewPartySprite = unit.team === "party" && drawBattleCharacterSprite(unit);
-    if (!drewPartySprite) {
+    const drewEnemySprite = !drewPartySprite && unit.team === "enemy" && drawEnemyBattleSprite(unit);
+    if (!drewPartySprite && !drewEnemySprite) {
       ctx.fillStyle = unit.frozen > 0 ? "#cfefff" : unit.color;
       ctx.strokeStyle = unit.team === "enemy" ? "#3a1816" : "#101814";
       ctx.lineWidth = Math.max(2, battlePx(3));
@@ -1579,6 +1583,85 @@
     }
 
     ctx.restore();
+  }
+
+  function drawEnemyBattleSprite(unit) {
+    if (!enemySpriteSystem || typeof enemySpriteSystem.getEnemySpriteRenderImage !== "function") {
+      return false;
+    }
+    const facing = getEnemyBattleSpriteFacing(unit);
+    const height = getEnemyBattleSpriteHeight(unit);
+    const image = enemySpriteSystem.getEnemySpriteRenderImage(unit, facing, "battle", height);
+    if (!image || !(image.width > 0 || image.naturalWidth > 0) || !(image.height > 0 || image.naturalHeight > 0)) {
+      return false;
+    }
+    const width = image.width || image.naturalWidth || height;
+    const drawHeight = image.height || image.naturalHeight || height;
+    const footY = unit.y + unit.radius;
+    ctx.save();
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, unit.x - width / 2, footY - drawHeight, width, drawHeight);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+    ctx.restore();
+    return true;
+  }
+
+  function getEnemyBattleSpriteHeight(unit) {
+    const configured = Number(unit && unit.battleSpriteHeight);
+    if (Number.isFinite(configured) && configured > 0) {
+      return Math.max(battlePx(24), configured);
+    }
+    const radius = Math.max(10, Number(unit && unit.radius) || battlePx(12));
+    return Math.max(battlePx(44), Math.round(radius * 4.6));
+  }
+
+  function getEnemySpriteState(unit) {
+    const id = unit && unit.id || "enemy";
+    let state = enemySpriteStates.get(id);
+    if (!state) {
+      state = {
+        facing: unit && unit.enemySpriteFacing === "right" ? "right" : "left",
+        turnedAt: -Infinity,
+      };
+      enemySpriteStates.set(id, state);
+    }
+    return state;
+  }
+
+  function getEnemyBattleSpriteTarget(unit) {
+    if (!unit) {
+      return null;
+    }
+    const candidates = [
+      unit.aiIntent && unit.aiIntent.target,
+      unit.forcedTarget,
+      unit.tutorialForcedTarget,
+      unit.currentTarget,
+      unit.shadowPackTarget,
+    ];
+    return candidates.find((target) => target && !target.dead) || null;
+  }
+
+  function getEnemyBattleSpriteFacing(unit) {
+    const state = getEnemySpriteState(unit);
+    const target = getEnemyBattleSpriteTarget(unit);
+    if (!target) {
+      return state.facing;
+    }
+    const dx = target.x - unit.x;
+    const deadzone = Math.max(battlePx(12), (Number(unit.radius) || 0) * 0.8);
+    if (Math.abs(dx) <= deadzone) {
+      return state.facing;
+    }
+    const nextFacing = dx < 0 ? "left" : "right";
+    const now = Number.isFinite(game.time) ? game.time : 0;
+    if (nextFacing !== state.facing && now - state.turnedAt >= ENEMY_SPRITE_TURN_COOLDOWN) {
+      state.facing = nextFacing;
+      state.turnedAt = now;
+      unit.enemySpriteFacing = nextFacing;
+    }
+    return state.facing;
   }
 
   function drawBattleCharacterSprite(unit) {

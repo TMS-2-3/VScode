@@ -24,6 +24,7 @@
       EQUIPMENT_DATA,
       MATERIAL_DATA,
       itemSystem,
+      enemySpriteSystem,
       tileMapSystem,
       getEquipmentInstancesByItemId,
       getEquipmentItemRef,
@@ -1410,6 +1411,16 @@
     const radius = Math.max(10, Number(actor.radius) || 16);
     const footY = actor.y + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 17);
     const bodyY = actor.y - radius * 0.65 + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 0);
+    const spriteTop = drawTownMonsterSymbolSprite(actor, footY);
+    if (spriteTop !== null) {
+      if (actor.questId) {
+        drawTownQuestPaperMark(actor.x + (actor.alert ? -18 : 0), spriteTop - 18, actor.questType);
+      }
+      if (actor.alert) {
+        drawArgumentMark(actor.x + (actor.questId ? 18 : 0), spriteTop - 16);
+      }
+      return;
+    }
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.24)";
     ctx.beginPath();
@@ -1434,6 +1445,44 @@
     if (actor.alert) {
       drawArgumentMark(actor.x + (actor.questId ? 18 : 0), bodyY - radius - 16);
     }
+  }
+
+  function drawTownMonsterSymbolSprite(actor, footY) {
+    if (!enemySpriteSystem || typeof enemySpriteSystem.getEnemySpriteRenderImage !== "function") {
+      return null;
+    }
+    const height = getTownMonsterSpriteHeight(actor);
+    const image = enemySpriteSystem.getEnemySpriteRenderImage(actor, getTownMonsterSpriteFacing(actor), "map", height);
+    if (!image || !(image.width > 0 || image.naturalWidth > 0) || !(image.height > 0 || image.naturalHeight > 0)) {
+      return null;
+    }
+    const width = image.width || image.naturalWidth || height;
+    const drawHeight = image.height || image.naturalHeight || height;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.24)";
+    ctx.beginPath();
+    ctx.ellipse(actor.x, footY - 2, Math.max(16, width * 0.32), Math.max(6, height * 0.12), 0, 0, TAU);
+    ctx.fill();
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, actor.x - width / 2, footY - drawHeight, width, drawHeight);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+    ctx.restore();
+    return footY - drawHeight;
+  }
+
+  function getTownMonsterSpriteHeight(actor) {
+    const configured = Number(actor && (actor.mapSpriteHeight ?? actor.spriteHeight));
+    if (Number.isFinite(configured) && configured > 0) {
+      return Math.max(24, configured);
+    }
+    const tileMap = getTownTileMap();
+    const tileSize = tileMap && Number.isFinite(tileMap.tileSize) ? tileMap.tileSize : 48;
+    return Math.max(36, Math.round(tileSize * 1.25));
+  }
+
+  function getTownMonsterSpriteFacing(actor) {
+    return actor && actor.facing === "right" ? "right" : "left";
   }
 
   function drawTownQuestPaperMark(x, y, questType) {

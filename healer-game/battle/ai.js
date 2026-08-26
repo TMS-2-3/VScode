@@ -585,6 +585,7 @@
         if (!target) {
           continue;
         }
+        enemy.currentTarget = target;
 
         const rangeTarget = getEnemyPreferredRangeTarget(enemy, target);
         const d = dist(enemy, rangeTarget);
@@ -619,6 +620,7 @@
         enemy.aiIntent = null;
         return false;
       }
+      enemy.currentTarget = intent.target;
       if (enemy.actionLock > 0 || (enemy.cds.attack || 0) > 0) {
         return true;
       }

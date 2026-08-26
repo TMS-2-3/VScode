@@ -28,6 +28,7 @@
       addBurst,
       addFloat,
       preloadBattleEffects,
+      preloadBattleEnemySprites,
     } = context;
 
     const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
@@ -459,6 +460,9 @@
       if (typeof preloadBattleEffects === "function") {
         preloadBattleEffects([...party, ...enemies]);
       }
+      if (typeof preloadBattleEnemySprites === "function") {
+        preloadBattleEnemySprites(enemies);
+      }
 
       for (const member of party) {
         applyCarriedStatuses(member);
@@ -501,6 +505,9 @@
       if (spawned > 0) {
         if (typeof preloadBattleEffects === "function") {
           preloadBattleEffects(enemies);
+        }
+        if (typeof preloadBattleEnemySprites === "function") {
+          preloadBattleEnemySprites(enemies);
         }
         const message = quest && quest.reinforcementMessage || "後方から増援!";
         addFloat("増援!", spawnX + battlePx(46), centerY - battlePx(120), COLORS.enemy);

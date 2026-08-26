@@ -159,6 +159,12 @@
       };
     }
 
+    function createEnemySpriteContext() {
+      return {
+        ENEMY_DEFS,
+      };
+    }
+
     function createUnitFactoryContext() {
       return {
         CHARACTER_DEFS,
@@ -326,6 +332,7 @@
         skillSystem: systems.skillSystem,
         itemSystem: systems.itemSystem,
         saveSystem: systems.saveSystem,
+        enemySpriteSystem: systems.enemySpriteSystem,
         tileMapSystem: systems.tileMapSystem,
         getGold: callLater("walletSystem", "getGold"),
         formatGold: callLater("walletSystem", "formatGold"),
@@ -570,6 +577,8 @@
         NPC_DATA,
         TOWN_WIDTH,
         TOWN_HEIGHT,
+        preloadMapEnemySprites: callLater("enemySpriteSystem", "preloadMapEnemySprites"),
+        preloadBattleEnemySprites: callLater("enemySpriteSystem", "preloadBattleEnemySprites"),
         resetGame: callLater("battleSetup", "resetGame"),
         clampTownPlayer: callLater("geometry", "clampTownPlayer"),
         clamp: callLater("geometry", "clamp"),
@@ -634,6 +643,7 @@
         addBurst: callLater("battleRuntime", "addBurst"),
         addFloat: callLater("battleRuntime", "addFloat"),
         preloadBattleEffects: callLater("effectSystem", "preloadBattleEffects"),
+        preloadBattleEnemySprites: callLater("enemySpriteSystem", "preloadBattleEnemySprites"),
       };
     }
 
@@ -865,6 +875,7 @@
       createSaveContext,
       createLoadoutContext,
       createEquipmentContext,
+      createEnemySpriteContext,
       createUnitFactoryContext,
       createEffectContext,
       createSkillContext,

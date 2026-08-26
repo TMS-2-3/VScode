@@ -17,6 +17,7 @@
     createBattleSetup: window.createHealerBattleSetup,
     createBattleRuntime: window.createHealerBattleRuntime,
     createEffectSystem: window.createHealerEffectSystem,
+    createEnemySpriteSystem: window.createHealerEnemySpriteSystem,
     createItemSystem: window.createHealerItemSystem,
     createInputSystem: window.createHealerInputSystem,
     createRenderer: window.createHealerRenderer,
@@ -115,6 +116,7 @@
   systems.loadoutSystem = modules.createLoadoutSystem(contexts.createLoadoutContext());
   systems.equipmentSystem = modules.createEquipmentSystem(contexts.createEquipmentContext());
   systems.walletSystem = modules.createWalletSystem(contexts.createWalletContext());
+  systems.enemySpriteSystem = modules.createEnemySpriteSystem(contexts.createEnemySpriteContext());
   systems.unitFactory = modules.createUnitFactory(contexts.createUnitFactoryContext());
   systems.effectSystem = modules.createEffectSystem(contexts.createEffectContext());
 

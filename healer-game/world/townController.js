@@ -24,6 +24,8 @@
       NPC_DATA,
       TOWN_WIDTH,
       TOWN_HEIGHT,
+      preloadMapEnemySprites,
+      preloadBattleEnemySprites,
       resetGame,
       clampTownPlayer,
       clamp,
@@ -1384,7 +1386,7 @@
       const state = ensureTownSymbolEncounterState();
       const key = String(mapId || "town");
       if (!state.byMapId[key] || typeof state.byMapId[key] !== "object") {
-        state.byMapId[key] = { symbols: [] };
+        state.byMapId[key] = { symbols: [], symbolSpritePreloadKey: "" };
       }
       const mapState = state.byMapId[key];
       if (!Array.isArray(mapState.symbols)) {
@@ -1397,7 +1399,7 @@
       const state = ensureTownSymbolEncounterState();
       const key = String(mapId || "town");
       state.byMapId = {
-        [key]: { symbols: [] },
+        [key]: { symbols: [], symbolSpritePreloadKey: "" },
       };
       state.pendingBattle = null;
       return state.byMapId[key];
@@ -2004,6 +2006,122 @@
       return { col, row };
     }
 
+    function getTownSymbolPrimaryEnemyRole(enemyEntries, config) {
+      const firstEntry = Array.isArray(enemyEntries) && enemyEntries.length > 0
+        ? enemyEntries.find((entry) => entry && entry.role)
+        : null;
+      if (firstEntry && firstEntry.role) {
+        return firstEntry.role;
+      }
+      return config && (config.enemyId || config.role || config.enemyType) || null;
+    }
+
+    function getTownSymbolDirectImagePath(config) {
+      if (!config || typeof config !== "object") {
+        return null;
+      }
+      const sprite = config.sprite || config.enemySprite || null;
+      return String(
+        config.mapImagePath
+        || config.mapSpritePath
+        || config.imagePath
+        || config.spritePath
+        || sprite && (sprite.mapImagePath || sprite.mapSpritePath || sprite.imagePath || sprite.path || sprite.left)
+        || "",
+      ).trim() || null;
+    }
+
+    function getTownSymbolMapSpriteHeight(config) {
+      const value = Number(config && (config.mapSpriteHeight ?? config.spriteHeight ?? config.imageHeight));
+      if (Number.isFinite(value) && value > 0) {
+        return Math.max(24, value);
+      }
+      const role = config && (config.enemyId || config.role || config.enemyType);
+      const enemyDef = role && ENEMY_DEFS ? ENEMY_DEFS[role] : null;
+      const enemyValue = Number(enemyDef && (enemyDef.mapSpriteHeight ?? enemyDef.spriteHeight ?? enemyDef.imageHeight));
+      return Number.isFinite(enemyValue) && enemyValue > 0 ? Math.max(24, enemyValue) : null;
+    }
+
+    function preloadTownSymbolSprites(symbols) {
+      if (typeof preloadMapEnemySprites !== "function") {
+        return;
+      }
+      const sources = [];
+      for (const symbol of Array.isArray(symbols) ? symbols : []) {
+        if (!symbol || symbol.removed) {
+          continue;
+        }
+        sources.push(symbol);
+        if (symbol.enemyRole) {
+          sources.push(symbol.enemyRole);
+        }
+        if (Array.isArray(symbol.enemyEntries)) {
+          sources.push(...symbol.enemyEntries);
+        }
+      }
+      const preloadResult = preloadMapEnemySprites(sources);
+      if (preloadResult && typeof preloadResult.catch === "function") {
+        preloadResult.catch(() => {});
+      }
+    }
+
+    function getTownSymbolSpritePreloadKey(symbols) {
+      return (Array.isArray(symbols) ? symbols : [])
+        .filter((symbol) => symbol && !symbol.removed)
+        .map((symbol) => {
+          const entries = Array.isArray(symbol.enemyEntries)
+            ? symbol.enemyEntries.map((entry) => String(entry && (entry.role || entry.enemyId || entry.type || entry.id) || "")).join(",")
+            : "";
+          return [
+            symbol.id,
+            symbol.enemyRole || "",
+            symbol.imagePath || "",
+            symbol.mapSpriteHeight || "",
+            entries,
+          ].join(":");
+        })
+        .join("|");
+    }
+
+    function preloadTownSymbolSpritesIfNeeded(mapState) {
+      if (!mapState || !Array.isArray(mapState.symbols)) {
+        return;
+      }
+      const key = getTownSymbolSpritePreloadKey(mapState.symbols);
+      if (mapState.symbolSpritePreloadKey === key) {
+        return;
+      }
+      mapState.symbolSpritePreloadKey = key;
+      preloadTownSymbolSprites(mapState.symbols);
+    }
+
+    function preloadTownBattleSprites(quest) {
+      if (typeof preloadBattleEnemySprites !== "function") {
+        return;
+      }
+      const sources = [];
+      if (Array.isArray(quest && quest.enemies)) {
+        sources.push(...quest.enemies);
+      }
+      if (Array.isArray(quest && quest.reinforcements)) {
+        sources.push(...quest.reinforcements);
+      }
+      const preloadResult = preloadBattleEnemySprites(sources);
+      if (preloadResult && typeof preloadResult.catch === "function") {
+        preloadResult.catch(() => {});
+      }
+    }
+
+    function getTownSymbolFacingAfterMove(symbol, step) {
+      if (step && step.x < 0) {
+        return "left";
+      }
+      if (step && step.x > 0) {
+        return "right";
+      }
+      return symbol && symbol.facing || "left";
+    }
+
     function makeTownMonsterSymbol(tileMap, mapId, config, configIndex, spawnTile) {
       const state = ensureTownSymbolEncounterState();
       const configId = getTownSymbolConfigId(config, configIndex);
@@ -2023,6 +2141,9 @@
         rank: config.rank || "D",
         questId: getTownQuestIdFromSymbolConfig(config) || null,
         battleId: config.battleId || null,
+        enemyRole: getTownSymbolPrimaryEnemyRole(enemyEntries, config),
+        imagePath: getTownSymbolDirectImagePath(config),
+        mapSpriteHeight: getTownSymbolMapSpriteHeight(config),
         objective: config.objective || null,
         enemyPreview,
         reward: config.reward || null,
@@ -2051,6 +2172,7 @@
       const mapState = getTownSymbolMapState(mapId);
       if (configs.length === 0) {
         mapState.symbols = [];
+        mapState.symbolSpritePreloadKey = "";
         return mapState.symbols;
       }
       const activeConfigIds = new Set(configs.map((config, index) => getTownSymbolConfigId(config, index)));
@@ -2068,6 +2190,7 @@
           currentCount += 1;
         }
       });
+      preloadTownSymbolSpritesIfNeeded(mapState);
       return mapState.symbols;
     }
 
@@ -2084,6 +2207,10 @@
             name: symbol.name,
             label: symbol.label,
             color: symbol.color,
+            role: symbol.enemyRole || null,
+            enemyRole: symbol.enemyRole || null,
+            imagePath: symbol.imagePath || null,
+            mapSpriteHeight: symbol.mapSpriteHeight || null,
             x: symbol.x,
             y: symbol.y,
             col: symbol.col,
@@ -2767,7 +2894,7 @@
       symbol.row = targetRow;
       symbol.x = center.x;
       symbol.y = center.y;
-      symbol.facing = step.facing || symbol.facing || "down";
+      symbol.facing = getTownSymbolFacingAfterMove(symbol, step);
       return true;
     }
 
@@ -2853,6 +2980,7 @@
     }
 
     function startEncounterCutin(quest, symbols) {
+      preloadTownBattleSprites(quest);
       town.player.gridMove = null;
       input.keys = input.keys || {};
       for (const key of TOWN_MOVEMENT_KEYS) {
@@ -3840,6 +3968,7 @@
         });
         return;
       }
+      preloadTownBattleSprites(quest);
       resetGame(quest);
     }
 
