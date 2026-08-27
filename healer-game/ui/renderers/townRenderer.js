@@ -3168,11 +3168,25 @@
     if (!id || !SKILL_DATA) {
       return null;
     }
-    for (const ownerSkills of Object.values(SKILL_DATA)) {
+    const commonSkills = SKILL_DATA.common || window.HEALER_COMMON_SKILL_DATA || null;
+    if (commonSkills && typeof commonSkills === "object") {
+      for (const skill of Object.values(commonSkills)) {
+        if (skill && String(skill.id || "") === id) {
+          return skill;
+        }
+      }
+    }
+    for (const [owner, ownerSkills] of Object.entries(SKILL_DATA)) {
+      if (owner === "common") {
+        continue;
+      }
       if (!ownerSkills || typeof ownerSkills !== "object") {
         continue;
       }
       for (const skill of Object.values(ownerSkills)) {
+        if (skill && skill.commonSkillView) {
+          continue;
+        }
         if (skill && String(skill.id || "") === id) {
           return skill;
         }

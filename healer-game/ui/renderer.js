@@ -3609,8 +3609,22 @@
     if (!skillId || !SKILL_DATA) {
       return null;
     }
-    for (const skills of Object.values(SKILL_DATA)) {
+    const commonSkills = SKILL_DATA.common || window.HEALER_COMMON_SKILL_DATA || null;
+    if (commonSkills && typeof commonSkills === "object") {
+      for (const skill of Object.values(commonSkills)) {
+        if (skill && (skill.id === skillId || skill.key === key)) {
+          return skill;
+        }
+      }
+    }
+    for (const [owner, skills] of Object.entries(SKILL_DATA)) {
+      if (owner === "common") {
+        continue;
+      }
       for (const skill of Object.values(skills || {})) {
+        if (skill && skill.commonSkillView) {
+          continue;
+        }
         if (skill && (skill.id === skillId || skill.key === key)) {
           return skill;
         }

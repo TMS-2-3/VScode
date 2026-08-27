@@ -771,14 +771,12 @@
       const fixedFirstKey = enemy.firstSkillPending && enemy.firstSkillKey;
       if (fixedFirstKey) {
         const fixedAction = reachableCandidates.find((candidate) => candidate.key === fixedFirstKey);
-        if (!fixedAction) {
-          if (!getUnitSkill(enemy, fixedFirstKey)) {
-            enemy.firstSkillPending = false;
-          }
-          enemy.aiTick = ctx.AI_IDLE_RECHECK;
-          return false;
+        if (fixedAction) {
+          return executeEnemyChosenAction(enemy, fixedAction);
         }
-        return executeEnemyChosenAction(enemy, fixedAction);
+        if (!getUnitSkill(enemy, fixedFirstKey)) {
+          enemy.firstSkillPending = false;
+        }
       }
       if (!reachableCandidates.length) {
         enemy.aiTick = ctx.AI_IDLE_RECHECK;

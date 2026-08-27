@@ -743,15 +743,41 @@
       return;
     }
     const commonSkill = commonSkillData[commonKey];
-    skillData[targetOwner][aliasKey] = {
-      ...commonSkill,
+    const view = {};
+    const localFields = new Set([
+      "key",
+      "owner",
+      "sourceOwner",
+      "sourceKey",
+      "originalOwner",
+      "originalKey",
+      "commonSkillView",
+    ]);
+    for (const prop of Object.keys(commonSkill)) {
+      if (localFields.has(prop)) {
+        continue;
+      }
+      Object.defineProperty(view, prop, {
+        enumerable: true,
+        configurable: true,
+        get() {
+          return commonSkill[prop];
+        },
+        set(value) {
+          commonSkill[prop] = value;
+        },
+      });
+    }
+    Object.assign(view, {
       key: aliasKey,
       owner: targetOwner,
       sourceOwner: "common",
       sourceKey: commonKey,
       originalOwner: commonSkill.originalOwner,
       originalKey: commonSkill.originalKey,
-    };
+      commonSkillView: true,
+    });
+    skillData[targetOwner][aliasKey] = view;
   }
 
   function addCommonSkillViews() {
