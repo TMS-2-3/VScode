@@ -1,328 +1,207 @@
 AI用メモ
+最終更新: 2026-08-28
 
-AI用メモ / 2026-07-17 現行引き継ぎ（最優先）
-このファイルは作業ログ兼、次のAIへの引き継ぎメモ。古い日付の行は履歴であり、現行仕様はこのブロックと末尾の最新日付行を最優先すること。古い行と矛盾した場合はコードと最新メモを優先して確認する。
+このファイルは、次のAI/共同作業者が古い履歴に引っ張られないための現行仕様メモ。
+過去の作業ログ、古い仮仕様、今と食い違う内容は削除済み。
+迷ったら `memo.xlsx` と現在のコードを優先し、このメモは全体把握用として読む。
 
-- 作業対象は `C:\VScode\healer-game`。ユーザー指示どおり、それ以外のファイルを変更しない。
-- `memo.xlsx` は設計データの元。ゲーム側の実データは主に `data/*.js`、挙動は `battle/*.js`、町/マップは `world/*.js` と `map/`、UIは `ui/*.js` に分かれている。Excelの変更を適用する時は、該当するコード側データも忘れず確認する。
-- 旧ログには文字化けや古い仕様が混ざっている。特に `map/tileMaps.js` を編集先としている古い記述は現行では誤り。現在のマップ編集先は `map/tile.js`、`map/maps.js`、画像は `map/img_tile/`。
-- マップ現行: `map/tile.js` がタイル定義、`map/maps.js` がマップ定義。`index.html` と `map/map-editor.html` は両方を読み込む。`world/tileMapSystem.js` は共通エンジンで、通常のマップ追加では触らない。
-- 現在ゲーム内に読み込める主なマップは `startTown01`（クラク村）、`kuraku_forest_1`（西クラク森）、`kuraku_forest_2`（南クラク森）、`kuraku_forest_3`（花畑）、`kuraku_forest_4`（北クラク森）、`otoru_village`（オトール村）。通常開始は `startTown01`。`設定 > ゲーム > マップデバッグモード` をONにすると、`map/maps.js` の `HEALER_DEBUG_TILE_MAPS` に登録されたマップ切替ボタンを表示できる。
-- タイルサイズは48。`map-editor.html` のエクスポートはレイヤーの `tiles` がフラット配列になることがあり、`world/tileMapSystem.js` は `row * width + col` で読む。`{ tileId, rotate }` の回転描画にも対応済み。
-- `map-editor.html` は幅/高さ変更時に既存タイルを同じ座標へ保つ。広げる場合は右/下へ追加、縮める場合は右/下から切れる。複製ツールは全レイヤー込みの矩形をコピーし、左クリックで貼付後解除、右クリックで連続貼付。余白タイルは `marginTiles` のレイヤー別1マスで、地面/地形/配置物/イベントを重ねられる。Undo/Redoは拡大縮小付近の戻る/進むボタンで、編集履歴は20件。
-- `map-editor.html` の塗りつぶしツールは、クリックしたタイルと同じ内容で上下左右につながっている範囲だけをバケツ塗りする。マップ全体一括塗りではない。
-- `map-editor.html` は `maps.jsへ適用` ボタンで、ブラウザのファイル選択から `map/maps.js` の同名マップだけを直接上書きできる。ブラウザ仕様上、無確認の自動書き込みは不可。ID/名前などの入力欄は適用・コピー・JS書き出し時に自動反映する。既存マップ読込後にIDを変えた場合は旧IDの定義を新IDへ置換し、`HEALER_DEBUG_TILE_MAPS` と `targetMap` の旧ID参照も更新する。未登録IDの場合は `window.HEALER_DEBUG_TILE_MAPS` の手前へ追記する。
-- 町マップ移動はタイルマップ使用時のみ1マス単位。移動先はタイル中央。カメラはマップ端で止まり、端では先頭キャラが画面中央から外れて動く。マップが画面より小さい時はマップを中央寄せし、画面外だけ `marginTiles`（旧 `marginTile` も互換）の余白キャッシュで埋める。キャラ描画は足先がタイル中央に来るよう調整済みで、default/ground の後、terrain/object/event とキャラをY座標順に描く。タイルマップがない時だけ旧px移動/旧町描画がフォールバック。
-- 戦闘中のプレイヤー移動は基本AI任せ。WASDはフィールド/町用。戦闘スキルキー初期値はQ/W/E/R/T、発射は左クリック、構えキャンセルは右クリック、ページ切替はSpace、アイテムはC/V/B/N、必殺は1/2/3/4。
-- 戦闘不能は全滅判定に関係する。戦闘不能キャラは調子0固定、必殺チャージ不可、攻撃/回復対象外、状態は戦闘不能だけ表示。戦闘終了後も戦闘不能は解除しない。敗北時はセーブ地点/町再開の選択仕様あり。
-- 戦闘間ではHPとMPを引き継ぐ。宿屋は100Gで全回復し、戦闘するまで再使用不可。状態は `data/statuses.js` のcarryover/引き継ぎ系フラグが真のものだけ引き継ぐ。現状は基本false。
-- HP/MP再生はFPS依存ではなく1秒ごとのtick。デフォルトMP再生率は1%。HP再生率は装備/セット効果などで付く。
-- 調子の現行自然変動: HP85%以上+0.5/s、70%以上+0.2/s、60%以上+0、50%以上-0.5/s、40%以上-0.8/s、30%以上-1.0/s、20%以上-1.5/s、10%以上-3.0/s、10%未満-5.0/s。調子90以上のプラス増加は0.5倍。被ダメ調子減少は現在最大HP参照 + 基礎減少0.2。必殺の手動発動不可条件は調子40未満。
-- ダメージ種別: ドット/ドット物理/ドット魔法はDoT扱い。DoTは通常計算を使うが、ガード不可・会心なし・カウンターなし・睡眠解除なし。燃焼tickはドット魔法。ミックスダメージは防御と魔防それぞれの補正を出し、その中央値を使う。不変は防御/魔防だけ無視し、ガード/会心/ダメージ率は通常どおり。
-- 防御/魔防は100基準。100未満も100との差分を使って、100超え時と同じ緩やかさで被ダメ増加する。
-- プレイヤー向け表示で敵対ユニットの総称は「魔物」に統一する。内部IDや英語のenemy系キー名は変更しない。
-- 依頼の戦闘前会話は `encounterStoryOnce` が真なら `town.encounterStorySeenQuestIds` でセーブ単位に1回だけ表示する。表示済みフラグは会話開始時に立つため、負けてロードせず町復帰した場合も2回目は出ない。
-- 自然湧きシンボルはチュートリアル依頼 `story_horn_rabbit_competition_001` クリア後に解禁。配置は西クラク森にツノウサギ/つぼみのアルラウネ、南クラク森につぼみのアルラウネ/シャドウウルフ。1種ごとに最大3シンボル、1シンボルにつき同種2〜4体をシンボル生成時にランダム決定して保持する。
-- フリー依頼は即戦闘ではなく、受注後に対象マップへ依頼シンボルを生成する形式。ツノウサギ/つぼみのアルラウネ/シャドウウルフのフリー依頼は、それぞれ該当魔物を含む戦闘に勝利すると解禁される。勝利済み魔物は `town.enemyVictoryByRole` に保存。各依頼は6体討伐で、対象魔物のドロップ表からG込みの比率抽選を5回行う。フロスティーニ再戦は `story_path_ahead_001` クリア後に解禁し、フロスティーニ素材を2回抽選する。フリー依頼の出現マップ/報酬ロールは `town.freeQuestRollsById` に保存し、依頼クリア時に次回分を再ロールする。同時受注は最大3件で、フィールド左上には受注中ストーリー依頼の下に受注中フリー依頼の依頼名と場所を表示する。ストーリー依頼がない時は上に詰めて表示する。受注中フリー依頼を依頼一覧から選ぶと、確認後に受注破棄できる。3件受注中に新しいフリー依頼を受ける場合は、破棄する受注中依頼を選ぶか受注をやめるかを選べる。破棄では受注フラグと依頼シンボルを消し、出現マップ/報酬ロールは消さない。
-- スキル/必殺/パッシブは基本的に共通プールで、必要武器/必要キャラ/所持状態を満たすものを各キャラが見られる。通常攻撃は武器側に紐づく特殊扱い。装備変更の候補では装備不可(赤×)を後ろ寄せする。
-- 現行デフォルトロードアウト: Arjuna/Finald active = `attack, heal, shield, commandAttack, commandDefend`、passive=`hilment`、ultimate=`ult`。Ulpes/Rihas/Sushiaはactive=`attack`、各passive/ultimateは固定で所持。`take_aim`(フォーカス)、`distance`(ノータッチ)、全体指示系は結晶などで取得/強化する対象。
-- Focus/Distanceは後から発動した方を優先。Focusを無視したAIでも、通常ターゲット選択の結果として同じ魔物を攻撃することはある。
-- 魔物側の予測線/範囲表示は、memo.xlsx備考やskill.showTelegraph系で明示された場合だけ追加する。castやradiusがあるだけで勝手に予測線を出さない。
-- 装備は同名でも複数インスタンスを持てる前提。武器強化と防具強化は仕様が違うので混ぜない。武器種別追加ステータスは強化対象外。防具/アクセの初期ランダムステータス仕様は廃止され、memo.xlsx記載の固定ステータス値を使う。
-- セーブはファイル保存/ブラウザローカル保存の扱いが分かれている。ファイル保存時に勝手にブラウザローカル保存しない方針。タイトル画面のロードには削除ボタンがある。
-- `aimemo` への追記は、最新仕様が古い履歴に負けないよう、できるだけこの最優先ブロックか末尾の最新日付行に書く。
+## 作業範囲
+- 基本の作業対象は `C:\VScode\healer-game`。
+- ユーザーから明示がない限り、healer-game 外のファイルは変更しない。
+- `memo.xlsx` はスキル、敵、装備、アイテム、状態、セット効果などの設計データの一次情報。
+- コード側の主なデータは `data/*.js`、戦闘処理は `battle/*.js`、町/マップ処理は `world/*.js` と `map/`。
 
-- このファイルはCodexが作業中の判断、仕様差分、確認事項を残すためのメモ。
-運用ルール: 仕様変更、設計方針の変更、大きめの実装、後で見返す判断材料が出たらaimemoを更新する。特に会話で決まった仕様や実装の区切りごとにここへ残す。
+## マップ
+- マップ共同作業者向けの作業場所は基本的に `map/`。
+- タイル定義は `map/tile.js`、マップ定義は `map/maps.js`、タイル画像は `map/img_tile/`。
+- 旧 `map/tileMaps.js` 前提の案内は古い。現行は `tile.js` と `maps.js` に分割済み。
+- マップ編集は `map/map-editor.html`。エディタのブラウザ内ドラフトは補助で、最終的なゲーム反映は `map/maps.js` を見る。
+- タイルサイズは48px基準。
+- フィールド移動は1マス単位。斜め移動あり。ただし斜め移動時に通過する隣接マスが移動不可なら斜め移動不可。
+- カメラは基本的に主人公を中央に置き、マップ端ではクランプする。
+- マップ描画は入場時にキャッシュへ描画して使う方針。余白埋めも通常マップと同じレイヤールールで描画する。
+- マップデバッグモードは設定 > ゲームから切替。グリッドとA1形式の座標を表示する。デフォルトOFF。
 
-2026-05-25 mood tune: natural fall -0.5/s above 50, recover +0.3/s below 50, event mood deltas x1.2 (heal, shield, dealt/received damage).
-2026-05-25 mood curve changed: outgoing damage peaks at mood70 (+30%), falls to -20% at 100 and -50% at 0; incoming +0 until 70 then +20% at 100; guard point curve 0:-50pt 50:0 70:+15pt 92:-15pt 93+:0%; ult blocked <=40, random auto >=85, forced auto >=95; CD penalty below 50 (40:+5%, 0:+80%); cast curve 0:+30%, 50:0, 70:-20%, 100:0.
-2026-05-25 town prototype added: initial state town; walkable 1600x1100 town map, facilities inn/item/weapon/armor/guild, E interaction panels, guild starts tutorial battle, battle result R returns to town.
-2026-05-25 player controls changed: Space guard; RMB hold attack aim preview, LMB confirms shot, RMB release cancels; F/G enter heal/shield aim previews, LMB confirms, RMB cancels. Added range/aim preview drawing.
-2026-05-25 attack aim changed from RMB-hold to RMB toggle. F/G aim overwrites current aim, so pressing a different skill while aiming switches to that skill; RMB cancels any current aim.
-2026-05-25 interrupted player casts now set the interrupted skill cooldown to 80% of its max CD (attack 3.2s, heal 4.8s, shield 6.4s). Constants added for player CDs.
-2026-05-25 mood gain tuning: damage mood gain gets distance multiplier x1 at <200, linear to x1.5 at >=420; natural mood fall above 50 scales down with noDamage time to 0.1/s at 18s+; multi-hit mood bonus on 2+ enemy hits from one skill = 3 + enemyHits (enemies only).
-2026-05-25 UI color distinction: mood changed to pink/magenta (#ff7ac8, high #ff4f87); ultimate remains gold (#ffd86b) in skill gauge.
-2026-05-25 UI: mood stays yellow/orange bar; ultimate = circular icon ring in lower-left party HUD, violet color; skill panel ultimate uses same violet.
-2026-05-25 UI: added ultimate key badges beside circular ult rings. Mapping is by id, not party row order: ulpes=1, rihas=2, sushia=3, finald=4.
-2026-05-25 dialogue: added SKILL_LINES from spec and speech bubble effect for normal attacks, skills, and ultimates. Lines trigger on successful action/cast start.
-2026-05-25 dialogue: casted skills now speak on cast completion/resolution, not on cast start. Applies to Finald attack/heal/shield and Sushia bolts/bomb/ice ult; Full Heal remains on channel start.
-2026-05-25 player cast interrupt: INTERRUPTED_CAST_COOLDOWN_REDUCTION=0.8 means remaining cooldown is 20% of max, e.g. 10s -> 2s.
-2026-05-26 shields/taunt: Rihas taunt radius 350px; shield durability stacks additively with max timer; taunted units draw a pulsing anger mark.
+## 現行マップ
+- `startTown01`: クラク村
+- `kuraku_forest_1`: 西クラク森
+- `kuraku_forest_2`: 南クラク森
+- `kuraku_forest_3`: 花畑
+- `kuraku_forest_4`: 北クラク森
+- `otoru_village`: オトール村
+- マップ名表示は `map/maps.js` の `name` を参照する。クエスト目的地もこの表示名に追従させる。
 
-2026-05-26 architecture: added skills.js. All current skill data and per-skill behavior now lives in createHealerSkillSystem; main.js keeps game loop, shared helpers, damage/heal, rendering, and delegates via wrappers.
+## 施設とNPC
+- クラク村とオトール村は宿屋、アイテム屋、武器屋、防具屋、依頼所を使える。
+- 施設利用は建物オブジェクトそのものではなく、指定された施設判定マスと向きで判定する。
+- NPC定義は `data/npcs.js`。
+- NPCはマップ、名前、見た目、初期位置/向き、移動、会話、出現条件を持てる。
+- クラク村の装備助言NPCはチュートリアル依頼クリア後に出現。
+- オトール村には村人NPCが2人いる。
 
-2026-05-26 mood scaling: damage dealt/taken and heal mood changes now use amount / target.maxHp, then convert through moodBaseHp so current balance matches the old raw rates. Rates remain dealt=0.035, taken=0.045, heal=0.12 before MOOD_EVENT_MULT.
+## ストーリー/依頼
+- プレイヤー目線の敵総称は「魔物」に統一。
+- 最初はタイトル画面から開始。始めるを押すと新規ゲームとして完全リセットして始まる。
+- 新規開始後、3人に話しかける前は村外へ出られない。通常会話UIで理由を表示し、会話後に戻す。
+- パーティー加入後、チュートリアル依頼 `討伐数対決!?` を受けるまでも村外へ出られない。
+- 依頼前確認は削除済み。依頼受注後、任意のタイミングで自分で目的地へ向かう。
+- `討伐数対決!?` はストーリーチュートリアル。西クラク森に依頼シンボルを出す。報酬は1000G。
+- チュートリアル依頼完了後、暗転してクラク村へ戻り、依頼所前で会話。会話後は通常の追従パーティーに戻す。
+- チュートリアル後にストーリー依頼 `道の先` を追加し、そのまま受注する。受注時は汎用の依頼受注ポップを表示する。
+- `道の先` は花畑の固定シンボルでフロスティーニ1体。報酬は1500G。戦闘前会話はセーブデータ内で初回のみ。
+- フリー依頼は即戦闘ではなく、依頼シンボルをマップに生成する方式。
+- フリー依頼は最大3件まで同時受注。受注中のフリー依頼はフィールド左上のストーリー依頼の下に表示。
+- ストーリー依頼とフリー依頼は同時に持てる。ストーリー依頼受注中でもフリー依頼の受注に影響しない。
+- 受注中のフリー依頼を選ぶと破棄確認を出す。3件受注中に追加受注しようとした場合も破棄候補を選ばせる。
+- クリア済みストーリー依頼は非表示ではなく、下の方に「クリア済み」として積む。
 
-2026-05-26 mood color: mood gauge color interpolates 0=white, 50=yellow, 70=orange, 100=red; same helper used by field ring and HUD bar.
+## モンスターシンボル
+- モンスターシンボルはマップに入るたびに再生成し、基本的に保存しない。
+- 生成タイミングはマップ入場時とシンボル撃破後。プレイヤー半径3マス内、マップ移動イベント半径2マス内には生成しない。
+- 自然湧きはチュートリアル依頼クリア後に解放。
+- 自然湧き: ツノウサギは西クラク森、つぼみのアルラウネは西クラク森/南クラク森、シャドウウルフは南クラク森。
+- 敵種ごとに最大3シンボル。1シンボルあたり敵数は2-4体で、シンボルごとに保持。
+- 通常時は2秒に1回ランダムに1マス移動。
+- プレイヤー半径3マス以内で発見状態になり、ビックリマークを出して1秒に1マスで追跡。
+- 半径5マスより離れると追跡解除。
+- 発見状態のシンボルがプレイヤーに触れた時だけ戦闘開始。
+- 依頼シンボルは自然湧きとは別枠。ストーリー依頼は黄色の紙、フリー依頼は白色の紙の依頼マークを表示。
 
-2026-05-26 telegraph avoidance: party AI with mood <=80 avoids enemy circle/line/fan telegraphs when not action-locked/casting/channeling. Avoidance movement overrides preferred-range movement; while avoiding, units may still use in-range non-approach skills. Approach skills (e.g. Rihas quake) and automatic ultimates are skipped while avoiding.
-2026-05-26 Sushia ice world split: automatic keeps base radius/damage/duration but freezes allies 3s and enemies 1s. Manual uses radius +50px, freezes allies 1s and enemies 3s, and halves ally damage.
-2026-05-26 story intro: added town RPG-style bottom dialogue. Opening plays once from inn start, guild approach triggers party meeting, then guild quest starts tutorial. Advance with E/Space/Enter/click.
-2026-05-26 story correction: only quoted story memo lines are shown as dialogue. Added profile setup for gender/name/pronoun before opening; name feeds protagonist speaker/full name. Ulpes/Rihas/Sushia wait outside guild arguing before meeting, then become town followers after the meeting.
-2026-05-26 profile/town party tune: removed free gender choice, profile setup now only shows the current field. Name input shows suffix "・フィナルチE beside the input. After meeting, town party follows Finald in a Pikmin-like chain order: Ulpes, Rihas, Sushia.
-2026-05-26 town NPC placement: before joining, Ulpes/Rihas/Sushia are drawn from the start after profile setup near the outside of the guild entrance, lower than the previous arguing position.
-2026-05-26 ice world bugfix: freeze/damage checks now use the fixed ice area center captured on cast resolve, matching the drawn area. Previously checks followed Sushia's current position after the area appeared.
-2026-05-26 battle stage background: battle field now has top/bottom tree bands and a central grass lane. Unit movement/teleports/jump landings/shield placement are clamped to the playable grass bounds, reserving top/bottom space for future UI.
-2026-05-26 mood natural drift (superseded by later mood tuning/current 2026-07-02 table): time-based mood drift now depends on current HP ratio, not mood returning to 50. HP >=75%: +0.35/s, 60-75%: +0.15/s, 40-60%: -0.1/s, 25-40%: -0.45/s, <25%: -0.9/s. No high-mood auto stop/decay yet; tune later after playtest.
-2026-05-26 mood high damping (superseded by current 0.5 high-mood damping): all positive mood gains are reduced by 30% once mood is >=90. If a gain crosses 90, only the portion above 90 is damped. Applies to event gains through addMoodGain and natural HP-based gains.
-2026-05-26 heal mood tune: quick heal bonus after recent damage is now a flat final +2 mood, not 5*eventMult. Heal mood still uses healed HP ratio * fixed current-character moodBaseHp, preserving current feel when maxHP later changes from levels/equipment.
-2026-05-26 heal mood rate lowered 8%: MOOD_HEAL_RATE 0.12 -> 0.1104. Fixed quick heal bonus remains +2.
-2026-05-26 mood natural HP table changed (superseded by 2026-07-02 current tuning): >=85 +1/s, >=70 +0.5/s, >=60 +0.2/s, >=50 -0.3/s, >=40 -0.5/s, >=30 -0.8/s, >=20 -1/s, >=10 -1.5/s, <10 -3/s. Existing >=90 mood gain damping still reduces positive natural gains.
-2026-05-26 damage/kill mood (superseded by 2026-07-02 current tuning): dealt-damage mood gain now has MOOD_DAMAGE_DEALT_MULT=0.85. Killing an enemy gives the party attacker MOOD_KILL_BONUS=3 through addMoodGain, so noDamage gain multiplier and >=90 damping still apply; displays a small kill mood float.
-2026-05-26 damage taken mood loss increased 10% (current formula also has base loss; see 2026-07-02 correction): MOOD_DAMAGE_TAKEN_RATE 0.045 -> 0.0495. Applies to party non-Finald damage taken mood loss.
-2026-05-26 player attack aim control: LMB starts attack aim when idle, second LMB confirms/fires. RMB is now cancel-only for current aim; F/G still switch to heal/shield aim.
-2026-05-26 battle guide: accepting the guild quest now opens a pre-battle guide panel before resetGame. It summarizes Finald's skills, all ultimates, controls, and starts combat with E/Space/Enter/click.
-2026-05-26 battle pacing: first full enemy wipe now spawns a rear small-vanguard wave of 3 enemies from the enemy-side back line. Quest completes only after this reinforcement wave is also defeated.
-2026-05-26 reinforcement position tweak: the 3 small-vanguard reinforcements now spawn from the screen-left/back side instead of the right enemy-side back line.
-2026-05-26 mood initial: party non-Finald mood now starts at 35 instead of 50. MOOD_BASELINE remains 50 for curves/speed/reference behavior.
-2026-05-26 battle guide copy: added a pre-battle mood meter explanation to explain HP/activity gains, high-mood overconfidence risks, and low-HP mood loss.
-2026-05-26 protagonist display name: visible player name now uses firstName/default Arjuna instead of Finald, while the profile input suffix "・フィナルチE remains. Temporary protagonist marker changed from チEto 主.
-2026-05-26 management rework step 1 (superseded by later field-unit Arjuna rework): split fixed data into data/characters.js, data/enemies.js, and data/town.js, loaded before skills/main. Battle player is now a UI/support unit (field=false/targetable=false/collidable=false), so enemies/collisions/field drawing ignore the protagonist. Player support skills no longer depend on field position: attack fires from a backline support origin toward the cursor, heal targets hovered field allies, shield targets a point, and Finald ult pulses across field allies.
-2026-05-26 Rihas passive rework: HP damage still delays 1/3 of the final HP damage into 5 delayed ticks. Removed the old "while delayed damage exists: +8 defense and +12% dealt damage" bonuses. Direct HP-damaging hits now grant 1 Rihas stack up to 30, refreshing a 2s shared timer. Stack ratio gives up to +15% dealt damage and -15% incoming damage at 30 stacks. Delayed ticks do not grant new stacks.
-2026-05-26 Rihas passive follow-up: removed the field/foot stack display and stack gain float text. Rihas stack gain now has a 0.8s cooldown. Delayed damage ticks can grant a stack if they actually reduce HP, respecting the same cooldown.
-2026-05-27 Arjuna skill rework: support shot is now a 1s cast / 5s CD point-target narrow AoE (radius 54) that damages units in the area instead of firing a projectile/healing allies. Heal and barrier unchanged. Full Heal is now a 3s cast that heals all field allies by maxHP*(25% + missingHP ratio*50%), so 25% at full HP and 75% at 0 HP.
-2026-05-28 Arjuna passive update (superseded by Hilment/current field-unit Arjuna): [フロチE��クチE is represented by the non-field support setup. Finald/Arjuna stays off the battle field with field=false, targetable=false, and collidable=false, so enemies cannot target/collide with him while he supports from UI. Removed the previous calm-style mood-gain suppression behavior.
-2026-05-28 Arjuna passive icon: Finald/Arjuna always shows a permanent status icon labeled 空 in the status UI for [フロチE��クチE. Permanent icons sort before timed statuses and render without a timer shadow.
-2026-05-28 Arjuna floating field visual: battle now draws a non-interactive Finald/Arjuna avatar near the rear-left sky after normal field units, with no HP bar, no target/collision changes, gentle vertical bobbing, a ground shadow, and a pale air ring to show that he is floating. Current placement is left battle edge +240px and 170px above a fixed ground shadow.
-2026-05-28 Arjuna guard removal: removed the unused player manual guard stub and player-specific guard damage multiplier. Guard checks now only apply to non-Finald party field members, using the existing 0.48 damage multiplier on successful CPU guard.
-2026-05-28 WASD cleanup: removed unused keyboard movement state tracking plus getMoveVector/hasMoveInput. Movement inputs are no longer part of Arjuna/town control flow.
-2026-05-28 town walking cleanup: removed unused walking-era helpers updateTownFollowers, isTownBlockedAt, drawTownPlayer, and the now-unused circleRectOverlap helper. The clickable town overview still uses fixed companion/NPC drawings.
-2026-05-28 hidden status detail width: overflowed buff/debuff icons in the detail panel now use as many columns as fit within the panel width while staying capped at 3 rows. Overflow still uses the bottom-right "…" cell.
-2026-05-28 Arjuna skill panel input badges: bottom battle skill cards now show temporary input badges in order: 左クリチE��, F, G, R.
-2026-05-28 temporary Sushia 30-icon status test removed after checking the detail-panel overflow layout.
-2026-05-29 mood rebalance: guard-capable allies now have 20% base guard chance and successful guard reduces damage to 0.5x. Mood outgoing damage is 0-10%=0.3x, 50%=1x, 90-100%=1.3x. Mood incoming damage is <=70%=1x, 80%=1.1x, 90%=1.25x, 100%=1.4x. Removed mood-based guard chance, cooldown, and cast-time modifiers. Non-Finald ult lockout is now mood <=50. Telegraph avoidance no longer disables at high mood.
-2026-05-29 Arjuna guard display: Finald/Arjuna has guardChance=0 in character data and getMoodGuardChance explicitly returns 0 for finald so UI/detail displays cannot show a nonzero guard rate.
-2026-05-29 guard reduction detail stat: detailed status now shows ガード軽減率 next to ガード率, using the shared GUARD_DAMAGE_MULTIPLIER=0.5. This displays 50% for everyone, including Arjuna, while Arjuna's guard rate remains 0%.
-2026-05-29 MP regen stat: units now have mpRegenRate, defaulting to 0.05. updateCooldownsAndTimers regenerates MP by maxMp * mpRegenRate per second for units with maxMp > 0; the old flat player-only 13 MP/s regen was removed. Detailed stats show MP回復玁Eto the right of 移動速度.
-2026-05-29 mood color ramp: mood gauge low color changed from white to blue. Current ramp is blue -> yellow -> orange -> red.
-TODO: Arjuna battle voice placement needs a UI-side redesign. For now Finald/Arjuna skill speech bubbles are suppressed because the protagonist is no longer a field unit.
-2026-05-27 town map rework step 1: town no longer uses walking/near-door interaction during normal play. The full town map is scaled into the viewport, buildings are clickable directly, and existing simple facility panels are reused. Guild click triggers the meeting if not done, then opens the quest panel; no separate facility pages yet.
-2026-05-27 battle HUD layout step 1: replaced the old bottom-left party list/right skill panel layout. Top HUD now shows three separate ally status cards for Ulpes/Rihas/Sushia with HP/MP/mood/ult bars. Bottom HUD now focuses on Arjuna with HP/MP/ult and skill cooldown cards.
-2026-05-28 battle HUD height tune: initial HUD-only tune made top ally cards and bottom Arjuna HUD use more of the existing reserved top/bottom bands.
-2026-05-28 battle spatial scale pass: added data/config.js with battleSpatialScale=0.9. Character/enemy radii, movement speeds, preferred ranges, skill ranges/radii/widths/projectile speeds, combat spacing offsets, and battle map bounds now use the same scale so the field can be visually smaller while gameplay proportions stay consistent.
-2026-05-28 battle side forest: non-playable left/right battle margins now draw clipped tree rows using battlePx, matching the top/bottom forest bands.
-2026-05-28 ally status UI pass: top ally cards now show HP/MP/mood bars with numbers, shield overlay on HP bars, ult as the main circular gauge, a separate action-CD circular gauge, buff/debuff icons with counter-clockwise black timer wedges and stack badges, placeholder 5-step defense/attack command meters, and red danger flashing at <=25% HP. Shield gain is capped at maxHP.
-2026-05-28 field unit bars simplified: field units now use one HP bar with shield overlaid in cyan like the status UI. Party MP/separate shield bars were removed, and enemies will automatically show the same shield overlay if they later gain shield.
-2026-05-28 float text cleanup: mood gain floats are hidden, shield-absorbed damage uses the same damage float color as the original hit, and delayed damage stores/reuses the original hit color.
-2026-05-28 damage float sign cleanup: damage, shield-absorbed damage, and delayed damage float text now show unsigned values. Heal floats still keep the leading +.
-2026-05-28 heal float color split: heal float text now uses green for party targets and purple-pink for enemy targets, including +0 cases.
-2026-05-28 ally status portrait layout: top ally cards now reserve a left portrait area using img/char/main_char_yuru assets when available. Name/role sit above the portrait, while HP/MP/mood/command bars are shifted to the right.
-2026-05-28 status UI naming: ally status cards now display full names for Ulpes/Rihas/Sushia. Role labels changed to Finald/Arjuna=白魔法士 and Sushia=黒魔法士.
-2026-05-28 Sushia passive status icon: Sushia's "あったまってきたよ！E castStacks now appear in the buff/debuff icon row as 熱, with the existing stack badge and remaining-time shadow wedge.
-2026-05-28 freeze status icon timing: Ice World freeze now records frozenMax when applied, so the existing 凁Edebuff icon uses the correct 1s/3s timer ratio for manual/automatic ally/enemy freezes.
-2026-05-28 Arjuna status UI portrait layout: bottom Arjuna stats now match the portrait-style status UI with name/role over a left portrait and HP/MP/ult bars on the right. Action CD, mood, and defense/attack command meter remain omitted for Arjuna.
-2026-05-28 Arjuna ult gauge placement: bottom Arjuna stats now put the ult gauge as a circular gauge in the upper-right of the stats block, with HP/MP bars shifted lower. The old horizontal ult bar was removed.
-2026-05-28 portrait placeholder revert: status UI portrait frames remain reserved, but temporary yuru-character image loading was removed. Portrait contents are back to the initial colored circle plus character label until final icons are chosen.
-2026-05-28 four-person top status UI prototype: top status cards now show Ulpes/Rihas/Sushia plus Arjuna on the far right in a more compact 4-card layout. Arjuna's top card omits action CD, mood, and the defense/attack command meter; the bottom HUD now uses the freed space for the skill panel only.
-2026-05-28 status card vertical swap: in top status cards, HP/MP/mood/command bars now occupy the upper-right area in the same order, while buff/debuff icons plus action CD and ult circular gauges moved to the lower-right area.
-2026-05-28 status bar value readability: HP/MP/mood bars now reserve a right-side value area by shortening the bar body slightly. Values render outside the bar at up to 11px, shrinking only if needed; command meters are unchanged.
-2026-05-28 buff/debuff icon wrapping: status icons now use a compact two-row layout. Icons fill from the upper-left to the action-CD side, then continue from the lower-left; active icons reflow to close gaps, and overflow is represented by a bottom-right "…" icon.
-2026-05-28 temporary Sushia status UI test removed: the 15 display-only dummy icons used to check two-row/overflow status icon behavior were removed after review. The two-row/overflow layout itself remains.
-2026-05-28 status icon sort order: buff/debuff icons now sort by remaining duration descending before layout, so long-lasting effects stay toward the upper-left and short-lived effects tend to disappear from the right/lower side with less visible reflow.
-2026-05-28 temporary detailed status panel: status cards now have a small white lower-right triangle button when no detail panel is open. Clicking it expands a temporary detail panel below that card; while open, only the panel's lower-right close triangle is shown. The panel shows overflowed buff/debuff icons, detailed stats (attack/magic/defense/magic defense/crit/outgoing and incoming damage modifiers/cast speed/skill speed/guard/move speed), and owned skill icons with cooldown shadows.
-2026-05-28 detailed status panel vertical layout: detail panels now use the source card width instead of a wide cross-card panel, with a taller vertical layout. Hidden statuses, detailed stats, and skill cooldown icons stack downward so opening another character's detail does not horizontally overlap neighboring status cards.
-2026-05-28 multiple detailed status panels: detail panel state now supports multiple open character cards at once. The card corner triangle is always visible; for closed cards it opens details, and for open cards it closes them. The detail panel's own lower-right triangle also closes that specific panel.
-2026-05-28 hidden status detail grid: removed the "隠れ状慁E heading from detail panels. Overflowed buff/debuff icons now display in a fixed 3-column grid, capped at 3 rows; if more remain, the bottom-right grid cell becomes "…".
-2026-05-29 guard overflow conversion: guard chance above 100% is capped to 100% for display and actual guard roll. Excess guard chance converts to guard damage reduction at +10pt reduction per +30pt excess guard chance, with total guard reduction capped at 85%.
-2026-05-29 command bias meter: top status command meter is now clickable for non-Arjuna CPs. It stores selected commandBias immediately, but activeCommandBias only commits when the unit starts its next action via setActionCooldown. Active bias modifies guard chance, action cooldown tempo, and all mood gain/loss amounts.
-2026-05-29 normal attack CD tuning: Ulpes attack/素早ぁE��ラチE��ュ, Rihas 台地揺るがす拳, and Sushia 拡散弾 base CDs are all 2.5s before command-bias multipliers.
-2026-05-29 command bias drag: command meters now support click-and-drag/hold movement. Mousedown on the meter starts commandBiasDrag, mousemove snaps the selected stance to the nearest of the five track positions, mouseup or mouseleave ends the drag.
-2026-05-29 mood-driven command bias: when a non-Arjuna CP reaches its next action decision, mood can auto-adjust commandBias before activeCommandBias is committed. <=20 rolls independent 70% full-defense and 50% shift-left, with full-defense winning if both succeed; <=39 only rolls 50% shift-left. >=80 rolls independent 80% full-attack and 60% shift-right, with full-attack winning if both succeed; >=70 only rolls 60% shift-right.
-2026-05-29 mood-driven command bias timing fix: auto command-bias changes moved from the AI decision gate to skillSystem.setActionCooldown, so they only roll when the CP actually starts an action. The 0.2s no-candidate recheck no longer rolls mood-driven command changes.
-2026-05-29 command bias opening grace: each non-Arjuna CP tracks commandBiasActionCount. Mood-driven automatic command-bias changes are skipped for that unit's first 5 actual actions, but manual selected commandBias still commits normally on those actions.
-2026-05-29 mood auto command chance tuning: mood-driven command-bias automatic changes now roll -2 at 50%, -1 at 30%, +1 at 30%, and +2 at 50%. Conditions, independent overlapping rolls, priority, and 5-action grace remain unchanged.
-2026-05-29 enemy action CD policy: enemy action cooldowns should track shared action-CD changes unless the user explicitly says player-only/ally-only. Current enemy action CD is 5s; caster 封E��緁Eskill CD is fixed 12s; elite ヘビースラム skill CD is 17s.
-2026-05-29 damage calculation order: dealDamage now applies crit first, then defense/magic defense, then outgoing/incoming and special multiplicative modifiers, then guard. Skill code still constructs base damage as base + stat * scale before calling dealDamage.
-2026-06-01 architecture split phase 1: main.js no longer owns canvas rendering directly. Rendering/UI/town drawing/status cards/profile drawing/visual helpers moved to systems/renderer.js via window.createHealerRenderer(context). main.js keeps state, input, battle update, AI, combat calculation, and geometry wrappers. Shared arrays are now stable const arrays cleared with length=0 so renderer and skills keep live references.
-2026-06-01 architecture split phase 2: split non-render responsibilities into data/story.js and systems/{geometry,input,profile,townController,unitFactory,battleSetup}. main.js is now mostly shared state, context wiring, battle update/AI/combat rules, and thin wrapper functions for old call sites.
-2026-06-01 architecture split phase 3: split battle rules out of main.js into systems/battleStats.js (mood/command/guard/MP/passive math), systems/combat.js (damage/heal/shield/guard/delayed damage), systems/battleAi.js (party/enemy AI and telegraph avoidance), and systems/battleRuntime.js (battle frame update, projectiles, telegraphs, areas/effects, battle state, support origin). main.js is now primarily state setup, module wiring, and compatibility wrappers.
-2026-06-01 architecture split phase 4: reorganized JS folders by responsibility. battle/{skills,stats,combat,ai,setup,runtime}.js, ui/{renderer,input,profile,screen,statusControls}.js, world/{geometry,townController}.js, entities/unitFactory.js, core/{scaler,gameLoop}.js. main.js delegates resize, game loop, status UI clicks, command-bias dragging, and battlePx scaling.
-2026-06-01 architecture split phase 5: moved tuning constants into data/balance.js and visual/key label constants into data/theme.js. Removed the large main.js compatibility-wrapper block; contexts now use a small callLater(getSystem, methodName) bridge. main.js is down to roughly 500 lines and is mostly bootstrap, state, and context wiring.
-2026-06-02 architecture split phase 6: moved all large create*Context wiring from main.js into core/contextFactory.js. main.js now mainly validates loaded modules/data, creates initial state, instantiates systems in order, and starts input/game loop. Current main.js is roughly 150 lines.
+## 戦闘の基本
+- 戦闘中の主人公移動はAI任せ。WASD移動はフィールド用。
+- プレイヤーがスキル/アイテムを使う時だけ、必要なら発動位置や射程内まで移動する。
+- 自分中心範囲スキルをプレイヤーが使う場合、クリック位置へ移動して使用する。範囲表示はカーソルに追従し、移動予測線を出す。
+- スキル発動のための移動中は予兆線回避をしない。
+- 適正距離は「できれば保つ」程度で、敵同士や壁付近でガタつかないよう過剰な押し戻しを避ける。
+- 敵/味方AIは、最初は未使用スキルからランダムに選び、全て一巡した後は待機列を回す。
+- 射程内スキルは優先。ただし射程外しかない場合も、移動できるならそのスキルを選んで近づいて使う。
+- 敵の固定初手スキルは、そのスキルが現在使用可能/到達可能な時だけ優先。無理なら通常の選出に進む。
+- 予兆線は `memo.xlsx` の備考や showTelegraph 指定があるものだけ出す。詠唱や範囲があるだけで勝手に追加しない。
+- 敵の詠唱エフェクトも表示対象。
 
-2026-06-15 catch-up: aimemo had not been updated since 2026-06-02. Important recent state summarized below.
-2026-06-15 Arjuna name/profile: protagonist now has editable first and last name, each limited to 8 chars. Default is アルジュナ�EフィナルチE Self-introduction uses full name and calls the role 白魔法士, not サポ�EチE
-2026-06-15 story/town flow: dialogue processing lives in data/story.js and world/townController.js. Only quoted lines from story memo are shown. Town uses clickable overview-style buildings. Guild flow is guild click -> story/free quest type -> quest select -> pre-battle guide -> battle. Current prototype battle starts from the story quest placeholder.
-2026-06-15 layout/UI direction: battle HUD currently has the skill/quest panel on the upper band and four status cards on the lower band. Detail panels open upward from status cards, with the triangle button on the top-right. Quest info occupies the right side of the upper HUD.
-2026-06-15 Arjuna skill panel (superseded by keybind settings/current defaults): active skill inputs are Q/E/R/F/G for the left five cards. Space toggles between page1/page2. The rightmost card is a fixed ultimate slot using key 4 and is not part of the active loadout limit.
-2026-06-15 Arjuna active loadout: active skills and command skills now share one common pool of up to 10 equipped active skills. Page1 displays equipped active indices 0-4, page2 displays 5-9. Command skills can be placed on either page and still execute as commands. Passive remains separate and required.
-2026-06-15 command skills: command/stance skills are normal active skills for loadout purposes. Targeted command skills start an aim state on their assigned card/key; all-ally command skills fire immediately. Mood can still cause command effects to be ignored based on the existing low/high mood ignore rules.
-2026-06-15 status/detail UI: status cards show compact HP/MP/mood, shield overlay on HP, ult/action circular gauges, buff/debuff icons, and detail panels with combat stats and skill cooldown icons. Arjuna omits action CD/mood/command meter in his status card.
-2026-06-15 architecture: main.js is intended to stay as bootstrap/context wiring. Large systems are split under battle/, ui/, world/, entities/, core/, and data/. contextFactory.js owns the large dependency wiring.
-2026-06-15 equipment/stat foundation: equipment concept exists with slots weapon/head/body/waist/feet/hands/accessory. Weapons and passives are required. Early equipment data includes starter weapons from memo.xlsx. Rank equipment stat budgets are D30/C60/B90/A120/S150. Weapon normal attacks are intended to vary by weapon later.
-2026-06-15 attributes simplification: earlier elemental system was backed away for scope. Current design should treat existing attributes as none/hidden for now, and avoid adding attribute stats to accessory generation. Physical/magic boost/resistance can remain as internal buff hooks, but detailed UI hides old normal/none element boost/resist rows.
-2026-06-15 damage/stat math direction: skill code builds base as skill base + stat*scale. Damage order target is crit/defense core first, then additive outgoing/incoming/special damage modifiers, with element/attribute-like modifiers only if reintroduced as multiplicative, and guard last. Stat buffs should be flat additions into base stat plus additive percent bonuses based on that base. Nonnegative floors: HP, MP, attack, magic, movement speed; crit damage minimum 100%. HP/MP regen rates may go negative. Defense/magic defense may go negative unless intentionally clamped later.
-2026-06-15 balance state: allies and enemies were normalized around HP500, MP300, attack/magic/defense/magicDefense 100 for party basics, enemy defense/magic defense currently 100 baseline. Base crit damage changed to 150%, and excess crit chance above 100% converts 50% of overflow into crit damage.
-2026-06-15 friendly fire old rule (superseded 2026-06-17): ally-damaging skills used to scale friendly damage by caster mood from 10% to 70%.
-2026-06-15 cast speed: intended cast speed cap is 100%, making cast time effectively 0.0001s. Negative cast speed increases cast time linearly, e.g. -50% => 1.5x, -200% => 3x.
+## 戦闘不能/敗北
+- 戦闘敗北条件は全滅。
+- 戦闘不能になったキャラは調子0固定、必殺ゲージ増加なし、攻撃/回復などの対象外、ダメージも受けない。
+- 戦闘不能時は状態をすべて解除し、唯一 `戦闘不能` 状態だけを付けて表示する。
+- 戦闘中の戦闘不能キャラは下UIを灰色にし、戦闘不能用画像は `img/char/<character>_img/sleep/` を使う。
+- 戦闘不能は戦闘終了だけでは解除しない。
+- 全滅時は「セーブ地点から再開」か「町から再開」を選ぶ。
+- セーブ地点から再開はセーブ後の出来事を破棄。
+- 町から再開はセーブ後の出来事を残す。宿屋から再開するか確認し、所持金が足りれば全回復。宿屋を使わない場合は全員HP10%で再開。
 
+## HP/MP/状態
+- HPとMPは戦闘間で引き継ぐ。
+- 戦闘不能の場合は最大HP20%まで自動回復する仕様が過去にあったが、現在は全滅/町再開仕様と競合しやすいのでコード確認を優先。
+- 状態の戦闘間引き継ぎは `data/statuses.js` の carryover/引き継ぎ設定に従う。現在の状態は基本的に引き継ぎなし。
+- HP/MP再生率はFPS依存にせず、1秒ごとにまとめて変動する。
+- デフォルトMP再生率は1%。
+- ポーションなどアイテムの回復は調子上昇に含めない。
 
-2026-06-15 item slots (superseded by 2026-06-24 character item slots): battle HUD now has item slots beside skill panel: bag icon + C/V/B slots. Slot C starts with Potion x3 (heals hovered ally by 25% max HP), V/B are empty. Items use the same ready/confirm flow as skills: press key or click item slot to ready, left-click hovered ally to use, right-click/Esc/Space/other skill or item switches/cancels. Skill cards and command cards remain clickable through statusUiButtons.
+## 調子/攻防
+- 調子によって攻防メーターが自動で切り替わる仕様は一旦停止中。
+- HP割合による毎秒調子変動:
+  - 85%以上: +0.5/秒
+  - 70%以上: +0.2/秒
+  - 60%以上: +0.0/秒
+  - 50%以上: -0.5/秒
+  - 40%以上: -0.8/秒
+  - 30%以上: -1.0/秒
+  - 20%以上: -1.5/秒
+  - 10%以上: -3.0/秒
+  - 10%未満: -5.0/秒
+- 調子90以上の調子増加量は0.5倍。
+- 被ダメによる調子減少は現在の最大HPを参照し、基礎値0.2を加える。
+- シールド獲得による調子増加は回復と同じく最大HP基準。ただし被ダメ直後の増加量補正は載せない。
+- シェルト自体の基礎調子増加量は削除。
+- 調子40未満ではプレイヤー操作の必殺技を発動できない。復帰時に必殺アイコンの灰色表示も更新する。
 
-2026-06-16 command bias balance: commandBiasConfigs updated. -2 guard x3/actionCD x2.5/moodGain x0.6/moodLoss x1.5/damageOut x0.8/damageIn x0.8; -1 guard x1.8/actionCD x1.6/moodGain x0.8/moodLoss x1.2/damageOut x0.9/damageIn x0.9; 0 all x1; +1 guard x0.6/actionCD x0.7/mood unchanged/damageOut x1.1/damageIn x1.15; +2 guard 0/actionCD x0.5/moodGain x1.1/moodLoss x0.9/damageOut x1.2/damageIn x1.3.
+## ダメージ
+- 防御/魔防は100基準。
+- 100より高い場合は被ダメージを緩やかに減らす。
+- 100より低い場合は、100からの差分を使って高い場合と同じ緩やかさで被ダメージを増やす。
+- `不変` ダメージは相手の防御力/魔防をダメージ計算に入れないだけ。ガード、会心、ダメージ率は通常通り入る。
+- `ドット`、`ドット物理`、`ドット魔法` はドットダメージ扱い。
+- ドットダメージは通常のダメージ計算を使うが、ガード不可、会心判定なし、カウンターなし、眠り解除なし。
+- 燃焼のダメージは `ドット魔法`。
+- ミックスダメージは防御と魔防の両方を見て、それぞれの補正率の中央値を適用する。
+- ランウェーブは表記上ミックスではなく、着地が物理、衝撃波が魔法。
+- ガード時のダメージ表記は `ダメージ/B`。
 
-2026-06-16 detailed handoff doc: created メモ/詳細.txt as a comprehensive current-state handoff for collaborators. It summarizes concept, story, characters, town/quest flow, battle rules, controls, UI, stats/damage/mood/command bias, skills/passives, enemies, items, equipment/rank/attributes, architecture, TODOs, and collaboration notes. It prioritizes current code/aimemo state over older stale spec text where they differ.
+## スキル
+- 通常攻撃スキルは武器に付属する特殊枠。
+- アクティブ、必殺、パッシブは基本的に共通プールに置き、必要武器/必要キャラ/所持状況を満たすキャラが候補として見える。
+- スキル候補で装備不可のものは赤いバツを表示し、一覧の後ろ側に寄せる。
+- 現在の武器条件を満たせない装備中スキルは、装備確認画面でもバツ表示し、戦闘中は使用不可扱い。
+- フォーカスとディスタンスは後から発動された方を優先。
+- フォーカスを無視しても、通常AIの結果として同じ魔物を狙うことはあり得る。
+- 指示スキルは結晶候補/所持状況に注意。アルジュナ初期所持は現在コードと `memo.xlsx` を確認する。
+- スキル説明は戦闘中と装備変更画面で同じ説明生成元を使う方針。簡易/詳細説明設定に対応。
+- `memo.xlsx` の「効果時間」はスキル自体の持続時間。バフ/状態の持続時間とは別。
+- 全通常攻撃スキルのCDは一律ではない。`memo.xlsx` を参照する。
+- スキル速度は旧「クールタイム」名称。プラスならスキル回転が速くなる方向。
 
-2026-06-16 Finald passive/WASD test (superseded by current AI-controlled battle movement): Flotict effect is temporarily disabled with passive.disabled for later rework. Arjuna/Finald is now a field, targetable, collidable battle unit again, starts in the field, and moves with WASD. Floating duplicate draw and the permanent 空 passive icon are hidden while disabled/fielded; support origin and speech bubbles follow his field position. Current Finald ranges: support shot 420, heal 520, shield 340, single-target commands 480, all-ally commands radius 520. Aiming draws a range circle and confirms fail with 封E��夁Ewhen the target/point is outside range.
+## 装備/強化
+- 同じ名前の装備を複数作成でき、インスタンスごとに強化レベルや状態を管理する。
+- 武器強化と防具強化は仕様が違うので混ぜない。
+- 武器の乱数は生成時ではなく強化時の加算値にかける。強化結果は内部的にも整数に丸め、最低変化量は+1。
+- 通常攻撃スキルのレベルは装備している武器インスタンスの強化レベルに同期する。
+- 武器種別の追加ステータスは強化対象外。
+- 防具/アクセサリの初期ランダムステータス仕様は廃止。`memo.xlsx` の固定ステータス値を使う。
+- 防具強化は所持しているステータスの中からランダムに強化対象を選ぶ。マイナス値も強化対象に含める。
+- 防具屋のステータスリセット項目は削除済み。
+- 強化リセットは確認ウィンドウを出す。
+- 防具部位は現在「頭、胴、手、腰、足」。旧「脚/靴」や `leggings` 系IDの残りに注意。
+- 武器屋/防具屋は左リスト、右詳細の全画面寄りUI。フィルターはボタンで別ウィンドウを開く。
+- 武器詳細には装備可能者と通常攻撃説明を表示する。
+- 防具/武器詳細にはセット効果も表示する。セット効果は `セット効果名:効果説明` 形式。
+- 持ち物確認や強化画面では、誰かが装備中なら `○○装備中` を表示する。
 
-2026-06-16 Hilment passive rework: Finald/Arjuna passive changed from Flotict to Hilment. Default passive key is now hilment. When Finald heals another party member, he self-heals for 30% of the actual HP restored to that ally; overheal on the ally is excluded because healUnit uses the healed delta. The self-heal is applied directly without recursion and shows a green + float on Finald. Permanent status icon changed from 空 to 癁E Spec/detail docs and memo.xlsx were updated with Hilment plus current Finald ranges.
+## アイテム/所持金
+- 所持金単位は `G`。
+- 所持金は戦闘中以外、右上メニューの左に表示。持ち物確認画面では欄外右上あたりに表示。
+- アイテムは1キャラ1つずつ持つ方式。戦闘中アイテム枠は4つで、順番はウルペス、リハス、スシア、アルジュナ。
+- アイテム屋購入は持ち物へ入る。各キャラのアイテム枠へ勝手に補充しない。
+- 装備画面で装備可能アイテムを個数指定して持たせる。
+- 現行商品は傷薬、魔力草、リラックス草、アングリ草。仮ポーションは店頭から外し、ウルペス初期所持も空にする方針。
+- 力の結晶の自動使用設定は設定 > ゲーム。デフォルトON。
+- 自動使用ON時は戦闘終了の獲得アイテム表示から「次へ」で今回獲得分だけ開封し、保存していた結晶は勝手に開けない。
+- 持ち物確認から力の結晶を使う場合は「使う」と「全て開ける」がある。全開封中はバツなし、次ボタンで進め、最後に閉じる。
+- 力の結晶の結果表示には、獲得/強化、Lv変化、強化内容、スキル説明を出す。
 
-2026-06-16 Finald range tuning: player aim range circle is now more visible by opacity only (alpha 0.42, line width 2, dash 8/8). Finald/Arjuna ranges changed: Shock/support shot 420 -> 200, Heal 520 -> 300, Barrier 340 -> 280. Spec/detail docs and memo.xlsx updated.
-2026-06-16 Full Heal tuning: Finald/Arjuna ult missing-HP bonus changed from max 50% to max 30%, so total heal is 25%-55%. Range indicator stays 2px wide; visibility comes from higher alpha only. Restored Sushia spread shot range to 340 after Finald range tuning.
-2026-06-17 casting rule rework: Player casting now blocks WASD movement; normal HP damage no longer cancels player.cast; future forced-position effects should call cancelPlayerCast. Player cast cooldown now starts at cast completion or interruption, and interruption uses the full cooldown with no 80% reduction/refund. Manual cast cancel remains unavailable. 詳細.txt updated.
-2026-06-17 Finald ult timing: Full Heal no longer consumes ult gauge at cast start. The gauge is consumed when the cast completes or when the cast is interrupted, matching the new cooldown timing rule.
-2026-06-17 status tooltip prep: statusRenderer now keeps separate statusTooltipTargets for hover-only UI, registers visible/overflow status icons and detailed skill icons, and shows placeholder tooltips that can later consume description/tooltip/helpText fields. Remember to update aimemo after game-logic/UI changes.
-2026-06-17 ally bot casting cooldown alignment: party AI now commits command-bias decisions at action start, but starts action cooldown and skill cooldown after the cast/telegraph resolves. Instant actions finish immediately. Normal damage still does not interrupt bot casts; no forced-position interruption effect exists yet.
-2026-06-17 Finald battle start placement: moved Finald/Arjuna starting x from battle width 18% to 26%, closer to the ally formation while still behind the front party.
-2026-06-17 town WASD rework: Town is back to direct WASD walking. Map/building left-click selection is disabled; facilities are used with E when Finald is near the building door. After the guild meeting, Ulpes/Rihas/Sushia follow Finald by replaying his recorded movement trail in order, Pikmin-like, rather than pathfinding by shortest route. Town renderer now draws the player plus fixed pre-meeting NPCs or trail-following party members, and HUD prompt says WASD/E.
-2026-06-17 shield stack rework: Shields now use unit.shields as individual stacks with independent timers, while unit.shield/unit.shieldTimer remain synchronized aggregate compatibility fields for UI. New shields add durability up to max HP. Damage consumes the shortest remaining shield stacks first. Expired stacks remove only their own durability. While a party member with mood has any shield durability, they gain mood at 0.3/s through the normal mood-gain path.
-2026-06-17 critical rework: Critical is now default for all dealDamage calls from a source unless options.noCrit or crit:false is set. Units have base critChance 10% and critDamage as a damage-rate stat, base 50%, so a crit multiplies damage by 1 + critDamageRate (base 150%). Swordwork doubles raw crit chance and halves critDamageRate before overflow. Crit chance over 100% is capped for rolls and 50% of overflow is added to critDamageRate. Status detail uses the critDamage rate internally rather than total crit multiplier. memo.xlsx intentionally not edited by Codex per user request.
-2026-06-17 crit/status tooltip wording: User-facing crit stat name is 会忁E��メージ while keeping the same internal critDamage rate math. Detailed status hover tooltips now say 残りクールタイム for skills and 残り効果時閁Efor statuses, with remaining seconds rounded up to whole seconds.
+## UI/設定/保存
+- 三本線メニューは三本線クリックまたはEscで開閉。町パネルなど前面UI中は開けない/閉じる対象に注意。
+- 戦闘中メニューの「降参」は「逃走」に名称変更。
+- 会話送りはEのみ。インタラクトと会話送りは統合済み。
+- キーバインド設定は設定 > 操作。共通/フィールド/戦闘に分け、同じ項目内と共通との被りは不可。左クリックは禁止。
+- デフォルト戦闘スキル構えキーは Q/W/E/R/T。
+- 発射は左クリック、キャンセルは右クリック、ページ切替はSpace、アイテムはC/V/B/N、必殺は1/2/3/4。
+- 設定 > ゲームには詳細説明文の適用、力の結晶の自動使用、マップデバッグモード、FPS上限がある。
+- 詳細説明文の適用はデフォルトOFF。
+- FPS上限は 15/30/45/60/90/120/140/160/180/210/無制限。デフォルト60fps。
+- セーブデータはファイル保存方式。ファイル保存時にブラウザのローカル保存へ二重保存しない。
+- ファイル保存後にタイトルへ戻さない。
+- タイトルのロード一覧には削除ボタンがあり、削除前に確認する。
+- タイトルに戻ってから「始める」を押した場合は必ず完全新規ゲームとしてリセットする。
 
-2026-06-17 friendly-fire/mood rework: Party offensive AoE/projectiles no longer affect allies below source mood 80. Mood 80-89 lets allies be hit for 30% damage and 50% debuff/effect duration; mood 90-100 uses 80% damage and 100% effect duration. Enemy-targeted skills still choose enemies, but high-mood splash can include allies. Mood-triggered automatic ultimates scale enemy damage/effects to 60%; ally damage/effects use the friendly-fire mood rule separately. Updated skills/runtime/combat helpers and docs.
-2026-06-18 forced hostile target: Party AI now prioritizes forcedTarget while tauntTimer > 0, including allied targets. A forced allied target bypasses the mood friendly-fire hit gate and damage/effect reduction, so future ally-attacking debuffs can reuse forcedTarget + tauntTimer. Expired forced ally intents are cleared from movement/action intent.
-2026-06-18 Sushia Chacka implementation (superseded by 2026-06-22 Fire rename and later burn rework/current tuning): memo.xlsx 味方スキル row 23 added チャチE�� as Sushia initial non-normal skill. Removed Impact Bomb from Sushia default loadout but kept its skill data. Removed the accidental Finald chacka data/default. Implemented useSushiaChacka as enemy target magic hit + 4s burn. Burn debuff lowers defense by 10% and ticks magic damage equal to 1% current HP per second; status UI now shows 燁Eicon/tooltips.
-2026-06-19 skill overhaul follow-up: Fixed data/skills.js syntax break in Rihas/Sushia ultimate category fields. Variable ultimate gauge cost is now treated as required cap/cost, not early-use threshold: Strepion requires 110%, Ice World requires 130%, default remains 100%. Sushia normal attack ID is masic_shot; old Impact Bomb became Bomber/bomber with line ボンバ�E. Updated detailed handoff/spec notes to use Shock/Shelt/Strepion/Magic Bullet/Bomber naming and current values.
-2026-06-19 skill wait queue: Added per-unit skillQueue/usedSkillKeys/skillCooldownKeys. Party CPs and enemies now use random selection only when no queued usable skill exists. Once a skill has been used, it re-enters that unit's queue when its own cooldown finishes; normal attacks and other actions without a separate skill cooldown re-enter when the action cooldown finishes. Queued skills are checked from the front, skipping temporarily unusable entries to avoid stalls.
-2026-06-19 normal attack fallback: Adjusted AI skill selection so normal attacks are fallback actions. Non-normal usable skills are considered first by queue/random order; normal attack only enters candidates when no non-normal skill can currently be selected.
-2026-06-19 normal attacks queued again: Reverted normal attacks from fallback-only to full wait-queue candidates. Party normal attack skill CDs set to 6s for Finald/Shock, Ulpes attack, Rihas attack, and Sushia Magic Bullet.
+## 画像/エフェクト
+- キャラ画像は `img/char/<character>_img/...`。
+- スシアは `sushia_img` 表記に統一済み。旧 `susia_img` 参照に注意。
+- 敵画像は `img/entity/<enemyId>/<enemyId>_default.png`。
+- 敵に画像指定がある場合、その画像を左向きとして使い、右向きはメモリ上で反転して保持する。
+- 敵画像が未指定なら丸と文字の仮表示を使う。
+- 敵の左右向きは、フィールドでは左右移動時のみ変更。上下移動では維持。
+- 戦闘ではターゲットのx座標が自分の左右どちらにあるかで向きを変える。中心付近はデッドゾーンを設けて高速反転を避ける。
+- エフェクト定義は `data/effects.js`、実行管理は `battle/effects.js`。
+- エフェクトは飾り扱い。基本レイヤーはユニットより上、UIより下。
+- エフェクト基本構成は3フレーム:
+  - 1フレーム目: 発動時から0.5秒
+  - 2フレーム目: 0.7秒 + スキル効果時間
+  - 3フレーム目: 0.5秒
+- 画像がないエフェクトは何も表示しない。
 
-2026-06-19 ultimate natural gain tuning: natural passive ultimate gauge gain halved from 1.2%/s to 0.6%/s. Damage/heal ultimate gains unchanged.
-
-2026-06-19 ultimate gain flat affected-unit rule: replaced amount-based ult gains with +4% per affected enemy damaged/debuffed and +4% per affected ally healed/shielded/buffed. Ultimate effects and burn DoT ticks do not grant ultimate gauge. Sushia magic shot projectileCount is now 1.
-2026-06-22 memo.xlsx sheets: added 防具, セチE��効极E アイチE�� sheets. 防具 includes 部佁Eso accessories can be managed there for now; all new sheets have header filters.
-
-2026-06-22 naming: user-facing スキルヘイスチElabel renamed to クールタイム. Internal stat handling remains unchanged; negative values mean cooldown shortening by design.
-
-2026-06-22 command bias action CD tuning: +1 actionCd multiplier changed 0.7 -> 0.8, +2 changed 0.5 -> 0.6.
-
-2026-06-22 action speed display: detailed status 行動クールタイム seconds renamed to 行動速度 percent. Display uses 100% / active command actionCd multiplier; base action CD math remains unchanged.
-
-2026-06-22 detail stats order: reordered detailed stats to attack/magic/defenses, crit, guard, global/physical/magic damage modifiers, regen, cast/cooldown/action speed, then break before ultimate gauge charge and move speed. Added physical/magic modifier display; memo.xlsx intentionally unchanged.
-
-2026-06-22 damage rate detail display: renamed six detailed damage modifier stats to 丁E被ダメージ玁Evariants and changed display baseline from signed +0% to 100% rate. Physical/magic incoming rates show 100% - resistance.
-2026-06-22 random equipment stats reminder: armor random stat total values are +% budget, not flat values. Accessory random stat rolls allow duplicates; duplicate rolls stack linearly (2 rolls = value x2).
-2026-06-22 field mood display: party field mood ring no longer uses a progress arc. It now draws a full ring colored by mood only.
-2026-06-22 chacka/default loadout note (superseded by Fire rename/current default loadout): chacka remains implemented as a Sushia active skill with burn support, but is intentionally not included in any default loadout yet per user request.
-2026-06-22 enemy caster line dodgeability: 封E��緁Enow has aimLockBeforeFire=1.3. enemyLineAttack locks the line once remaining cast time reaches that window and treats it as the minimum cast time, so the beam no longer tracks until the instant it fires and can be dodged.
-2026-06-22 enemy caster line cast time: 封E��緁Ecast changed to 2.0s, so it tracks for roughly 0.7s and then fires from a fixed line after the remaining 1.3s dodge window.
-2026-06-22 chacka loadout correction (superseded by Fire rename/current default loadout): per user follow-up, chacka itself was left unchanged and returned to Sushia's default active loadout.
-2026-06-22 Sushia Fire rename/tuning (current values corrected 2026-07-02): memo.xlsx 味方スキル now defines former chacka as ID/key fire, name ファイア. Current skill values are damage 30 + magic * 0.45, MP cost 40, CD 14s, cast 1s, burn duration 3s, and voice line ファイア. Sushia's current default active loadout is only ["attack"]; Fire is implemented/obtainable/equippable but not default-equipped.
-2026-06-22 detailed skill tooltip trim: detailed status skill tooltips no longer show remaining cooldown or range. Base CD/cost and descriptions still display.
-2026-06-22 tooltip description default: tooltip descriptions now prefer simpleDescription by default and fall back to description. A future settings UI can switch game.settings.tooltipDescriptionMode to "detail" to prefer detailed descriptions.
-2026-06-22 passive simple descriptions: memo.xlsx also contains simple descriptions for passive rows, so HEALER_PASSIVE_DATA now carries simpleDescription for Hilment, Swordwork, Painless, and Warmup. Hilment's permanent status icon passes that simpleDescription into the tooltip.
-2026-06-22 Arjuna skill panel tooltips: the top-left Arjuna skill panel now registers tooltip targets for each occupied skill slot, using the same skill tooltip builder as detailed status. Ultimate panel entries fill in finald.ult skill data and gauge text before tooltip rendering.
-2026-06-22 burn rework: memo.xlsx 状慁Edebuff_burn now defines burn as magic DoT only. Removed burn defense reduction from skill data, applyBurn, status stat bonuses, unit setup/reset fields, and user-facing burn descriptions.
-2026-06-22 party HP/MP carryover: battle result -> town now saves current party HP into game.partyHpById and MP into game.partyMpById. resetGame restores HP and MP for Finald/Ulpes/Rihas/Sushia while cooldowns, shields, status timers, ult, positions, etc. still reset per battle. Inn healing updates the saved HP/MP values to max.
-2026-06-22 incapacitated HP floor: when carrying HP back to town, party members who are dead or at 0 HP are saved at 20% max HP. resetGame also treats old saved HP <= 0 as 20% max HP, so incapacitated members do not enter the next battle at 0 HP.
-2026-06-23 aim cancel input: removed Esc as a battle aim/item-aim cancel input. Right-click remains the cancel path for skill/item targeting; Esc remains available for future menu handling and currently still closes existing town panels.
-2026-06-23 system menu skeleton: added game.systemMenu plus right-top hamburger/Esc menu. Town menu shows 裁E��変更/持ち物確誁E設宁EセーチEタイトルへ戻めE battle menu shows 裁E��確誁E設宁E降参. Item screens are placeholder full panels; surrender/title show confirmation placeholders only. Town panels/stories/profile hide and block the hamburger. Battle pauses while any system menu panel/dropdown/confirm is open and draws a dark pause overlay.
-2026-06-23 equipment screen shell: 裁E��変更/裁E��確誁Enow opens a real full-screen equipment UI. It defaults to Arjuna, has left character tabs, central character art with 7 equipment slots, bottom skill/passive slots, right full-name/stat/set-effect panel, slot pickers, and a preset popover. Town mode can equip/change skills and save/load in-memory presets; battle mode is read-only confirmation. Esc closes slot/preset popovers before closing the full panel.
-2026-06-23 party config persistence: added game.partyEquipmentById, game.partyLoadoutById, and game.equipmentPresetsById. Equipment/skill changes made from the equipment screen are copied to live units when present and reapplied to freshly-created party members at battle start.
-2026-06-23 equipment picker icons: equipment/skill/passive candidate pickers now show compact icon grids instead of long horizontal detail rows. Hovering an icon shows a detail tooltip; clicking an icon equips it in town mode. Clicking the equipment-screen background outside the picker/preset popover closes that small window.
-2026-06-23 equipment picker equipped badge: equipment/skill/passive picker icons remain visible even when already equipped. Already-equipped candidates show a small E badge at the icon's top-right; the currently selected slot also keeps its selected highlight.
-2026-06-23 equipment skill slot layout: moved the equipment screen's equipped skill slots into the whitespace below the central character art so they remain visible above the lower picker popover. Skill slots now include locked passive/normal attack/ultimate display slots plus configurable active slots. Normal attack is excluded from active-skill picker candidates and is preserved when saving loadouts.
-2026-06-23 ultimate loadout correction: ultimate is now a required-but-changeable loadout slot. Loadouts persist an `ultimate` key, the equipment screen opens a dedicated ultimate picker from the 忁Eslot, normal active skill candidates exclude ultimate-category skills, and battle skill lists/gauges read the equipped ultimate instead of assuming fixed `ult`.
-2026-06-23 equipment active skill swap: selecting an already-equipped active skill from a skill-slot picker now swaps it with the target slot instead of deleting/replacing the previous slot contents. Selecting it onto an empty tail slot moves it to the compacted tail because loadouts do not store empty holes.
-2026-06-23 picker same-selection unequip: selecting the same active skill already in the target slot now unequips that skill. Selecting the same item already in an optional equipment slot also unequips it. Required slots such as weapon, plus passive and ultimate slots, remain non-removable.
-2026-06-23 equipment skill weapon conditions: memo.xlsx 忁E��武器 is now represented on implemented skill data as requiredWeapons/requiredWeaponItemIds. Equipment skill tooltips show 条件. Active-skill candidate grids include skills whose required weapon types overlap the viewed character's possible weapon types; candidates whose current weapon does not satisfy the requirement show a red X and cannot be selected. E badges are green for the viewed character and orange when equipped by another character. Added Arjuna aliases for Sushia fire/bomb and minimal player cast handling for those two skills.
-2026-06-23 orange-E active skill transfer: trying to equip an active skill that is currently equipped by another character now opens an equipment-panel confirmation dialog. No/background/Esc closes the dialog and picker without changes. Yes removes the matching skill identity from the previous character's active loadout, then equips it on the viewed character.
-2026-06-23 preset edit/delete controls: saved equipment presets now show a pencil icon to the left of 読込 for renaming through the existing preset name field, and a trash icon to the right of 読込 for deleting the preset. While renaming, the top preset action button changes to 名前変更.
-2026-06-23 equipment skill grid: equipment screen skill slots use a wider fixed grid. Row 1 centers passive and ultimate in columns 2/4, row 2 is normal attack plus skill slots 1-4, and Arjuna-only row 3 is skill slots 5-9. Non-Arjuna characters hide the third row.
-2026-06-23 equipment slot spacing: moved the side armor slots closer to the character art and slightly narrowed slot width so the weapon slot no longer overlaps the lower-left armor slot on the equipment screen.
-2026-06-23 Sushia support skills: fixed equipped Heal/Shelt aliases not working in battle by adding AI support candidates, support ally intents, and generic party heal/shield casts that use the acting unit's MP/CD/stats.
-2026-06-23 Sushia support targeting simplification: support skills are no longer HP/shield-priority actions. Heal/Shelt join the normal AI candidate pool, and ally-target support picks a completely random living party member including self.
-2026-06-23 party AI skill dispatch: moved companion skill choice/execution toward data-driven handling. AI now reads equipped active skills for any companion and dispatches by skill properties (heal, shield, projectile, fan, jump area, self area, target area, single-target line) instead of character-id/key-only branches.
-2026-06-23 Rihas skill rename: changed former 台地めE揺れよ!/quake/daiti_wave to ランウェーチEwith ID/key lan_wave. Also aligned Rihas normal attack display/reference ID to memo.xlsx huriharai while keeping internal normal attack slot key as attack. Updated Rihas default loadout and current specs.
-2026-06-23 settings tooltip description toggle: added Settings -> Game -> 詳細説明文の適用. Default is OFF/simple; ON sets game.settings.tooltipDescriptionMode="detail". Equipment skill/passive tooltips now follow the same mode as status tooltips.
-2026-06-23 focus command skill: Added Arjuna skill take_aim/フォーカス from memo.xlsx row 23. It targets one enemy within 550px, sets the party priority target for 20 seconds, then clears automatically or when the target dies. Removed free left-click enemy priority targeting so the behavior is now available through the equipped skill only.
-2026-06-23 story advance input: Town story dialogue now advances only with E. Space/Enter and left-click no longer advance dialogue, and the dialogue prompt now displays E only.
-2026-06-23 interact unification: Town dialogue advance is now routed through interactTown(), so future keybind settings can use one フィールチEインタラクチEbinding for both normal interaction and advancing dialogue.
-2026-06-23 keybind settings: Added data/keybinds.js and Settings -> 操佁E Controls are edited as a draft, can be saved/restored/reset to defaults, persist in localStorage, and reject conflicts where common overlaps anything or same-section actions overlap. The controls list scrolls with the mouse wheel. Keyboard and mouse buttons 0-4 are supported, including Mouse4/Mouse5 side buttons. Field dialogue/interact, menu/back, battle skill slots, item slots, page toggle, fire/cancel, and all four ultimates now read from keybind settings; town/battle HUD labels and battle guide text update from the current bindings.
-2026-06-23 system menu scrolling: Generalized mouse-wheel scrolling beyond keybind settings. Generic full panels now track panelScroll/panelScrollMax, 持ち物確誁Euses a scrollable list for current battle item slots and equipment data, and equipment picker candidate grids now render all equipment/active/passive/ultimate candidates in a clipped scrollable grid instead of truncating to visible slots.
-2026-06-23 keybind self-check follow-up: メニュー開閉/戻めEnow rejects left-click (mouse:0) so menu UI clicks cannot be swallowed by the back/menu action. normalizeKeybinds also falls back to Esc if an old/manual saved binding tries to set common.menuBack to mouse:0. Settings -> Game now uses its own scroll state (gameScroll/gameScrollMax), matching the controls tab for future settings growth. 持ち物確誁Eremains a temporary inventory/list view until a real possession system exists.
-2026-06-24 equipment tooltip formula display: Equipment screen skill/passive tooltips now replace the memo placeholder `(弁E値)` with formula=value text calculated from the currently viewed character's stats. This uses the same formula handling as status/detail tooltips.
-2026-06-24 equipment tooltip status references: Equipment screen skill/passive tooltips now append related status explanations using the same statusIds/quoted-status-name lookup as battle HUD skill tooltips. The equipment tooltip line cap now scales with viewport height instead of hard-clipping to 8 lines so appended status notes such as 燁E��/凍絁Eremain visible.
-2026-06-24 shared tooltip text helper: Added ui/tooltipText.js and load it before both statusRenderer and renderer. Battle HUD tooltips and equipment-screen tooltips now share the same description selection, `(弁E値)` formula replacement, and related-status lookup logic. Screen-specific lines such as equipment conditions and battle MP/CD/gauge still remain in their owning renderers.
-2026-06-24 character item slots: Temporary battle items now use one item slot per character. Slot order is Ulpes/Rihas/Sushia/Arjuna, with default keys C/V/B/N and a visible owner name under each battle HUD item slot. Added partyItemById and itemSystem helpers for character item get/set/clear; legacy first potion migrates to Ulpes and new games seed Ulpes with Potion x3. Equipment screen now shows an アイチE�� slot above the weapon slot, opens an item picker, and includes item selection in equipment presets. Actual richer item-use behavior remains for later; the existing temporary potion use is left in place.
-2026-06-24 item use behavior: Battle item keys now queue item use on that slot's owner instead of entering Arjuna hover-target aim. Allies reserve the item for their next action; once action CD is ready they clear normal AI intent, move until at least 200 battle px from the nearest enemy, then spend the item's drink/eat cast time. Arjuna starts the item cast in place immediately if free. Item cast completion consumes the item, applies the temporary potion self-heal, and starts item reuse CD; interruption by death/freeze/forced player cast cancel consumes the item and starts reuse CD with no effect. Temporary potion currently has cast=1s and reuseCd=8s.
-2026-06-24 wall-slide AI movement: Battle AI movement now uses a shared wall-slide move helper for party/enemy preferred-range movement and party telegraph avoidance. When a unit tries to move into the battle bounds, the blocked component is removed and a stable tangent slide direction is used instead, reducing jitter at walls while preserving avoidance/range behavior.
-2026-06-25 preferred-range jitter fix: Party preferred-range movement now keeps a sticky movement target instead of switching to the absolute nearest enemy every frame. Normal range keeping also uses aggregated close-enemy pressure, so when a unit is between multiple enemies and escape directions cancel out it stops forcing movement instead of oscillating. Preferred range is treated as a soft goal with a wider dead zone; explicit skill approach and telegraph avoidance still override it.
-2026-07-02 memo.xlsx skill duration meaning: 味方スキル/敵スキルの「効果時間」�Eスキル本体�E持続時間を表す。状態異常・バフ欁E��書かれる燃焼/凍絁E強化などの持続時間とは別扱ぁE��侁E アイスワールド�E効果時閁E秒�E、アイスワールド�EフィールチE篁E��効果そのも�EぁE秒間続くとぁE��意味で、凍結などの状態時間とは刁E��て実裁E�E説明する、E
-2026-07-02 current controls correction: Default battle skill keys are Q/W/E/R/T for skill slots 1-5, Space for skill/item page toggle, Mouse0 for fire/confirm, Mouse2 for aim cancel, C/V/B/N for the four character item slots, and 1/2/3/4 for Ulpes/Rihas/Sushia/Arjuna ultimates. Movement keybinds are field/town movement only; battle movement is AI-controlled.
-2026-07-02 current mood correction: Natural mood drift is HP >=85% +0.5/s, >=70% +0.2/s, >=60% +0, >=50% -0.5/s, >=40% -0.8/s, >=30% -1.0/s, >=20% -1.5/s, >=10% -3.0/s, <10% -5.0/s. Positive mood gains at mood >=90 are damped by 0.5. Enemy-hit mood gain is based on enemy HP ratio damage with per-hit cap 2 and per-action cap 6; enemy kill bonus still uses the same per-action cap. Damage-taken mood loss uses actual immediate HP damage after delay/shield handling plus base loss 0.2.
-2026-07-02 current default skills correction: Arjuna/Finald default active loadout is ["attack", "heal", "shield", "commandAttack", "commandDefend"]. Focus/take_aim, commandAttackAll, and commandDefendAll are not default-owned/equipped unless later obtained. Ulpes/Rihas/Sushia default active loadouts are currently ["attack"] only, with passive and ultimate always present.
-2026-07-02 current sprite correction: Town walking sprites now load img/char/<character>_img/walk direction/frame images for Sushia, Ulpes, Rihas, and Arjuna. Arjuna uses arjuna_man_img or arjuna_woman_img based on the selected appearance. Equipment screen character art uses default/front.png for Arjuna male/female, Ulpes, Rihas, and Sushia.
-2026-07-02 dot damage concept: memo.xlsx skill damage types ドッチE ドット物琁E and ドット魔況Eare treated as DoT damage. DoT damage uses the normal damage calculation for its physical/magic type, but cannot be guarded and does not roll critical hits. Burn status ticks are ドット魔況Edamage. Rihas Painless delayed damage is marked as DoT-style direct HP damage. Future sleep/眠めEwake-up checks should ignore damage when options.dotDamage is true.
-2026-07-02 focus current spec: Focus/take_aim lasts 15s. On activation, each non-Finald party member with mood >=70 or <=30 rolls an ignore check; ignored members do not use the focus target for movement or attack target selection for that focus. Focus ignore chance is 70/60/50/40/30/20% by skill level 0-5. The old focus damage-taken upgrade is disabled. Other command ignore chances remain 75/65/55/45/35/25% by level 0-5.
-2026-07-02 mood damage-loss reference: Damage-taken mood loss now uses the unit's current maxHp as the reference instead of moodBaseHp/moodReferenceHpById. This makes the proportional term equivalent to actual HP damage * 0.0495 * 1.2 before the flat 0.2 and command moodLoss multiplier. Heal mood gain still uses moodReferenceHp.
-2026-07-02 shield mood gain: Immediate mood gain from receiving shields now uses actual added shield durability with the same rate as heal mood gain: addedShield * 0.1104 * 1.2 before normal mood gain modifiers. It does not receive the quick-heal +2 after recent damage. Shelt no longer has a fixed skill.moodGain value; shield upkeep mood gain (+0.3/s while shield remains) is unchanged.
-2026-07-02 command bias auto disabled: Mood-driven automatic command-bias changes are currently disabled. applyMoodCommandBiasAuto is intentionally a no-op, so commandBias changes only through explicit command skills/UI-style changes. Older notes about mood-based auto shifts are historical until this is re-enabled.
-2026-07-02 status carryover prep: data/statuses.js now has carryover flags for current statuses. Battle result -> town saves only active party statuses whose status definition has carryover/引き継ぎ enabled, and the next battle restores only those statuses. Current status data sets all carryover flags to false, so all statuses still clear between battles. Inn full recovery clears saved carried statuses too.
-2026-07-02 new status specs: Added state support for memo.xlsx 状慁Erows debuff_sleep/睡眠 and Injury/負傷. Sleep is an action debuff: affected units cannot act, battle action CD for normal attacks is paused like freeze, guard/item/ultimate/manual skill actions are blocked, and non-DoT damage clears sleep while DoT damage does not. Injury is a stat debuff: moveSpeed -10% and defense -10%. Both statuses have UI icons/tooltips, timers, carryover support flags, and are currently carryover=false.
-2026-07-02 new enemy data/skills: Added memo.xlsx enemy defs corner_rabbit/チE��ウサギ, bud_alraune/つぼみのアルラウチE and shadow_wolf/シャドウウルチEto data/enemies.js. Added enemy skills d_enemy_attack, rush, multi_biting, vine_punch, sleep_scent, pollen_spraying, biting, shadow_dash, and throat_hunt. Custom enemy loadouts read each enemy's skills list; corner_rabbit targets the lowest-current-HP party member, shadow_wolf pack members share a target when multiple are present, sleep_scent applies 睡眠, pollen_spraying is ドット魔況Earea damage, biting applies 負傷, and shadow_dash grants its temporary move/action speed buff.
-2026-07-02 player taunt control: If Finald/Arjuna receives an allied taunt/forcedTarget, battle controls are temporarily locked and the party AI controls Finald until tauntTimer ends. During forced-hostile taunt, party AI uses the same queue/random selection behavior as other party AI and only command/instruction skills are excluded from candidates. The forced target overrides normal targeting; offensive skills hit the forced target, and support skills can also resolve on a forced target so future enemy/ally inversion-style effects can produce behavior such as healing an enemy. Menus/status open-close controls remain usable; battle skill/page/item/ultimate inputs are ignored while control is locked.
-2026-07-03 tile map foundation (historical): Initially added tile-map support as a future base. This was later connected to the town scene and split on 2026-07-15; current authoring uses map/tile.js for tile definitions and map/maps.js for map definitions, with world/tileMapSystem.js as the shared engine.
-2026-07-03 map debug setting (updated current): Settings -> Game -> mapDebugMode defaults OFF. It is now connected to tile-map rendering: when ON, townRenderer calls tileMapSystem.drawDebugGrid(ctx, map), using the map tileSize and Excel-like labels A1, B1, ..., Z1, AA1.
-2026-07-03 town facility page sizing: Item shop, weapon shop, and armor shop panels now use a near-fullscreen facility page rect instead of capped mid-size windows, leaving only a small margin around the viewport. Inn remains a compact confirmation panel because it has no long item/equipment list.
-2026-07-03 weapon type assignment: One-handed sword is now usable by Ulpes/Rihas, while two-handed sword is Ulpes-only. Ulpes Sword/default_u is a two-handed sword. Ulpes Slash/heroSlash and Ulpes ultimate 真っ二つ require two-handed sword.
-2026-07-03 weapon type naming: The music-instrument weapon type is named 楽器 in equipment data, skill requiredWeapons, AI range-role checks, and design notes.
-2026-07-03 player self-centered area skills: Player-command self-centered range skills such as 攻撁E��形/防御陣形 now enter aim mode. Their preview circle follows the cursor. Confirming queues Arjuna to move to the clicked point, then the skill fires centered on Arjuna's position after arrival. If no valid allies are in range after arrival, the skill shows 篁E��夁Eand is not consumed.
-2026-07-03 player skill move preview: While Arjuna is aiming a player skill, if using it would require movement, the battle preview draws a dashed arrow from Arjuna to the predicted stop point. Target/point skills stop at the first point that enters range; self-centered area skills point to the clicked cursor destination.
-2026-07-03 battle spatial scale removed: battleSpatialScale is now 1.0. Canvas/view size is unchanged, but battle px values are no longer multiplied by 0.9, so skill ranges/radii/projectile speeds and other battlePx/px-scaled values match the data/Excel numbers directly.
-2026-07-03 accessory display naming reverted: The displayed equipment slot/category name is アクセサリ again. Internal slot id remains accessory.
-2026-07-06 map folder handoff (updated current): Map/tile authoring data is intentionally centralized under map/. Map collaborators and future AIs should edit map/tile.js for tile definitions, map/maps.js for map definitions, and map/img_tile/ for tile images. world/tileMapSystem.js remains the shared engine/helper and should not be edited for normal map data work. index.html now loads ./map/tile.js and ./map/maps.js. The town scene is connected to the tile-map system.
-2026-07-06 image folder handoff: Character art/sprites were reorganized under img/char/. UI image loading for equipment art, town walking sprites, and battle walking sprites now points to img/char/<character>_img/.... Map tile images should not be mixed into img/char; use map/img_tile/ for tiles.
-2026-07-06 bud alraune equipment/materials: Added alraune_leaf/alraune_ivy/alraune_bud materials, bud_alraune equipment series, 7 bud_alraune weapons, 5 armor pieces, and bud_alraune_pendant. Bud alraune equipment uses memo.xlsx lowercase IDs, series bud_alraune, and existing weapon normal attacks from the horn rabbit weapon set. Enemy/quest role ID was normalized from bud_Alraune to bud_alraune, and bud_alraune drops now include 40G, two independent alraune_leaf 70% rolls, alraune_ivy 80%, alraune_bud 40%, and 力�E結晶(D) 70%.
-2026-07-08 enemy telegraph policy: Do not add enemy prediction lines/areas automatically just because a skill has cast time or radius. Only show an enemy telegraph when memo.xlsx 備老Eexplicitly calls for a warning/prediction display, and represent that with skill.showTelegraph / warningTelegraph / telegraph. Generic Flostiny enemyArea skills such as 恵みの雨, 木漏れ日, and 絡み合う根 keep their cast delay but hide the telegraph by default.
-2026-07-08 poison/status icon fix: Poison/debuff_poison is treated as an active durationless status icon with high display priority, so it stays visible even when multiple status icons overflow. Durationless icons now show "解除まで継綁E in tooltips. Confirmed all data/statuses.js entries and all skill statusIds currently have status icon branches.
-2026-07-13 map current workspace (corrected): The active map work directory is C:\VScode\healer-game\map. Map-related authoring should stay inside this folder. Older map notes or temporary files in Desktop\map or Downloads are not part of the active workspace.
-2026-07-13 map editor workflow (corrected): Tile placement work is mainly done in map/map-editor.html. Browser-side temporary save is only for draft editing and is not the final source of truth. Final map data must be exported and applied to map/maps.js under window.HEALER_TILE_MAPS. map-preview.html was retired and moved aside as map-preview.old.html.
-2026-07-13 map tile policy: tileSize is 48. Repeating base tiles such as grass, soil, water, and stone should mainly use low-contrast seamless assets from img_tile/base_seamless. Stronger accents such as flowers, dark grass, and cracked stone should be used as variation or highlight tiles. Border blending should be handled by adjacent tile placement and cached composition where needed.
-2026-07-13 startTown01 (historical, updated current): Added startTown01 as the formal Start Town map. Current source is map/maps.js. Current クラク村 size is width 35, height 19. Older notes that say 15x8 or 20x19 are historical only.
-2026-07-13 startTown01 buildings: Building images from C:\Users\�א��ĕ�\Documents\�Q�[��\assets\town_objects_front were imported into map/img_tile/town_objects_front as transparent 144x96 PNG assets and defined as 3x2 object tiles. Tile IDs: armorShopFront, weaponShopFront, innFront, requestOfficeFront, itemShopFront.
-2026-07-13 startTown01 building placement: Object placement uses armor shop at (4,0), weapon shop at (8,0), inn at (3,3), request office at (6,3), and item shop at (9,3). Matching buildingArea events were also aligned to the same 3x2 size and tileId values.
-2026-07-14 map editor usability (corrected current path): Updated map/map-editor.html to make new-map flow clearer. Renamed labels to `New Map`, `Export JS`, and `Save Record JSON`, and added an on-screen status note showing whether the current map is an existing maps.js map or a browser-only unsaved new map.
-2026-07-14 startTown01 sync (corrected current path): Applied the attached Start Town data as `startTown01`; current source is map/maps.js. Fixed the broken closing syntax and normalized the map name, layer names, and building event names to readable text.
-2026-07-14 forest maps (corrected current path): Updated `forestTest01` with the revised layout and added `forest2`; current source is map/maps.js. Normalized display names and layer names to readable text.
-2026-07-14 flower map (corrected current path): Added `flower` as a new map; current source is map/maps.js. Set the display name to `Flower Map` and normalized all layer names to readable text.
-
-
-
-
-2026-07-15 tile map split: map/tileMaps.js was split into map/tile.js (tile definitions) and map/maps.js (map definitions). index.html and map/map-editor.html now load both files. Future map collaborators should edit tile properties in tile.js and map layouts/events in maps.js. world/tileMapSystem.js remains the shared engine.
-2026-07-16 start town tile map applied: The game town scene now uses map/maps.js startTown01 through world/tileMapSystem.js for rendering. main.js derives town width/height from the tile map, townController rebuilds town buildings from buildingArea events and uses tile passability for movement blocking, and townRenderer draws the tile map plus map debug grid when mapDebugMode is ON. The old hand-drawn town remains only as a fallback when no tile map is available.
-2026-07-16 tile map movement/camera (updated 2026-07-20): When a town scene has a tile map, player movement is grid-based: each input reserves movement to the next tile center and continuous key hold chains one tile at a time. The renderer camera clamps at map edges, so the lead player can move away from screen center near edges; small maps are centered and only the outside screen area is filled from cached layered marginTiles, with old single marginTile maps still supported. Non-tile-map fallback towns keep the old pixel movement and fit-to-view rendering.
-2026-07-16 tile map render parity fix: world/tileMapSystem.js now reads editor-exported flat layer tile arrays with row * width + col, while still supporting 2D arrays and row strings. It also preserves object tile entries like { tileId, rotate } for drawing so game rendering matches map/map-editor.html more closely.
-2026-07-17 debug map switching (updated current): map/maps.js exposes HEALER_DEBUG_TILE_MAPS for temporary in-game map checks. Settings -> Game -> map debug mode ON shows the registered map selector. Current entries are startTown01, kuraku_forest_1, kuraku_forest_2, kuraku_forest_3, kuraku_forest_4, and new_map1.
-2026-07-17 map debug settings render-state fix: Toggling Settings -> Game -> map debug mode could leave canvas transform/clip state stuck after debug grid/settings clipping, making the map render inside the settings panel and blocking usable UI. ui/renderer.js now resets the canvas frame state at the start of draw and wraps settings panel clipping in try/finally; townRenderer wraps the town-map transform in try/finally.
-2026-07-17 headbutt defense ignore: memo.xlsx 味方スキル row headbutt changed 頭突き from fixed damage to physical damage with defenseIgnoreRatio 0.2. Defense ignore is implemented as ignoring only the portion above the 100 defense baseline, so 100 stays 100, 120 becomes 116, and 200 becomes 180 before the existing defense multiplier formula.
-2026-07-17 map editor coordinate labels: map/map-editor.html now has a display toggle for tile coordinate labels using the same A1/AA1 style as the in-game map debug grid. Labels are drawn in a non-interactive overlay above tile images so painting still works.
-2026-07-17 map transfer events (updated current): Added town step-based mapTransfer support. Transfer target coordinates are stored as zero-based targetCol/targetRow in map/maps.js. Current route/event truth is map/maps.js; older forestTest01/forest2/flower transfer notes are historical.
-2026-07-20 map editor resize/duplicate tools: map/map-editor.html now preserves existing tile coordinates when width/height changes, expanding to the right/bottom instead of reflowing flat tile arrays through the new width. Added duplicate tool: drag to select a rectangle across all layers, then paste it with left click once or right click repeatedly.
-2026-07-20 layered margin tile: map/map-editor.html now stores the margin filler as one layered cell via marginTiles, so ground/terrain/object/event entries can be stacked like a normal map tile. world/tileMapSystem.js draws layered marginTiles while still supporting old single marginTile maps.
-2026-07-20 map editor undo redo: map/map-editor.html now has undo/redo buttons near zoom controls. It stores up to 20 map-edit snapshots for paint/erase/fill/range fill/duplicate paste/margin tile/layer clear/resize edits; map load and new-map actions reset history.
-2026-07-20 map editor cursor jitter fix: map/map-editor.html cursor/range/duplicate overlays use border-box sizing so hover frames do not expand the scrollable map area by their border width and make the stage appear to wobble while moving the cursor.
-2026-07-20 start town map replaced (updated current): map/maps.js startTown01 uses the latest クラク村 map while keeping the startTown01 id for existing game references. Current size is 35x19, marginTiles are included, buildingArea events are aligned to visible building tile positions, and transfer/event truth is map/maps.js.
-2026-07-20 town tile render order: ui/renderers/townRenderer.js draws tile-map towns as default/ground first, then depth-sorts town characters with terrain/object/event foreground tiles by their lower drawn Y position. Characters below an object draw above it; characters above an object draw behind it. Multi-tile object images use their drawn image bottom, not just the base 1-tile cell.
-2026-07-20 town camera margin cache: ui/renderers/townRenderer.js now clamps tile-map town cameras to map bounds, centers maps smaller than the viewport, and asks world/tileMapSystem.js to draw only outside-map margin tiles via cache. world/townController.js clears margin caches on map switches.
-2026-07-20 map editor drag autoscroll: map/map-editor.html now auto-scrolls the central map viewport while paint/erase/range/duplicate drag operations are held near the viewport edge. The active cursor cell is recalculated after auto-scroll so drag painting and rectangle previews continue into newly revealed tiles.
-2026-08-24 enemy image organization: Reorganized img/entiti image folders into lowercase underscore enemy IDs. Matching IDs now use the same names as armor relationships where applicable, including cave_bat, cave_spider, cave_scorpion, cave_lizard, horn_boar, goblin_scout, mushroom_monster, lantern_wisp, city_lancer, and skeleton_swordsman. Other enemy folders also use the same ID format, such as giant_rat, dark_mage, crystal_slime, and shadow_hound. Image files were moved only for organization; no code or map data was changed.
-2026-08-24 armor image organization: Reorganized 77 armor images under img/防具image by enemy-themed series. The current 13 series folders use enemy IDs from armor_relationships.md: blade_claw, cave_bat, cave_ghost, cave_scorpion, city_lancer, goblin_scout, horn_boar, lantern_wisp, mushroom_monster, sewer_ooze, skeleton_swordsman, stone_gargoyle, and vine_doll. Each series retains its part folders (頭防具, 胴防具, 手防具, 足防具, 一式). No gameplay code or map data was changed.
-
-2026-08-25 armor image completion and overwrite policy: Completed missing armor parts for cave_scorpion, stone_gargoyle, city_lancer, sewer_ooze, lantern_wisp, and goblin_scout under img/防具image. Corrected existing role-equivalent or misfiled PNGs by overwriting them in place; only genuinely missing parts received new files. Removed the temporary duplicate revision files and verified all six series have full/head/body/hands/feet categories with no added_20260825 duplicates. New generated assets use transparent PNG backgrounds. Future corrections to an existing armor asset should overwrite the corresponding existing file instead of creating a revision copy. No gameplay code or map data was changed.
-
-2026-08-26 self-check cleanup: Removed stale `flower` from `HEALER_DEBUG_TILE_MAPS`; current debug map IDs are startTown01, kuraku_forest_1, kuraku_forest_2, kuraku_forest_3, kuraku_forest_4, and otoru_village. Story/free Flostiny quest destination data now consistently points to `kuraku_forest_3` (花畑), matching the fixed M3 symbol position; the tutorial horn-rabbit quest uses 西クラク森 naming. Enemy first-skill AI now prioritizes a fixed first skill only when currently reachable/usable; if it cannot be used this tick, normal queue selection can proceed. Common active/ultimate skill views remain available under each owner for compatibility, but their data fields are backed by `HEALER_COMMON_SKILL_DATA` via live accessors rather than copied skill bodies.
-
-2026-08-27 otoru village connection: `otoru_village` is the current オトール村 map. Its facilities are defined in map/maps.js by buildingArea + facilityInteraction events matched to the placed building tiles: weapon/armor/inn/guild/item. Map transfer connects オトール村 T19 (zero-based col 19, row 18) to 北クラク森 R1 (col 17, row 0), and 北クラク森 R1 back to オトール村 T19.
-
-
-2026-08-25 armor folder mixed-series correction: Audited all 130 PNGs under img/防具image by monster folder and visual theme. Corrected mixed assets in cave_bat and city_lancer by overwriting the existing misfiled PNGs while preserving their filenames. Separated the cave_spider set from cave_bat into a new cave_spider folder with transparent head, two body variants, hands, and feet assets. Cave_bat now contains bat-themed equipment only; the plant-themed city_lancer head entry was overwritten with the correct lancer helmet. Verified all separated assets use alpha transparency and cross-monster exact-duplicate groups are zero. No gameplay code or map data was changed.
-
-
-2026-08-25 cave_bat duplicate cleanup: Removed 11 byte-identical duplicate PNGs from img/防具image/cave_bat after the mixed-series correction. Kept one canonical copy for each visual asset. The folder now contains 9 unique transparent armor images: 2 head, 3 body, 2 hands, and 2 feet. Verified duplicate hash groups are zero. No other armor folders, gameplay code, or map data were changed.
-
-
-2026-08-25 full armor duplicate audit: Rechecked all armor PNGs under img/防具image after cave_bat cleanup. Found and removed five remaining byte-identical duplicates: three in cave_scorpion, one in city_lancer, and one in goblin_scout. The current library contains 119 PNGs across 18 monster folders. Verified within-folder duplicate hash groups = 0 and cross-monster duplicate hash groups = 0. Visual folder review found no additional clearly mixed enemy armor themes beyond the previously corrected cave_bat/cave_spider/city_lancer cases. No gameplay code or map data was changed.
-
+## 現在の注意点
+- `memo.xlsx` の更新が多い。新データ適用時はID、表示名、説明、必要武器、ドロップ、セット効果、状態IDをまとめて確認する。
+- 同じ見た目や同じ名前の装備でも、所持品では別インスタンスとして扱う。
+- 依頼、自然湧き、ストーリーイベントは互いに似ているが管理が違う。即戦闘の古いフリー依頼仕様には戻さない。
+- チュートリアル戦闘は通常戦闘に近い動きを使いながら、必要箇所だけ停止/入力制限する八百長構成。
+- 予兆線、AI行動順、スキル効果時間、状態引き継ぎは過去に何度も変更されているので、古い記述を見つけたら現行コードと `memo.xlsx` を優先する。

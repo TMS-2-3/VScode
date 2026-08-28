@@ -19,6 +19,32 @@
           { speaker: "村人", text: "組み合わせによっては特殊な効果も出ることもあるんだ" },
         ],
       },
+      {
+        id: "otoru_villager_lure_001",
+        mapId: "otoru_village",
+        name: "村人",
+        label: "村",
+        color: "#f7fff6",
+        cell: "N15",
+        facing: "right",
+        wander: { enabled: true, interval: 2 },
+        dialogue: [
+          { speaker: "村人", text: "危険になるけど何体もの魔物をおびき寄せてから戦えばまとめて倒すことができるよ" },
+        ],
+      },
+      {
+        id: "otoru_villager_upgrade_001",
+        mapId: "otoru_village",
+        name: "村人",
+        label: "村",
+        color: "#f7fff6",
+        cell: "W16",
+        facing: "left",
+        wander: { enabled: true, interval: 2 },
+        dialogue: [
+          { speaker: "村人", text: "勝てない魔物が出てきたら装備やスキルの見直しや強化をすると勝てるかも" },
+        ],
+      },
       /*
       {
         id: "kuraku_villager_001",
