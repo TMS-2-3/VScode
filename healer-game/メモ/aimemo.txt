@@ -205,3 +205,7 @@ AI用メモ
 - 依頼、自然湧き、ストーリーイベントは互いに似ているが管理が違う。即戦闘の古いフリー依頼仕様には戻さない。
 - チュートリアル戦闘は通常戦闘に近い動きを使いながら、必要箇所だけ停止/入力制限する八百長構成。
 - 予兆線、AI行動順、スキル効果時間、状態引き継ぎは過去に何度も変更されているので、古い記述を見つけたら現行コードと `memo.xlsx` を優先する。
+
+2026-09-01 waist armor assets: Added 腰防具 folders and 22 transparent waist armor PNGs across all 18 enemy-derived armor series. Added female/male waist variants for bud_alraune, horn_rabbit, hurostieni, and shadow_hound; added one waist asset for each remaining series. Verified all 18 waist folders are present, all 22 PNGs use true alpha transparency, and there are no duplicate SHA-256 hash groups. Existing same-name waist assets are overwritten as requested. No gameplay code or map data was changed.
+
+2026-09-01 armor image folder flattening: In img/防具image, moved all 141 armor image files from the part folders into their corresponding 18 enemy-themed folders, then removed 101 empty part folders (一式, 頭防具, 胴防具, 手防具, 足防具, 腰防具). Verified that only the 18 enemy folders remain, there are no nested folders, all 141 files are directly under an enemy folder, and there are no duplicate SHA-256 hash groups. No armor images, gameplay code, or map data were deleted or changed.
