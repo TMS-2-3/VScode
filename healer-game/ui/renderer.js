@@ -2366,6 +2366,9 @@
   }
 
   function hasCurrentSavePoint() {
+    if (saveSystem && typeof saveSystem.hasCurrentSavePoint === "function") {
+      return saveSystem.hasCurrentSavePoint();
+    }
     const saveId = game.currentSaveId;
     if (!saveId || !saveSystem || typeof saveSystem.listSaves !== "function") {
       return false;
@@ -2374,6 +2377,9 @@
   }
 
   function getCurrentSavePointName() {
+    if (saveSystem && typeof saveSystem.getCurrentSavePointName === "function") {
+      return saveSystem.getCurrentSavePointName();
+    }
     const saveId = game.currentSaveId;
     if (!saveId || !saveSystem || typeof saveSystem.listSaves !== "function") {
       return "なし";

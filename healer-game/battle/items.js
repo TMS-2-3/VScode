@@ -843,7 +843,7 @@
         attack: "攻撃力",
         magic: "魔力",
         defense: "防御力",
-        magicDefense: "魔防",
+        magicDefense: "魔法防御",
         maxHp: "HP",
         maxMp: "MP",
       };

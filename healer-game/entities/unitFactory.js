@@ -5,7 +5,6 @@
     const {
       CHARACTER_DEFS,
       ENEMY_DEFS,
-      MOOD_REFERENCE_HP_BY_ID,
       MOOD_INITIAL,
       DEFAULT_MP_REGEN_RATE,
       BASE_CRIT_CHANCE,
@@ -78,7 +77,7 @@
         },
         maxHp: baseMaxHp,
         hp: baseMaxHp,
-        moodBaseHp: options.moodBaseHp || MOOD_REFERENCE_HP_BY_ID[options.id] || baseMaxHp,
+        moodBaseHp: baseMaxHp,
         maxMp: baseMaxMp,
         mp: baseMaxMp,
         hpRegenRate: baseHpRegenRate,

@@ -80,12 +80,6 @@
     friendlyFireHighEffectDurationMultiplier: 1,
     autoUltimateEnemyDamageMultiplier: 0.6,
     autoUltimateEnemyEffectMultiplier: 0.6,
-    moodReferenceHpById: {
-      ulpes: 190,
-      rihas: 230,
-      sushia: 135,
-    },
-
     telegraphAvoidPadding: 18,
     telegraphAvoidSpeedMult: 1.15,
 

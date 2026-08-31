@@ -610,11 +610,12 @@
     }
 
     function hasCurrentSavePoint() {
-      const saveId = game.currentSaveId;
-      if (!saveId || !saveSystem || typeof saveSystem.listSaves !== "function") {
-        return false;
+      if (saveSystem && typeof saveSystem.hasCurrentSavePoint === "function") {
+        return saveSystem.hasCurrentSavePoint();
       }
-      return saveSystem.listSaves().some((entry) => entry && entry.id === saveId);
+      const saveId = game.currentSaveId;
+      return Boolean(saveId && saveSystem && typeof saveSystem.listSaves === "function"
+        && saveSystem.listSaves().some((entry) => entry && entry.id === saveId));
     }
 
     function restartFromCurrentSavePoint() {
@@ -622,13 +623,17 @@
         return;
       }
       const ui = getDefeatUi();
-      if (!hasCurrentSavePoint() || !saveSystem || typeof saveSystem.loadSave !== "function") {
+      if (!hasCurrentSavePoint() || !saveSystem) {
         ui.mode = "main";
         ui.message = "利用できるセーブ地点がありません。";
         clearMovementKeys();
         return;
       }
-      const result = saveSystem.loadSave(game.currentSaveId);
+      const result = typeof saveSystem.loadCurrentSavePoint === "function"
+        ? saveSystem.loadCurrentSavePoint()
+        : typeof saveSystem.loadSave === "function"
+          ? saveSystem.loadSave(game.currentSaveId)
+          : { ok: false, message: "セーブ地点から再開できませんでした。" };
       if (!result || !result.ok) {
         ui.mode = "main";
         ui.message = result && result.message ? result.message : "セーブ地点から再開できませんでした。";

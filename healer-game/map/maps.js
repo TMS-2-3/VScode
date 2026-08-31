@@ -1154,8 +1154,8 @@
                     "width": 1,
                     "height": 2,
                     "targetMap": "kuraku_forest_1",
-                    "targetCol": 1,
-                    "targetRow": 3
+                    "targetCol": 2,
+                    "targetRow": 1
             }
     ],
   };
@@ -1284,7 +1284,7 @@
                     "name": "クラク森2へ",
                     "type": "mapTransfer",
                     "trigger": "step",
-                    "x": 24,
+                    "x": 11,
                     "y": 19,
                     "width": 1,
                     "height": 1,

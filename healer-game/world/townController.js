@@ -59,7 +59,6 @@
       getEquipmentBaseItemId,
     } = context;
 
-    const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const INN_REST_COST = 100;
     const TUTORIAL_STORY_QUEST_ID = "story_horn_rabbit_competition_001";
     const STORY_PATH_AHEAD_QUEST_ID = "story_path_ahead_001";
@@ -346,9 +345,7 @@
 
     function getPersistentHp(member) {
       const maxHp = Number.isFinite(member.maxHp) ? member.maxHp : member.hp;
-      const hp = member.dead || member.hp <= 0
-        ? maxHp * INCAPACITATED_HP_RECOVERY_RATIO
-        : member.hp;
+      const hp = member.dead || member.hp <= 0 ? 0 : member.hp;
       return clamp(hp, 0, maxHp);
     }
 
@@ -4818,7 +4815,7 @@
         hpRegenRate: "HP再生率",
         mpRegenRate: "MP再生率",
         castSpeed: "詠唱速度",
-        cooldownReduction: "クールタイム",
+        cooldownReduction: "スキル速度",
         actionSpeed: "行動速度",
         ultimateChargeRate: "ゲージ上昇率",
         moveSpeed: "移動速度",

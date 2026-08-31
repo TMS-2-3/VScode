@@ -18,6 +18,7 @@
     const SAVE_VERSION = 1;
     const SAVE_NAME_MAX_LENGTH = 24;
     let storageAvailable = null;
+    let currentFileSaveSnapshot = null;
 
     function canUseStorage() {
       if (storageAvailable !== null) {
@@ -220,6 +221,7 @@
         });
         writeIndex(index);
         game.currentSaveId = id;
+        currentFileSaveSnapshot = null;
         return { ok: true, id, name, savedAt: snapshot.savedAt, message: `${name} にセーブしました。` };
       } catch (error) {
         return { ok: false, message: "セーブに失敗しました。保存容量を確認してください。" };
@@ -251,6 +253,9 @@
         writeIndex(readIndex().filter((item) => item.id !== saveId));
         if (game.currentSaveId === saveId) {
           game.currentSaveId = null;
+        }
+        if (currentFileSaveSnapshot && currentFileSaveSnapshot.id === saveId) {
+          currentFileSaveSnapshot = null;
         }
         return { ok: true, message: `${entry.name || "セーブデータ"} を削除しました。` };
       } catch (error) {
@@ -377,6 +382,7 @@
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
       game.currentSaveId = null;
+      currentFileSaveSnapshot = null;
       game.defeatUi = null;
       assignObject(game.materialsById, {});
       assignObject(game.partyHpById, {});
@@ -545,7 +551,11 @@
       }
     }
 
-    function applySnapshot(snapshot, saveId) {
+    function rememberFileSaveSnapshot(snapshot) {
+      currentFileSaveSnapshot = clonePlain(snapshot, null);
+    }
+
+    function applySnapshot(snapshot, saveId, options = {}) {
       restoreProfile(snapshot.playerProfile);
       restoreGameStores(snapshot.game);
       restoreTown(snapshot.town);
@@ -554,6 +564,11 @@
       game.systemMenu.panel = null;
       game.systemMenu.confirm = null;
       game.currentSaveId = saveId;
+      if (options.rememberFileSnapshot) {
+        rememberFileSaveSnapshot(snapshot);
+      } else if (saveId) {
+        currentFileSaveSnapshot = null;
+      }
       game.encounterCutin = null;
       game.defeatUi = null;
       game.titleLoadOpen = false;
@@ -567,6 +582,42 @@
         return { ok: false, message: "セーブデータを読み込めませんでした。" };
       }
       return applySnapshot(snapshot, saveId);
+    }
+
+    function hasCurrentSavePoint() {
+      if (game.currentSaveId && readSave(game.currentSaveId)) {
+        return true;
+      }
+      return Boolean(currentFileSaveSnapshot);
+    }
+
+    function getCurrentSavePointName() {
+      if (game.currentSaveId) {
+        const entry = listSaves().find((item) => item && item.id === game.currentSaveId);
+        if (entry && entry.name) {
+          return entry.name;
+        }
+      }
+      if (currentFileSaveSnapshot) {
+        return currentFileSaveSnapshot.name || "ファイルセーブ";
+      }
+      return "なし";
+    }
+
+    function loadCurrentSavePoint() {
+      if (game.currentSaveId) {
+        const result = loadSave(game.currentSaveId);
+        if (result && result.ok) {
+          return result;
+        }
+      }
+      if (currentFileSaveSnapshot) {
+        const snapshot = clonePlain(currentFileSaveSnapshot, null);
+        if (snapshot) {
+          return applySnapshot(snapshot, null, { rememberFileSnapshot: true });
+        }
+      }
+      return { ok: false, message: "利用できるセーブ地点がありません。" };
     }
 
     function importFileText(text, options = {}) {
@@ -583,7 +634,7 @@
       const shouldRegister = options && options.register === true;
       const stored = shouldRegister ? storeImportedSnapshot(snapshot) : { ok: false };
       const registeredSaveId = shouldRegister && stored.ok ? snapshot.id : null;
-      const result = applySnapshot(snapshot, registeredSaveId);
+      const result = applySnapshot(snapshot, registeredSaveId, { rememberFileSnapshot: !registeredSaveId });
       if (!result.ok) {
         return result;
       }
@@ -615,6 +666,9 @@
       loadSave,
       createFileSave,
       importFileText,
+      hasCurrentSavePoint,
+      getCurrentSavePointName,
+      loadCurrentSavePoint,
       listSaves,
       normalizeSaveName,
       formatTimestamp,

@@ -198,7 +198,7 @@
     }
 
     function getMoodReferenceHp(unit) {
-      return Math.max(1, unit && (unit.moodBaseHp || unit.maxHp) || 1);
+      return Math.max(1, unit && unit.maxHp || 1);
     }
 
     function applyCommandMoodDelta(unit, amount) {

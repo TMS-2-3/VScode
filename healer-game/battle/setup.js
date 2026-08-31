@@ -31,17 +31,15 @@
       preloadBattleEnemySprites,
     } = context;
 
-    const INCAPACITATED_HP_RECOVERY_RATIO = 0.2;
     const BATTLE_START_ULTIMATE_RATIO = 0.5;
 
     function getCarriedHp(unit) {
       const savedHp = game.partyHpById && game.partyHpById[unit.id];
       const carriedDead = Boolean(game.partyDeadById && game.partyDeadById[unit.id]);
-      const minRecoveredHp = unit.maxHp * INCAPACITATED_HP_RECOVERY_RATIO;
       if (!Number.isFinite(savedHp)) {
-        return carriedDead ? minRecoveredHp : unit.maxHp;
+        return carriedDead ? 0 : unit.maxHp;
       }
-      const hp = savedHp <= 0 || carriedDead ? Math.max(savedHp, minRecoveredHp) : savedHp;
+      const hp = carriedDead ? 0 : savedHp;
       return Math.max(0, Math.min(unit.maxHp, hp));
     }
 

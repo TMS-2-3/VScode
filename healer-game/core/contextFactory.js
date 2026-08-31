@@ -169,7 +169,6 @@
       return {
         CHARACTER_DEFS,
         ENEMY_DEFS,
-        MOOD_REFERENCE_HP_BY_ID: balance.moodReferenceHpById,
         MOOD_INITIAL: balance.moodInitial,
         DEFAULT_MP_REGEN_RATE: balance.defaultMpRegenRate,
         BASE_CRIT_CHANCE: balance.baseCritChance,
