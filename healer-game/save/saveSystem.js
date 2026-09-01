@@ -71,6 +71,16 @@
     const initialTownPlayer = clonePlain(town.player, {});
     const initialPlayer = clonePlain(player, null);
 
+    function cloneTownPlayerForSave() {
+      const savedPlayer = clonePlain(town.player, {});
+      delete savedPlayer.gridMove;
+      delete savedPlayer.moving;
+      delete savedPlayer.walkFrame;
+      delete savedPlayer.walkFrameIndex;
+      delete savedPlayer.walkTimer;
+      return savedPlayer;
+    }
+
     function normalizeSaveName(name) {
       const text = String(name || "").trim();
       return text.slice(0, SAVE_NAME_MAX_LENGTH);
@@ -175,9 +185,10 @@
           settings: clonePlain(game.settings, {}),
         },
         town: {
+          mapId: typeof town.mapId === "string" && town.mapId ? town.mapId : initialTownMapId,
           introDone: town.introDone === true,
           meetingDone: town.meetingDone === true,
-          player: clonePlain(town.player, {}),
+          player: cloneTownPlayerForSave(),
           acceptedQuestIds: clonePlain(town.acceptedQuestIds, {}),
           completedQuestIds: clonePlain(town.completedQuestIds, {}),
           encounterStorySeenQuestIds: clonePlain(town.encounterStorySeenQuestIds, {}),
@@ -383,6 +394,7 @@
       game.reinforcementsSpawned = false;
       game.currentSaveId = null;
       currentFileSaveSnapshot = null;
+      game.pendingTownRestoreFromSave = null;
       game.defeatUi = null;
       assignObject(game.materialsById, {});
       assignObject(game.partyHpById, {});
@@ -483,6 +495,7 @@
       game.stageClearTimer = 0;
       game.reinforcementsSpawned = false;
       game.defeatUi = null;
+      game.pendingTownRestoreFromSave = null;
       game.priorityTarget = null;
       game.priorityTargetTimer = 0;
       game.priorityTargetIgnoredUnitIds = {};
@@ -515,6 +528,9 @@
 
     function restoreTown(snapshotTown) {
       const saved = snapshotTown && typeof snapshotTown === "object" ? snapshotTown : {};
+      const hasSavedMapId = typeof saved.mapId === "string" && saved.mapId;
+      const savedMapId = hasSavedMapId ? saved.mapId : initialTownMapId;
+      town.mapId = savedMapId;
       town.introDone = saved.introDone === true;
       town.meetingDone = saved.meetingDone === true;
       town.story = null;
@@ -532,7 +548,14 @@
       town.enemyVictoryByRole = clonePlain(saved.enemyVictoryByRole, {});
       if (saved.player && typeof saved.player === "object") {
         Object.assign(town.player, clonePlain(saved.player, {}));
+        town.player.gridMove = null;
       }
+      game.pendingTownRestoreFromSave = hasSavedMapId && saved.player && typeof saved.player === "object"
+        ? {
+            mapId: savedMapId,
+            player: clonePlain(saved.player, {}),
+          }
+        : null;
     }
 
     function restoreProfile(snapshotProfile) {

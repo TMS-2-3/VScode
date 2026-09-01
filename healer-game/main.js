@@ -209,6 +209,7 @@
         currentQuest: null,
         encounterCutin: null,
         battleTutorial: null,
+        pendingTownRestoreFromSave: null,
         stageClearTimer: 0,
         reinforcementsSpawned: false,
         partyHpById: {},

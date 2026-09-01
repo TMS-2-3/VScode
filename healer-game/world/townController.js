@@ -67,6 +67,7 @@
     const TUTORIAL_STORY_RETURN_ROW = 17;
     const TOWN_RETURN_FADE_HOLD = 0.35;
     const TOWN_RETURN_FADE_DURATION = 0.85;
+    const TOWN_QUEST_NOTICE_FADE_IN = 0.8;
     const TOWN_QUEST_NOTICE_HOLD = 2;
     const TOWN_QUEST_NOTICE_FADE = 1;
     const MAX_ACCEPTED_FREE_QUESTS = 3;
@@ -174,6 +175,7 @@
       const questName = String(options.questName || quest.name || "依頼");
       town.questNoticePopup = {
         age: 0,
+        fadeIn: Math.max(0, Number(options.fadeIn) || TOWN_QUEST_NOTICE_FADE_IN),
         hold: Math.max(0, Number(options.hold) || TOWN_QUEST_NOTICE_HOLD),
         fade: Math.max(0.01, Number(options.fade) || TOWN_QUEST_NOTICE_FADE),
         typeName,
@@ -190,9 +192,10 @@
         return;
       }
       popup.age = Math.max(0, Number(popup.age) || 0) + Math.max(0, Number(dt) || 0);
+      const fadeIn = Math.max(0, Number(popup.fadeIn) || TOWN_QUEST_NOTICE_FADE_IN);
       const hold = Math.max(0, Number(popup.hold) || TOWN_QUEST_NOTICE_HOLD);
       const fade = Math.max(0.01, Number(popup.fade) || TOWN_QUEST_NOTICE_FADE);
-      if (popup.age >= hold + fade) {
+      if (popup.age >= fadeIn + hold + fade) {
         const onComplete = typeof popup.onComplete === "function" ? popup.onComplete : null;
         town.questNoticePopup = null;
         if (onComplete) {
@@ -510,6 +513,9 @@
 
     function startTown() {
       const returningFromBattle = game.state === "won" || game.state === "lost";
+      const pendingSaveRestore = !returningFromBattle && game.pendingTownRestoreFromSave && typeof game.pendingTownRestoreFromSave === "object"
+        ? game.pendingTownRestoreFromSave
+        : null;
       const completedQuest = game.currentQuest;
       const completedSymbolEncounter = returningFromBattle && game.state === "won"
         ? completedQuest && completedQuest.symbolEncounter
@@ -540,7 +546,9 @@
       game.currentQuest = null;
       game.message = "はじまりの町";
       game.messageTimer = 4;
-      if (completedTutorialStoryEncounter) {
+      if (pendingSaveRestore && pendingSaveRestore.mapId) {
+        town.mapId = pendingSaveRestore.mapId;
+      } else if (completedTutorialStoryEncounter) {
         town.mapId = TUTORIAL_STORY_RETURN_MAP_ID;
       } else if (completedSymbolEncounter && completedSymbolEncounter.mapId) {
         town.mapId = completedSymbolEncounter.mapId;
@@ -556,7 +564,10 @@
       if (getTownTileMap() || town.buildings.length === 0) {
         setupTown();
       }
-      if (completedTutorialStoryEncounter) {
+      const restoredTownPlayerFromSave = pendingSaveRestore && restoreTownPlayerFromSave(pendingSaveRestore.player);
+      if (restoredTownPlayerFromSave) {
+        game.pendingTownRestoreFromSave = null;
+      } else if (completedTutorialStoryEncounter) {
         placeTownPlayerAtTile(getTownTileMap(), TUTORIAL_STORY_RETURN_COL, TUTORIAL_STORY_RETURN_ROW);
         town.player.facing = "up";
       } else if (completedSymbolEncounter && Number.isFinite(completedSymbolEncounter.returnCol) && Number.isFinite(completedSymbolEncounter.returnRow)) {
@@ -569,7 +580,12 @@
         town.player.x = TOWN_WIDTH * 0.5;
         town.player.y = TOWN_HEIGHT - 155;
       }
-      snapTownPlayerToGridCenter();
+      if (!restoredTownPlayerFromSave) {
+        snapTownPlayerToGridCenter();
+      }
+      if (pendingSaveRestore) {
+        game.pendingTownRestoreFromSave = null;
+      }
       clampTownPlayer();
       if (completedSymbolEncounter) {
         completeTownSymbolEncounter(completedSymbolEncounter);
@@ -2060,6 +2076,28 @@
       if (preloadResult && typeof preloadResult.catch === "function") {
         preloadResult.catch(() => {});
       }
+    }
+
+    function restoreTownPlayerFromSave(savedPlayer) {
+      if (!savedPlayer || typeof savedPlayer !== "object") {
+        return false;
+      }
+      const x = Number(savedPlayer.x);
+      const y = Number(savedPlayer.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return false;
+      }
+      town.player.x = x;
+      town.player.y = y;
+      town.player.gridMove = null;
+      if (["up", "down", "left", "right"].includes(savedPlayer.facing)) {
+        town.player.facing = savedPlayer.facing;
+      }
+      town.player.moving = false;
+      town.player.walkFrame = 1;
+      town.player.walkFrameIndex = -1;
+      town.player.walkTimer = 0;
+      return true;
     }
 
     function getTownSymbolSpritePreloadKey(symbols) {

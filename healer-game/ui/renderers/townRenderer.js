@@ -1262,18 +1262,19 @@
     }
     const pulse = 0.5 + Math.sin(game.time * 6) * 0.18;
     ctx.strokeStyle = `rgba(255,255,255,${0.62 + pulse * 0.3})`;
-    ctx.lineWidth = 5;
-    roundRect(building.x - 12, building.y - 48, building.w + 24, building.h + 104, 14);
+    ctx.lineWidth = 4;
+    const padding = 4;
+    roundRect(building.x + padding, building.y + padding, Math.max(8, building.w - padding * 2), Math.max(8, building.h - padding * 2), 8);
     ctx.stroke();
     ctx.fillStyle = "rgba(17,23,20,0.86)";
     ctx.strokeStyle = "#f7fff6";
     ctx.lineWidth = 2;
-    roundRect(building.x + building.w / 2 - 50, building.y - 78, 100, 30, 8);
+    roundRect(building.x + building.w / 2 - 50, building.y - 34, 100, 30, 8);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#f7fff6";
     ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    drawFittedTownText(getInteractLabel(), building.x + building.w / 2, building.y - 63, 86, 800, 15, 9, "#f7fff6", "center");
+    drawFittedTownText(getInteractLabel(), building.x + building.w / 2, building.y - 19, 86, 800, 15, 9, "#f7fff6", "center");
   }
 
   function getTownEventCharacterActors() {
@@ -1372,7 +1373,7 @@
     if (eventActors.length > 0) {
       for (const actor of eventActors) {
         if (actor && actor.showArgumentMark !== false) {
-          drawArgumentMark(actor.x, actor.y - 44);
+          drawArgumentMark(actor.x, getTownActorArgumentMarkY(actor));
         }
       }
       return;
@@ -1383,6 +1384,12 @@
     drawArgumentMark(baseX - 48, baseY - 22);
     drawArgumentMark(baseX + 6, baseY + 4);
     drawArgumentMark(baseX + 66, baseY - 18);
+  }
+
+  function getTownActorArgumentMarkY(actor) {
+    const height = Number(actor && actor.spriteHeight) || 64;
+    const footOffset = getTownTileMap() ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 24;
+    return (Number(actor && actor.y) || 0) + footOffset - height - 8;
   }
 
   function getTownActorSortY(actor) {
@@ -1569,14 +1576,6 @@
     ctx.textBaseline = "middle";
     ctx.strokeText("!", x, y);
     ctx.fillText("!", x, y);
-    ctx.strokeStyle = "rgba(255,84,64,0.78)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(x - 22, y + 4);
-    ctx.lineTo(x - 8, y - 10);
-    ctx.lineTo(x + 4, y - 2);
-    ctx.lineTo(x + 20, y - 16);
-    ctx.stroke();
     ctx.restore();
   }
 
@@ -1636,9 +1635,14 @@
       return;
     }
     const age = Math.max(0, Number(popup.age) || 0);
+    const fadeIn = Math.max(0, Number(popup.fadeIn) || 0.8);
     const hold = Math.max(0, Number(popup.hold) || 2);
     const fade = Math.max(0.01, Number(popup.fade) || 1);
-    const alpha = age <= hold ? 1 : Math.max(0, 1 - (age - hold) / fade);
+    const alpha = fadeIn > 0 && age < fadeIn
+      ? Math.max(0, Math.min(1, age / fadeIn))
+      : age <= fadeIn + hold
+        ? 1
+        : Math.max(0, 1 - (age - fadeIn - hold) / fade);
     if (alpha <= 0) {
       return;
     }

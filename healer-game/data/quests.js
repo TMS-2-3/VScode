@@ -12,7 +12,7 @@
         type: "story",
         rank: "D",
         name: "討伐数対決!?",
-        summary: "西クラク森に出現したツノウサギを討伐する。森にいるシンボルに接触して戦闘を開始する。",
+        summary: "西クラク森に出現したツノウサギを討伐する。",
         objective: "ツノウサギを4体討伐する",
         recommended: "西クラク森",
         enemyPreview: "ツノウサギ x4",
@@ -29,6 +29,7 @@
         fieldEnemyCount: 4,
         symbolLabel: "依",
         symbolColor: "#ffd86b",
+        stationarySymbol: false,
       },
       {
         id: "story_path_ahead_001",

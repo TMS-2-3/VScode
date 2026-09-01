@@ -10,6 +10,7 @@
     horn_rabbit: {
       label: "兎",
       imagePath: "img/entity/horn_rabbit/horn_rabbit_default.png",
+      mapImagePath: "img/entity/horn_rabbit/horn_rabbit_96.png",
       spriteHeight: px(96),
       hp: 400,
       mp: 0,
@@ -43,6 +44,7 @@
     bud_alraune: {
       label: "蕾",
       imagePath: "img/entity/bud_alraune/bud_alraune_default.png",
+      mapImagePath: "img/entity/bud_alraune/bud_alraune_96.png",
       spriteHeight: px(96),
       hp: 370,
       mp: 60,
@@ -76,6 +78,7 @@
     shadow_wolf: {
       label: "狼",
       imagePath: "img/entity/shadow_wolf/shadow_wolf_default.png",
+      mapImagePath: "img/entity/shadow_wolf/wolf_96.png",
       spriteHeight: px(96),
       hp: 480,
       mp: 20,
