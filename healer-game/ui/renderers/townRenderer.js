@@ -1281,6 +1281,10 @@
     return typeof getTownEventActors === "function" ? getTownEventActors() : [];
   }
 
+  function hasTownStoryEventActors(eventActors) {
+    return Boolean(town && town.story && Array.isArray(town.story.eventActors) && eventActors.length > 0);
+  }
+
   function getTownNpcCharacterActors() {
     return typeof getTownNpcActors === "function" ? getTownNpcActors() : [];
   }
@@ -1304,7 +1308,9 @@
       spriteHeight: town.player.spriteHeight || 72,
     }];
     const eventActors = getTownEventCharacterActors();
-    if (!town.meetingDone && eventActors.length > 0) {
+    if (hasTownStoryEventActors(eventActors)) {
+      actors.push(...eventActors);
+    } else if (!town.meetingDone && eventActors.length > 0) {
       actors.push(...eventActors);
     } else if (!town.meetingDone) {
       const guild = getTownBuilding("guild");
@@ -1344,7 +1350,9 @@
       spriteHeight: town.player.spriteHeight || 72,
     }];
     const eventActors = getTownEventCharacterActors();
-    if (!town.meetingDone && eventActors.length > 0) {
+    if (hasTownStoryEventActors(eventActors)) {
+      actors.push(...eventActors);
+    } else if (!town.meetingDone && eventActors.length > 0) {
       actors.push(...eventActors);
     } else if (!town.meetingDone) {
       const guild = getTownBuilding("guild");

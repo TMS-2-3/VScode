@@ -2984,8 +2984,11 @@
       ctx.addTelegraph(telegraph);
     }
 
-    function useSushiaBolts(unit, target) {
+    function useSushiaBolts(unit, target, options = {}) {
       const skill = need("sushia", "attack");
+      const damageOverride = typeof options.getDamage === "function" ? options.getDamage : null;
+      const onHit = typeof options.onHit === "function" ? options.onHit : null;
+      const forcedPierceCount = Number.isFinite(options.pierceCount) ? Math.max(0, Math.floor(options.pierceCount)) : null;
       beginPartyAction(unit);
       paySkillCost(unit, skill);
       const cast = ctx.getSushiaCastTime(skill.cast, unit);
@@ -3002,7 +3005,10 @@
           for (let i = 0; i < skill.projectileCount; i += 1) {
             const spread = (i - Math.floor(skill.projectileCount / 2)) * skill.spread;
             const angle = ctx.angleTo(unit, target) + spread;
-            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), getDamage: (hitTarget) => getSkillDamageAgainst(unit, skill, hitTarget), magic: damageOptions.magic, dotDamage: damageOptions.dotDamage, damageType: damageOptions.damageType, life: skill.life, hit: new Set(), pierce: pierceCount > 0, pierceCount: pierceCount > 0 ? pierceCount : undefined, affectsAllies: true, color: skill.color });
+            ctx.projectiles.push({ x: unit.x, y: unit.y, vx: Math.cos(angle) * skill.projectileSpeed, vy: Math.sin(angle) * skill.projectileSpeed, radius: skill.projectileRadius, team: "party", owner: unit, damage: getSkillDamage(unit, skill), getDamage: (hitTarget) => {
+              const customDamage = damageOverride ? damageOverride(hitTarget, target, skill) : null;
+              return Number.isFinite(customDamage) ? customDamage : getSkillDamageAgainst(unit, skill, hitTarget);
+            }, magic: damageOptions.magic, dotDamage: damageOptions.dotDamage, damageType: damageOptions.damageType, life: skill.life, hit: new Set(), pierce: Boolean(options.pierce) || pierceCount > 0, pierceCount: forcedPierceCount !== null ? forcedPierceCount : (pierceCount > 0 ? pierceCount : undefined), affectsAllies: true, onHit: onHit ? (hitTarget, dealt) => onHit(hitTarget, dealt, target, skill) : undefined, color: skill.color });
           }
         },
       });

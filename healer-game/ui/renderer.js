@@ -3593,19 +3593,30 @@
     }
     const unit = getInventoryResultSkillUnit(result, skill);
     const lines = ["", "スキル説明"];
-    const meta = [skill.rank, skill.category, skill.skillType].filter(Boolean).join(" / ");
+    const meta = [
+      skill.rank || result.rank,
+      skill.category || result.category,
+      skill.skillType || result.skillType,
+    ].filter(Boolean).join(" / ");
     if (meta) {
       lines.push(meta);
     }
-    const description = formatEquipmentDescriptionText(getSystemTooltipDescription(skill), unit, skill);
+    const tooltipDescription = getSystemTooltipDescription(skill)
+      || (getGameSettings().tooltipDescriptionMode === "detail"
+        ? result.description || result.simpleDescription || ""
+        : result.simpleDescription || result.description || "");
+    const description = formatEquipmentDescriptionText(tooltipDescription, unit, skill);
     if (description) {
       lines.push(...String(description).split(/\r?\n/).filter(Boolean));
     }
-    appendEquipmentRelatedStatuses(lines, description, skill.statusIds, unit);
+    appendEquipmentRelatedStatuses(lines, description, skill.statusIds || result.statusIds, unit);
     return lines;
   }
 
   function getInventoryResultSkill(result) {
+    if (isInventoryResultPassive(result)) {
+      return getInventoryResultPassiveSkill(result);
+    }
     const owner = result && result.owner;
     const key = result && result.key;
     if (owner && key && SKILL_DATA && SKILL_DATA[owner] && SKILL_DATA[owner][key]) {
@@ -3639,8 +3650,61 @@
     return null;
   }
 
+  function isInventoryResultPassive(result) {
+    return Boolean(result && (
+      result.kind === "passive"
+      || result.category === "パッシブ"
+      || String(result.identity || "").startsWith("passive:")
+    ));
+  }
+
+  function getInventoryResultPassiveSkill(result) {
+    const owner = result && result.owner;
+    const key = result && result.key;
+    if (owner && key && PASSIVE_DATA && PASSIVE_DATA[owner] && PASSIVE_DATA[owner][key]) {
+      return PASSIVE_DATA[owner][key];
+    }
+    const skillId = result && result.skillId;
+    const commonPassives = PASSIVE_DATA && (PASSIVE_DATA.common || window.HEALER_COMMON_PASSIVE_DATA) || null;
+    if (commonPassives && typeof commonPassives === "object") {
+      for (const passive of Object.values(commonPassives)) {
+        if (passive && (passive.id === skillId || passive.key === key)) {
+          return passive;
+        }
+      }
+    }
+    for (const [unitId, passives] of Object.entries(PASSIVE_DATA || {})) {
+      if (unitId === "common") {
+        continue;
+      }
+      for (const passive of Object.values(passives || {})) {
+        if (passive && (passive.id === skillId || passive.key === key)) {
+          return passive;
+        }
+      }
+    }
+    return null;
+  }
+
   function getInventoryResultSkillUnit(result, skill) {
     const owner = result && result.owner || skill && (skill.owner || skill.sourceOwner);
+    if (isInventoryResultPassive(result) || skill && skill.category === "パッシブ") {
+      if (owner === "common" && skill) {
+        const identity = result && result.identity || getPassiveIdentity("common", result && result.key || skill.key, skill);
+        for (const unitId of equipmentUnitOrder) {
+          const aliasKey = skill.originalKey || skill.key;
+          const aliasPassive = PASSIVE_DATA && PASSIVE_DATA[unitId] && PASSIVE_DATA[unitId][aliasKey];
+          if (aliasPassive && getPassiveIdentity(unitId, aliasKey, aliasPassive) === identity) {
+            return getEquipmentDisplayUnit(unitId) || player;
+          }
+        }
+        if (skill.originalOwner) {
+          return getEquipmentDisplayUnit(skill.originalOwner) || player;
+        }
+        return player;
+      }
+      return owner ? getEquipmentDisplayUnit(owner) || player : player;
+    }
     if (owner === "common" && skill) {
       const identity = getSkillIdentity("common", result && result.key || skill.key, skill);
       for (const unitId of equipmentUnitOrder) {
@@ -6095,6 +6159,12 @@
     const sourceOwner = skill && skill.sourceOwner ? skill.sourceOwner : owner;
     const sourceKey = skill && skill.sourceKey ? skill.sourceKey : key;
     return `${sourceOwner}:${sourceKey}`;
+  }
+
+  function getPassiveIdentity(owner, key, passive) {
+    const sourceOwner = passive && passive.sourceOwner ? passive.sourceOwner : owner;
+    const sourceKey = passive && passive.sourceKey ? passive.sourceKey : key;
+    return `passive:${sourceOwner}:${sourceKey}`;
   }
 
   function getActiveSkillEquipState(unit, key, skill) {

@@ -173,7 +173,7 @@
       const size = getImageDimensions(image);
       const width = Math.max(1, Math.floor(size.width) || 1);
       const height = Math.max(1, Math.floor(size.height) || 1);
-      if (usage !== "map") {
+      if (usage === "raw") {
         return { x: 0, y: 0, width, height };
       }
       const bounds = getImageAlphaBounds(image);

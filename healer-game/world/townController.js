@@ -64,7 +64,7 @@
     const STORY_PATH_AHEAD_QUEST_ID = "story_path_ahead_001";
     const TUTORIAL_STORY_RETURN_MAP_ID = "startTown01";
     const TUTORIAL_STORY_RETURN_COL = 19;
-    const TUTORIAL_STORY_RETURN_ROW = 17;
+    const TUTORIAL_STORY_RETURN_ROW = 9;
     const TOWN_RETURN_FADE_HOLD = 0.35;
     const TOWN_RETURN_FADE_DURATION = 0.85;
     const TOWN_QUEST_NOTICE_FADE_IN = 0.8;
@@ -145,11 +145,12 @@
       }
     }
 
-    function startTownReturnFade() {
+    function startTownReturnFade(onComplete) {
       town.returnFade = {
         age: 0,
         hold: TOWN_RETURN_FADE_HOLD,
         fade: TOWN_RETURN_FADE_DURATION,
+        onComplete: typeof onComplete === "function" ? onComplete : null,
       };
     }
 
@@ -162,7 +163,11 @@
       const hold = Math.max(0, Number(fade.hold) || 0);
       const duration = Math.max(0.01, Number(fade.fade) || TOWN_RETURN_FADE_DURATION);
       if (fade.age >= hold + duration) {
+        const onComplete = typeof fade.onComplete === "function" ? fade.onComplete : null;
         town.returnFade = null;
+        if (onComplete) {
+          onComplete();
+        }
       }
     }
 
@@ -607,10 +612,11 @@
       if (completedTutorialStoryEncounter && !town.story) {
         const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
         if (Array.isArray(storyLines) && storyLines.length > 0) {
-          startTownReturnFade();
-          startTownStory(`questCompleted:${TUTORIAL_STORY_QUEST_ID}`, storyLines, () => {
+          const completionActors = setupTutorialCompletionStoryScene();
+          startTownReturnFade(() => startTownStory(`questCompleted:${TUTORIAL_STORY_QUEST_ID}`, storyLines, () => {
+            finishTutorialCompletionStoryScene();
             acceptNextStoryQuestAfterTutorial();
-          });
+          }, { eventActors: completionActors }));
         }
       } else if (completedSymbolEncounter && completedStoryQuest && completedStoryQuest.type === "story" && !town.story) {
         const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
@@ -677,6 +683,10 @@
         return;
       }
       if (updateEncounterCutin(dt)) {
+        town.interaction = null;
+        return;
+      }
+      if (town.returnFade) {
         town.interaction = null;
         return;
       }
@@ -774,7 +784,45 @@
       return col >= eventCol && row >= eventRow && col < eventCol + width && row < eventRow + height;
     }
 
+    function makeTownEventActorFromConfig(config, tileMap = getTownTileMap()) {
+      const raw = config || {};
+      const npcId = raw.npcId || raw.actorId || raw.characterId || raw.id;
+      const col = Math.floor(Number(raw.col ?? raw.x) || 0);
+      const row = Math.floor(Number(raw.row ?? raw.y) || 0);
+      const hasWorldPosition = Number.isFinite(Number(raw.worldX)) && Number.isFinite(Number(raw.worldY));
+      const center = hasWorldPosition
+        ? { x: Number(raw.worldX), y: Number(raw.worldY) }
+        : getTownTileCenter(tileMap, col, row);
+      return {
+        id: npcId,
+        eventId: raw.eventId || raw.id || npcId,
+        name: raw.name || npcId,
+        x: center.x,
+        y: center.y,
+        color: raw.color || TOWN_EVENT_ACTOR_COLORS[npcId] || "#f7fff6",
+        label: raw.label || TOWN_EVENT_ACTOR_LABELS[npcId] || String(raw.name || npcId || "?").slice(0, 1),
+        facing: raw.facing || raw.direction || "down",
+        walkFrame: 1,
+        spriteHeight: Number.isFinite(town.player && town.player.spriteHeight) ? town.player.spriteHeight : TOWN_FOLLOWER_SPRITE_HEIGHT,
+        showArgumentMark: raw.showArgumentMark !== false,
+      };
+    }
+
+    function getTownStoryEventActors(tileMap = getTownTileMap()) {
+      const actors = town.story && Array.isArray(town.story.eventActors) ? town.story.eventActors : [];
+      if (!actors.length) {
+        return [];
+      }
+      return actors
+        .map((actor) => makeTownEventActorFromConfig(actor, tileMap))
+        .filter(Boolean);
+    }
+
     function getTownEventActors(tileMap = getTownTileMap()) {
+      const storyActors = getTownStoryEventActors(tileMap);
+      if (storyActors.length > 0) {
+        return storyActors;
+      }
       if (!tileMap || !playerProfile.done || town.meetingDone) {
         return [];
       }
@@ -786,24 +834,42 @@
         })
         .map((event) => {
           const raw = getTownRawMapEvent(event) || {};
-          const npcId = raw.npcId || raw.actorId || raw.characterId || raw.id;
-          const col = Math.floor(Number(raw.col ?? raw.x) || 0);
-          const row = Math.floor(Number(raw.row ?? raw.y) || 0);
-          const center = getTownTileCenter(tileMap, col, row);
-          return {
-            id: npcId,
-            eventId: raw.id || npcId,
-            name: raw.name || npcId,
-            x: center.x,
-            y: center.y,
-            color: raw.color || TOWN_EVENT_ACTOR_COLORS[npcId] || "#f7fff6",
-            label: raw.label || TOWN_EVENT_ACTOR_LABELS[npcId] || String(raw.name || npcId || "?").slice(0, 1),
-            facing: raw.facing || raw.direction || "down",
-            walkFrame: 1,
-            spriteHeight: Number.isFinite(town.player && town.player.spriteHeight) ? town.player.spriteHeight : TOWN_FOLLOWER_SPRITE_HEIGHT,
-            showArgumentMark: raw.showArgumentMark !== false,
-          };
+          return makeTownEventActorFromConfig(raw, tileMap);
         });
+    }
+
+    function getTutorialCompletionStoryEventActors() {
+      return [
+        { id: "ulpes", col: 18, row: 10, facing: "right", showArgumentMark: false },
+        { id: "sushia", col: 20, row: 10, facing: "left", showArgumentMark: false },
+        { id: "rihas", col: 19, row: 11, facing: "up", showArgumentMark: false },
+      ];
+    }
+
+    function setupTutorialCompletionStoryScene() {
+      const tileMap = getTownTileMap();
+      placeTownPlayerAtTile(tileMap, TUTORIAL_STORY_RETURN_COL, TUTORIAL_STORY_RETURN_ROW);
+      town.player.facing = "down";
+      town.player.walkFrame = 1;
+      town.player.walkFrameIndex = -1;
+      town.player.walkTimer = 0;
+      town.player.gridMove = null;
+      town.followers = [];
+      resetTownTrail();
+      return getTutorialCompletionStoryEventActors();
+    }
+
+    function finishTutorialCompletionStoryScene() {
+      const tileMap = getTownTileMap();
+      placeTownPlayerAtTile(tileMap, TUTORIAL_STORY_RETURN_COL, TUTORIAL_STORY_RETURN_ROW);
+      town.player.facing = "up";
+      town.player.walkFrame = 1;
+      town.player.walkFrameIndex = -1;
+      town.player.walkTimer = 0;
+      town.player.gridMove = null;
+      initializeTownFollowers(true);
+      resetTownTrail();
+      town.interaction = getTownInteraction();
     }
 
     function ensureTownSymbolEncounterState() {
@@ -5211,13 +5277,16 @@
       });
     }
 
-    function startTownStory(id, lines, onComplete) {
+    function startTownStory(id, lines, onComplete, options = {}) {
       town.story = {
         id,
         lines,
         index: 0,
         onComplete,
       };
+      if (Array.isArray(options.eventActors) && options.eventActors.length > 0) {
+        town.story.eventActors = options.eventActors;
+      }
     }
 
     function advanceTownStory() {

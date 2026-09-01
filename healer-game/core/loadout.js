@@ -631,6 +631,7 @@
         : null;
       return {
         type,
+        kind: entry.kind,
         identity: entry.identity,
         owner: entry.owner,
         key: entry.key,
