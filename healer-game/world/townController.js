@@ -145,19 +145,81 @@
       }
     }
 
-    function startTownReturnFade(onComplete) {
-      town.returnFade = {
+    function startTownReturnFade(onComplete, options = {}) {
+      const waitFor = options && options.waitFor;
+      const loadTask = normalizeTownLoadTask(waitFor);
+      const waitPromise = loadTask && loadTask.promise;
+      const fade = {
         age: 0,
-        hold: TOWN_RETURN_FADE_HOLD,
-        fade: TOWN_RETURN_FADE_DURATION,
+        waitAge: 0,
+        hold: Number.isFinite(options.hold) ? Math.max(0, options.hold) : TOWN_RETURN_FADE_HOLD,
+        fade: Number.isFinite(options.fade) ? Math.max(0.01, options.fade) : TOWN_RETURN_FADE_DURATION,
+        maxWait: Number.isFinite(options.maxWait) ? Math.max(0, options.maxWait) : 4,
+        ready: !waitPromise,
+        loadingProgress: waitPromise ? 0 : 1,
+        loadTask,
         onComplete: typeof onComplete === "function" ? onComplete : null,
       };
+      town.returnFade = {
+        ...fade,
+      };
+      if (waitPromise) {
+        const activeFade = town.returnFade;
+        waitPromise
+          .catch(() => {})
+          .then(() => {
+            if (town.returnFade === activeFade) {
+              activeFade.ready = true;
+              activeFade.loadingProgress = 1;
+            }
+          });
+      }
+    }
+
+    function normalizeTownLoadTask(waitFor) {
+      if (!waitFor) {
+        return null;
+      }
+      if (typeof waitFor.then === "function") {
+        return {
+          promise: waitFor,
+          getProgress: null,
+        };
+      }
+      if (waitFor && typeof waitFor.promise === "object" && typeof waitFor.promise.then === "function") {
+        return {
+          promise: waitFor.promise,
+          getProgress: typeof waitFor.getProgress === "function" ? waitFor.getProgress : null,
+        };
+      }
+      return null;
+    }
+
+    function getTownLoadProgress(loadTask, fallbackProgress = 0) {
+      const fallback = Math.max(0, Math.min(1, fallbackProgress));
+      if (loadTask && typeof loadTask.getProgress === "function") {
+        const progress = Number(loadTask.getProgress());
+        if (Number.isFinite(progress)) {
+          return Math.max(fallback, Math.max(0, Math.min(1, progress)));
+        }
+      }
+      return fallback;
     }
 
     function updateTownReturnFade(dt = 0) {
       const fade = town.returnFade;
       if (!fade) {
         return;
+      }
+      if (fade.ready === false) {
+        fade.waitAge = Math.max(0, Number(fade.waitAge) || 0) + Math.max(0, Number(dt) || 0);
+        const timeoutProgress = Math.min(0.92, fade.waitAge / Math.max(0.01, Number(fade.maxWait) || 1) * 0.9);
+        fade.loadingProgress = getTownLoadProgress(fade.loadTask, timeoutProgress);
+        if (fade.waitAge < Math.max(0, Number(fade.maxWait) || 0)) {
+          return;
+        }
+        fade.ready = true;
+        fade.loadingProgress = 1;
       }
       fade.age = Math.max(0, Number(fade.age) || 0) + Math.max(0, Number(dt) || 0);
       const hold = Math.max(0, Number(fade.hold) || 0);
@@ -272,6 +334,11 @@
       resetTownTrail();
       ensureTownMapSymbols(tileMap);
       ensureTownMapNpcs(tileMap);
+      startTownReturnFade(null, {
+        waitFor: preloadTownMapEntryAssets(tileMap),
+        hold: 0.05,
+        fade: 0.22,
+      });
       town.interaction = getTownInteraction();
       updateTownCamera();
       return true;
@@ -599,6 +666,7 @@
       }
       ensureTownMapSymbols();
       ensureTownMapNpcs();
+      const townEntryLoadTask = preloadTownMapEntryAssets(getTownTileMap());
       initializeTownFollowers(true);
       resetTownTrail();
       town.interaction = getTownInteraction();
@@ -609,6 +677,7 @@
         return;
       }
       beginOpeningStory();
+      let startedReturnFade = false;
       if (completedTutorialStoryEncounter && !town.story) {
         const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
         if (Array.isArray(storyLines) && storyLines.length > 0) {
@@ -616,13 +685,24 @@
           startTownReturnFade(() => startTownStory(`questCompleted:${TUTORIAL_STORY_QUEST_ID}`, storyLines, () => {
             finishTutorialCompletionStoryScene();
             acceptNextStoryQuestAfterTutorial();
-          }, { eventActors: completionActors }));
+          }, { eventActors: completionActors }), { waitFor: townEntryLoadTask });
+          startedReturnFade = true;
         }
       } else if (completedSymbolEncounter && completedStoryQuest && completedStoryQuest.type === "story" && !town.story) {
         const storyLines = typeof getQuestCompletedStory === "function" ? getQuestCompletedStory(completedStoryQuest) : [];
         if (Array.isArray(storyLines) && storyLines.length > 0) {
-          startTownStory(`questCompleted:${completedStoryQuest.id}`, storyLines);
+          startTownReturnFade(() => startTownStory(`questCompleted:${completedStoryQuest.id}`, storyLines), {
+            waitFor: townEntryLoadTask,
+          });
+          startedReturnFade = true;
         }
+      }
+      if (returningFromBattle && !startedReturnFade && !town.returnFade) {
+        startTownReturnFade(null, {
+          waitFor: townEntryLoadTask,
+          hold: 0.05,
+          fade: 0.22,
+        });
       }
     }
 
@@ -674,8 +754,12 @@
     }
 
     function updateTown(dt = 0) {
-      updateTownMapNamePopup(dt);
       updateTownReturnFade(dt);
+      if (town.returnFade) {
+        town.interaction = null;
+        return;
+      }
+      updateTownMapNamePopup(dt);
       updateTownQuestNoticePopup(dt);
       if (!playerProfile.done) {
         updateProfileNameInput();
@@ -683,10 +767,6 @@
         return;
       }
       if (updateEncounterCutin(dt)) {
-        town.interaction = null;
-        return;
-      }
-      if (town.returnFade) {
         town.interaction = null;
         return;
       }
@@ -1465,7 +1545,7 @@
       const state = ensureTownSymbolEncounterState();
       const key = String(mapId || "town");
       if (!state.byMapId[key] || typeof state.byMapId[key] !== "object") {
-        state.byMapId[key] = { symbols: [], symbolSpritePreloadKey: "" };
+        state.byMapId[key] = { symbols: [], symbolSpritePreloadKey: "", symbolSpritePreloadTask: null };
       }
       const mapState = state.byMapId[key];
       if (!Array.isArray(mapState.symbols)) {
@@ -1478,7 +1558,7 @@
       const state = ensureTownSymbolEncounterState();
       const key = String(mapId || "town");
       state.byMapId = {
-        [key]: { symbols: [], symbolSpritePreloadKey: "" },
+        [key]: { symbols: [], symbolSpritePreloadKey: "", symbolSpritePreloadTask: null },
       };
       state.pendingBattle = null;
       return state.byMapId[key];
@@ -2121,9 +2201,87 @@
       return Number.isFinite(enemyValue) && enemyValue > 0 ? Math.max(24, enemyValue) : null;
     }
 
+    function createTownImageLoadTask(images) {
+      const list = (Array.isArray(images) ? images : [images])
+        .filter((image) => image && typeof image === "object");
+      if (list.length === 0) {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
+      }
+      let doneCount = 0;
+      const promises = list.map((image) => {
+        if (image.complete === true || typeof image.addEventListener !== "function") {
+          doneCount += 1;
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          const done = () => {
+            doneCount += 1;
+            resolve();
+          };
+          image.addEventListener("load", done, { once: true });
+          image.addEventListener("error", done, { once: true });
+        });
+      });
+      return {
+        promise: Promise.all(promises).then(() => {}),
+        getProgress: () => list.length > 0 ? doneCount / list.length : 1,
+      };
+    }
+
+    function createTownPromiseLoadTask(promise) {
+      if (!promise || typeof promise.then !== "function") {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
+      }
+      let done = false;
+      return {
+        promise: promise.catch(() => {}).then(() => {
+          done = true;
+        }),
+        getProgress: () => done ? 1 : 0,
+      };
+    }
+
+    function combineTownLoadTasks(tasks) {
+      const list = (Array.isArray(tasks) ? tasks : [tasks])
+        .filter((task) => task && task.promise && typeof task.promise.then === "function");
+      if (list.length === 0) {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
+      }
+      return {
+        promise: Promise.all(list.map((task) => task.promise.catch(() => {}))).then(() => {}),
+        getProgress: () => {
+          const total = list.length;
+          const sum = list.reduce((acc, task) => acc + getTownLoadProgress(task, 0), 0);
+          return total > 0 ? sum / total : 1;
+        },
+      };
+    }
+
+    function preloadTownTileImages(tileMap) {
+      if (!tileMap || !tileMapSystem || typeof tileMapSystem.preloadTileImages !== "function") {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
+      }
+      return createTownImageLoadTask(tileMapSystem.preloadTileImages(tileMap));
+    }
+
     function preloadTownSymbolSprites(symbols) {
       if (typeof preloadMapEnemySprites !== "function") {
-        return;
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
       }
       const sources = [];
       for (const symbol of Array.isArray(symbols) ? symbols : []) {
@@ -2138,10 +2296,13 @@
           sources.push(...symbol.enemyEntries);
         }
       }
-      const preloadResult = preloadMapEnemySprites(sources);
-      if (preloadResult && typeof preloadResult.catch === "function") {
-        preloadResult.catch(() => {});
+      if (sources.length === 0) {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
       }
+      return createTownPromiseLoadTask(preloadMapEnemySprites(sources));
     }
 
     function restoreTownPlayerFromSave(savedPlayer) {
@@ -2186,19 +2347,40 @@
 
     function preloadTownSymbolSpritesIfNeeded(mapState) {
       if (!mapState || !Array.isArray(mapState.symbols)) {
-        return;
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
       }
       const key = getTownSymbolSpritePreloadKey(mapState.symbols);
-      if (mapState.symbolSpritePreloadKey === key) {
-        return;
+      if (mapState.symbolSpritePreloadKey === key && mapState.symbolSpritePreloadTask) {
+        return mapState.symbolSpritePreloadTask;
       }
       mapState.symbolSpritePreloadKey = key;
-      preloadTownSymbolSprites(mapState.symbols);
+      mapState.symbolSpritePreloadTask = preloadTownSymbolSprites(mapState.symbols);
+      return mapState.symbolSpritePreloadTask;
+    }
+
+    function preloadTownMapEntryAssets(tileMap) {
+      if (!tileMap) {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
+      }
+      const mapState = getTownSymbolMapState(getTownSymbolMapId(tileMap));
+      return combineTownLoadTasks([
+        preloadTownTileImages(tileMap),
+        preloadTownSymbolSpritesIfNeeded(mapState),
+      ]);
     }
 
     function preloadTownBattleSprites(quest) {
       if (typeof preloadBattleEnemySprites !== "function") {
-        return;
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
       }
       const sources = [];
       if (Array.isArray(quest && quest.enemies)) {
@@ -2207,10 +2389,13 @@
       if (Array.isArray(quest && quest.reinforcements)) {
         sources.push(...quest.reinforcements);
       }
-      const preloadResult = preloadBattleEnemySprites(sources);
-      if (preloadResult && typeof preloadResult.catch === "function") {
-        preloadResult.catch(() => {});
+      if (sources.length === 0) {
+        return {
+          promise: Promise.resolve(),
+          getProgress: () => 1,
+        };
       }
+      return createTownPromiseLoadTask(preloadBattleEnemySprites(sources));
     }
 
     function getTownSymbolFacingAfterMove(symbol, step) {
@@ -2274,6 +2459,7 @@
       if (configs.length === 0) {
         mapState.symbols = [];
         mapState.symbolSpritePreloadKey = "";
+        mapState.symbolSpritePreloadTask = null;
         return mapState.symbols;
       }
       const activeConfigIds = new Set(configs.map((config, index) => getTownSymbolConfigId(config, index)));
@@ -3081,7 +3267,7 @@
     }
 
     function startEncounterCutin(quest, symbols) {
-      preloadTownBattleSprites(quest);
+      const loadTask = preloadTownBattleSprites(quest);
       town.player.gridMove = null;
       input.keys = input.keys || {};
       for (const key of TOWN_MOVEMENT_KEYS) {
@@ -3097,7 +3283,21 @@
         subtitle: quest && quest.name ? quest.name : "魔物と遭遇",
         enemyText: getEncounterCutinEnemyText(quest, symbols),
         symbolText: getEncounterCutinSymbolText(symbols),
+        ready: false,
+        waitAge: 0,
+        maxWait: 4,
+        loadingProgress: 0,
+        loadTask,
       };
+      const activeCutin = game.encounterCutin;
+      loadTask.promise
+        .catch(() => {})
+        .then(() => {
+          if (game.encounterCutin === activeCutin) {
+            activeCutin.ready = true;
+            activeCutin.loadingProgress = 1;
+          }
+        });
     }
 
     function updateEncounterCutin(dt = 0) {
@@ -3105,6 +3305,16 @@
         return false;
       }
       const cutin = game.encounterCutin;
+      if (cutin.ready === false) {
+        cutin.waitAge = Math.max(0, Number(cutin.waitAge) || 0) + Math.max(0, Number(dt) || 0);
+        const timeoutProgress = Math.min(0.92, cutin.waitAge / Math.max(0.01, Number(cutin.maxWait) || 1) * 0.9);
+        cutin.loadingProgress = getTownLoadProgress(cutin.loadTask, timeoutProgress);
+        if (cutin.waitAge >= Math.max(0, Number(cutin.maxWait) || 0)) {
+          cutin.ready = true;
+          cutin.loadingProgress = 1;
+        }
+        return true;
+      }
       cutin.timer = Math.max(0, Number(cutin.timer) || 0) + Math.max(0, Number(dt) || 0);
       if (cutin.timer < Math.max(0.1, Number(cutin.duration) || ENCOUNTER_CUTIN_DURATION)) {
         return true;

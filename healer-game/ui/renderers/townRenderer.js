@@ -1634,6 +1634,61 @@
     ctx.save();
     ctx.fillStyle = `rgba(0,0,0,${Math.min(1, alpha)})`;
     ctx.fillRect(0, 0, view.w, view.h);
+    drawTownLoadingIndicator(fade, alpha);
+    ctx.restore();
+  }
+
+  function drawTownLoadingIndicator(fade, alpha = 1) {
+    const progress = Number.isFinite(fade && fade.loadingProgress)
+      ? Math.max(0, Math.min(1, fade.loadingProgress))
+      : fade && fade.ready === false ? 0 : 1;
+    const spinnerR = 13;
+    const pad = 18;
+    const barW = Math.min(230, Math.max(150, view.w * 0.18));
+    const barH = 9;
+    const panelW = barW + spinnerR * 2 + pad * 3;
+    const panelH = 46;
+    const x = Math.max(14, view.w - panelW - 22);
+    const y = Math.max(14, view.h - panelH - 22);
+    const spinnerX = x + panelW - pad - spinnerR;
+    const spinnerY = y + panelH / 2;
+    const barX = x + pad;
+    const barY = y + panelH / 2 + 5;
+    const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+    const rotation = (now / 720) % TAU;
+
+    ctx.save();
+    ctx.globalAlpha *= Math.min(1, Math.max(0.45, alpha));
+    ctx.fillStyle = "rgba(10, 17, 17, 0.72)";
+    roundRect(x, y, panelW, panelH, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(247, 255, 246, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(247, 255, 246, 0.86)";
+    ctx.fillText("ロード中", barX, y + 15);
+
+    ctx.fillStyle = "rgba(247, 255, 246, 0.18)";
+    roundRect(barX, barY, barW, barH, 5);
+    ctx.fill();
+    ctx.fillStyle = "#ffd86b";
+    roundRect(barX, barY, Math.max(4, barW * progress), barH, 5);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(247, 255, 246, 0.28)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(spinnerX, spinnerY, spinnerR, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffd86b";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(spinnerX, spinnerY, spinnerR, rotation, rotation + TAU * 0.66);
+    ctx.stroke();
     ctx.restore();
   }
 

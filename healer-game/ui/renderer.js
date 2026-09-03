@@ -339,6 +339,14 @@
     if (!cutin || cutin.active !== true) {
       return false;
     }
+    if (cutin.ready === false) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.fillRect(0, 0, view.w, view.h);
+      drawCornerLoadingIndicator(cutin.loadingProgress, "ロード中");
+      ctx.restore();
+      return true;
+    }
     const duration = Math.max(0.1, Number(cutin.duration) || 1.25);
     const timer = Math.max(0, Number(cutin.timer) || 0);
     const progress = Math.max(0, Math.min(1, timer / duration));
@@ -383,6 +391,57 @@
     }
     ctx.restore();
     return true;
+  }
+
+  function drawCornerLoadingIndicator(progressValue, label = "ロード中") {
+    const progress = Number.isFinite(progressValue) ? Math.max(0, Math.min(1, progressValue)) : 0;
+    const spinnerR = 13;
+    const pad = 18;
+    const barW = Math.min(230, Math.max(150, view.w * 0.18));
+    const barH = 9;
+    const panelW = barW + spinnerR * 2 + pad * 3;
+    const panelH = 46;
+    const x = Math.max(14, view.w - panelW - 22);
+    const y = Math.max(14, view.h - panelH - 22);
+    const spinnerX = x + panelW - pad - spinnerR;
+    const spinnerY = y + panelH / 2;
+    const barX = x + pad;
+    const barY = y + panelH / 2 + 5;
+    const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+    const rotation = (now / 720) % TAU;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(10, 17, 17, 0.72)";
+    roundRect(x, y, panelW, panelH, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(247, 255, 246, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.fillStyle = "rgba(247, 255, 246, 0.86)";
+    ctx.fillText(label, barX, y + 15);
+
+    ctx.fillStyle = "rgba(247, 255, 246, 0.18)";
+    roundRect(barX, barY, barW, barH, 5);
+    ctx.fill();
+    ctx.fillStyle = "#ffd86b";
+    roundRect(barX, barY, Math.max(4, barW * progress), barH, 5);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(247, 255, 246, 0.28)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(spinnerX, spinnerY, spinnerR, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffd86b";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(spinnerX, spinnerY, spinnerR, rotation, rotation + TAU * 0.66);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawEncounterCrossedSwords(sweep = 1) {
