@@ -855,6 +855,90 @@
 
   window.HEALER_CREATE_TEXT_LAYOUT_MAP = createTextLayoutMap;
 
+  function createCaveMap(spec) {
+    const width = spec.width;
+    const height = spec.height;
+    const cellCount = width * height;
+    const groundTiles = Array(cellCount).fill("caveFloor01");
+    const terrainTiles = Array(cellCount).fill(null);
+    const objectTiles = Array(cellCount).fill(null);
+    const eventTiles = Array(cellCount).fill(null);
+    const indexOf = (x, y) => y * width + x;
+    const inBounds = (x, y) => x >= 0 && y >= 0 && x < width && y < height;
+    const setTile = (tiles, x, y, tileId) => {
+      if (inBounds(x, y)) tiles[indexOf(x, y)] = tileId;
+    };
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const variation = (x * 37 + y * 53 + spec.seed * 97) % 31;
+        if (variation === 0) setTile(groundTiles, x, y, "caveFloorCracked01");
+        else if (variation <= 4) setTile(groundTiles, x, y, "caveFloor02");
+      }
+    }
+
+    (spec.groundPatches || []).forEach((patch) => {
+      const radiusX = Math.max(1, patch.radiusX);
+      const radiusY = Math.max(1, patch.radiusY);
+      for (let y = patch.centerY - radiusY; y <= patch.centerY + radiusY; y += 1) {
+        for (let x = patch.centerX - radiusX; x <= patch.centerX + radiusX; x += 1) {
+          const distance = ((x - patch.centerX) / radiusX) ** 2 + ((y - patch.centerY) / radiusY) ** 2;
+          const edgeBreak = (x * 11 + y * 7 + spec.seed) % 6 === 0;
+          if (distance <= 1 && !(distance > 0.7 && edgeBreak)) {
+            setTile(groundTiles, x, y, patch.tileId);
+          }
+        }
+      }
+    });
+
+    for (let x = 0; x < width; x += 1) {
+      setTile(terrainTiles, x, 0, "caveWallHorizontalV2");
+      setTile(terrainTiles, x, height - 1, "caveWallHorizontalV2");
+    }
+    for (let y = 0; y < height; y += 1) {
+      setTile(terrainTiles, 0, y, "caveWallVerticalV2");
+      setTile(terrainTiles, width - 1, y, "caveWallVerticalV2");
+    }
+
+    (spec.horizontalWalls || []).forEach((wall) => {
+      const gaps = new Set(wall.gaps || []);
+      for (let x = wall.startX; x <= wall.endX; x += 1) {
+        if (!gaps.has(x)) setTile(terrainTiles, x, wall.y, "caveWallHorizontalV2");
+      }
+    });
+    (spec.verticalWalls || []).forEach((wall) => {
+      const gaps = new Set(wall.gaps || []);
+      for (let y = wall.startY; y <= wall.endY; y += 1) {
+        if (!gaps.has(y)) setTile(terrainTiles, wall.x, y, "caveWallVerticalV2");
+      }
+    });
+    (spec.wallBlocks || []).forEach(([x, y]) => setTile(terrainTiles, x, y, "caveWallPillarV2"));
+    (spec.openings || []).forEach(([x, y]) => setTile(terrainTiles, x, y, null));
+    (spec.objects || []).forEach(([tileId, x, y]) => setTile(objectTiles, x, y, tileId));
+
+    return {
+      id: spec.id,
+      name: spec.name,
+      tileSize: 48,
+      width,
+      height,
+      defaultTile: "caveFloor01",
+      marginTiles: {
+        ground: "caveFloor01",
+        terrain: "caveWallPillarV2",
+        object: null,
+        event: null,
+      },
+      layers: [
+        { id: "ground", name: "地面", tiles: groundTiles },
+        { id: "terrain", name: "地形", tiles: terrainTiles },
+        { id: "object", name: "配置物", tiles: objectTiles },
+        { id: "event", name: "イベント", tiles: eventTiles },
+      ],
+      events: spec.events || [],
+    };
+  }
+
 
 
   window.HEALER_TILE_MAPS.startTown01 = {
@@ -1475,6 +1559,362 @@
             }
     ],
   };
+  window.HEALER_TILE_MAPS.cave01 = {
+    ...createCaveMap({
+      id: "cave01",
+      name: "洞窟1",
+      width: 40,
+      height: 22,
+      seed: 1,
+      openings: [[0, 18], [39, 3]],
+      groundPatches: [
+        { tileId: "caveFloorWet01", centerX: 12, centerY: 18, radiusX: 4, radiusY: 2 },
+        { tileId: "caveFloorCracked01", centerX: 33, centerY: 5, radiusX: 4, radiusY: 3 },
+      ],
+      horizontalWalls: [
+        { y: 5, startX: 14, endX: 26, gaps: [21, 22] },
+        { y: 11, startX: 26, endX: 38, gaps: [32, 33] },
+        { y: 15, startX: 8, endX: 25, gaps: [17, 18] },
+      ],
+      verticalWalls: [
+        { x: 8, startY: 1, endY: 14, gaps: [11, 12] },
+        { x: 26, startY: 6, endY: 20, gaps: [9, 10] },
+      ],
+      wallBlocks: [[8, 1], [8, 14], [8, 15], [14, 5], [25, 15], [26, 5], [26, 11], [26, 20], [38, 11]],
+      objects: [
+        ["caveTorch01", 2, 17],
+        ["caveTorch01", 6, 19],
+        ["caveCrystalBlue", 3, 3],
+        ["caveStalagmite01", 5, 12],
+        ["caveTorch01", 10, 10],
+        ["caveCrystalBlue", 12, 18],
+        ["caveStalagmite01", 18, 12],
+        ["caveTorch01", 20, 14],
+        ["caveCrystalBlue", 23, 7],
+        ["caveStalagmite01", 29, 18],
+        ["caveTorch01", 31, 9],
+        ["caveCrystalBlue", 35, 5],
+        ["caveStalagmite01", 36, 14],
+      ],
+      events: [
+        {
+          id: "cave01_to_cave02",
+          name: "洞窟2へ",
+          type: "mapTransfer",
+          trigger: "step",
+          x: 39,
+          y: 3,
+          width: 1,
+          height: 1,
+          targetMap: "cave02",
+          targetCol: 1,
+          targetRow: 18,
+        },
+      ],
+    }),
+  };
+
+  window.HEALER_TILE_MAPS.cave02 = {
+    id: "cave02",
+    name: "洞窟2",
+    tileSize: 48,
+    width: 40,
+    height: 21,
+    defaultTile: "caveFloor01",
+    marginTiles: {
+      ground: "caveFloor01",
+      terrain: "caveWallPillarV2",
+      object: null,
+      event: null,
+    },
+    layers: [
+      {
+        id: "ground",
+        name: "地面",
+        tiles: [
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01",
+        ],
+      },
+      {
+        id: "terrain",
+        name: "地形",
+        tiles: [
+          "caveWallVerticalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", null, null, null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallPillarV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", null, null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallPillarV2", "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallPillarV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallVerticalV2", null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallPillarV2", "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, "caveWallVerticalV2", "caveWallPillarV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", null, null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallPillarV2", "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallVerticalV2",
+        ],
+      },
+      {
+        id: "object",
+        name: "配置物",
+        tiles: [
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveBossDoorClosed", null, null, null, null, null, null, null, null, null, null, { tileId: "caveBossDoorOpen", rotate: 90 }, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveCrystalBlue", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, "caveCrystalBlue", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null, null, null, null, null, null, null, "caveCrystalBlue", null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, "caveCrystalBlue", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveStalagmite01", null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      },
+      {
+        id: "event",
+        name: "イベント",
+        tiles: [
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      }
+    ],
+    events: [
+            {
+                    "id": "cave02_to_cave01",
+                    "name": "洞窟1へ戻る",
+                    "type": "mapTransfer",
+                    "trigger": "step",
+                    "x": 0,
+                    "y": 18,
+                    "width": 1,
+                    "height": 1,
+                    "targetMap": "cave01",
+                    "targetCol": 38,
+                    "targetRow": 3
+            },
+            {
+                    "id": "cave02_to_boss_room",
+                    "name": "ボス部屋へ",
+                    "type": "mapTransfer",
+                    "trigger": "step",
+                    "x": 39,
+                    "y": 2,
+                    "width": 1,
+                    "height": 1,
+                    "targetMap": "caveBossRoom",
+                    "targetCol": 20,
+                    "targetRow": 18
+            }
+    ],
+  };
+
+  window.HEALER_TILE_MAPS.caveBossRoom = {
+    id: "caveBossRoom",
+    name: "洞窟ボス部屋",
+    tileSize: 48,
+    width: 40,
+    height: 20,
+    defaultTile: "caveFloor01",
+    marginTiles: {
+      ground: "caveFloor01",
+      terrain: "caveWallPillarV2",
+      object: null,
+      event: null,
+    },
+    layers: [
+      {
+        id: "ground",
+        name: "地面",
+        tiles: [
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloor01", "caveFloorCracked01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01",
+          "caveFloor02", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor02", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor02",
+          "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor02", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloorWet01", "caveFloorWet01", "caveFloorWet01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorWet01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloorCracked01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloorWet01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01",
+          "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01",
+          "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloorCracked01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor01", "caveFloor02", "caveFloor01", "caveFloor01",
+        ],
+      },
+      {
+        id: "terrain",
+        name: "地形",
+        tiles: [
+          "caveWallVerticalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallPillarV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", null, null, null, null, null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallPillarV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallPillarV2", null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, "caveWallPillarV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", null, null, null, null, null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallPillarV2", null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveWallVerticalV2",
+          "caveWallVerticalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", null, null, null, null, "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallHorizontalV2", "caveWallVerticalV2",
+        ],
+      },
+      {
+        id: "object",
+        name: "配置物",
+        tiles: [
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveCrystalBlue", null, "caveTorch01", null, null, "caveTorch01", null, "caveCrystalBlue", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, "caveCrystalBlue", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveCrystalBlue", null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, "caveTorch01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveBossDoorOpen", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      },
+      {
+        id: "event",
+        name: "イベント",
+        tiles: [
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        ],
+      }
+    ],
+    events: [
+            {
+                    "id": "boss_room_to_cave02",
+                    "name": "洞窟2へ戻る",
+                    "type": "mapTransfer",
+                    "trigger": "step",
+                    "x": 20,
+                    "y": 19,
+                    "width": 1,
+                    "height": 1,
+                    "targetMap": "cave02",
+                    "targetCol": 38,
+                    "targetRow": 2
+            }
+    ],
+  };
+
+  function placeCaveBossDoor(mapId, x, y, rotate = 0) {
+    const map = window.HEALER_TILE_MAPS[mapId];
+    const objectLayer = map && map.layers.find((layer) => layer.id === "object");
+    if (!objectLayer || x < 0 || y < 0 || x >= map.width || y >= map.height) return;
+    objectLayer.tiles[y * map.width + x] = rotate
+      ? { tileId: "caveBossDoorOpen", rotate }
+      : "caveBossDoorOpen";
+  }
+
+  placeCaveBossDoor("cave02", 38, 0, 90);
+  placeCaveBossDoor("caveBossRoom", 19, 18);
+
   window.HEALER_DEBUG_TILE_MAPS = [
     { id: "startTown01", label: "クラク村" },
     { id: "kuraku_forest_1", label: "西クラク森" },
@@ -1482,5 +1922,8 @@
     { id: "kuraku_forest_3", label: "花畑" },
     { id: "kuraku_forest_4", label: "北クラク森" },
     { id: "otoru_village", label: "オトール村" },
+    { id: "cave01", label: "洞窟1" },
+    { id: "cave02", label: "洞窟2" },
+    { id: "caveBossRoom", label: "洞窟ボス部屋" },
 ];
 })();
