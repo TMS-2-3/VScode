@@ -278,9 +278,8 @@
         return image;
       }
       const height = Math.max(1, Math.round(rawHeight));
-      const sourceSize = getImageDimensions(image);
-      const sourceHeight = Math.max(1, Math.floor(sourceSize.height) || 1);
       const sourceRect = getEnemySpriteRenderSourceRect(image, usage);
+      const sourceHeight = Math.max(1, Math.floor(sourceRect.height) || 1);
       const scale = height / sourceHeight;
       const width = Math.max(1, Math.round(sourceRect.width * scale));
       const drawHeight = Math.max(1, Math.round(sourceRect.height * scale));
