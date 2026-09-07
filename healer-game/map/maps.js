@@ -1686,7 +1686,7 @@
         id: "object",
         name: "配置物",
         tiles: [
-          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveBossDoorClosed", null, null, null, null, null, null, null, null, null, null, { tileId: "caveBossDoorOpen", rotate: 90 }, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveBossDoorClosed", null, null, null, null, null, null, null, null, null, null, { tileId: "caveBossDoorClosedEntrance", rotate: 90 }, null,
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveTorch01", null, null, null,
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveCrystalBlue", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
@@ -1855,7 +1855,7 @@
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveStalagmite01", null, null, null, null, null, null, null,
-          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveBossDoorOpen", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "caveBossDoorClosedEntrance", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
         ],
       },
@@ -1908,8 +1908,8 @@
     const objectLayer = map && map.layers.find((layer) => layer.id === "object");
     if (!objectLayer || x < 0 || y < 0 || x >= map.width || y >= map.height) return;
     objectLayer.tiles[y * map.width + x] = rotate
-      ? { tileId: "caveBossDoorOpen", rotate }
-      : "caveBossDoorOpen";
+      ? { tileId: "caveBossDoorClosedEntrance", rotate }
+      : "caveBossDoorClosedEntrance";
   }
 
   placeCaveBossDoor("cave02", 38, 0, 90);
