@@ -355,6 +355,7 @@
         getTownEventActors: callLater("townController", "getTownEventActors"),
         getTownNpcActors: callLater("townController", "getTownNpcActors"),
         getTownMonsterSymbols: callLater("townController", "getTownMonsterSymbols"),
+        isEquipmentCraftVisible: callLater("townController", "isEquipmentCraftVisible"),
         getQuestTypes: callLater("townController", "getQuestTypes"),
         getQuestsByType: callLater("townController", "getQuestsByType"),
         getQuestById: callLater("townController", "getQuestById"),

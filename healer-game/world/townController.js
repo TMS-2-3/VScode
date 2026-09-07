@@ -111,6 +111,8 @@
     const SYMBOL_ENCOUNTER_TRANSFER_EXCLUSION_RADIUS = 2;
     const SYMBOL_ENCOUNTER_RANDOM_ATTEMPTS = 240;
     const ENCOUNTER_CUTIN_DURATION = 1.25;
+    const ENCOUNTER_CUTIN_FADE_DURATION = 0.35;
+    const ENCOUNTER_CUTIN_MAX_LOAD_WAIT = 4;
     const TOWN_NPC_WANDER_INTERVAL = 2;
     const SYMBOL_ENCOUNTER_DIRECTIONS = [
       { x: 0, y: -1, facing: "up" },
@@ -1060,6 +1062,96 @@
       for (const role of roles) {
         markTownEnemyVictory(role);
       }
+    }
+
+    let equipmentCraftMaterialEnemySourcesCache = null;
+
+    function getEquipmentCraftMaterialEnemySources() {
+      if (equipmentCraftMaterialEnemySourcesCache) {
+        return equipmentCraftMaterialEnemySourcesCache;
+      }
+      const sourcesByMaterial = {};
+      const enemyDefs = ENEMY_DEFS && typeof ENEMY_DEFS === "object" ? ENEMY_DEFS : {};
+      for (const [enemyId, enemy] of Object.entries(enemyDefs)) {
+        const sourceKeys = [
+          enemyId,
+          enemy && enemy.role,
+          enemy && enemy.enemyId,
+          enemy && enemy.type,
+          enemy && enemy.id,
+        ].map((value) => String(value || "").trim()).filter(Boolean);
+        const drops = Array.isArray(enemy && enemy.drops) ? enemy.drops : [];
+        for (const drop of drops) {
+          if (!drop || drop.type !== "material") {
+            continue;
+          }
+          const chance = Number(drop.chance);
+          if (Number.isFinite(chance) && chance <= 0) {
+            continue;
+          }
+          const materialKey = String(drop.key || drop.id || drop.materialId || "").trim();
+          if (!materialKey) {
+            continue;
+          }
+          if (!sourcesByMaterial[materialKey]) {
+            sourcesByMaterial[materialKey] = new Set();
+          }
+          for (const sourceKey of sourceKeys) {
+            sourcesByMaterial[materialKey].add(sourceKey);
+          }
+        }
+      }
+      equipmentCraftMaterialEnemySourcesCache = sourcesByMaterial;
+      return sourcesByMaterial;
+    }
+
+    function getCraftUnlockMaterialKeys(recipe) {
+      return Object.entries(getRecipeMaterials(recipe))
+        .map(([key, rawCount]) => {
+          const count = Number(rawCount);
+          return {
+            key: String(key || "").trim(),
+            count: Math.max(0, Math.floor(Number.isFinite(count) ? count : 0)),
+          };
+        })
+        .filter((entry) => entry.key && entry.count > 0)
+        .map((entry) => entry.key);
+    }
+
+    function isCraftMaterialUnlockedByEnemyVictory(materialKey) {
+      const key = String(materialKey || "").trim();
+      if (!key) {
+        return true;
+      }
+      const sources = getEquipmentCraftMaterialEnemySources()[key];
+      if (!sources || sources.size <= 0) {
+        return false;
+      }
+      for (const source of sources) {
+        if (isTownEnemyVictoryUnlocked(source)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function isEquipmentCraftVisible(itemOrId) {
+      const item = typeof itemOrId === "string" ? getEquipmentItem(itemOrId) : itemOrId;
+      if (!item || item.shopHidden) {
+        return false;
+      }
+      if (item.craftVisibleByDefault || item.visibleByDefault) {
+        return true;
+      }
+      const recipe = getCraftRecipe(item);
+      if (!recipe) {
+        return false;
+      }
+      const materialKeys = getCraftUnlockMaterialKeys(recipe);
+      if (!materialKeys.length) {
+        return true;
+      }
+      return materialKeys.every(isCraftMaterialUnlockedByEnemyVictory);
     }
 
     function getTownRawQuestById(questId) {
@@ -3267,7 +3359,6 @@
     }
 
     function startEncounterCutin(quest, symbols) {
-      const loadTask = preloadTownBattleSprites(quest);
       town.player.gridMove = null;
       input.keys = input.keys || {};
       for (const key of TOWN_MOVEMENT_KEYS) {
@@ -3276,19 +3367,34 @@
       game.messageTimer = 0;
       game.encounterCutin = {
         active: true,
+        phase: "cutin",
         timer: 0,
         duration: ENCOUNTER_CUTIN_DURATION,
+        fadeTimer: 0,
+        fadeDuration: ENCOUNTER_CUTIN_FADE_DURATION,
         quest,
         title: "戦闘開始",
         subtitle: quest && quest.name ? quest.name : "魔物と遭遇",
         enemyText: getEncounterCutinEnemyText(quest, symbols),
         symbolText: getEncounterCutinSymbolText(symbols),
-        ready: false,
+        ready: true,
+        loadStarted: false,
         waitAge: 0,
-        maxWait: 4,
+        maxWait: ENCOUNTER_CUTIN_MAX_LOAD_WAIT,
         loadingProgress: 0,
-        loadTask,
       };
+    }
+
+    function startEncounterCutinLoad(cutin) {
+      if (!cutin || cutin.loadStarted) {
+        return;
+      }
+      const loadTask = preloadTownBattleSprites(cutin.quest);
+      cutin.loadStarted = true;
+      cutin.ready = false;
+      cutin.waitAge = 0;
+      cutin.loadingProgress = 0;
+      cutin.loadTask = loadTask;
       const activeCutin = game.encounterCutin;
       loadTask.promise
         .catch(() => {})
@@ -3305,7 +3411,27 @@
         return false;
       }
       const cutin = game.encounterCutin;
-      if (cutin.ready === false) {
+      const phase = cutin.phase || (cutin.ready === false ? "loading" : "cutin");
+      if (phase === "cutin") {
+        cutin.timer = Math.max(0, Number(cutin.timer) || 0) + Math.max(0, Number(dt) || 0);
+        if (cutin.timer < Math.max(0.1, Number(cutin.duration) || ENCOUNTER_CUTIN_DURATION)) {
+          return true;
+        }
+        cutin.phase = "fade";
+        cutin.fadeTimer = 0;
+        return true;
+      }
+      if (phase === "fade") {
+        cutin.fadeTimer = Math.max(0, Number(cutin.fadeTimer) || 0) + Math.max(0, Number(dt) || 0);
+        if (cutin.fadeTimer < Math.max(0.01, Number(cutin.fadeDuration) || ENCOUNTER_CUTIN_FADE_DURATION)) {
+          return true;
+        }
+        cutin.fadeTimer = Math.max(0.01, Number(cutin.fadeDuration) || ENCOUNTER_CUTIN_FADE_DURATION);
+        cutin.phase = "loading";
+        startEncounterCutinLoad(cutin);
+        return true;
+      }
+      if (phase === "loading" && cutin.ready === false) {
         cutin.waitAge = Math.max(0, Number(cutin.waitAge) || 0) + Math.max(0, Number(dt) || 0);
         const timeoutProgress = Math.min(0.92, cutin.waitAge / Math.max(0.01, Number(cutin.maxWait) || 1) * 0.9);
         cutin.loadingProgress = getTownLoadProgress(cutin.loadTask, timeoutProgress);
@@ -3313,10 +3439,6 @@
           cutin.ready = true;
           cutin.loadingProgress = 1;
         }
-        return true;
-      }
-      cutin.timer = Math.max(0, Number(cutin.timer) || 0) + Math.max(0, Number(dt) || 0);
-      if (cutin.timer < Math.max(0.1, Number(cutin.duration) || ENCOUNTER_CUTIN_DURATION)) {
         return true;
       }
       const quest = cutin.quest || null;
@@ -4860,6 +4982,10 @@
         setTownPanelMessage("この装備にはまだ製作データがありません。");
         return;
       }
+      if (!isEquipmentCraftVisible(item)) {
+        setTownPanelMessage("必要素材の入手元になる魔物にまだ勝利していません。");
+        return;
+      }
       if (!canPayRecipeCost(recipe)) {
         setTownPanelMessage("素材か所持金が足りません。");
         return;
@@ -5535,6 +5661,7 @@
       startGuildMeetingStory,
       startTownStory,
       advanceTownStory,
+      isEquipmentCraftVisible,
       getQuestTypes,
       getQuestsByType,
       getQuestById,

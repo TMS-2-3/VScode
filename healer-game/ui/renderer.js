@@ -339,11 +339,17 @@
     if (!cutin || cutin.active !== true) {
       return false;
     }
-    if (cutin.ready === false) {
+    const phase = cutin.phase || (cutin.ready === false ? "loading" : "cutin");
+    if (phase === "fade" || phase === "loading") {
+      const fadeDuration = Math.max(0.01, Number(cutin.fadeDuration) || 0.35);
+      const fadeTimer = Math.max(0, Number(cutin.fadeTimer) || 0);
+      const alpha = phase === "loading" ? 1 : Math.max(0, Math.min(1, fadeTimer / fadeDuration));
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
       ctx.fillRect(0, 0, view.w, view.h);
-      drawCornerLoadingIndicator(cutin.loadingProgress, "ロード中");
+      if (phase === "loading") {
+        drawCornerLoadingIndicator(cutin.loadingProgress, "ロード中");
+      }
       ctx.restore();
       return true;
     }

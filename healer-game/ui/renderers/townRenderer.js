@@ -48,6 +48,7 @@
       getTownEventActors,
       getTownNpcActors,
       getTownMonsterSymbols,
+      isEquipmentCraftVisible,
       getQuestTypes,
       getQuestsByType,
       getQuestById,
@@ -3777,11 +3778,15 @@
           ? getEquipmentInstancesByItemId(item.id)
           : [];
         rows.push(...instances);
-      } else if (getCraftRecipe(item)) {
+      } else if (getCraftRecipe(item) && isEquipmentCraftVisibleForTown(item)) {
         rows.push(item);
       }
     }
     return applyEquipmentShopFilters(rows, shopKind);
+  }
+
+  function isEquipmentCraftVisibleForTown(item) {
+    return typeof isEquipmentCraftVisible === "function" ? isEquipmentCraftVisible(item) : true;
   }
 
   function createDefaultEquipmentShopFiltersForTown() {
