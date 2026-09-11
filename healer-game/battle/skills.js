@@ -1267,7 +1267,9 @@
           continue;
         }
         if (skill.enemyArea) {
-          candidates.push({ key, skill, target: enemy, range: Infinity, use: () => useEnemyAreaSkill(enemy, key, skill) });
+          const actionTarget = target || enemy;
+          const range = target ? getEnemySkillRange(skill) + target.radius : Infinity;
+          candidates.push({ key, skill, target: actionTarget, range, use: () => useEnemyAreaSkill(enemy, key, skill) });
           continue;
         }
         if (skill.enemyLine) {
@@ -1295,6 +1297,12 @@
           }
           continue;
         }
+        if (key === "fly_double_attack") {
+          if (target) {
+            candidates.push({ key, skill, target, range: getEnemySkillRange(skill) + target.radius, use: () => useEnemyFlyDoubleAttack(enemy, key, skill, target) });
+          }
+          continue;
+        }
         const range = getEnemySkillRange(skill);
         if (target) {
           candidates.push({ key, skill, target, range: range + target.radius, use: () => useEnemySingleTargetSkill(enemy, key, skill, target) });
@@ -1311,6 +1319,7 @@
       if (key === "sleep_scent") return useEnemySleepScent(enemy, key, skill || getUnitSkill(enemy, key));
       if (key === "pollen_spraying") return useEnemyPollenSpraying(enemy, key, skill || getUnitSkill(enemy, key), target);
       if (key === "absorption_of_reunion") return useEnemyAbsorption(enemy, key, skill || getUnitSkill(enemy, key), target);
+      if (key === "fly_double_attack") return useEnemyFlyDoubleAttack(enemy, key, skill || getUnitSkill(enemy, key), target);
       if (skill && skill.enemyArea) return useEnemyAreaSkill(enemy, key, skill);
       if (skill && skill.enemyLine) return useEnemyLineSkill(enemy, key, skill, target);
       return useEnemySingleTargetSkill(enemy, key, skill || getUnitSkill(enemy, key), target);
@@ -1332,8 +1341,9 @@
     }
 
     function getEnemySkillRange(skill) {
-      if (skill && Number.isFinite(skill.range)) return skill.range;
+      if (skill && Number.isFinite(skill.range) && skill.range > 0) return skill.range;
       if (skill && Number.isFinite(skill.hitRange)) return skill.hitRange;
+      if (skill && Number.isFinite(skill.range) && skill.range === 0 && Number.isFinite(skill.radius)) return skill.radius * 0.5;
       if (skill && Number.isFinite(skill.radius)) return skill.radius;
       return ctx.battlePx(50);
     }
@@ -1630,11 +1640,17 @@
           if (dealt > 0 && enemy.tutorialOpeningHitUnitId && target.id === enemy.tutorialOpeningHitUnitId) {
             enemy.tutorialOpeningHitDone = true;
           }
+          if (dealt > 0 && Number.isFinite(skill.lifeStealRatio) && skill.lifeStealRatio > 0 && ctx.healUnit) {
+            ctx.healUnit(enemy, enemy, dealt * skill.lifeStealRatio, { noMood: true, noUltGain: true });
+          }
           if (Number.isFinite(skill.injuryDuration)) {
             applyInjury(enemy, target, skill.injuryDuration);
           }
           if (skill.poison) {
             applyPoison(enemy, target, skill);
+          }
+          if (Number.isFinite(skill.flinchingDuration)) {
+            applyFlinching(enemy, target, skill.flinchingDuration);
           }
           if (Number.isFinite(skill.woundStacks)) {
             applyWound(enemy, target, skill.woundStacks);
@@ -1668,6 +1684,80 @@
             enemy.forcedEnemySkillTarget = target;
             enemy.cds.attack = 0;
             enemy.aiIntent = null;
+          }
+          if (typeof ctx.slashEffect === "function") {
+            ctx.slashEffect(enemy, target);
+          }
+        }, i * delayMs);
+      }
+      return true;
+    }
+
+    function getEnemySkillTargetsInRange(enemy, skill) {
+      if (!enemy || enemy.dead || !skill) {
+        return [];
+      }
+      const range = getEnemySkillRange(skill);
+      return ctx.getFieldPartyMembers().filter((member) => {
+        return member && !member.dead && ctx.dist(enemy, member) <= range + member.radius;
+      });
+    }
+
+    function pickRandomEnemySkillTargets(enemy, skill, count) {
+      const targets = getEnemySkillTargetsInRange(enemy, skill);
+      if (targets.length <= 0) {
+        return [];
+      }
+      if (targets.length === 1) {
+        return Array(Math.max(1, count)).fill(targets[0]);
+      }
+      const shuffled = targets.slice();
+      for (let i = shuffled.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled.slice(0, Math.max(1, count));
+    }
+
+    function useEnemyFlyDoubleAttack(enemy, key, skill, target) {
+      if (!target || target.dead) {
+        return false;
+      }
+      beginEnemySkill(enemy, key, skill);
+      const cast = getCastTime(skill.cast, enemy);
+      if (cast > 0) {
+        enemy.actionLock = Math.max(enemy.actionLock || 0, cast + ctx.ACTION_GAP);
+        startEnemyCastVisual(enemy, cast);
+        ctx.addTelegraph({
+          type: "circle", x: target.x, y: target.y, radius: Math.max(target.radius + ctx.battlePx(8), ctx.battlePx(24)), team: "enemy", time: cast,
+          hidden: true,
+          getPosition: () => ({ x: target.x, y: target.y }),
+          resolve: () => resolveEnemyFlyDoubleAttack(enemy, key, skill),
+        });
+        return true;
+      }
+      return resolveEnemyFlyDoubleAttack(enemy, key, skill);
+    }
+
+    function resolveEnemyFlyDoubleAttack(enemy, key, skill) {
+      if (!enemy || enemy.dead || isActionDisabled(enemy)) {
+        return false;
+      }
+      const count = Math.max(1, Math.floor(Number.isFinite(skill.randomTargetCount) ? skill.randomTargetCount : 2));
+      const targets = pickRandomEnemySkillTargets(enemy, skill, count);
+      if (!targets.length) {
+        return false;
+      }
+      const delayMs = Math.max(0, Math.floor(Number.isFinite(skill.repeatDelayMs) ? skill.repeatDelayMs : 0));
+      for (let i = 0; i < targets.length; i += 1) {
+        const target = targets[i];
+        setTimeout(() => {
+          if (!enemy || enemy.dead || isActionDisabled(enemy) || !target || target.dead || ctx.dist(enemy, target) > getEnemySkillRange(skill) + target.radius) {
+            return;
+          }
+          const dealt = ctx.dealDamage(enemy, target, getEnemySkillDamage(enemy, target, skill), getSkillDamageOptions(skill));
+          if (dealt > 0 && Number.isFinite(skill.lifeStealRatio) && skill.lifeStealRatio > 0 && ctx.healUnit) {
+            ctx.healUnit(enemy, enemy, dealt * skill.lifeStealRatio, { noMood: true, noUltGain: true });
           }
           if (typeof ctx.slashEffect === "function") {
             ctx.slashEffect(enemy, target);

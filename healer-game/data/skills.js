@@ -608,6 +608,22 @@
         id: "poisonous_stinger", key: "poisonous_stinger", owner: "enemy", name: "毒針", rank: "D", category: "スキル", skillType: "単体攻撃",
         cd: 30, range: px(130), damageBase: 5, attackScale: 0.1, poison: true, damageType: "physical", lines: ["毒針"], statusIds: ["debuff_poison"],
       },
+      clamp: {
+        id: "clamp", key: "clamp", owner: "enemy", name: "クランプ", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 16, cast: 1, range: px(80), damageBase: 30, attackScale: 0.3, flinchingDuration: 3, damageType: "physical", lines: ["クランプ"], statusIds: ["debuff_flinching"],
+      },
+      ultrasound: {
+        id: "ultrasound", key: "ultrasound", owner: "enemy", name: "超音波", rank: "D", category: "スキル", skillType: "範囲攻撃",
+        cd: 15, cost: 10, cast: 1, range: px(0), radius: px(270), damageBase: 10, magicScale: 0.2, enemyArea: true, damageType: "magic", lines: ["超音波"],
+      },
+      fly_double_attack: {
+        id: "fly_double_attack", key: "fly_double_attack", owner: "enemy", name: "飛び回る", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 15, range: px(200), randomTargetCount: 2, repeatDelayMs: 120, damageBase: 10, attackScale: 0.2, damageType: "physical", lines: ["飛び回る"],
+      },
+      hp_bite: {
+        id: "hp_bite", key: "hp_bite", owner: "enemy", name: "吸血", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 18, range: px(50), damageBase: 0, attackScale: 0.3, lifeStealRatio: 1, damageType: "physical", lines: ["吸血"],
+      },
       absorption_of_reunion: {
         id: "absorption_of_reunion", key: "absorption_of_reunion", owner: "enemy", name: "吸収", rank: "D", category: "スキル", skillType: "単体攻撃",
         cd: 5, cast: 3, range: px(120), duration: 4, tickRate: 1, damageBase: 5, attackScale: 0.1, magicScale: 0.1, absorbHealMultiplier: 5, damageType: "不変ドット", lines: ["吸収"],
