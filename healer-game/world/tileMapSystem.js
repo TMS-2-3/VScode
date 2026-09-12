@@ -4,6 +4,7 @@
   window.createHealerTileMapSystem = function createHealerTileMapSystem(options = {}) {
     const tileDefs = options.tileDefs || window.HEALER_TILE_DEFS || {};
     const tileMaps = options.tileMaps || window.HEALER_TILE_MAPS || {};
+    const commonTileSize = Math.max(1, Math.floor(Number(options.tileSize ?? window.HEALER_TILE_SIZE) || 48));
     const imageCache = new Map();
     const marginTileCache = new Map();
 
@@ -22,8 +23,7 @@
     }
 
     function getTileSize(mapOrId) {
-      const map = getMap(mapOrId);
-      return Math.max(1, Math.floor(Number(map && map.tileSize) || 48));
+      return commonTileSize;
     }
 
     function getMapPixelSize(mapOrId) {
@@ -266,7 +266,7 @@
       if (!map) {
         return null;
       }
-      return Object.prototype.hasOwnProperty.call(map, "marginTile") ? map.marginTile : map.defaultTile;
+      return Object.prototype.hasOwnProperty.call(map, "marginTile") ? map.marginTile : null;
     }
 
     function shouldUseMarginLayerId(layerId, includeLayerIds, excludeLayerIds) {

@@ -1,6 +1,8 @@
 (() => {
   "use strict";
 
+  window.HEALER_TILE_SIZE = 48;
+
   // Map data edited by map collaborators.
   // Tile images are optional for now. When assets are ready, set image to a path
   // such as "map/img_tile/forest/grass.png".

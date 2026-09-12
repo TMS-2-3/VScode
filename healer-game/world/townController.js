@@ -59,6 +59,7 @@
       getEquipmentBaseItemId,
     } = context;
 
+    const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
     const INN_REST_COST = 100;
     const TUTORIAL_STORY_QUEST_ID = "story_horn_rabbit_competition_001";
     const STORY_PATH_AHEAD_QUEST_ID = "story_path_ahead_001";
@@ -289,7 +290,7 @@
       if (tileMap && tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function") {
         return tileMapSystem.getMapPixelSize(tileMap);
       }
-      const tileSize = Math.max(1, Math.floor(Number(tileMap && tileMap.tileSize) || 48));
+      const tileSize = COMMON_TILE_SIZE;
       return {
         w: Math.max(0, Math.floor(Number(tileMap && tileMap.width) || 0)) * tileSize || TOWN_WIDTH,
         h: Math.max(0, Math.floor(Number(tileMap && tileMap.height) || 0)) * tileSize || TOWN_HEIGHT,
@@ -389,7 +390,7 @@
     }
 
     function buildTownBuildingsFromTileMap(map) {
-      const tileSize = Math.max(1, Math.floor(Number(map && map.tileSize) || 48));
+      const tileSize = getTownTileSize(map);
       const events = Array.isArray(map && map.events) ? map.events : [];
       return events
         .filter((event) => event && (event.type === "buildingArea" || event.action === "buildingArea"))
@@ -802,7 +803,7 @@
       if (tileMap && tileMapSystem && typeof tileMapSystem.getTileSize === "function") {
         return tileMapSystem.getTileSize(tileMap);
       }
-      return Math.max(1, Math.floor(Number(tileMap && tileMap.tileSize) || 48));
+      return COMMON_TILE_SIZE;
     }
 
     function getTownGridCollisionRadius(tileSize) {

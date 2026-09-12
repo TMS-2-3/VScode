@@ -564,17 +564,6 @@
           </div>
         </div>
 
-        <div class="row">
-          <div>
-            <label for="tile-size">タイル</label>
-            <input id="tile-size" type="number" min="16" max="96" value="48" />
-          </div>
-          <div>
-            <label for="default-tile">標準</label>
-            <select id="default-tile"></select>
-          </div>
-        </div>
-
         <div class="button-row">
           <button id="new-map-button" class="primary">新規作成</button>
           <button id="resize-button">反映</button>
@@ -621,6 +610,10 @@
           <div class="map-toolbar">
             <div class="status" id="map-size-label"></div>
             <div class="map-control-row">
+              <div class="margin-tile-editor">
+                <span>標準地面</span>
+                <button id="default-tile-cell" class="margin-tile-cell" type="button"></button>
+              </div>
               <div class="margin-tile-editor">
                 <span>余白タイル</span>
                 <button id="margin-tile-cell" class="margin-tile-cell" type="button"></button>
@@ -692,6 +685,8 @@
     <script>
       const defs = window.HEALER_TILE_DEFS || {};
       const sourceMaps = window.HEALER_TILE_MAPS || {};
+      const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
+      window.HEALER_TILE_SIZE = COMMON_TILE_SIZE;
       const layerConfigs = [
         { id: "ground", name: "地面" },
         { id: "terrain", name: "地形" },
@@ -735,7 +730,7 @@
       const DRAG_SCROLL_MAX_SPEED = 24;
       const NEW_MAP_DEFAULT_WIDTH = 35;
       const NEW_MAP_DEFAULT_HEIGHT = 30;
-      const NEW_MAP_DEFAULT_TILE_SIZE = 48;
+      const DEFAULT_MARGIN_GROUND_TILE = "test_grass";
       const DRAFT_MAP_SELECT_PREFIX = "draft:";
       const CAVE_WALL_TOP_TILE_ID = "caveWallHorizontalV2";
       const CAVE_WALL_LOWER_TILE_ID = "caveWallLowerV2";
@@ -745,8 +740,6 @@
       const mapNameInput = document.getElementById("map-name-input");
       const mapWidthInput = document.getElementById("map-width");
       const mapHeightInput = document.getElementById("map-height");
-      const tileSizeInput = document.getElementById("tile-size");
-      const defaultTileSelect = document.getElementById("default-tile");
       const layerTabs = document.getElementById("layer-tabs");
       const palette = document.getElementById("palette");
       const selectedInfo = document.getElementById("selected-info");
@@ -759,6 +752,7 @@
       const rangeCell = document.getElementById("range-cell");
       const duplicateCell = document.getElementById("duplicate-cell");
       const coordLabelButton = document.getElementById("coord-label-button");
+      const defaultTileCell = document.getElementById("default-tile-cell");
       const marginTileCell = document.getElementById("margin-tile-cell");
       const undoButton = document.getElementById("undo-button");
       const redoButton = document.getElementById("redo-button");
@@ -1027,24 +1021,40 @@
         return { id: layer.id, name: layer.name || layer.id, tiles };
       }
 
-      function getMarginFillForLayer(layerId, defaultTile = state.map && state.map.defaultTile) {
-        return layerId === "ground" ? defaultTile || "grass" : null;
+      function getMarginFillForLayer(layerId) {
+        if (layerId !== "ground") {
+          return null;
+        }
+        if (defs[DEFAULT_MARGIN_GROUND_TILE]) {
+          return DEFAULT_MARGIN_GROUND_TILE;
+        }
+        return defs.grass ? "grass" : null;
       }
 
-      function normalizeMarginTiles(map, defaultTile) {
+      function getDefaultGroundTileFallback(preferred) {
+        const preferredId = getTileIdFromEntry(preferred);
+        if (preferredId && defs[preferredId] && tileFitsLayer(preferredId, "ground")) {
+          return preferredId;
+        }
+        if (defs.grass && tileFitsLayer("grass", "ground")) {
+          return "grass";
+        }
+        return Object.keys(defs).find((tileId) => tileFitsLayer(tileId, "ground")) || "";
+      }
+
+      function normalizeMarginTiles(map) {
         const result = {};
         const rawMarginTiles = map && map.marginTiles;
         const hasLayeredMargin = rawMarginTiles && typeof rawMarginTiles === "object" && !Array.isArray(rawMarginTiles);
         const hasLegacyMargin = Object.prototype.hasOwnProperty.call(map || {}, "marginTile");
-        const legacyMarginTile = hasLegacyMargin ? map.marginTile : defaultTile;
 
         layerConfigs.forEach((config) => {
-          const fill = getMarginFillForLayer(config.id, defaultTile);
+          const fill = getMarginFillForLayer(config.id);
           if (hasLayeredMargin) {
             const hasLayerValue = Object.prototype.hasOwnProperty.call(rawMarginTiles, config.id);
             result[config.id] = normalizeTileEntry(hasLayerValue ? rawMarginTiles[config.id] : fill, fill);
           } else if (config.id === "ground") {
-            result[config.id] = legacyMarginTile == null ? null : normalizeTileEntry(legacyMarginTile, fill);
+            result[config.id] = normalizeTileEntry(hasLegacyMargin ? map.marginTile : fill, fill);
           } else {
             result[config.id] = null;
           }
@@ -1055,7 +1065,7 @@
 
       function getMarginTiles() {
         if (!state.map.marginTiles) {
-          state.map.marginTiles = normalizeMarginTiles(state.map, state.map.defaultTile);
+          state.map.marginTiles = normalizeMarginTiles(state.map);
         }
         return state.map.marginTiles;
       }
@@ -1063,7 +1073,7 @@
       function normalizeMap(map) {
         const width = Math.max(1, Number(map.width) || 8);
         const height = Math.max(1, Number(map.height) || 15);
-        const defaultTile = defs[map.defaultTile] ? map.defaultTile : "grass";
+        const defaultTile = getDefaultGroundTileFallback(map.defaultTile);
         const sourceLayers = Array.isArray(map.layers) ? map.layers : [];
         const events = Array.isArray(map.events) ? clone(map.events) : [];
         const layers = layerConfigs.map((config) => {
@@ -1076,11 +1086,11 @@
         const normalized = {
           id: sanitizeId(map.id || "smallMap01"),
           name: map.name || "小マップ01",
-          tileSize: Number(map.tileSize) || 48,
+          tileSize: COMMON_TILE_SIZE,
           width,
           height,
           defaultTile,
-          marginTiles: normalizeMarginTiles(map, defaultTile),
+          marginTiles: normalizeMarginTiles(map),
           layers,
           events,
         };
@@ -1095,16 +1105,16 @@
 
       function createNewMap() {
         const identity = createUniqueNewMapIdentity();
-        const defaultTile = defs[defaultTileSelect.value] ? defaultTileSelect.value : "grass";
+        const defaultTile = getDefaultGroundTileFallback(state.map && state.map.defaultTile);
         return normalizeMap({
           id: identity.id,
           name: identity.name,
-          tileSize: NEW_MAP_DEFAULT_TILE_SIZE,
+          tileSize: COMMON_TILE_SIZE,
           width: NEW_MAP_DEFAULT_WIDTH,
           height: NEW_MAP_DEFAULT_HEIGHT,
           defaultTile,
           marginTiles: {
-            ground: defaultTile,
+            ground: getMarginFillForLayer("ground"),
             terrain: null,
             object: null,
             event: null,
@@ -1866,9 +1876,10 @@
             const img = document.createElement("img");
             img.src = resolveEditorImagePath(def.image);
             img.alt = def.name || tileId;
-            const scale = 48 / (def.drawWidth || state.map.tileSize || 48);
-            img.style.width = `${(def.drawWidth || 48) * scale}px`;
-            img.style.height = `${(def.drawHeight || 48) * scale}px`;
+            const previewTileSize = COMMON_TILE_SIZE;
+            const scale = previewTileSize / (def.drawWidth || state.map.tileSize || previewTileSize);
+            img.style.width = `${(def.drawWidth || previewTileSize) * scale}px`;
+            img.style.height = `${(def.drawHeight || previewTileSize) * scale}px`;
             img.style.left = `${(def.drawOffsetX || 0) * scale}px`;
             img.style.top = `${(def.drawOffsetY || 0) * scale}px`;
             button.appendChild(img);
@@ -1930,6 +1941,23 @@
           parent.style.background = def.passable === false ? "#777" : "#8bbd62";
         }
         return true;
+      }
+
+      function renderDefaultTileControl() {
+        defaultTileCell.innerHTML = "";
+        defaultTileCell.style.background = "#d8decf";
+        const tileId = state.map ? getTileIdFromEntry(state.map.defaultTile) : null;
+        const def = getTileDef(tileId);
+        defaultTileCell.classList.toggle("empty", !tileId);
+        defaultTileCell.title = tileId
+          ? `標準地面: ${def && def.name ? def.name : tileId} (${tileId})`
+          : "標準地面なし";
+        if (!tileId) {
+          return;
+        }
+        appendTilePreview(defaultTileCell, tileId, Math.max(1, defaultTileCell.clientWidth || 42), {
+          sourceTileSize: state.map.tileSize,
+        });
       }
 
       function renderMarginTileControl() {
@@ -2041,25 +2069,11 @@
         setStatus(message || `${state.map.name} を作成しました。まだ maps.js には保存されていません。`);
       }
 
-      function renderDefaultTiles() {
-        defaultTileSelect.innerHTML = "";
-        Object.keys(defs)
-          .filter((tileId) => tileFitsLayer(tileId, "ground"))
-          .forEach((tileId) => {
-            const option = document.createElement("option");
-            option.value = tileId;
-            option.textContent = defs[tileId].name || tileId;
-            defaultTileSelect.appendChild(option);
-          });
-      }
-
       function syncInputsFromMap() {
         mapIdInput.value = state.map.id;
         mapNameInput.value = state.map.name;
         mapWidthInput.value = state.map.width;
         mapHeightInput.value = state.map.height;
-        tileSizeInput.value = state.map.tileSize;
-        defaultTileSelect.value = state.map.defaultTile;
       }
 
       function setStatus(text) {
@@ -2132,7 +2146,7 @@
         if (!state.map) return;
         const marginTiles = getMarginTiles();
         if (state.tool === "erase") {
-          const nextTile = getMarginFillForLayer(state.activeLayer, state.map.defaultTile);
+          const nextTile = getMarginFillForLayer(state.activeLayer);
           if (tileEntriesEqual(marginTiles[state.activeLayer], nextTile)) return;
           const snapshot = createHistorySnapshot();
           marginTiles[state.activeLayer] = nextTile;
@@ -2157,12 +2171,33 @@
         setStatus(`余白タイルの ${state.activeLayer} レイヤーを ${def && def.name ? def.name : state.selectedTile} にしました。`);
       }
 
+      function setDefaultTileFromSelection() {
+        if (!state.map) return;
+        if (!state.selectedTile || !tileFitsLayer(state.selectedTile, "ground")) {
+          setStatus("標準地面に使う地面タイルを選択してください。");
+          return;
+        }
+        if (state.map.defaultTile === state.selectedTile) {
+          setStatus("標準地面に変更はありません。");
+          return;
+        }
+        const snapshot = createHistorySnapshot();
+        state.map.defaultTile = state.selectedTile;
+        renderDefaultTileControl();
+        renderSurface();
+        updateExport();
+        rememberCurrentDraftMap();
+        commitHistoryEntry(snapshot);
+        const def = getTileDef(state.selectedTile);
+        setStatus(`標準地面を ${def && def.name ? def.name : state.selectedTile} にしました。`);
+      }
+
       function applyMapSettingsFromInputs(options = {}) {
         const shouldRender = options.render !== false;
         const width = Math.max(1, Math.min(80, Number(mapWidthInput.value) || state.map.width));
         const height = Math.max(1, Math.min(80, Number(mapHeightInput.value) || state.map.height));
-        const tileSize = Math.max(16, Math.min(96, Number(tileSizeInput.value) || 48));
-        const defaultTile = defaultTileSelect.value || "grass";
+        const tileSize = COMMON_TILE_SIZE;
+        const defaultTile = getDefaultGroundTileFallback(state.map.defaultTile);
         const oldWidth = Math.max(1, Number(state.map.width) || width);
         const oldHeight = Math.max(1, Number(state.map.height) || height);
         const snapshot = createHistorySnapshot();
@@ -2269,7 +2304,7 @@ ${baseIndent}}`;
         return {
           id: sanitizeId(map.id),
           name: map.name || sanitizeId(map.id),
-          tileSize: Number(map.tileSize) || 48,
+          tileSize: COMMON_TILE_SIZE,
           width: Number(map.width) || 8,
           height: Number(map.height) || 15,
           defaultTile: map.defaultTile || "grass",
@@ -2430,6 +2465,7 @@ ${baseIndent}}`;
         renderLayerTabs();
         renderPalette();
         renderSelectedInfo();
+        renderDefaultTileControl();
         renderMarginTileControl();
         renderSurface();
         updateEditorMode();
@@ -3057,6 +3093,7 @@ ${baseIndent}}`;
           setStatus("向きを 0度 にしました。");
         });
         coordLabelButton.addEventListener("click", toggleCoordLabels);
+        defaultTileCell.addEventListener("click", setDefaultTileFromSelection);
         marginTileCell.addEventListener("click", setMarginTileFromSelection);
         undoButton.addEventListener("click", undoMapEdit);
         redoButton.addEventListener("click", redoMapEdit);
@@ -3194,7 +3231,6 @@ ${baseIndent}}`;
       }
 
       function init() {
-        renderDefaultTiles();
         renderMapSelect();
         initEvents();
         const firstMap = getSourceMapList()[0];

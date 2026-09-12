@@ -55,6 +55,7 @@
       getKeybindLabel,
     } = context;
 
+  const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
   const MAX_ACCEPTED_FREE_QUESTS = 3;
   const INN_PARTY_UNIT_ORDER = ["finald", "ulpes", "rihas", "sushia"];
   const ITEM_SHOP_CATEGORIES = [
@@ -346,8 +347,8 @@
     return tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function"
       ? tileMapSystem.getMapPixelSize(map)
       : {
-          w: Math.max(1, Math.floor(Number(map && map.width) || 0) * Math.floor(Number(map && map.tileSize) || 48)),
-          h: Math.max(1, Math.floor(Number(map && map.height) || 0) * Math.floor(Number(map && map.tileSize) || 48)),
+          w: Math.max(1, Math.floor(Number(map && map.width) || 0) * COMMON_TILE_SIZE),
+          h: Math.max(1, Math.floor(Number(map && map.height) || 0) * COMMON_TILE_SIZE),
         };
   }
 
@@ -414,7 +415,7 @@
       getTownMapCacheId(map),
       Math.floor(Number(map && map.width) || 0),
       Math.floor(Number(map && map.height) || 0),
-      Math.floor(Number(map && map.tileSize) || 48),
+      COMMON_TILE_SIZE,
       Math.round(Number(mapSize && mapSize.w) || 0),
       Math.round(Number(mapSize && mapSize.h) || 0),
       layerIds,
@@ -550,7 +551,7 @@
   function getTownMarginDepthBounds(map, viewport, drawPadding = TOWN_MARGIN_DEPTH_DRAW_PADDING) {
     const tileSize = tileMapSystem && typeof tileMapSystem.getTileSize === "function"
       ? tileMapSystem.getTileSize(map)
-      : Math.max(1, Math.floor(Number(map && map.tileSize) || 48));
+      : COMMON_TILE_SIZE;
     const mapSize = getTownMapPixelSize(map);
     const safeViewport = viewport || { x: 0, y: 0, w: mapSize.w, h: mapSize.h };
     const padding = Math.max(1, Math.floor(Number(drawPadding) || 1));
@@ -574,7 +575,7 @@
       getTownMapCacheId(map),
       Math.floor(Number(map && map.width) || 0),
       Math.floor(Number(map && map.height) || 0),
-      Math.floor(Number(map && map.tileSize) || 48),
+      COMMON_TILE_SIZE,
       layerIds.join(","),
       bounds.tileSize,
       bounds.minCol,
@@ -743,7 +744,7 @@
       getTownMapCacheId(map),
       Math.floor(Number(map.width) || 0),
       Math.floor(Number(map.height) || 0),
-      Math.floor(Number(map.tileSize) || 48),
+      COMMON_TILE_SIZE,
       Math.round(mapSize.w || 0),
       Math.round(mapSize.h || 0),
       "debug-grid",
@@ -1493,7 +1494,9 @@
       return Math.max(24, configured);
     }
     const tileMap = getTownTileMap();
-    const tileSize = tileMap && Number.isFinite(tileMap.tileSize) ? tileMap.tileSize : 48;
+    const tileSize = tileMapSystem && typeof tileMapSystem.getTileSize === "function"
+      ? tileMapSystem.getTileSize(tileMap)
+      : COMMON_TILE_SIZE;
     return Math.max(36, Math.round(tileSize * 1.25));
   }
 

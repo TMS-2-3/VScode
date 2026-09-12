@@ -57,10 +57,16 @@
 exampleMap: {
   id: "exampleMap",
   name: "サンプルマップ",
-  tileSize: 48,
+  tileSize: 48, // 互換用。実際のタイルサイズは tile.js の HEALER_TILE_SIZE を使う
   width: 15,
   height: 8,
   defaultTile: "grass",
+  marginTiles: {
+    ground: "test_grass",
+    terrain: null,
+    object: null,
+    event: null,
+  },
   layers: [
     { id: "ground", name: "地面", tiles: [] },
     { id: "terrain", name: "地形", tiles: [] },
@@ -102,7 +108,10 @@ grass: {
 
 ## タイル方針
 
-- 標準タイルサイズは `48`
+- タイルサイズはゲーム全体で共通。`tile.js` の `window.HEALER_TILE_SIZE` を変更すると、ゲーム側・map-editor側の基準サイズが変わる
+- 各マップの `tileSize` は互換用に残しているだけで、個別設定としては使わない
+- `defaultTile` はマップ内の標準地面用。マップ外の余白埋めは `marginTiles` で別に指定する
+- map-editorではパレットで地面タイルを選び、上部の「標準地面」セルを押すと `defaultTile` が変わる
 - 草、土、道、水、石などの繰り返し地形は、できるだけ低コントラストのシームレスタイルを使う
 - 花、濃い草、ひび割れ石、かぶせ用タイルなどの強い見た目は、変化用・強調用として使う
 - 建物や配置物は `object` レイヤーへ置く
