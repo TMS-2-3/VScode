@@ -34,8 +34,12 @@
       triggerUltimate,
     } = context;
 
+    function isPetrified(unit) {
+      return Boolean(unit && (unit.petrificationActive || (unit.petrificationTimer || 0) > 0));
+    }
+
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0 || isPetrified(unit)));
     }
 
     function updatePartyAi(dt) {
@@ -358,7 +362,7 @@
     }
 
     function getPartyTargetableEnemies() {
-      return enemies.filter((enemy) => enemy && !enemy.dead && !(typeof isAvoidTarget === "function" && isAvoidTarget(enemy)));
+      return enemies.filter((enemy) => enemy && !enemy.dead && !isPetrified(enemy) && !(typeof isAvoidTarget === "function" && isAvoidTarget(enemy)));
     }
 
     function isForcedHostileTarget(source, target) {

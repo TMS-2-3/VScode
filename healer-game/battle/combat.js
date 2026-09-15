@@ -61,6 +61,8 @@
       addMoodActionGain,
       addMoodGain,
       addMoodLoss,
+      getUnitSkill,
+      applyPetrification,
       hasPassive,
     } = context;
 
@@ -152,6 +154,122 @@
       return "physical";
     }
 
+    function getAutoReactionSkill(unit, key) {
+      if (!unit || !key || typeof getUnitSkill !== "function") {
+        return null;
+      }
+      const activeKeys = unit.loadout && Array.isArray(unit.loadout.active) ? unit.loadout.active : null;
+      if (!activeKeys || !activeKeys.includes(key)) {
+        return null;
+      }
+      const skill = getUnitSkill(unit, key);
+      return skill && skill.autoOnly ? skill : null;
+    }
+
+    function canUseAutoReactionSkill(unit, key, skill) {
+      if (!unit || unit.dead || !skill || (unit.cds && (unit.cds[key] || 0) > 0)) {
+        return false;
+      }
+      if (!unit.cds || typeof unit.cds !== "object") {
+        unit.cds = {};
+      }
+      if (skill.costAllMp) {
+        const minCost = Math.max(0, Number.isFinite(skill.minMpCost) ? skill.minMpCost : 1);
+        return (unit.mp || 0) >= minCost;
+      }
+      const cost = Number.isFinite(skill.cost) ? skill.cost : 0;
+      return cost <= 0 || (unit.mp || 0) >= cost;
+    }
+
+    function spendAutoReactionCost(unit, skill) {
+      if (!unit || !skill) {
+        return 0;
+      }
+      if (skill.costAllMp) {
+        const spent = Math.max(0, Number.isFinite(unit.mp) ? unit.mp : 0);
+        unit.mp = 0;
+        return spent;
+      }
+      const cost = Math.max(0, Number.isFinite(skill.cost) ? skill.cost : 0);
+      if (cost > 0) {
+        unit.mp = Math.max(0, (unit.mp || 0) - cost);
+      }
+      return cost;
+    }
+
+    function startAutoReactionCooldown(unit, key, skill) {
+      if (!unit || !key || !skill || !Number.isFinite(skill.cd) || skill.cd <= 0) {
+        return;
+      }
+      if (!unit.cds || typeof unit.cds !== "object") {
+        unit.cds = {};
+      }
+      unit.cds[key] = Math.max(unit.cds[key] || 0, skill.cd);
+    }
+
+    function applyMagicEatReaction(target, amount, options, dotDamage, damageSchool) {
+      if (!target || target.dead || dotDamage || damageSchool !== "magic" || amount <= 0) {
+        return amount;
+      }
+      const skill = getAutoReactionSkill(target, "magic_eat");
+      if (!canUseAutoReactionSkill(target, "magic_eat", skill)) {
+        return amount;
+      }
+      spendAutoReactionCost(target, skill);
+      startAutoReactionCooldown(target, "magic_eat", skill);
+      const restoreScale = Number.isFinite(skill.magicEatMpRestoreScale) ? skill.magicEatMpRestoreScale : 2;
+      const beforeMp = Math.max(0, Number.isFinite(target.mp) ? target.mp : 0);
+      target.mp = clamp(beforeMp + amount * restoreScale, 0, target.maxMp || beforeMp);
+      const restored = target.mp - beforeMp;
+      addFloat("魔力吸収", target.x, target.y - 34, "#9ef7ff");
+      if (restored > 0) {
+        addFloat(`+${Math.round(restored)}MP`, target.x, target.y - 24, COLORS.mp || "#7ab8ff");
+      }
+      const multiplier = Number.isFinite(skill.magicEatDamageMultiplier) ? skill.magicEatDamageMultiplier : 0.05;
+      return amount * Math.max(0, multiplier);
+    }
+
+    function startTailCuttingReaction(target, hpDamage, damageSchool, options, dotDamage) {
+      if (!target || target.dead || dotDamage || !["physical", "mixed"].includes(damageSchool) || hpDamage <= 0) {
+        return false;
+      }
+      const skill = getAutoReactionSkill(target, "tail_cutting");
+      if (!canUseAutoReactionSkill(target, "tail_cutting", skill)) {
+        return false;
+      }
+      const schoolScale = damageSchool === "mixed"
+        ? (Number.isFinite(skill.tailCuttingMixedScale) ? skill.tailCuttingMixedScale : 0.5)
+        : (Number.isFinite(skill.tailCuttingPhysicalScale) ? skill.tailCuttingPhysicalScale : 1);
+      const healPerTick = hpDamage * (Number.isFinite(skill.tailCuttingHealRatio) ? skill.tailCuttingHealRatio : 1 / 3) * schoolScale;
+      if (healPerTick <= 0) {
+        return false;
+      }
+      spendAutoReactionCost(target, skill);
+      startAutoReactionCooldown(target, "tail_cutting", skill);
+      const duration = Math.max(0.1, Number.isFinite(skill.duration) ? skill.duration : 3);
+      target.tailCuttingRegenTimer = Math.max(target.tailCuttingRegenTimer || 0, duration);
+      target.tailCuttingRegenMax = Math.max(target.tailCuttingRegenMax || 0, duration);
+      target.tailCuttingHealPerTick = healPerTick;
+      target.tailCuttingTick = Math.min(Number.isFinite(target.tailCuttingTick) && target.tailCuttingTick > 0 ? target.tailCuttingTick : 1, 1);
+      addFloat("尻尾切り", target.x, target.y - 34, COLORS.heal || "#7dff9d");
+      return true;
+    }
+
+    function applyPetrificationEyeReaction(source, target, options, dotDamage) {
+      if (!source || !target || source === target || source.dead || target.dead || dotDamage || !options.targeted || (target.petrificationEyeTimer || 0) <= 0) {
+        return false;
+      }
+      target.petrificationEyeTimer = 0;
+      target.petrificationEyeMax = 0;
+      if (typeof applyPetrification === "function") {
+        applyPetrification(target, source);
+      } else {
+        source.petrificationActive = true;
+      }
+      addFloat("石化の目", target.x, target.y - 34, "#d6cadc");
+      return true;
+    }
+
     function clearCounterattackStance(unit) {
       if (!unit) {
         return;
@@ -228,6 +346,7 @@
       const dotDamage = isDotDamageOptions(options);
       const fixedDamage = isFixedDamageOptions(options);
       const damageSchool = getDamageSchool(options);
+      applyPetrificationEyeReaction(source, target, options, dotDamage);
 
       if (shouldRollCritical(source, target, options)) {
         finalAmount *= getCritDamageMultiplier(source);
@@ -240,6 +359,7 @@
       finalAmount = applyDamageModifierSum(source, target, finalAmount, options);
       finalAmount *= getElementDamageMultiplier(source, target, options);
       finalAmount *= getFriendlyFireDamageMultiplier(source, target);
+      finalAmount = applyMagicEatReaction(target, finalAmount, options, dotDamage, damageSchool);
 
       if (!dotDamage && finalAmount > 0 && (target.woundStacks || 0) > 0) {
         finalAmount *= 1.5;
@@ -321,6 +441,9 @@
         }
       } else if (delayedAmount > 0) {
         target.noDamage = 0;
+      }
+      if (immediateHpDamage > 0) {
+        startTailCuttingReaction(target, immediateHpDamage, damageSchool, options, dotDamage);
       }
 
       const rewardDamage = finalAmount + delayedAmount;
@@ -481,6 +604,19 @@
       unit.sharpenBladeMax = 0;
       unit.flinchingTimer = 0;
       unit.flinchingMax = 0;
+      unit.stickinessTimer = 0;
+      unit.stickinessMax = 0;
+      unit.petrificationTimer = 0;
+      unit.petrificationMax = 0;
+      unit.petrificationActive = false;
+      unit.petrificationEyeTimer = 0;
+      unit.petrificationEyeMax = 0;
+      unit.hardeningDefenseBonus = 0;
+      unit.tailCuttingRegenTimer = 0;
+      unit.tailCuttingRegenMax = 0;
+      unit.tailCuttingHealPerTick = 0;
+      unit.tailCuttingTick = 0;
+      unit.lastSkillSpentMp = 0;
       clearCounterattackStance(unit);
       unit.rihasPassiveStacks = 0;
       unit.rihasPassiveTimer = 0;
@@ -875,7 +1011,7 @@
     }
 
     function tryGuard(unit) {
-      if (unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || (unit.actionLock > 0 && (unit.counterattackStanceTimer || 0) <= 0)) {
+      if (unit.frozen > 0 || (unit.sleepTimer || 0) > 0 || unit.petrificationActive || (unit.petrificationTimer || 0) > 0 || (unit.actionLock > 0 && (unit.counterattackStanceTimer || 0) <= 0)) {
         return false;
       }
       const chance = getEffectiveGuardChance(unit);

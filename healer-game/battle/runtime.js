@@ -50,8 +50,12 @@
       return Boolean(game.state === "playing" && menu && (menu.open || menu.panel || menu.confirm));
     }
 
+    function isPetrified(unit) {
+      return Boolean(unit && (unit.petrificationActive || (unit.petrificationTimer || 0) > 0));
+    }
+
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0 || isPetrified(unit)));
     }
 
     function isBattleTutorialPaused() {
@@ -141,10 +145,13 @@
         }
 
         unit.noDamage += dt;
+        const petrifiedAtFrameStart = isPetrified(unit);
         if (unit.actionLock > 0 && (!unit.actionTotal || unit.actionTotal < unit.actionLock)) {
           unit.actionTotal = unit.actionLock;
         }
-        unit.actionLock = Math.max(0, unit.actionLock - dt);
+        if (!petrifiedAtFrameStart) {
+          unit.actionLock = Math.max(0, unit.actionLock - dt);
+        }
         if (unit.actionLock <= 0) {
           unit.actionTotal = 0;
         }
@@ -223,6 +230,21 @@
           unit.actionSpeedDownMax = 0;
           unit.actionSpeedDownRatio = 0;
         }
+        unit.stickinessTimer = Math.max(0, (unit.stickinessTimer || 0) - dt);
+        if (unit.stickinessTimer <= 0) {
+          unit.stickinessMax = 0;
+        }
+        if ((unit.petrificationTimer || 0) > 0) {
+          unit.petrificationTimer = Math.max(0, unit.petrificationTimer - dt);
+          if (unit.petrificationTimer <= 0) {
+            unit.petrificationMax = 0;
+            unit.petrificationActive = false;
+          }
+        }
+        unit.petrificationEyeTimer = Math.max(0, (unit.petrificationEyeTimer || 0) - dt);
+        if (unit.petrificationEyeTimer <= 0) {
+          unit.petrificationEyeMax = 0;
+        }
         unit.shadowDashTimer = Math.max(0, (unit.shadowDashTimer || 0) - dt);
         if (unit.shadowDashTimer <= 0) {
           unit.shadowDashMax = 0;
@@ -247,6 +269,7 @@
           continue;
         }
         updateRihasPassiveStacks(unit, dt);
+        updateTailCuttingRegen(unit, dt);
 
         if (unit.stackTimer > 0) {
           unit.stackTimer -= dt;
@@ -277,7 +300,9 @@
         updateSorrow(unit, dt);
         updateShieldStacks(unit, dt);
 
+        const freezeSkillCooldowns = isPetrified(unit);
         for (const key of Object.keys(unit.cds)) {
+          if (freezeSkillCooldowns) continue;
           if (key === "attack" && (isActionDisabled(unit) || unit.chocolateLilyCharging)) continue;
           const before = unit.cds[key] || 0;
           unit.cds[key] = Math.max(0, before - dt);
@@ -381,6 +406,41 @@
       unit.burnTickRate = 1;
       unit.burnDamageHpRatio = 0;
       unit.burnSource = null;
+    }
+
+    function updateTailCuttingRegen(unit, dt) {
+      if (!unit || unit.dead || (unit.tailCuttingRegenTimer || 0) <= 0) {
+        clearTailCuttingRegen(unit);
+        return;
+      }
+      const previousTimer = Math.max(0, unit.tailCuttingRegenTimer || 0);
+      const elapsed = Math.min(dt, previousTimer);
+      const tickRate = 1;
+      unit.tailCuttingRegenTimer = Math.max(0, previousTimer - dt);
+      unit.tailCuttingTick = (Number.isFinite(unit.tailCuttingTick) && unit.tailCuttingTick > 0 ? unit.tailCuttingTick : tickRate) - elapsed;
+      while (unit.tailCuttingTick <= 0 && !unit.dead) {
+        const amount = Math.max(0, Number.isFinite(unit.tailCuttingHealPerTick) ? unit.tailCuttingHealPerTick : 0);
+        if (amount > 0 && typeof healUnit === "function") {
+          healUnit(unit, unit, amount, { noMood: true, noUltGain: true });
+        }
+        unit.tailCuttingTick += tickRate;
+        if (unit.tailCuttingRegenTimer <= 0 && unit.tailCuttingTick > 0) {
+          break;
+        }
+      }
+      if (unit.tailCuttingRegenTimer <= 0 || unit.dead) {
+        clearTailCuttingRegen(unit);
+      }
+    }
+
+    function clearTailCuttingRegen(unit) {
+      if (!unit) {
+        return;
+      }
+      unit.tailCuttingRegenTimer = 0;
+      unit.tailCuttingRegenMax = 0;
+      unit.tailCuttingHealPerTick = 0;
+      unit.tailCuttingTick = 0;
     }
 
     function updatePoison(unit, dt) {
@@ -643,6 +703,19 @@
       unit.actionSpeedDownTimer = 0;
       unit.actionSpeedDownMax = 0;
       unit.actionSpeedDownRatio = 0;
+      unit.stickinessTimer = 0;
+      unit.stickinessMax = 0;
+      unit.petrificationTimer = 0;
+      unit.petrificationMax = 0;
+      unit.petrificationActive = false;
+      unit.petrificationEyeTimer = 0;
+      unit.petrificationEyeMax = 0;
+      unit.hardeningDefenseBonus = 0;
+      unit.tailCuttingRegenTimer = 0;
+      unit.tailCuttingRegenMax = 0;
+      unit.tailCuttingHealPerTick = 0;
+      unit.tailCuttingTick = 0;
+      unit.lastSkillSpentMp = 0;
       unit.shadowDashTimer = 0;
       unit.shadowDashMax = 0;
       unit.sharpenBladeTimer = 0;
@@ -1150,7 +1223,7 @@
     }
 
     function isTargetableUnit(unit) {
-      return isFieldUnit(unit) && unit.targetable !== false && !unit.dead;
+      return isFieldUnit(unit) && unit.targetable !== false && !unit.dead && !isPetrified(unit);
     }
 
     function getFieldPartyMembers() {

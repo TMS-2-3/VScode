@@ -624,6 +624,42 @@
         id: "hp_bite", key: "hp_bite", owner: "enemy", name: "吸血", rank: "D", category: "スキル", skillType: "単体攻撃",
         cd: 18, range: px(50), damageBase: 0, attackScale: 0.3, lifeStealRatio: 1, damageType: "physical", lines: ["吸血"],
       },
+      spider_thread: {
+        id: "spider_thread", key: "spider_thread", owner: "enemy", name: "粘糸", rank: "D", category: "スキル", skillType: "単体デバフ",
+        cd: 16, cost: 15, cast: 1, range: px(150), damageBase: 0, stickinessDuration: 3, damageType: "physical", lines: ["粘糸"], statusIds: ["debuff_stickiness"],
+      },
+      jamp_attack: {
+        id: "jamp_attack", key: "jamp_attack", owner: "enemy", name: "飛びつく", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 10, range: px(180), damageBase: 5, attackScale: 0.4, afterAttackMoveToTarget: true, damageType: "physical", lines: ["飛びつく"],
+      },
+      hardening: {
+        id: "hardening", key: "hardening", owner: "enemy", name: "硬化", rank: "D", category: "スキル", skillType: "自己バフ",
+        cd: 15, cost: 5, cast: 2, enemySelf: true, hardeningDefenseBonus: 0.05, lines: ["硬化"],
+      },
+      tail_cutting: {
+        id: "tail_cutting", key: "tail_cutting", owner: "enemy", name: "尻尾切り", rank: "D", category: "スキル", skillType: "回復",
+        cd: 20, cost: 20, duration: 3, autoOnly: true, tailCuttingHealRatio: 1 / 3, tailCuttingPhysicalScale: 1, tailCuttingMixedScale: 0.5, lines: ["尻尾切り"],
+      },
+      glare_at: {
+        id: "glare_at", key: "glare_at", owner: "enemy", name: "睨みつける", rank: "D", category: "スキル", skillType: "自己バフ",
+        cd: 20, cast: 3, enemySelf: true, petrificationEyeDuration: 5, lines: ["睨みつける"], statusIds: ["debuff_petrification_eye"],
+      },
+      poison_fang: {
+        id: "poison_fang", key: "poison_fang", owner: "enemy", name: "毒牙", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 16, range: px(80), damageBase: 40, attackScale: 0.1, poison: true, damageType: "physical", lines: ["毒牙"], statusIds: ["debuff_poison"],
+      },
+      magic_eat: {
+        id: "magic_eat", key: "magic_eat", owner: "enemy", name: "魔力吸収", rank: "D", category: "スキル", skillType: "回復",
+        cd: 4, autoOnly: true, magicEatDamageMultiplier: 0.05, magicEatMpRestoreScale: 2, lines: ["魔力吸収"],
+      },
+      magic_vomit: {
+        id: "magic_vomit", key: "magic_vomit", owner: "enemy", name: "魔力放出", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 20, cast: 3, costAllMp: true, minMpCost: 1, range: px(360), damageBase: 0, spentMpDamageScale: 0.01, damageType: "magic", lines: ["魔力放出"],
+      },
+      solution: {
+        id: "solution", key: "solution", owner: "enemy", name: "溶液", rank: "D", category: "スキル", skillType: "単体攻撃",
+        cd: 15, range: px(230), damageBase: 0, poison: true, damageType: "magic", lines: ["溶液"], statusIds: ["debuff_poison"],
+      },
       absorption_of_reunion: {
         id: "absorption_of_reunion", key: "absorption_of_reunion", owner: "enemy", name: "吸収", rank: "D", category: "スキル", skillType: "単体攻撃",
         cd: 5, cast: 3, range: px(120), duration: 4, tickRate: 1, damageBase: 5, attackScale: 0.1, magicScale: 0.1, absorbHealMultiplier: 5, damageType: "不変ドット", lines: ["吸収"],

@@ -531,7 +531,19 @@
           bonus -= 0.5;
         } else if (statKey === "moveSpeed") {
           bonus -= 0.1;
+        } else if (statKey === "guardChance") {
+          bonus -= 1;
         }
+      }
+      if (unit && (unit.stickinessTimer || 0) > 0) {
+        if (statKey === "actionSpeed") {
+          bonus -= 0.8;
+        } else if (statKey === "moveSpeed") {
+          bonus -= 0.5;
+        }
+      }
+      if (unit && Number.isFinite(unit.hardeningDefenseBonus) && unit.hardeningDefenseBonus > 0 && statKey === "defense") {
+        bonus += unit.hardeningDefenseBonus;
       }
       if (unit && (unit.plantStage || 0) > 0 && statKey === "hpRegenRate") {
         const penalties = [0, 0.001, 0.003, 0.005, 0.008];

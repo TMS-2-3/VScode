@@ -557,7 +557,7 @@
     }
 
     function isActionDisabled(unit) {
-      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0));
+      return Boolean(unit && ((unit.frozen || 0) > 0 || (unit.sleepTimer || 0) > 0 || (unit.absorptionLockTimer || 0) > 0 || unit.petrificationActive || (unit.petrificationTimer || 0) > 0));
     }
 
     function requestItemUse(index) {

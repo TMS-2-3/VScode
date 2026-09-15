@@ -825,6 +825,22 @@
       const flinchingMax = Math.max(0.1, unit.flinchingMax || unit.flinchingTimer);
       icons.push(makeStatusIcon(unit, "debuff_flinching", { ratio: unit.flinchingTimer / flinchingMax, remaining: unit.flinchingTimer }));
     }
+    if ((unit.stickinessTimer || 0) > 0) {
+      const stickinessMax = Math.max(0.1, unit.stickinessMax || unit.stickinessTimer);
+      icons.push(makeStatusIcon(unit, "debuff_stickiness", { ratio: unit.stickinessTimer / stickinessMax, remaining: unit.stickinessTimer }));
+    }
+    if (unit.petrificationActive || (unit.petrificationTimer || 0) > 0) {
+      if ((unit.petrificationTimer || 0) > 0) {
+        const petrificationMax = Math.max(0.1, unit.petrificationMax || unit.petrificationTimer);
+        icons.push(makeStatusIcon(unit, "debuff_petrification", { ratio: unit.petrificationTimer / petrificationMax, remaining: unit.petrificationTimer }));
+      } else {
+        icons.push(makeStatusIcon(unit, "debuff_petrification", { ratio: 1, permanent: true, durationless: true, sortPriority: 58 }));
+      }
+    }
+    if ((unit.petrificationEyeTimer || 0) > 0) {
+      const eyeMax = Math.max(0.1, unit.petrificationEyeMax || unit.petrificationEyeTimer);
+      icons.push(makeStatusIcon(unit, "debuff_petrification_eye", { ratio: unit.petrificationEyeTimer / eyeMax, remaining: unit.petrificationEyeTimer }));
+    }
     if ((unit.magicNeutralizeTimer || 0) > 0) {
       const neutralizeMax = Math.max(0.1, unit.magicNeutralizeMax || unit.magicNeutralizeTimer);
       const ratio = Math.max(0, Number.isFinite(unit.magicNeutralizeRatio) ? unit.magicNeutralizeRatio : 0);

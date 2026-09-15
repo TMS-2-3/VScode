@@ -747,6 +747,8 @@
         addMoodActionGain: callLater("battleStats", "addMoodActionGain"),
         addMoodGain: callLater("battleStats", "addMoodGain"),
         addMoodLoss: callLater("battleStats", "addMoodLoss"),
+        getUnitSkill: callLater("skillSystem", "getUnitSkill"),
+        applyPetrification: callLater("skillSystem", "applyPetrification"),
         hasPassive: callLater("loadoutSystem", "hasPassive"),
       };
     }
