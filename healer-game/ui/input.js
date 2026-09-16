@@ -965,6 +965,10 @@
       return keybindTools.eventMatchesAction(getGameSettings(), actionId, event);
     }
 
+    function isDialogueAdvanceEvent(event) {
+      return isActionEvent("field.interact", event) || Boolean(event && event.type === "mousedown" && event.button === 0);
+    }
+
     function shouldPreventKeyDown(event, key) {
       if (isPresetNativeInputEvent(event)) {
         return false;
@@ -1197,7 +1201,10 @@
     function setEquipmentMessage(text) {
       const ui = getEquipmentUi();
       ui.message = text || "";
-      ui.messageTimer = text ? 2.4 : 0;
+      ui.messageStartedAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+      ui.messageHoldMs = text ? 3000 : 0;
+      ui.messageFadeMs = text ? 1000 : 0;
+      ui.messageTimer = text ? 4 : 0;
     }
 
     function openEquipmentPanelFromTarget(target) {
@@ -1688,7 +1695,7 @@
         }
         commitEquipmentUnit(unit);
         getEquipmentUi().picker = null;
-          setEquipmentMessage("装備を外しました。");
+        setEquipmentMessage(`${item.name || "装備"}を外しました。`);
         return;
       }
       if (!options.skipTransferConfirm) {
@@ -1722,13 +1729,15 @@
         return;
       }
       const unit = getSelectedEquipmentUnit();
+      const currentItemRef = unit && unit.equipment ? unit.equipment[slotKey] : null;
+      const currentItem = currentItemRef && typeof resolveEquipmentItem === "function" ? resolveEquipmentItem(currentItemRef) : null;
       if (!unit || typeof unequipSlot !== "function" || !unequipSlot(unit, slotKey)) {
         setEquipmentMessage(slotKey === "weapon" ? "武器は外せません。" : "この枠は外せません。");
         return;
       }
       commitEquipmentUnit(unit);
       getEquipmentUi().picker = null;
-      setEquipmentMessage("装備を外しました。");
+      setEquipmentMessage(`${currentItem && currentItem.name || "装備"}を外しました。`);
     }
 
     function selectCharacterItemCandidate(itemId) {
@@ -1856,10 +1865,13 @@
       if (!unit || typeof clearCharacterItem !== "function") {
         return;
       }
+      const current = typeof getCharacterItem === "function" ? getCharacterItem(unit.id) : null;
+      const currentCandidate = current && current.id ? getItemCandidateById(current.id) : null;
+      const itemName = current && (current.name || currentCandidate && currentCandidate.name) || "アイテム";
       clearCharacterItem(unit.id);
       unit.item = null;
       getEquipmentUi().picker = null;
-      setEquipmentMessage("アイテムを外しました。");
+      setEquipmentMessage(`${itemName}を外しました。`);
     }
 
     function getFixedAttackKey(owner) {
@@ -2160,7 +2172,7 @@
           unit.loadout = { passive: current.passive, ultimate: current.ultimate, active: composeActiveKeys(owner, configurable) };
           commitEquipmentUnit(unit);
           getEquipmentUi().picker = null;
-          setEquipmentMessage("スキルを外しました。");
+          setEquipmentMessage(`${skill.name || "スキル"}を外しました。`);
           return;
         }
         reordered = true;
@@ -2205,11 +2217,13 @@
       if (index < 0 || index >= configurable.length) {
         return;
       }
+      const removedKey = configurable[index];
+      const removedSkill = SKILL_DATA && SKILL_DATA[owner] && SKILL_DATA[owner][removedKey] || null;
       configurable.splice(index, 1);
       unit.loadout = { passive: current.passive, ultimate: current.ultimate, active: composeActiveKeys(owner, configurable) };
       commitEquipmentUnit(unit);
       getEquipmentUi().picker = null;
-      setEquipmentMessage("スキルを外しました。");
+      setEquipmentMessage(`${removedSkill && removedSkill.name || "スキル"}を外しました。`);
     }
 
     function equipSelectedPassive(passiveKey) {
@@ -3275,12 +3289,12 @@
           return;
         }
         if (town.story) {
-          if (isActionEvent("field.interact", event)) {
+          if (isDialogueAdvanceEvent(event)) {
             interactTown();
           }
           return;
         }
-        if (town.panel && town.panel.action === "battleGuide" && isActionEvent("field.interact", event)) {
+        if (town.panel && town.panel.action === "battleGuide" && isDialogueAdvanceEvent(event)) {
           interactTown();
           return;
         }
@@ -3463,7 +3477,7 @@
       clearMovementKeys();
       const helpers = getBattleTutorialHelpers();
       if (step.type === "line") {
-        if (isActionEvent("field.interact", event)) {
+        if (isDialogueAdvanceEvent(event)) {
           tutorial.advanceLine(game, helpers);
         } else {
           tutorial.reject(game, "会話を進めてください");
@@ -3519,7 +3533,7 @@
       }
       const helpers = getBattleTutorialHelpers();
       if (step.type === "line") {
-        if (isActionEvent("field.interact", event)) {
+        if (isDialogueAdvanceEvent(event)) {
           tutorial.advanceLine(game, helpers);
         } else {
           tutorial.reject(game, "会話を進めてください");
@@ -3679,7 +3693,7 @@
           return;
         }
         if (town.story) {
-          if (isActionEvent("field.interact", event)) {
+          if (isDialogueAdvanceEvent(event)) {
             interactTown();
           }
           return;
@@ -3687,7 +3701,7 @@
         if (town.panel && event.button === 0 && handleTownPanelScrollbarClick()) {
           return;
         }
-        if (town.panel && town.panel.action === "battleGuide" && isActionEvent("field.interact", event)) {
+        if (town.panel && town.panel.action === "battleGuide" && isDialogueAdvanceEvent(event)) {
           interactTown({ pointer: true });
           return;
         }

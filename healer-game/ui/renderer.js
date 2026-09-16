@@ -4442,7 +4442,6 @@
       drawEquipmentStage(layout.stage, unit, readOnly);
       drawEquipmentStats(layout.stats, unit);
     }
-    drawEquipmentMessage(rect);
     if (ui.picker || ui.preset) {
       addSystemMenuTarget({ action: "closeEquipmentSubwindow", x: rect.x, y: rect.y, w: rect.w, h: rect.h });
     }
@@ -4455,6 +4454,7 @@
     if (ui.confirm) {
       drawEquipmentConfirmWindow(layout, ui.confirm);
     }
+    drawEquipmentMessage(rect);
     if (!ui.confirm) {
       drawEquipmentHoverTooltip();
     }
@@ -6100,18 +6100,60 @@
     if (!ui.message) {
       return;
     }
+    const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+    const startedAt = Number.isFinite(ui.messageStartedAt) ? ui.messageStartedAt : now;
+    const holdMs = Number.isFinite(ui.messageHoldMs) ? Math.max(0, ui.messageHoldMs) : 3000;
+    const fadeMs = Number.isFinite(ui.messageFadeMs) ? Math.max(1, ui.messageFadeMs) : 1000;
+    const elapsed = Math.max(0, now - startedAt);
+    const alpha = elapsed <= holdMs ? 1 : Math.max(0, 1 - (elapsed - holdMs) / fadeMs);
+    if (alpha <= 0) {
+      return;
+    }
+    const lines = getEquipmentMessageLines(ui.message, Math.max(160, panelRect.w - 104));
+    const lineH = 16;
+    const h = Math.max(36, 18 + lines.length * lineH);
     ctx.save();
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const textW = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
+    ctx.restore();
+    const minW = 180;
+    const maxW = Math.min(panelRect.w - 48, Math.max(420, panelRect.w * 0.64));
+    const w = Math.max(minW, Math.min(maxW, Math.ceil(textW + 48)));
+    ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = "rgba(16,32,24,0.88)";
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    const w = Math.min(360, panelRect.w - 48);
-    const h = 34;
     const x = panelRect.x + panelRect.w / 2 - w / 2;
     const y = panelRect.y + panelRect.h - h - 18;
     roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
-    drawFittedSystemText(ui.message, x + 16, y + h / 2, w - 32, 800, 13, 9, "#f7fff6", "center", "middle");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < lines.length; i += 1) {
+      drawFittedSystemText(lines[i], x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * lineH, w - 32, 800, 13, 9, "#f7fff6", "center", "middle");
+    }
     ctx.restore();
+  }
+
+  function getEquipmentMessageLines(message, maxWidth) {
+    const text = String(message || "");
+    ctx.save();
+    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    if (ctx.measureText(text).width <= maxWidth) {
+      ctx.restore();
+      return [text];
+    }
+    const suffixes = ["を装備しました。", "を持たせました。", "を読み込みました。", "を保存しました。", "を削除しました。", "に名前を変更しました。"];
+    for (const suffix of suffixes) {
+      if (text.endsWith(suffix)) {
+        const head = text.slice(0, -suffix.length);
+        ctx.restore();
+        return [`${head}`, suffix.trimStart()];
+      }
+    }
+    ctx.restore();
+    return [text];
   }
 
   function drawSystemSmallButton(x, y, w, h, label, action, extra = {}) {
