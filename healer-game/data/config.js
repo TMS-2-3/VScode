@@ -7,7 +7,7 @@
     smallScreenDefaultZoom: 1.08,
     battleSpatialScale: 1,
     defaultFpsLimit: 60,
-    fpsLimitOptions: [15, 30, 45, 60, 90, 120, 140, 160, 180, 210, "unlimited"],
+    fpsLimitOptions: [15, 30, 45, 60, 90, 120, 140, "unlimited"],
     playerSkillSlotKeys: ["q", "w", "e", "r", "t"],
     itemSlotKeys: ["c", "v", "b", "n"],
   };

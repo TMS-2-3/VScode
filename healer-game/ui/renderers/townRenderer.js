@@ -16,6 +16,7 @@
       profileClickTargets,
       COLORS,
       CHARACTER_DEFS,
+      ENEMY_DEFS,
       SKILL_DATA,
       BASE_CRIT_CHANCE,
       BASE_CRIT_DAMAGE_RATE,
@@ -57,9 +58,9 @@
 
   const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
   const MAX_ACCEPTED_FREE_QUESTS = 3;
-  const HORN_RABBIT_DEBUG_HIT_RADIUS = 10;
   const PARTY_DEBUG_HIT_RADIUS_FALLBACK = 15;
   const PARTY_DEBUG_HIT_UNIT_IDS = new Set(["finald", "ulpes", "rihas", "sushia"]);
+  const MONSTER_SPRITE_BASE_RADIUS = 25;
   const INN_PARTY_UNIT_ORDER = ["finald", "ulpes", "rihas", "sushia"];
   const ITEM_SHOP_CATEGORIES = [
     { key: "healing", label: "回復" },
@@ -1424,7 +1425,7 @@
       return;
     }
     drawTownNpc(actor.x, actor.y, actor.color, actor.label);
-    if (isPartyCharacterDebugTarget(actor)) {
+    if (isCharacterHitboxDebugModeEnabled() && isPartyCharacterDebugTarget(actor)) {
       drawPartyCharacterDebugHitCircle(actor.x, actor.y, getPartyCharacterDebugHitRadius(actor));
     }
   }
@@ -1434,11 +1435,11 @@
     const radius = Math.max(10, Number(actor.radius) || 16);
     const footY = actor.y + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 17);
     const bodyY = actor.y - radius * 0.65 + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 0);
-    const shouldDrawDebugHitCircle = isHornRabbitDebugTarget(actor);
+    const shouldDrawDebugHitCircle = isCharacterHitboxDebugModeEnabled();
     const spriteTop = drawTownMonsterSymbolSprite(actor, footY);
     if (spriteTop !== null) {
       if (shouldDrawDebugHitCircle) {
-        drawHornRabbitDebugHitCircle(actor.x, actor.y);
+        drawMonsterDebugHitCircle(actor.x, actor.y, radius);
       }
       if (actor.questId) {
         drawTownQuestPaperMark(actor.x + (actor.alert ? -18 : 0), spriteTop - 18, actor.questType);
@@ -1467,7 +1468,7 @@
     ctx.fillText(actor.label || "M", actor.x, bodyY + 1);
     ctx.restore();
     if (shouldDrawDebugHitCircle) {
-      drawHornRabbitDebugHitCircle(actor.x, actor.y);
+      drawMonsterDebugHitCircle(actor.x, actor.y, radius);
     }
     if (actor.questId) {
       drawTownQuestPaperMark(actor.x + (actor.alert ? -18 : 0), bodyY - radius - 18, actor.questType);
@@ -1477,21 +1478,17 @@
     }
   }
 
-  function isHornRabbitDebugTarget(actor) {
-    return Boolean(actor && (
-      actor.role === "horn_rabbit"
-      || actor.enemyRole === "horn_rabbit"
-      || actor.enemyId === "horn_rabbit"
-    ));
+  function isCharacterHitboxDebugModeEnabled() {
+    return Boolean(game && game.settings && game.settings.characterHitboxDebugMode === true);
   }
 
-  function drawHornRabbitDebugHitCircle(x, y) {
+  function drawMonsterDebugHitCircle(x, y, radius) {
     ctx.save();
     ctx.fillStyle = "rgba(0, 255, 255, 0.12)";
     ctx.strokeStyle = "rgba(0, 255, 255, 0.95)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x, y, HORN_RABBIT_DEBUG_HIT_RADIUS, 0, TAU);
+    ctx.arc(x, y, Math.max(1, Number(radius) || 1), 0, TAU);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -1565,15 +1562,33 @@
   }
 
   function getTownMonsterSpriteHeight(actor) {
+    const scale = getTownMonsterSpriteRadiusScale(actor);
     const configured = Number(actor && (actor.mapSpriteHeight ?? actor.spriteHeight));
     if (Number.isFinite(configured) && configured > 0) {
-      return Math.max(24, configured);
+      return Math.max(1, Math.round(configured * scale));
     }
     const tileMap = getTownTileMap();
     const tileSize = tileMapSystem && typeof tileMapSystem.getTileSize === "function"
       ? tileMapSystem.getTileSize(tileMap)
       : COMMON_TILE_SIZE;
-    return Math.max(36, Math.round(tileSize * 1.25));
+    const baseHeight = Math.max(36, Math.round(tileSize * 1.25));
+    return Math.max(1, Math.round(baseHeight * scale));
+  }
+
+  function getTownMonsterSpriteRadiusScale(actor) {
+    const radius = getTownMonsterSpriteRadius(actor);
+    return radius > 0 ? radius / MONSTER_SPRITE_BASE_RADIUS : 1;
+  }
+
+  function getTownMonsterSpriteRadius(actor) {
+    const role = actor && (actor.enemyRole || actor.role || actor.enemyId);
+    const enemyDef = role && ENEMY_DEFS && ENEMY_DEFS[role] || null;
+    const enemyRadius = Number(enemyDef && enemyDef.radius);
+    if (Number.isFinite(enemyRadius) && enemyRadius > 0) {
+      return enemyRadius;
+    }
+    const actorRadius = Number(actor && actor.radius);
+    return Number.isFinite(actorRadius) && actorRadius > 0 ? actorRadius : MONSTER_SPRITE_BASE_RADIUS;
   }
 
   function getTownMonsterSpriteFacing(actor) {
@@ -1626,7 +1641,7 @@
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(image, actor.x - width / 2, footY - height, width, height);
     ctx.imageSmoothingEnabled = previousSmoothing;
-    if (isPartyCharacterDebugTarget(actor)) {
+    if (isCharacterHitboxDebugModeEnabled() && isPartyCharacterDebugTarget(actor)) {
       drawPartyCharacterDebugHitCircle(actor.x, actor.y, getPartyCharacterDebugHitRadius(actor));
     }
     ctx.restore();

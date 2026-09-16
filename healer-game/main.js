@@ -236,6 +236,7 @@
           tooltipDescriptionMode: "simple",
           powerCrystalAutoUse: true,
           mapDebugMode: false,
+          characterHitboxDebugMode: false,
           fpsLimit: Number.isFinite(CONFIG.defaultFpsLimit) ? CONFIG.defaultFpsLimit : 60,
           keybinds: window.HEALER_KEYBINDS
             ? window.HEALER_KEYBINDS.normalizeKeybinds(window.HEALER_KEYBINDS.loadSavedKeybinds())

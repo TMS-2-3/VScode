@@ -144,7 +144,7 @@
     let syncingPresetTextInput = false;
     const FPS_LIMIT_OPTIONS = Array.isArray(window.HEALER_CONFIG && window.HEALER_CONFIG.fpsLimitOptions)
       ? window.HEALER_CONFIG.fpsLimitOptions
-      : [15, 30, 45, 60, 90, 120, 140, 160, 180, 210, "unlimited"];
+      : [15, 30, 45, 60, 90, 120, 140, "unlimited"];
     const DEFAULT_FPS_LIMIT = Number.isFinite(window.HEALER_CONFIG && window.HEALER_CONFIG.defaultFpsLimit)
       ? window.HEALER_CONFIG.defaultFpsLimit
       : 60;
@@ -200,7 +200,7 @@
         equipment.picker.scrollMax = 0;
       }
       const settings = game.systemMenu.settings;
-      if (settings.tab !== "controls") {
+      if (settings.tab !== "controls" && settings.tab !== "debug") {
         settings.tab = "game";
       }
       if (!Number.isFinite(settings.controlsScroll)) {
@@ -214,6 +214,12 @@
       }
       if (!Number.isFinite(settings.gameScrollMax)) {
         settings.gameScrollMax = 0;
+      }
+      if (!Number.isFinite(settings.debugScroll)) {
+        settings.debugScroll = 0;
+      }
+      if (!Number.isFinite(settings.debugScrollMax)) {
+        settings.debugScrollMax = 0;
       }
       return game.systemMenu;
     }
@@ -253,6 +259,9 @@
       }
       if (typeof game.settings.mapDebugMode !== "boolean") {
         game.settings.mapDebugMode = false;
+      }
+      if (typeof game.settings.characterHitboxDebugMode !== "boolean") {
+        game.settings.characterHitboxDebugMode = false;
       }
       game.settings.fpsLimit = normalizeFpsLimit(game.settings.fpsLimit);
       if (keybindTools) {
@@ -300,7 +309,7 @@
     function getSettingsUi() {
       const menu = getSystemMenu();
       const settings = menu.settings;
-      if (settings.tab !== "controls") {
+      if (settings.tab !== "controls" && settings.tab !== "debug") {
         settings.tab = "game";
       }
       if (!settings.controlsDraft && keybindTools) {
@@ -840,7 +849,7 @@
 
     function selectSettingsTab(tab) {
       const ui = getSettingsUi();
-      ui.tab = tab === "controls" ? "controls" : "game";
+      ui.tab = tab === "controls" || tab === "debug" ? tab : "game";
       ui.controlsCapture = null;
       clearMovementKeys();
     }
@@ -3169,6 +3178,10 @@
           const settings = getGameSettings();
           settings.mapDebugMode = !settings.mapDebugMode;
           clearMovementKeys();
+        } else if (target.action === "toggleCharacterHitboxDebugMode") {
+          const settings = getGameSettings();
+          settings.characterHitboxDebugMode = !settings.characterHitboxDebugMode;
+          clearMovementKeys();
         } else if (target.action === "setFpsLimit") {
           const settings = getGameSettings();
           settings.fpsLimit = normalizeFpsLimit(target.fpsLimit);
@@ -3838,6 +3851,12 @@
       }
       if (menu.panel.type === "settings" && settings.tab === "controls") {
         if (scrollNumericState(settings, "controlsScroll", "controlsScrollMax", event.deltaY)) {
+          event.preventDefault();
+        }
+        return;
+      }
+      if (menu.panel.type === "settings" && settings.tab === "debug") {
+        if (scrollNumericState(settings, "debugScroll", "debugScrollMax", event.deltaY)) {
           event.preventDefault();
         }
         return;

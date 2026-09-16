@@ -17,6 +17,9 @@
       isTargetableUnit,
     } = context;
 
+    const UNIT_SEPARATION_PADDING = battlePx(4);
+    const ENEMY_ENEMY_SEPARATION_PADDING = battlePx(18);
+
     function clampTownPlayer() {
       town.player.x = clamp(town.player.x, town.player.radius, TOWN_WIDTH - town.player.radius);
       town.player.y = clamp(town.player.y, town.player.radius, TOWN_HEIGHT - town.player.radius);
@@ -30,12 +33,13 @@
           const b = all[j];
           const dx = b.x - a.x;
           const dy = b.y - a.y;
-          const d = Math.hypot(dx, dy) || 1;
-          const min = a.radius + b.radius + 4;
+          const d = Math.hypot(dx, dy);
+          const min = getUnitSeparationDistance(a, b);
           if (d < min) {
             const push = (min - d) * 0.5;
-            const nx = dx / d;
-            const ny = dy / d;
+            const normal = getUnitSeparationNormal(dx, dy, d, i, j);
+            const nx = normal.x;
+            const ny = normal.y;
             a.x -= nx * push * dt * 18;
             a.y -= ny * push * dt * 18;
             b.x += nx * push * dt * 18;
@@ -45,6 +49,27 @@
           }
         }
       }
+    }
+
+    function getUnitSeparationDistance(a, b) {
+      const radiusA = Number.isFinite(a && a.radius) ? a.radius : 0;
+      const radiusB = Number.isFinite(b && b.radius) ? b.radius : 0;
+      return radiusA + radiusB + getUnitSeparationPadding(a, b);
+    }
+
+    function getUnitSeparationPadding(a, b) {
+      if (a && b && a.team === "enemy" && b.team === "enemy") {
+        return ENEMY_ENEMY_SEPARATION_PADDING;
+      }
+      return UNIT_SEPARATION_PADDING;
+    }
+
+    function getUnitSeparationNormal(dx, dy, distance, indexA, indexB) {
+      if (distance > 0.001) {
+        return { x: dx / distance, y: dy / distance };
+      }
+      const angle = (((indexA + 1) * 97 + (indexB + 1) * 53) % 360) * Math.PI / 180;
+      return { x: Math.cos(angle), y: Math.sin(angle) };
     }
 
     function nearestAlive(from, list) {

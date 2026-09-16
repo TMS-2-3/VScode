@@ -299,6 +299,7 @@
         statusCardMetas: state.statusCardMetas,
         statusTooltipTargets: state.statusTooltipTargets,
         CHARACTER_DEFS,
+        ENEMY_DEFS,
         SKILL_DATA,
         PASSIVE_DATA,
         EQUIPMENT_DATA,

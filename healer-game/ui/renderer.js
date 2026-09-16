@@ -125,8 +125,8 @@
     const battleSpriteStates = new Map();
     const enemySpriteStates = new Map();
     const ENEMY_SPRITE_TURN_COOLDOWN = 0.3;
-    const HORN_RABBIT_DEBUG_HIT_RADIUS = 10;
     const PARTY_DEBUG_HIT_RADIUS_FALLBACK = 15;
+    const MONSTER_SPRITE_BASE_RADIUS = 25;
     const equipmentCharacterArtImages = createEquipmentCharacterArtImages();
     const equipmentSlotLayout = {
       left: ["head", "body", "waist"],
@@ -136,7 +136,7 @@
     const keybindTools = KEYBINDS || window.HEALER_KEYBINDS || null;
     const FPS_LIMIT_OPTIONS = Array.isArray(window.HEALER_CONFIG && window.HEALER_CONFIG.fpsLimitOptions)
       ? window.HEALER_CONFIG.fpsLimitOptions
-      : [15, 30, 45, 60, 90, 120, 140, 160, 180, 210, "unlimited"];
+      : [15, 30, 45, 60, 90, 120, 140, "unlimited"];
     const DEFAULT_FPS_LIMIT = Number.isFinite(window.HEALER_CONFIG && window.HEALER_CONFIG.defaultFpsLimit)
       ? window.HEALER_CONFIG.defaultFpsLimit
       : 60;
@@ -1542,33 +1542,18 @@
     return unit && unit.maxHp > 0 && unit.hp / unit.maxHp <= 0.25;
   }
 
-  function isHornRabbitDebugTarget(unit) {
-    return Boolean(unit && (
-      unit.role === "horn_rabbit"
-      || unit.enemyRole === "horn_rabbit"
-      || unit.enemyId === "horn_rabbit"
-    ));
-  }
-
-  function drawHornRabbitDebugHitCircle(x, y, radius) {
+  function drawCharacterHitboxDebugCircle(unit) {
+    if (!unit) {
+      return;
+    }
+    const isEnemy = unit.team === "enemy";
+    const radius = Math.max(1, Number(unit.radius) || battlePx(PARTY_DEBUG_HIT_RADIUS_FALLBACK));
     ctx.save();
-    ctx.fillStyle = "rgba(0, 255, 255, 0.12)";
-    ctx.strokeStyle = "rgba(0, 255, 255, 0.95)";
+    ctx.fillStyle = isEnemy ? "rgba(0, 255, 255, 0.12)" : "rgba(128, 255, 96, 0.12)";
+    ctx.strokeStyle = isEnemy ? "rgba(0, 255, 255, 0.95)" : "rgba(128, 255, 96, 0.95)";
     ctx.lineWidth = Math.max(1, battlePx(2));
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawPartyDebugHitCircle(x, y, radius) {
-    ctx.save();
-    ctx.fillStyle = "rgba(128, 255, 96, 0.12)";
-    ctx.strokeStyle = "rgba(128, 255, 96, 0.95)";
-    ctx.lineWidth = Math.max(1, battlePx(2));
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, TAU);
+    ctx.arc(unit.x, unit.y, radius, 0, TAU);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -1659,11 +1644,8 @@
       ctx.fillText(unit.label, unit.x, unit.y + 0.5);
     }
 
-    if (unit.team === "enemy" && isHornRabbitDebugTarget(unit)) {
-      drawHornRabbitDebugHitCircle(unit.x, unit.y, Math.max(1, battlePx(HORN_RABBIT_DEBUG_HIT_RADIUS)));
-    }
-    if (unit.team === "party") {
-      drawPartyDebugHitCircle(unit.x, unit.y, Math.max(1, Number(unit.radius) || battlePx(PARTY_DEBUG_HIT_RADIUS_FALLBACK)));
+    if (isCharacterHitboxDebugModeEnabled() && (unit.team === "party" || unit.team === "enemy")) {
+      drawCharacterHitboxDebugCircle(unit);
     }
 
     if (unit.team === "enemy") {
@@ -1714,12 +1696,20 @@
   }
 
   function getEnemyBattleSpriteHeight(unit) {
+    const scale = getEnemySpriteRadiusScale(unit);
     const configured = Number(unit && unit.battleSpriteHeight);
     if (Number.isFinite(configured) && configured > 0) {
-      return Math.max(battlePx(24), configured);
+      return Math.max(1, Math.round(configured * scale));
     }
-    const radius = Math.max(10, Number(unit && unit.radius) || battlePx(12));
-    return Math.max(battlePx(44), Math.round(radius * 4.6));
+    const baseRadius = Math.max(1, battlePx(MONSTER_SPRITE_BASE_RADIUS));
+    const baseHeight = Math.max(battlePx(44), Math.round(baseRadius * 4.6));
+    return Math.max(1, Math.round(baseHeight * scale));
+  }
+
+  function getEnemySpriteRadiusScale(unit) {
+    const radius = Number(unit && unit.radius);
+    const baseRadius = Math.max(1, battlePx(MONSTER_SPRITE_BASE_RADIUS));
+    return Number.isFinite(radius) && radius > 0 ? radius / baseRadius : 1;
   }
 
   function getEnemySpriteState(unit) {
@@ -2681,7 +2671,7 @@
       equipment.picker.scrollMax = 0;
     }
     const settings = game.systemMenu.settings;
-    if (settings.tab !== "controls") {
+    if (settings.tab !== "controls" && settings.tab !== "debug") {
       settings.tab = "game";
     }
     if (!Number.isFinite(settings.controlsScroll)) {
@@ -2695,6 +2685,12 @@
     }
     if (!Number.isFinite(settings.gameScrollMax)) {
       settings.gameScrollMax = 0;
+    }
+    if (!Number.isFinite(settings.debugScroll)) {
+      settings.debugScroll = 0;
+    }
+    if (!Number.isFinite(settings.debugScrollMax)) {
+      settings.debugScrollMax = 0;
     }
     return game.systemMenu;
   }
@@ -2711,6 +2707,9 @@
     }
     if (typeof game.settings.mapDebugMode !== "boolean") {
       game.settings.mapDebugMode = false;
+    }
+    if (typeof game.settings.characterHitboxDebugMode !== "boolean") {
+      game.settings.characterHitboxDebugMode = false;
     }
     game.settings.fpsLimit = normalizeFpsLimit(game.settings.fpsLimit);
     if (keybindTools) {
@@ -2753,6 +2752,10 @@
     return getGameSettings().mapDebugMode === true;
   }
 
+  function isCharacterHitboxDebugModeEnabled() {
+    return getGameSettings().characterHitboxDebugMode === true;
+  }
+
   function getDebugTileMapEntries() {
     const maps = window.HEALER_TILE_MAPS || {};
     const registry = Array.isArray(window.HEALER_DEBUG_TILE_MAPS)
@@ -2770,7 +2773,7 @@
   function getSettingsUi() {
     const menu = getSystemMenu();
     const settings = menu.settings;
-    if (settings.tab !== "controls") {
+    if (settings.tab !== "controls" && settings.tab !== "debug") {
       settings.tab = "game";
     }
     if (keybindTools && !settings.controlsDraft) {
@@ -3932,9 +3935,12 @@
       const content = { x: nav.x + nav.w + 24, y: nav.y, w: w - nav.w - 80, h: nav.h };
       drawSettingsNavItem(nav.x, nav.y, nav.w, 40, "ゲーム", "game", ui.tab === "game");
       drawSettingsNavItem(nav.x, nav.y + 48, nav.w, 40, "操作", "controls", ui.tab === "controls");
+      drawSettingsNavItem(nav.x, nav.y + nav.h - 40, nav.w, 40, "デバック", "debug", ui.tab === "debug");
 
       if (ui.tab === "controls") {
         drawSettingsControlsContent(content);
+      } else if (ui.tab === "debug") {
+        drawSettingsDebugContent(content);
       } else {
         drawSettingsGameContent(content);
       }
@@ -3967,12 +3973,8 @@
     const rows = [
       { type: "toggleDetailedDescriptions", label: "詳細説明文の適用", h: defaultRowH },
       { type: "togglePowerCrystalAutoUse", label: "力の結晶の自動使用", h: defaultRowH },
-      { type: "toggleMapDebugMode", label: "マップデバッグモード", h: defaultRowH },
-      { type: "fpsLimit", label: "FPS上限", h: 96 },
+      { type: "fpsLimit", label: "FPS上限", h: defaultRowH },
     ];
-    if (isMapDebugModeEnabled()) {
-      rows.push({ type: "debugMapSelector", label: "マップ確認", h: defaultRowH });
-    }
     const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
     const listContentH = rows.reduce((total, row) => total + (row.h || defaultRowH), 0);
     ui.gameScrollMax = Math.max(0, listContentH - listRect.h);
@@ -4009,6 +4011,53 @@
     });
   }
 
+  function drawSettingsDebugContent(content) {
+    const ui = getSettingsUi();
+    const headerH = 44;
+    const defaultRowH = 58;
+    const rows = [
+      { type: "toggleMapDebugMode", label: "マップデバッグモード", h: defaultRowH },
+      { type: "toggleCharacterHitboxDebugMode", label: "キャラ判定デバッグモード", h: defaultRowH },
+    ];
+    if (isMapDebugModeEnabled()) {
+      rows.push({ type: "debugMapSelector", label: "マップ確認", h: defaultRowH });
+    }
+    const listRect = { x: content.x, y: content.y + headerH, w: content.w, h: Math.max(80, content.h - headerH) };
+    const listContentH = rows.reduce((total, row) => total + (row.h || defaultRowH), 0);
+    ui.debugScrollMax = Math.max(0, listContentH - listRect.h);
+    ui.debugScroll = Math.max(0, Math.min(ui.debugScrollMax, ui.debugScroll || 0));
+
+    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#102018";
+    ctx.fillText("デバック", content.x, content.y + 2);
+
+    ctx.save();
+    try {
+      ctx.beginPath();
+      ctx.rect(listRect.x, listRect.y, listRect.w, listRect.h);
+      ctx.clip();
+      let y = listRect.y - ui.debugScroll;
+      for (let i = 0; i < rows.length; i += 1) {
+        const rowH = rows[i].h || defaultRowH;
+        const row = { x: listRect.x, y, w: listRect.w, h: rowH };
+        y += rowH;
+        if (row.y + row.h < listRect.y || row.y > listRect.y + listRect.h) {
+          continue;
+        }
+        drawSettingsGameRow(row, rows[i]);
+      }
+    } finally {
+      ctx.restore();
+    }
+    drawSettingsScrollbar(listRect, ui.debugScroll, ui.debugScrollMax, {
+      scrollState: ui,
+      valueKey: "debugScroll",
+      maxKey: "debugScrollMax",
+    });
+  }
+
   function drawSettingsGameRow(row, entry) {
     ctx.strokeStyle = "rgba(16,32,24,0.16)";
     ctx.beginPath();
@@ -4026,6 +4075,8 @@
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isPowerCrystalAutoUseEnabled(), "togglePowerCrystalAutoUse");
     } else if (entry.type === "toggleMapDebugMode") {
       drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isMapDebugModeEnabled(), "toggleMapDebugMode");
+    } else if (entry.type === "toggleCharacterHitboxDebugMode") {
+      drawSettingsToggle(row.x + row.w - 96, row.y + 12, 86, 34, isCharacterHitboxDebugModeEnabled(), "toggleCharacterHitboxDebugMode");
     } else if (entry.type === "fpsLimit") {
       drawSettingsFpsLimitSelector(row);
     } else if (entry.type === "debugMapSelector") {

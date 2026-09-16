@@ -12,7 +12,7 @@
     const DEFAULT_FPS_LIMIT = Number.isFinite(config && config.defaultFpsLimit) ? config.defaultFpsLimit : 60;
     const FPS_LIMIT_OPTIONS = Array.isArray(config && config.fpsLimitOptions) && config.fpsLimitOptions.length
       ? config.fpsLimitOptions
-      : [15, 30, 45, 60, 90, 120, 140, 160, 180, 210, "unlimited"];
+      : [15, 30, 45, 60, 90, 120, 140, "unlimited"];
     const FRAME_SKIP_TOLERANCE_MS = 0.25;
     const BASE_MAX_DT = 0.033;
 
