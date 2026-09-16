@@ -57,6 +57,9 @@
 
   const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
   const MAX_ACCEPTED_FREE_QUESTS = 3;
+  const HORN_RABBIT_DEBUG_HIT_RADIUS = 10;
+  const PARTY_DEBUG_HIT_RADIUS_FALLBACK = 15;
+  const PARTY_DEBUG_HIT_UNIT_IDS = new Set(["finald", "ulpes", "rihas", "sushia"]);
   const INN_PARTY_UNIT_ORDER = ["finald", "ulpes", "rihas", "sushia"];
   const ITEM_SHOP_CATEGORIES = [
     { key: "healing", label: "回復" },
@@ -1421,6 +1424,9 @@
       return;
     }
     drawTownNpc(actor.x, actor.y, actor.color, actor.label);
+    if (isPartyCharacterDebugTarget(actor)) {
+      drawPartyCharacterDebugHitCircle(actor.x, actor.y, getPartyCharacterDebugHitRadius(actor));
+    }
   }
 
   function drawTownMonsterSymbol(actor) {
@@ -1428,8 +1434,12 @@
     const radius = Math.max(10, Number(actor.radius) || 16);
     const footY = actor.y + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 17);
     const bodyY = actor.y - radius * 0.65 + (usingTileMap ? TOWN_TILE_CHARACTER_FOOT_OFFSET_Y : 0);
+    const shouldDrawDebugHitCircle = isHornRabbitDebugTarget(actor);
     const spriteTop = drawTownMonsterSymbolSprite(actor, footY);
     if (spriteTop !== null) {
+      if (shouldDrawDebugHitCircle) {
+        drawHornRabbitDebugHitCircle(actor.x, actor.y);
+      }
       if (actor.questId) {
         drawTownQuestPaperMark(actor.x + (actor.alert ? -18 : 0), spriteTop - 18, actor.questType);
       }
@@ -1456,12 +1466,78 @@
     ctx.textBaseline = "middle";
     ctx.fillText(actor.label || "M", actor.x, bodyY + 1);
     ctx.restore();
+    if (shouldDrawDebugHitCircle) {
+      drawHornRabbitDebugHitCircle(actor.x, actor.y);
+    }
     if (actor.questId) {
       drawTownQuestPaperMark(actor.x + (actor.alert ? -18 : 0), bodyY - radius - 18, actor.questType);
     }
     if (actor.alert) {
       drawArgumentMark(actor.x + (actor.questId ? 18 : 0), bodyY - radius - 16);
     }
+  }
+
+  function isHornRabbitDebugTarget(actor) {
+    return Boolean(actor && (
+      actor.role === "horn_rabbit"
+      || actor.enemyRole === "horn_rabbit"
+      || actor.enemyId === "horn_rabbit"
+    ));
+  }
+
+  function drawHornRabbitDebugHitCircle(x, y) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 255, 255, 0.12)";
+    ctx.strokeStyle = "rgba(0, 255, 255, 0.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, HORN_RABBIT_DEBUG_HIT_RADIUS, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function isPartyCharacterDebugTarget(actor) {
+    const id = actor && (actor.id || actor.unitId || actor.spriteId);
+    return PARTY_DEBUG_HIT_UNIT_IDS.has(id);
+  }
+
+  function getPartyCharacterDebugHitRadius(actor) {
+    if (Number.isFinite(Number(actor && actor.radius))) {
+      return Math.max(1, Number(actor.radius));
+    }
+    const id = actor && (actor.id || actor.unitId || actor.spriteId);
+    if (id === "finald" && Number.isFinite(Number(town && town.player && town.player.radius))) {
+      return Math.max(1, Number(town.player.radius));
+    }
+    const def = getPartyCharacterDebugDef(id);
+    if (Number.isFinite(Number(def && def.radius))) {
+      return Math.max(1, Number(def.radius));
+    }
+    return PARTY_DEBUG_HIT_RADIUS_FALLBACK;
+  }
+
+  function getPartyCharacterDebugDef(id) {
+    if (!CHARACTER_DEFS || !id) {
+      return null;
+    }
+    if (id === "finald") {
+      return CHARACTER_DEFS.player || null;
+    }
+    const allies = Array.isArray(CHARACTER_DEFS.allies) ? CHARACTER_DEFS.allies : [];
+    return allies.find((member) => member && member.id === id) || null;
+  }
+
+  function drawPartyCharacterDebugHitCircle(x, y, radius) {
+    ctx.save();
+    ctx.fillStyle = "rgba(128, 255, 96, 0.12)";
+    ctx.strokeStyle = "rgba(128, 255, 96, 0.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawTownMonsterSymbolSprite(actor, footY) {
@@ -1550,6 +1626,9 @@
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(image, actor.x - width / 2, footY - height, width, height);
     ctx.imageSmoothingEnabled = previousSmoothing;
+    if (isPartyCharacterDebugTarget(actor)) {
+      drawPartyCharacterDebugHitCircle(actor.x, actor.y, getPartyCharacterDebugHitRadius(actor));
+    }
     ctx.restore();
     return true;
   }

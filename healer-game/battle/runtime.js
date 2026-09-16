@@ -45,6 +45,8 @@
       addItem,
     } = context;
 
+    const STATUS_DATA = window.HEALER_STATUS_DATA || {};
+
     function isSystemMenuPaused() {
       const menu = game.systemMenu;
       return Boolean(game.state === "playing" && menu && (menu.open || menu.panel || menu.confirm));
@@ -52,6 +54,85 @@
 
     function isPetrified(unit) {
       return Boolean(unit && (unit.petrificationActive || (unit.petrificationTimer || 0) > 0));
+    }
+
+    const BATTLE_UNAVAILABLE_STATUS_ACCESSORS = {
+      incapacitated(unit) {
+        return { active: Boolean(unit && unit.dead), timed: false };
+      },
+      debuff_petrification(unit) {
+        const timer = Math.max(0, unit.petrificationTimer || 0);
+        const active = Boolean(unit.petrificationActive || timer > 0);
+        return { active, timed: timer > 0 && !unit.petrificationActive };
+      },
+    };
+
+    function isBattleUnavailableStatus(statusId) {
+      const status = STATUS_DATA && STATUS_DATA[statusId];
+      return Boolean(status && (status.battleUnavailable === true || String(status.battleUnavailable || "").toLowerCase() === "y"));
+    }
+
+    function getGenericBattleUnavailableState(unit, statusId) {
+      if (!unit) {
+        return null;
+      }
+      const statusContainers = [unit.statusStates, unit.statuses, unit.statusEffects, unit.statusTimers];
+      for (const container of statusContainers) {
+        if (!container || !Object.prototype.hasOwnProperty.call(container, statusId)) {
+          continue;
+        }
+        const state = container[statusId];
+        if (state === true) {
+          return { active: true, timed: false };
+        }
+        if (typeof state === "number") {
+          return { active: state > 0, timed: state > 0 };
+        }
+        if (state && typeof state === "object") {
+          const timer = Number.isFinite(state.timer)
+            ? state.timer
+            : Number.isFinite(state.remaining)
+              ? state.remaining
+              : Number.isFinite(state.duration)
+                ? state.duration
+                : 0;
+          const permanent = state.permanent === true || state.durationless === true || state.timed === false;
+          const active = state.active !== false && (permanent || timer > 0 || state.active === true);
+          return { active, timed: timer > 0 && !permanent };
+        }
+      }
+      return null;
+    }
+
+    function getBattleUnavailableState(unit, statusId) {
+      const genericState = getGenericBattleUnavailableState(unit, statusId);
+      if (genericState) {
+        return genericState;
+      }
+      const accessor = BATTLE_UNAVAILABLE_STATUS_ACCESSORS[statusId];
+      if (typeof accessor === "function") {
+        return accessor(unit);
+      }
+      return { active: false, timed: false };
+    }
+
+    function isBattleUnavailableUnit(unit) {
+      if (!unit) {
+        return false;
+      }
+      if (unit.dead) {
+        return true;
+      }
+      for (const statusId of Object.keys(STATUS_DATA || {})) {
+        if (!isBattleUnavailableStatus(statusId)) {
+          continue;
+        }
+        const statusState = getBattleUnavailableState(unit, statusId);
+        if (statusState.active && !statusState.timed) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function isActionDisabled(unit) {
@@ -815,7 +896,7 @@
         return;
       }
       const fieldPartyMembers = getFieldPartyMembers();
-      if (fieldPartyMembers.length > 0 && fieldPartyMembers.every((member) => member.dead)) {
+      if (fieldPartyMembers.length > 0 && fieldPartyMembers.every((member) => isBattleUnavailableUnit(member))) {
         clearBattleActionReservations();
         game.state = "lost";
         game.message = "全滅した";

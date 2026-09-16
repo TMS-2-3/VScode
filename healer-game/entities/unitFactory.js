@@ -22,7 +22,8 @@
       const skillOwner = options.skillOwner || options.id;
       const enforceLoadoutLimit = options.team !== "enemy";
       const baseMaxHp = options.maxHp || 100;
-      const baseMaxMp = options.maxMp || 0;
+      const baseMaxMp = Number.isFinite(options.maxMp) ? options.maxMp : 0;
+      const initialMp = Number.isFinite(options.initialMp) ? options.initialMp : baseMaxMp;
       const baseHpRegenRate = Number.isFinite(options.hpRegenRate) ? options.hpRegenRate : 0;
       const baseMpRegenRate = Number.isFinite(options.mpRegenRate) ? options.mpRegenRate : DEFAULT_MP_REGEN_RATE;
       const baseSpeed = options.speed || battlePx(100);
@@ -79,7 +80,8 @@
         hp: baseMaxHp,
         moodBaseHp: baseMaxHp,
         maxMp: baseMaxMp,
-        mp: baseMaxMp,
+        mp: initialMp,
+        mpLimitless: options.mpLimitless === true,
         hpRegenRate: baseHpRegenRate,
         mpRegenRate: baseMpRegenRate,
         speed: baseSpeed,
@@ -253,7 +255,9 @@
         color: stats.color,
         radius: stats.radius,
         maxHp: stats.hp,
-        maxMp: Number.isFinite(stats.mp) ? stats.mp : 0,
+        maxMp: stats.mpLimitless ? 0 : (Number.isFinite(stats.mp) ? stats.mp : 0),
+        initialMp: Number.isFinite(stats.initialMp) ? stats.initialMp : undefined,
+        mpLimitless: stats.mpLimitless === true,
         speed: stats.speed,
         attack: stats.attack,
         magic: Number.isFinite(stats.magic) ? stats.magic : 0,

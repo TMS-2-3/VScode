@@ -219,7 +219,9 @@
       startAutoReactionCooldown(target, "magic_eat", skill);
       const restoreScale = Number.isFinite(skill.magicEatMpRestoreScale) ? skill.magicEatMpRestoreScale : 2;
       const beforeMp = Math.max(0, Number.isFinite(target.mp) ? target.mp : 0);
-      target.mp = clamp(beforeMp + amount * restoreScale, 0, target.maxMp || beforeMp);
+      target.mp = target.mpLimitless
+        ? beforeMp + amount * restoreScale
+        : clamp(beforeMp + amount * restoreScale, 0, target.maxMp || beforeMp);
       const restored = target.mp - beforeMp;
       addFloat("魔力吸収", target.x, target.y - 34, "#9ef7ff");
       if (restored > 0) {

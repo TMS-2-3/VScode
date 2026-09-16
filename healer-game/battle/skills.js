@@ -2256,7 +2256,7 @@
       }
       const maxMp = Math.max(0, Number.isFinite(unit.maxMp) ? unit.maxMp : 0);
       const before = Math.max(0, Number.isFinite(unit.mp) ? unit.mp : 0);
-      unit.mp = Math.min(maxMp, before + amount);
+      unit.mp = unit.mpLimitless ? before + amount : Math.min(maxMp, before + amount);
       const restored = unit.mp - before;
       if (restored > 0) {
         ctx.addFloat(`MP+${Math.round(restored)}`, unit.x, unit.y - 32, "#9ef7ff");

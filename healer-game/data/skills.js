@@ -566,7 +566,7 @@
       heavySlam: { id: "enemy_heavy_slam", key: "heavySlam", owner: "enemy", name: "ヘビースラム", category: "スキル", cd: 17, cast: 0.95, radius: px(98), damageBonus: 20, burstRadius: px(110) },
       d_enemy_attack: {
         id: "d_enemy_attack", key: "d_enemy_attack", owner: "enemy", name: "通常攻撃", rank: "D", category: "通常攻撃", skillType: "単体攻撃",
-        cd: 5, range: px(50), damageBase: 10, attackScale: 0.2, damageType: "physical", lines: ["！！"],
+        cd: 5, range: px(70), damageBase: 10, attackScale: 0.2, damageType: "physical", lines: ["！！"],
       },
       rush: {
         id: "rush", key: "rush", owner: "enemy", name: "突進", rank: "D", category: "スキル", skillType: "単体攻撃",

@@ -125,6 +125,8 @@
     const battleSpriteStates = new Map();
     const enemySpriteStates = new Map();
     const ENEMY_SPRITE_TURN_COOLDOWN = 0.3;
+    const HORN_RABBIT_DEBUG_HIT_RADIUS = 10;
+    const PARTY_DEBUG_HIT_RADIUS_FALLBACK = 15;
     const equipmentCharacterArtImages = createEquipmentCharacterArtImages();
     const equipmentSlotLayout = {
       left: ["head", "body", "waist"],
@@ -1540,6 +1542,38 @@
     return unit && unit.maxHp > 0 && unit.hp / unit.maxHp <= 0.25;
   }
 
+  function isHornRabbitDebugTarget(unit) {
+    return Boolean(unit && (
+      unit.role === "horn_rabbit"
+      || unit.enemyRole === "horn_rabbit"
+      || unit.enemyId === "horn_rabbit"
+    ));
+  }
+
+  function drawHornRabbitDebugHitCircle(x, y, radius) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 255, 255, 0.12)";
+    ctx.strokeStyle = "rgba(0, 255, 255, 0.95)";
+    ctx.lineWidth = Math.max(1, battlePx(2));
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPartyDebugHitCircle(x, y, radius) {
+    ctx.save();
+    ctx.fillStyle = "rgba(128, 255, 96, 0.12)";
+    ctx.strokeStyle = "rgba(128, 255, 96, 0.95)";
+    ctx.lineWidth = Math.max(1, battlePx(2));
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawUnit(unit) {
     if (unit.dead && unit.team === "party") {
       drawIncapacitatedBattleCharacter(unit);
@@ -1623,6 +1657,13 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(unit.label, unit.x, unit.y + 0.5);
+    }
+
+    if (unit.team === "enemy" && isHornRabbitDebugTarget(unit)) {
+      drawHornRabbitDebugHitCircle(unit.x, unit.y, Math.max(1, battlePx(HORN_RABBIT_DEBUG_HIT_RADIUS)));
+    }
+    if (unit.team === "party") {
+      drawPartyDebugHitCircle(unit.x, unit.y, Math.max(1, Number(unit.radius) || battlePx(PARTY_DEBUG_HIT_RADIUS_FALLBACK)));
     }
 
     if (unit.team === "enemy") {
