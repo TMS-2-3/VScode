@@ -49,11 +49,13 @@
       getTownEventActors,
       getTownNpcActors,
       getTownMonsterSymbols,
+      canInnRest,
       isEquipmentCraftVisible,
       getQuestTypes,
       getQuestsByType,
       getQuestById,
       getKeybindLabel,
+      drawEquipmentCharacterArt,
     } = context;
 
   const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
@@ -188,10 +190,10 @@
   const EQUIPMENT_SHOP_WEAPON_TYPES = ["片手剣", "両手剣", "拳具", "棒具", "杖", "魔導書", "楽器"];
   const WEAPON_CRAFT_GRID_SLOTS = EQUIPMENT_SHOP_WEAPON_TYPES.map((type) => ({ key: type, label: type }));
   const EQUIPMENT_SHOP_UNITS = [
-    { id: "ulpes", label: "ウルペス" },
-    { id: "rihas", label: "リハス" },
-    { id: "sushia", label: "スシア" },
-    { id: "finald", label: "アルジュナ" },
+    { id: "ulpes" },
+    { id: "rihas" },
+    { id: "sushia" },
+    { id: "finald" },
   ];
   const WEAPON_ALLOWED_UNIT_FALLBACK = {
     "片手剣": ["ulpes", "rihas"],
@@ -1972,9 +1974,9 @@
   function drawInnPanel() {
     const { x, y, w, h } = getTownFacilityPageRect();
     const cost = Number.isFinite(town.panel.cost) ? town.panel.cost : 100;
-    const restLocked = Boolean(game.innRestUsedUntilBattle);
     const canPay = getGoldValue() >= cost;
     const members = getInnPartyMembers();
+    const canRest = typeof canInnRest === "function" ? canInnRest() : true;
     drawPanel(x, y, w, h);
 
     ctx.textAlign = "left";
@@ -1988,10 +1990,10 @@
 
     ctx.fillStyle = "#dce9dc";
     ctx.font = "700 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.fillText(restLocked ? "次の戦闘後まで再度利用できません。" : `全員を全回復します。料金は${formatGoldSafe(cost)}です。`, x + 26, y + 84);
-    ctx.fillText("HP/MPと戦闘不能、簡易的な状態異常を回復します。", x + 26, y + 108);
+    ctx.fillText(`全員を全回復します。料金は${formatGoldSafe(cost)}です。`, x + 26, y + 84);
+    ctx.fillText("HP/MPと戦闘不能、状態異常を回復します。", x + 26, y + 108);
 
-    drawInnStatusComparison(members, x, y, w, h);
+    drawInnStatusList(members, x, y, w, h);
     if (town.panel.message) {
       ctx.fillStyle = isTownPanelErrorMessage(town.panel.message) ? "#ffb4a8" : "#ffd86b";
       ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
@@ -1999,24 +2001,19 @@
     }
 
     drawTextButton(x + 26, y + h - 60, 132, 38, "閉じる", { kind: "close" });
-    drawTextButton(x + w - 190, y + h - 60, 164, 38, "泊まる", { kind: "confirmInnRest" }, true, restLocked || !canPay);
+    drawTextButton(x + w - 190, y + h - 60, 164, 38, "泊まる", { kind: "confirmInnRest" }, true, !canRest || !canPay);
     drawPanelFooter(x, y, w, h);
   }
 
-  function drawInnStatusComparison(members, panelX, panelY, panelW, panelH) {
+  function drawInnStatusList(members, panelX, panelY, panelW, panelH) {
     const contentX = panelX + 24;
     const contentY = panelY + 136;
     const contentW = panelW - 48;
     const contentH = Math.max(110, panelH - 220);
-    const gap = 18;
-    const columnW = (contentW - gap) / 2;
-    const currentRect = { x: contentX, y: contentY, w: columnW, h: contentH };
-    const afterRect = { x: contentX + columnW + gap, y: contentY, w: columnW, h: contentH };
-    drawInnStatusColumn("現在の状態", members, currentRect, false);
-    drawInnStatusColumn("泊まった後", members, afterRect, true);
+    drawInnStatusColumn("現在の状態", members, { x: contentX, y: contentY, w: contentW, h: contentH });
   }
 
-  function drawInnStatusColumn(title, members, rect, afterRest) {
+  function drawInnStatusColumn(title, members, rect) {
     ctx.save();
     ctx.fillStyle = "rgba(255,255,255,0.055)";
     roundRect(rect.x, rect.y, rect.w, rect.h, 8);
@@ -2035,47 +2032,59 @@
       return;
     }
 
-    const rowGap = 10;
-    const rowH = Math.max(82, Math.min(112, Math.floor((rect.h - 52 - rowGap * Math.max(0, members.length - 1)) / members.length)));
+    const cardGap = 12;
+    const columns = Math.min(members.length, rect.w >= 760 ? 4 : 2);
+    const rows = Math.ceil(members.length / columns);
+    const cardW = (rect.w - 24 - cardGap * Math.max(0, columns - 1)) / columns;
+    const cardH = Math.max(170, Math.min(290, Math.floor((rect.h - 54 - cardGap * Math.max(0, rows - 1)) / rows)));
     for (let i = 0; i < members.length; i += 1) {
-      const rowY = rect.y + 46 + i * (rowH + rowGap);
-      if (rowY + rowH > rect.y + rect.h - 8) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const cardX = rect.x + 12 + col * (cardW + cardGap);
+      const cardY = rect.y + 46 + row * (cardH + cardGap);
+      if (cardY + cardH > rect.y + rect.h - 8) {
         break;
       }
-      drawInnMemberRow(members[i], rect.x + 12, rowY, rect.w - 24, rowH, afterRest);
+      drawInnMemberCard(members[i], cardX, cardY, cardW, cardH);
     }
     ctx.restore();
   }
 
-  function drawInnMemberRow(member, x, y, w, h, afterRest) {
+  function drawInnMemberCard(member, x, y, w, h) {
     const name = getInnMemberName(member);
     const dead = isInnMemberIncapacitated(member);
     const maxHp = getInnMemberMaxResource(member, "maxHp");
     const maxMp = getInnMemberMaxResource(member, "maxMp");
-    const currentHp = afterRest ? maxHp : getInnMemberCurrentResource(member, "hp", maxHp);
-    const currentMp = afterRest ? maxMp : getInnMemberCurrentResource(member, "mp", maxMp);
-    const statusChips = afterRest ? [] : getInnMemberStatusChips(member);
+    const currentHp = getInnMemberCurrentResource(member, "hp", maxHp);
+    const currentMp = getInnMemberCurrentResource(member, "mp", maxMp);
+    const statusChips = getInnMemberStatusChips(member);
     ctx.save();
-    ctx.fillStyle = dead && !afterRest ? "rgba(255,120,110,0.1)" : "rgba(255,255,255,0.075)";
-    ctx.strokeStyle = dead && !afterRest ? "rgba(255,120,110,0.42)" : "rgba(255,255,255,0.14)";
+    ctx.fillStyle = dead ? "rgba(255,120,110,0.1)" : "rgba(255,255,255,0.075)";
+    ctx.strokeStyle = dead ? "rgba(255,120,110,0.42)" : "rgba(255,255,255,0.14)";
     ctx.lineWidth = 1;
     roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
 
-    const nameW = Math.min(118, Math.max(78, w * 0.24));
-    drawFittedTownText(name, x + 14, y + 25, nameW, 900, 16, 11, dead && !afterRest ? "#ffb4a8" : "#f7fff6");
-    if (afterRest && dead) {
-      ctx.fillStyle = "#8ff0a4";
-      ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText("戦闘不能解除", x + 14, y + 46);
+    drawFittedTownText(name, x + w / 2, y + 27, w - 28, 900, 17, 11, dead ? "#ffb4a8" : "#f7fff6", "center");
+
+    const barX = x + 14;
+    const barW = Math.max(48, w - 28);
+    const artSize = Math.max(30, Math.min(50, w * 0.18, h * 0.18));
+    const artY = y + Math.max(80, artSize * 1.7);
+    if (typeof drawEquipmentCharacterArt === "function") {
+      drawEquipmentCharacterArt(member, x + w / 2, artY, artSize);
     }
 
-    const barX = x + nameW + 24;
-    const barW = Math.max(116, w - nameW - 40);
-    drawInnResourceBar("HP", currentHp, maxHp, barX, y + 14, barW, COLORS.hp || "#72df82");
-    drawInnResourceBar("MP", currentMp, maxMp, barX, y + 42, barW, COLORS.mp || "#73a7ff");
-    drawInnStatusChips(afterRest ? [{ name: "状態なし", color: "#5d6864", empty: true }] : statusChips, barX, y + 70, barW, h - 76);
+    const resourceY = y + Math.max(156, h * 0.57);
+    drawInnResourceBar("HP", currentHp, maxHp, barX, resourceY, barW, COLORS.hp || "#72df82");
+    drawInnResourceBar("MP", currentMp, maxMp, barX, resourceY + 30, barW, COLORS.mp || "#73a7ff");
+    ctx.fillStyle = "#dce9dc";
+    ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("状態", barX, resourceY + 78);
+    drawInnStatusChips(statusChips, barX, resourceY + 84, barW, h - (resourceY - y) - 90);
     ctx.restore();
   }
 
@@ -2874,7 +2883,7 @@
         action: { kind: "toggleEquipmentShopFilter", category: "weaponType", value: type },
       }))), x, y, w) + 4;
       y += drawFilterChipRow("装備可能者", createBulkFilterChips("weaponUnit", EQUIPMENT_SHOP_UNITS.map((unit) => ({
-        label: unit.label,
+        label: getTownUnitShortName(unit.id),
         selected: weapon.mode === "unit" && weapon.unitIds.includes(unit.id),
         action: { kind: "toggleEquipmentShopFilter", category: "weaponUnit", value: unit.id },
       }))), x, y, w) + 4;
@@ -4052,10 +4061,7 @@
 
   function getWeaponAllowedUnitLabelsForTown(item) {
     const labels = getWeaponAllowedUnitIdsForTown(item)
-      .map((unitId) => {
-        const entry = EQUIPMENT_SHOP_UNITS.find((unit) => unit.id === unitId);
-        return entry ? entry.label : String(unitId || "").trim();
-      })
+      .map((unitId) => getTownUnitShortName(unitId))
       .filter(Boolean);
     return labels.length ? labels.join(" / ") : "-";
   }

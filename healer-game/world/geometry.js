@@ -8,6 +8,7 @@
       town,
       party,
       enemies,
+      tileMapSystem,
       TOWN_WIDTH,
       TOWN_HEIGHT,
       BATTLE_SIDE_MARGIN,
@@ -20,9 +21,27 @@
     const UNIT_SEPARATION_PADDING = battlePx(4);
     const ENEMY_ENEMY_SEPARATION_PADDING = battlePx(18);
 
+    function getTownMapBounds() {
+      const mapId = town && town.mapId;
+      const tileMap = tileMapSystem && typeof tileMapSystem.getMap === "function"
+        ? tileMapSystem.getMap(mapId)
+        : null;
+      const tileSize = tileMap && tileMapSystem && typeof tileMapSystem.getTileSize === "function"
+        ? tileMapSystem.getTileSize(tileMap)
+        : 0;
+      const width = tileMap ? Math.max(0, Math.floor(Number(tileMap.width) || 0)) * tileSize : 0;
+      const height = tileMap ? Math.max(0, Math.floor(Number(tileMap.height) || 0)) * tileSize : 0;
+      return {
+        width: width > 0 ? width : TOWN_WIDTH,
+        height: height > 0 ? height : TOWN_HEIGHT,
+      };
+    }
+
     function clampTownPlayer() {
-      town.player.x = clamp(town.player.x, town.player.radius, TOWN_WIDTH - town.player.radius);
-      town.player.y = clamp(town.player.y, town.player.radius, TOWN_HEIGHT - town.player.radius);
+      const bounds = getTownMapBounds();
+      const radius = Math.max(0, Number(town.player.radius) || 0);
+      town.player.x = clamp(town.player.x, radius, Math.max(radius, bounds.width - radius));
+      town.player.y = clamp(town.player.y, radius, Math.max(radius, bounds.height - radius));
     }
 
     function separateUnits(dt) {

@@ -4,7 +4,7 @@
   const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
     ? window.HEALER_CONFIG.battleSpatialScale
     : 1;
-  const px = (value) => Math.max(1, Math.round(value * spatialScale));
+  const px = (value) => Math.max(0, Math.round(value * spatialScale));
   const rangeLife = (range, speed) => px(range) / Math.max(1, px(speed));
 
   window.HEALER_SKILL_DATA = {

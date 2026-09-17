@@ -26,7 +26,7 @@
       const initialMp = Number.isFinite(options.initialMp) ? options.initialMp : baseMaxMp;
       const baseHpRegenRate = Number.isFinite(options.hpRegenRate) ? options.hpRegenRate : 0;
       const baseMpRegenRate = Number.isFinite(options.mpRegenRate) ? options.mpRegenRate : DEFAULT_MP_REGEN_RATE;
-      const baseSpeed = options.speed || battlePx(100);
+      const baseSpeed = Number.isFinite(options.speed) ? options.speed : battlePx(100);
       const baseAttack = options.attack || 10;
       const baseMagic = options.magic || 10;
       const baseDefense = options.defense || 0;
@@ -102,7 +102,7 @@
         commandBias: 0,
         activeCommandBias: 0,
         commandBiasActionCount: 0,
-        preferredRange: options.preferredRange || 90,
+        preferredRange: Number.isFinite(options.preferredRange) ? options.preferredRange : 90,
         mood: options.team === "party" && options.id !== "finald" ? MOOD_INITIAL : null,
         moodActionId: 0,
         moodActionGain: 0,
@@ -285,6 +285,7 @@
       enemy.usesCustomSkillSet = Array.isArray(stats.skills);
       enemy.firstSkillKey = typeof stats.firstSkill === "string" ? stats.firstSkill : null;
       enemy.firstSkillPending = Boolean(enemy.firstSkillKey);
+      enemy.initialSkillPolicy = stats.initialSkillPolicy ? { ...stats.initialSkillPolicy } : null;
       enemy.cds.attack = Math.random() * getActionCooldown(enemy);
       const skillSystem = getSkillSystem();
       if (kind === "caster") {

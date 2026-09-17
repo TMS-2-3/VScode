@@ -162,7 +162,6 @@
         savedAt: now,
         game: {
           gold: Number.isFinite(game.gold) ? Math.max(0, Math.floor(game.gold)) : 0,
-          innRestUsedUntilBattle: game.innRestUsedUntilBattle === true,
           materialsById: clonePlain(game.materialsById, {}),
           partyHpById: clonePlain(game.partyHpById, {}),
           partyMpById: clonePlain(game.partyMpById, {}),
@@ -385,7 +384,6 @@
       game.skillPage = "page1";
       game.itemSlots = null;
       game.gold = 0;
-      game.innRestUsedUntilBattle = false;
       game.battleRewards = null;
       game.currentQuest = null;
       game.encounterCutin = null;
@@ -488,7 +486,6 @@
     function restoreGameStores(snapshotGame) {
       const saved = snapshotGame && typeof snapshotGame === "object" ? snapshotGame : {};
       game.gold = Number.isFinite(saved.gold) ? Math.max(0, Math.floor(saved.gold)) : 0;
-      game.innRestUsedUntilBattle = saved.innRestUsedUntilBattle === true;
       game.battleRewards = null;
       game.currentQuest = null;
       game.encounterCutin = null;

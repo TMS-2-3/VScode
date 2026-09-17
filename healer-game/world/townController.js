@@ -2845,7 +2845,12 @@
         updateTownActorWalkAnimation(town.player, dt, false);
         return;
       }
+      const wasFacingUp = (town.player.facing || "down") === "up";
       town.player.facing = step.facing;
+      if (tryOpenTownFacilityFromMove(tileMap, step, wasFacingUp)) {
+        updateTownActorWalkAnimation(town.player, dt, false);
+        return;
+      }
       if (!startTownGridMove(tileMap, step)) {
         const fallbackStep = step.x && step.y ? getTownGridCardinalFallbackStep(keys) : null;
         if (!fallbackStep || !startTownGridMove(tileMap, fallbackStep)) {
@@ -3476,6 +3481,22 @@
       const questTemplate = symbols.length === 1 && questId
         ? getQuestById(questId)
         : null;
+      const battleLayout = Array.isArray(questTemplate && questTemplate.battleLayout)
+        ? questTemplate.battleLayout
+        : [];
+      const battleEnemies = enemiesForBattle.map((entry, index) => {
+        const layout = battleLayout[index];
+        if (!layout || typeof layout !== "object") {
+          return entry;
+        }
+        const positioned = { ...entry };
+        for (const key of ["x", "y", "dx", "dy"]) {
+          if (Number.isFinite(layout[key])) {
+            positioned[key] = layout[key];
+          }
+        }
+        return positioned;
+      });
       return {
         ...(questTemplate || {}),
         id: questTemplate && questTemplate.id || `symbol_${mapId}_${Date.now()}`,
@@ -3487,7 +3508,7 @@
         reward: questTemplate && questTemplate.reward || primarySymbol && primarySymbol.reward || "",
         rewards: questTemplate && questTemplate.rewards || primarySymbol && primarySymbol.rewards || null,
         battleId: questTemplate && questTemplate.battleId || primarySymbol && primarySymbol.battleId || `symbol_${mapId}`,
-        enemies: enemiesForBattle,
+        enemies: battleEnemies,
         symbolEncounter: {
           mapId,
           questId,
@@ -3959,11 +3980,12 @@
       return null;
     }
 
-    function getTownFacilityInteractionFromTileMap(tileMap) {
+    function getTownFacilityInteractionFromTileMap(tileMap, options = {}) {
       if (!tileMap || !tileMapSystem || typeof tileMapSystem.getEventsAtTile !== "function") {
         return null;
       }
-      if ((town.player.facing || "down") !== "up") {
+      const ignoreFacing = options.ignoreFacing === true;
+      if (!ignoreFacing && (town.player.facing || "down") !== "up") {
         return null;
       }
       const tile = getTownPlayerTile(tileMap);
@@ -3975,7 +3997,7 @@
           continue;
         }
         const requiredFacing = raw.facing || raw.direction || raw.requiredFacing || null;
-        if (requiredFacing && requiredFacing !== town.player.facing) {
+        if (!ignoreFacing && requiredFacing && requiredFacing !== town.player.facing) {
           continue;
         }
         const payload = raw.payload || {};
@@ -4003,6 +4025,18 @@
       return null;
     }
 
+    function tryOpenTownFacilityFromMove(tileMap, step, wasFacingUp) {
+      if (!wasFacingUp || !step || step.x !== 0 || step.y !== -1 || (town.player.facing || "down") !== "up") {
+        return false;
+      }
+      const facility = getTownFacilityInteractionFromTileMap(tileMap);
+      if (!facility) {
+        return false;
+      }
+      interactTown();
+      return true;
+    }
+
     function getTownInteraction() {
       if (town.panel || town.story) {
         return null;
@@ -4013,7 +4047,7 @@
         if (npc) {
           return npc;
         }
-        return getTownFacilityInteractionFromTileMap(tileMap);
+        return getTownFacilityInteractionFromTileMap(tileMap, { ignoreFacing: true });
       }
       let best = null;
       let bestDist = Infinity;
@@ -4411,14 +4445,14 @@
         title: "宿屋",
         action: "inn",
         cost: INN_REST_COST,
-        message: isInnRestLocked() ? "次の戦闘後まで利用できません。" : "",
+        message: "",
         clickTargets: [],
       };
     }
 
     function confirmInnRest() {
-      if (isInnRestLocked()) {
-        setTownPanelMessage("次の戦闘後まで利用できません。");
+      if (!canInnRest()) {
+        setTownPanelMessage("回復が必要な仲間はいません。");
         return;
       }
       if (!spendGoldSafe(INN_REST_COST)) {
@@ -4428,12 +4462,44 @@
       recoverPartyFull();
       saveFullPartyHp();
       clearSavedPartyStatuses();
-      game.innRestUsedUntilBattle = true;
       setTownPanelMessage(`全員が全回復しました。-${formatGoldSafe(INN_REST_COST)}`);
     }
 
-    function isInnRestLocked() {
-      return Boolean(game.innRestUsedUntilBattle);
+    function canInnRest() {
+      const savedStatuses = game.partyStatusById && typeof game.partyStatusById === "object"
+        ? game.partyStatusById
+        : {};
+      if (Object.values(savedStatuses).some((statuses) => statuses && typeof statuses === "object" && Object.keys(statuses).length > 0)) {
+        return true;
+      }
+
+      const incapacitatedById = game.partyDeadById && typeof game.partyDeadById === "object"
+        ? game.partyDeadById
+        : {};
+      const savedHpById = game.partyHpById && typeof game.partyHpById === "object"
+        ? game.partyHpById
+        : {};
+      const savedMpById = game.partyMpById && typeof game.partyMpById === "object"
+        ? game.partyMpById
+        : {};
+      return getRecoveryMembers().some((member) => {
+        const maxHp = Math.max(1, Number.isFinite(member.maxHp) ? member.maxHp : member.hp || 1);
+        const maxMp = Math.max(0, Number.isFinite(member.maxMp) ? member.maxMp : member.mp || 0);
+        const hp = Number.isFinite(savedHpById[member.id])
+          ? savedHpById[member.id]
+          : Number.isFinite(member.hp) ? member.hp : maxHp;
+        const mp = Number.isFinite(savedMpById[member.id])
+          ? savedMpById[member.id]
+          : Number.isFinite(member.mp) ? member.mp : maxMp;
+        return Boolean(
+          member.dead
+          || incapacitatedById[member.id]
+          || !Number.isFinite(hp)
+          || hp < maxHp
+          || !Number.isFinite(mp)
+          || mp < maxMp
+        );
+      });
     }
 
     function recoverPartyFull() {
@@ -5666,6 +5732,7 @@
       getQuestTypes,
       getQuestsByType,
       getQuestById,
+      canInnRest,
     };
   };
 })();

@@ -390,7 +390,6 @@
       game.currentQuest = quest;
       game.battleTutorial = null;
       game.battleRewards = { pending: [], granted: [], claimed: false };
-      game.innRestUsedUntilBattle = false;
       game.message = quest ? `依頼: ${quest.name}` : "依頼: 魔物を全滅させる";
       game.messageTimer = 4;
 

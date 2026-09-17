@@ -88,7 +88,10 @@
       throw new Error("createHealerStatPresenter must be loaded before ui/renderer.js");
     }
     const statPresenter = window.createHealerStatPresenter(context);
-    const townRenderer = window.createHealerTownRenderer(context);
+    const townRenderer = window.createHealerTownRenderer({
+      ...context,
+      drawEquipmentCharacterArt,
+    });
     const statusRenderer = window.createHealerStatusRenderer({ ...context, statPresenter });
     const tooltipText = window.createHealerTooltipText(context);
     const equipmentUnitOrder = ["finald", "ulpes", "rihas", "sushia"];

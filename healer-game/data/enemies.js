@@ -4,7 +4,7 @@
   const spatialScale = window.HEALER_CONFIG && Number.isFinite(window.HEALER_CONFIG.battleSpatialScale)
     ? window.HEALER_CONFIG.battleSpatialScale
     : 1;
-  const px = (value) => Math.max(1, Math.round(value * spatialScale));
+  const px = (value) => Math.max(0, Math.round(value * spatialScale));
 
   window.HEALER_ENEMY_DEFS = {
     horn_rabbit: {
@@ -130,6 +130,12 @@
       element: "none",
       elementResistances: {},
       firstSkill: "sowing_seeds",
+      initialSkillPolicy: {
+        type: "partyRange",
+        requireAllUntil: 5,
+        requireAnyAfter: 5,
+        skipAfter: 10,
+      },
       skills: [
         "vine_whip",
         "poisonous_stinger",

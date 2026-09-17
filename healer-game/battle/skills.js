@@ -281,7 +281,7 @@
 
     function showSkillUnavailable(unit, key, skill = null) {
       const text = getSkillUnavailableText(unit, key, skill);
-      if (!text || !ctx.addFloat) {
+      if (!text || text === "必要武器不足" || !ctx.addFloat) {
         return;
       }
       const origin = unit && unit.id === "finald" && ctx.getSupportOrigin ? ctx.getSupportOrigin() : unit || ctx.player;
@@ -774,12 +774,25 @@
       const reachableCandidates = candidates.filter((candidate) => isEnemyActionReachable(enemy, candidate));
       const fixedFirstKey = enemy.firstSkillPending && enemy.firstSkillKey;
       if (fixedFirstKey) {
-        const fixedAction = reachableCandidates.find((candidate) => candidate.key === fixedFirstKey);
-        if (fixedAction) {
+        const fixedAction = candidates.find((candidate) => candidate.key === fixedFirstKey);
+        const initialSkillResult = getInitialEnemySkillResult(enemy, fixedAction);
+        if (initialSkillResult === "skip") {
+          skipInitialEnemySkill(enemy, fixedFirstKey);
+        } else if (initialSkillResult === "wait") {
+          enemy.aiIntent = null;
+          enemy.aiTick = ctx.AI_IDLE_RECHECK;
+          return false;
+        } else if (initialSkillResult === "cast" && fixedAction) {
           return executeEnemyChosenAction(enemy, fixedAction);
         }
-        if (!getUnitSkill(enemy, fixedFirstKey)) {
-          enemy.firstSkillPending = false;
+        if (initialSkillResult !== "skip") {
+          const reachableFixedAction = reachableCandidates.find((candidate) => candidate.key === fixedFirstKey);
+          if (reachableFixedAction) {
+            return executeEnemyChosenAction(enemy, reachableFixedAction);
+          }
+          if (!getUnitSkill(enemy, fixedFirstKey)) {
+            enemy.firstSkillPending = false;
+          }
         }
       }
       if (!reachableCandidates.length) {
@@ -792,6 +805,52 @@
         return false;
       }
       return executeEnemyChosenAction(enemy, action);
+    }
+
+    function getInitialEnemySkillResult(enemy, action) {
+      const policy = enemy && enemy.initialSkillPolicy;
+      if (!policy || policy.type !== "partyRange") {
+        return null;
+      }
+      if (!action || !action.skill) {
+        return null;
+      }
+      const elapsed = Math.max(0, Number(ctx.game && ctx.game.time) || 0);
+      const skipAfter = Number.isFinite(policy.skipAfter) ? policy.skipAfter : Infinity;
+      if (elapsed >= skipAfter) {
+        return "skip";
+      }
+      const members = ctx.getTargetablePartyMembers
+        ? ctx.getTargetablePartyMembers()
+        : ctx.getFieldPartyMembers().filter((member) => member && !member.dead && !isPetrified(member));
+      const range = getInitialEnemySkillEffectRange(action.skill);
+      const inRange = members.filter((member) => ctx.dist(enemy, member) <= range + member.radius);
+      const requireAllUntil = Number.isFinite(policy.requireAllUntil) ? policy.requireAllUntil : 0;
+      const requireAnyAfter = Number.isFinite(policy.requireAnyAfter) ? policy.requireAnyAfter : 0;
+      if (elapsed < requireAllUntil) {
+        return members.length > 0 && inRange.length === members.length ? "cast" : "wait";
+      }
+      if (elapsed >= requireAnyAfter) {
+        return inRange.length > 0 ? "cast" : "wait";
+      }
+      return "wait";
+    }
+
+    function getInitialEnemySkillEffectRange(skill) {
+      if (skill && Number.isFinite(skill.radius) && skill.radius > 0) {
+        return skill.radius;
+      }
+      return getEnemySkillRange(skill);
+    }
+
+    function skipInitialEnemySkill(enemy, key) {
+      if (!enemy || !key) {
+        return;
+      }
+      enemy.firstSkillPending = false;
+      ensureSkillQueue(enemy);
+      enemy.usedSkillKeys[key] = true;
+      moveSkillToQueueBack(enemy, key);
     }
 
     function executeEnemyChosenAction(enemy, action) {
@@ -1282,7 +1341,13 @@
         }
         if (skill.enemyArea) {
           const actionTarget = target || enemy;
-          const range = target ? getEnemySkillRange(skill) + target.radius : Infinity;
+          const isInitialPartyRangeSkill = enemy.firstSkillPending
+            && enemy.firstSkillKey === key
+            && enemy.initialSkillPolicy
+            && enemy.initialSkillPolicy.type === "partyRange";
+          const range = target
+            ? (isInitialPartyRangeSkill ? getInitialEnemySkillEffectRange(skill) : getEnemySkillRange(skill)) + target.radius
+            : Infinity;
           candidates.push({ key, skill, target: actionTarget, range, use: () => useEnemyAreaSkill(enemy, key, skill) });
           continue;
         }
@@ -4252,6 +4317,14 @@
       return true;
     }
 
+    function canUseUltimateWithEquipment(unit) {
+      if (!unit) {
+        return false;
+      }
+      const ultimateEntry = getUnitUltimateEntry(unit);
+      return canUseSkillWithEquipment(unit, ultimateEntry.key || "ult", ultimateEntry.skill);
+    }
+
     function ultUlpes(unit, automatic) {
       const skill = getUnitUltimateEntry(unit).skill || need("ulpes", "ult");
       const target = getPartyAttackTarget(unit);
@@ -4813,6 +4886,7 @@
       getPanelSkills,
       executePartyIntent,
       executeEnemyIntent,
+      canUseUltimateWithEquipment,
     };
   }
 

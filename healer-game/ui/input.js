@@ -710,7 +710,6 @@
           return;
         }
         recoverBattlePartyFullForDefeatRestart();
-        game.innRestUsedUntilBattle = true;
       } else {
         recoverBattlePartyLowForDefeatRestart();
       }

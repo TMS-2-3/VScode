@@ -203,7 +203,6 @@
         skillPage: "page1",
         itemSlots: null,
         gold: 0,
-        innRestUsedUntilBattle: false,
         materialsById: {},
         battleRewards: null,
         currentQuest: null,

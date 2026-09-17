@@ -26,6 +26,7 @@
       clampUnit,
       getBattleBounds,
       updateTelegraphDynamic,
+      isFieldUnit,
       getTargetablePartyMembers,
       getPriorityTarget,
       isAvoidTarget,
@@ -75,7 +76,8 @@
         if (member === player && !playerTaunted && !regretForced) {
           continue;
         }
-        if (!regretForced && !avoidingTelegraph && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
+        const canAutoUseUltimate = !skillSystem.canUseUltimateWithEquipment || skillSystem.canUseUltimateWithEquipment(member);
+        if (!regretForced && !avoidingTelegraph && canAutoUseUltimate && member.actionLock <= 0 && member.ult >= skillSystem.getUltimateCost(member) && member.mood >= 95) {
           triggerUltimate(member.id, true);
           continue;
         }
@@ -84,7 +86,7 @@
           continue;
         }
 
-        if (!regretForced && !avoidingTelegraph && member.mood >= 85 && member.ult >= skillSystem.getUltimateCost(member) && Math.random() < 0.16) {
+        if (!regretForced && !avoidingTelegraph && canAutoUseUltimate && member.mood >= 85 && member.ult >= skillSystem.getUltimateCost(member) && Math.random() < 0.16) {
           triggerUltimate(member.id, true);
           continue;
         }
@@ -130,9 +132,8 @@
           }
           return false;
         }
-        const dir = normalize(target.x - unit.x, target.y - unit.y);
         unit.battleFacingIntent = "move";
-        moveUnitWithWallSlide(unit, dir, speed * moodSpeed * dt);
+        moveUnitAlongActionRoute(unit, target, unit.aiIntent.range, speed * moodSpeed * dt, dt);
         return false;
       }
 
@@ -634,10 +635,233 @@
         skillSystem.executeEnemyIntent(enemy);
         return true;
       }
-      const dir = normalize(intent.target.x - enemy.x, intent.target.y - enemy.y);
       enemy.battleFacingIntent = "move";
-      moveUnitWithWallSlide(enemy, dir, speed * dt);
+      moveUnitAlongActionRoute(enemy, intent.target, range, speed * dt, dt);
       return true;
+    }
+
+    function moveUnitAlongActionRoute(unit, target, range, distance, dt) {
+      if (!unit || !target || !Number.isFinite(distance) || distance <= 0) {
+        return false;
+      }
+      const intent = unit.aiIntent;
+      if (!intent) {
+        const direct = normalize(target.x - unit.x, target.y - unit.y);
+        return moveUnitWithWallSlide(unit, direct, distance);
+      }
+
+      advanceActionRoute(unit, intent);
+      if (!intent.actionRoute) {
+        const blocker = getActionRouteBlocker(unit, target, range);
+        if (blocker) {
+          intent.actionRoute = createActionRoute(unit, target, range, blocker, intent);
+        }
+      }
+
+      const route = intent.actionRoute;
+      if (route) {
+        const waypoint = route.points[route.index];
+        if (waypoint) {
+          const before = distPoint(unit.x, unit.y, waypoint.x, waypoint.y);
+          const direction = normalize(waypoint.x - unit.x, waypoint.y - unit.y);
+          const movement = moveUnitWithWallSlide(unit, direction, distance, { detailed: true });
+          const after = distPoint(unit.x, unit.y, waypoint.x, waypoint.y);
+          if (!movement.moved || after >= before - 0.01) {
+            route.stalledFor = (route.stalledFor || 0) + Math.max(0, dt || 0);
+          } else {
+            route.stalledFor = 0;
+          }
+          if (route.stalledFor >= 0.35) {
+            intent.actionRoutePreferredSide = -route.side;
+            intent.actionRoute = null;
+          }
+          return Boolean(movement.moved);
+        }
+        intent.actionRoute = null;
+      }
+
+      const direct = normalize(target.x - unit.x, target.y - unit.y);
+      return moveUnitWithWallSlide(unit, direct, distance);
+    }
+
+    function advanceActionRoute(unit, intent) {
+      const route = intent && intent.actionRoute;
+      if (!route || !Array.isArray(route.points)) {
+        return;
+      }
+      const reachDistance = Math.max(battlePx(4), Number.isFinite(unit.radius) ? unit.radius * 0.35 : 0);
+      while (route.index < route.points.length) {
+        const waypoint = route.points[route.index];
+        if (!waypoint || distPoint(unit.x, unit.y, waypoint.x, waypoint.y) > reachDistance) {
+          break;
+        }
+        route.index += 1;
+      }
+      if (route.index >= route.points.length) {
+        intent.actionRoute = null;
+      }
+    }
+
+    function getActionRouteBlocker(unit, target, range) {
+      const targetDistance = distPoint(unit.x, unit.y, target.x, target.y);
+      const travelDistance = Math.max(0, targetDistance - Math.max(0, Number.isFinite(range) ? range : 0));
+      if (travelDistance <= battlePx(2)) {
+        return null;
+      }
+      const direction = normalize(target.x - unit.x, target.y - unit.y);
+      if (direction.len <= 0) {
+        return null;
+      }
+      const lookAhead = Math.min(travelDistance, Math.max(battlePx(120), (Number(unit.radius) || 0) * 8));
+      let closest = null;
+      for (const other of getActionRouteUnits(unit, target)) {
+        const dx = other.x - unit.x;
+        const dy = other.y - unit.y;
+        const along = dx * direction.x + dy * direction.y;
+        if (along <= battlePx(1) || along > lookAhead) {
+          continue;
+        }
+        const lateral = Math.abs(dx * direction.y - dy * direction.x);
+        const clearance = getActionRouteClearance(unit, other);
+        if (lateral > clearance) {
+          continue;
+        }
+        if (!closest || along < closest.along) {
+          closest = { unit: other, along, clearance };
+        }
+      }
+      return closest;
+    }
+
+    function getActionRouteUnits(unit, target) {
+      return [...party, ...enemies].filter((other) => {
+        return other
+          && other !== unit
+          && other !== target
+          && !other.dead
+          && other.collidable !== false
+          && (!isFieldUnit || isFieldUnit(other));
+      });
+    }
+
+    function getActionRouteClearance(unit, other) {
+      const unitRadius = Math.max(0, Number(unit && unit.radius) || 0);
+      const otherRadius = Math.max(0, Number(other && other.radius) || 0);
+      return unitRadius + otherRadius + battlePx(7);
+    }
+
+    function createActionRoute(unit, target, range, blocker, intent) {
+      if (!blocker || !blocker.unit) {
+        return null;
+      }
+      const direction = normalize(target.x - unit.x, target.y - unit.y);
+      if (direction.len <= 0) {
+        return null;
+      }
+      const clearance = blocker.clearance + battlePx(3);
+      const sideOrder = intent && (intent.actionRoutePreferredSide === 1 || intent.actionRoutePreferredSide === -1)
+        ? [intent.actionRoutePreferredSide, -intent.actionRoutePreferredSide]
+        : [1, -1];
+      const before = {
+        x: blocker.unit.x - direction.x * clearance,
+        y: blocker.unit.y - direction.y * clearance,
+      };
+      const after = {
+        x: blocker.unit.x + direction.x * clearance,
+        y: blocker.unit.y + direction.y * clearance,
+      };
+      let best = null;
+      for (const side of sideOrder) {
+        const lateral = { x: -direction.y * side, y: direction.x * side };
+        const points = [
+          clampActionRoutePoint(unit, {
+            x: before.x + lateral.x * clearance,
+            y: before.y + lateral.y * clearance,
+          }),
+          clampActionRoutePoint(unit, {
+            x: after.x + lateral.x * clearance,
+            y: after.y + lateral.y * clearance,
+          }),
+        ];
+        if (!isActionRouteClearOfBlocker(points, blocker.unit, clearance)) {
+          continue;
+        }
+        const score = getActionRouteScore(unit, target, range, points, blocker.unit);
+        if (!best || score < best.score) {
+          best = { side, points, score };
+        }
+      }
+      if (!best) {
+        return null;
+      }
+      return {
+        side: best.side,
+        points: best.points,
+        index: 0,
+        stalledFor: 0,
+      };
+    }
+
+    function clampActionRoutePoint(unit, point) {
+      const bounds = typeof getBattleBounds === "function" ? getBattleBounds() : null;
+      if (!bounds) {
+        return point;
+      }
+      const radius = Math.max(0, Number(unit && unit.radius) || 0);
+      return {
+        x: clamp(point.x, bounds.left + radius, bounds.right - radius),
+        y: clamp(point.y, bounds.top + radius, bounds.bottom - radius),
+      };
+    }
+
+    function isActionRouteClearOfBlocker(points, blocker, clearance) {
+      return points.every((point) => distPoint(point.x, point.y, blocker.x, blocker.y) >= clearance * 0.96);
+    }
+
+    function getActionRouteScore(unit, target, range, points, routeBlocker) {
+      const destination = getActionRouteDestination(points[points.length - 1], target, range);
+      const path = [{ x: unit.x, y: unit.y }, ...points, destination];
+      let score = 0;
+      for (let i = 1; i < path.length; i += 1) {
+        score += distPoint(path[i - 1].x, path[i - 1].y, path[i].x, path[i].y);
+      }
+      for (const other of getActionRouteUnits(unit, target)) {
+        if (other === routeBlocker) {
+          continue;
+        }
+        const clearance = getActionRouteClearance(unit, other);
+        for (let i = 1; i < path.length; i += 1) {
+          const gap = distancePointToSegment(other.x, other.y, path[i - 1], path[i]);
+          if (gap < clearance) {
+            score += (clearance - gap + battlePx(1)) * 30;
+          }
+        }
+      }
+      return score;
+    }
+
+    function getActionRouteDestination(from, target, range) {
+      const direction = normalize(target.x - from.x, target.y - from.y);
+      const distance = distPoint(from.x, from.y, target.x, target.y);
+      const stopDistance = Math.max(0, Number.isFinite(range) ? range : 0);
+      if (direction.len <= 0 || distance <= stopDistance) {
+        return { x: from.x, y: from.y };
+      }
+      return {
+        x: target.x - direction.x * stopDistance,
+        y: target.y - direction.y * stopDistance,
+      };
+    }
+
+    function distancePointToSegment(x, y, start, end) {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const lengthSq = dx * dx + dy * dy;
+      if (lengthSq <= 0.0001) {
+        return distPoint(x, y, start.x, start.y);
+      }
+      const ratio = clamp(((x - start.x) * dx + (y - start.y) * dy) / lengthSq, 0, 1);
+      return distPoint(x, y, start.x + dx * ratio, start.y + dy * ratio);
     }
 
     function updateShadowWolfOrbit(enemy, target, distance, preferred, speed, dt) {
