@@ -63,10 +63,25 @@
     }
 
     function getQuestAcceptedStory(quest) {
-      if (!quest || quest.id !== TUTORIAL_STORY_QUEST_ID) {
+      if (!quest) {
         return [];
       }
       const name = getPlayerFirstName();
+      if (quest.id === PATH_AHEAD_STORY_QUEST_ID) {
+        return [
+          { speaker: "スシア", text: "そういえばさっきの戦闘でトゥルスとタインはボロボロでしょうし？" },
+          { speaker: "スシア", text: "宿屋に泊まってから向かいましょ" },
+          { speaker: "ウルペス", text: "おぉ！嬉しいこと言ってくれるな！" },
+          { speaker: "リハス", text: "俺様もくたくただったんだ！早く泊まりに行こう！" },
+          { speaker: "スシア", text: "２人とも１体も倒せなかったくせに？" },
+          { speaker: "リハス", text: "うっ、、、" },
+          { speaker: "ウルペス", text: "それは、、、" },
+          { speaker: name, text: "まあまあ、みんな頑張ったんだから、早く泊まりに行こ？" },
+        ];
+      }
+      if (quest.id !== TUTORIAL_STORY_QUEST_ID) {
+        return [];
+      }
       const mapName = getQuestMapName(quest) || "森";
       return [
         { speaker: "スシア", text: "今回の依頼の魔物は雑魚ね" },

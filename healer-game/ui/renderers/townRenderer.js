@@ -55,6 +55,7 @@
       getQuestsByType,
       getQuestById,
       getKeybindLabel,
+      statPresenter,
       drawEquipmentCharacterArt,
     } = context;
 
@@ -1888,9 +1889,9 @@
     }
     const x = 18;
     const y = 18;
-    const w = Math.min(view.w - 36, 380);
-    const rowH = 58;
-    const h = 16 + entries.length * rowH;
+    const w = Math.min(view.w - 36, 440);
+    const rowH = 70;
+    const h = 20 + entries.length * rowH;
     ctx.save();
     ctx.fillStyle = "rgba(11,18,14,0.76)";
     ctx.strokeStyle = "rgba(247,255,246,0.35)";
@@ -1902,13 +1903,13 @@
     ctx.textBaseline = "alphabetic";
     for (let i = 0; i < entries.length; i += 1) {
       const entry = entries[i];
-      const rowY = y + 14 + i * rowH;
+      const rowY = y + 16 + i * rowH;
       ctx.fillStyle = entry.color;
-      ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      ctx.fillText(entry.label, x + 15, rowY + 12);
-      drawFittedTownText(entry.name, x + 15, rowY + 36, w - 30, 900, 18, 12, "#f7fff6");
+      ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.fillText(entry.label, x + 18, rowY + 14);
+      drawFittedTownText(entry.name, x + 18, rowY + 42, w - 36, 900, 21, 14, "#f7fff6");
       if (entry.destination) {
-        drawFittedTownText(`場所: ${entry.destination}`, x + 15, rowY + 56, w - 30, 800, 15, 11, "#dce9dc");
+        drawFittedTownText(`場所: ${entry.destination}`, x + 18, rowY + 64, w - 36, 800, 17, 12, "#dce9dc");
       }
     }
     ctx.restore();
@@ -2314,7 +2315,7 @@
 
     if (town.panel.message) {
       ctx.fillStyle = isTownPanelErrorMessage(town.panel.message) ? "#ffb4a8" : "#ffd86b";
-      ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillText(town.panel.message, x + 26, y + h - 70);
     }
     drawTextButton(x + 24, y + h - 50, 130, 34, "閉じる", { kind: "close" });
@@ -3090,7 +3091,7 @@
 
   function drawArmorCraftGridList(groups, selectedItem, shopKind, tab, rect) {
     const columns = getEquipmentShopGridColumns(shopKind);
-    const headerH = 30;
+    const headerH = 34;
     const compactGrid = rect.w < 560;
     const seriesW = compactGrid
       ? Math.max(70, Math.floor(rect.w * 0.28))
@@ -3098,7 +3099,7 @@
     const colGap = 6;
     const slotCount = columns.length;
     const slotW = Math.max(12, Math.floor((rect.w - seriesW - colGap * slotCount - 8) / slotCount));
-    const rowH = 78;
+    const rowH = 86;
     const rowGap = 8;
     const listBottom = rect.y + rect.h;
 
@@ -3107,14 +3108,14 @@
     roundRect(rect.x, rect.y, rect.w, rect.h, 8);
     ctx.fill();
     ctx.fillStyle = "#dce9dc";
-    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("シリーズ", rect.x + 10, rect.y + 15);
+    ctx.fillText("シリーズ", rect.x + 10, rect.y + 17);
     for (let i = 0; i < slotCount; i += 1) {
       const slot = columns[i];
       const slotX = rect.x + seriesW + colGap + i * (slotW + colGap);
-      drawFittedTownText(slot.label, slotX + slotW / 2, rect.y + 15, slotW - 4, 800, 12, 8, "#dce9dc", "center");
+      drawFittedTownText(slot.label, slotX + slotW / 2, rect.y + 17, slotW - 4, 800, 14, 10, "#dce9dc", "center");
     }
     ctx.restore();
 
@@ -3143,13 +3144,13 @@
       ctx.fillStyle = groupIndex % 2 === 0 ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.025)";
       roundRect(rect.x + 2, rowY, rect.w - 8, rowH, 8);
       ctx.fill();
-      drawFittedTownText(group.name, rect.x + 12, rowY + 31, seriesW - 18, 900, 15, 10, "#f7fff6");
+      drawFittedTownText(group.name, rect.x + 12, rowY + 34, seriesW - 18, 900, 17, 12, "#f7fff6");
       ctx.fillStyle = "#dce9dc";
-      ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       const groupCountLabel = shopKind === "weapon" ? "種" : "部位";
-      ctx.fillText(`${getArmorCraftGroupItemCount(group)}${groupCountLabel}`, rect.x + 12, rowY + 56);
+      ctx.fillText(`${getArmorCraftGroupItemCount(group)}${groupCountLabel}`, rect.x + 12, rowY + 64);
 
       for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
         const slot = columns[slotIndex];
@@ -3199,7 +3200,7 @@
       roundRect(x, cellY, w, itemH, 7);
       ctx.fill();
       ctx.stroke();
-      drawFittedTownText(getEquipmentShopItemName(item, tab), x + 6, cellY + Math.max(15, itemH / 2 + 5), w - 12, 900, 12, 8, selected ? "#fff6c2" : "#f7fff6");
+      drawFittedTownText(getEquipmentShopItemName(item, tab), x + 6, cellY + Math.max(17, itemH / 2 + 5), w - 12, 900, 14, 10, selected ? "#fff6c2" : "#f7fff6");
       ctx.restore();
     }
   }
@@ -3214,12 +3215,12 @@
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = "#dce9dc";
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(`選択中の${equipmentLabel}`, rect.x + 16, rect.y + 26);
 
     if (!item) {
       ctx.fillStyle = "#dce9dc";
-      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "800 17px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillText(`左の一覧から${equipmentLabel}を選択してください。`, rect.x + 16, rect.y + 64);
       ctx.restore();
       return;
@@ -3242,19 +3243,13 @@
     const categoryName = shopKind === "weapon" ? item.weaponType || "武器種なし" : getEquipmentSlotName(item.slot);
     const detailX = rect.x + 16;
     const detailW = Math.max(60, rect.w - 32);
-    drawFittedTownText(getEquipmentShopItemName(item, tab), detailX, rect.y + 56, detailW, 900, 22, 14, "#f7fff6");
+    drawFittedTownText(getEquipmentShopItemName(item, tab), detailX, rect.y + 56, detailW, 900, 24, 16, "#f7fff6");
     ctx.fillStyle = "#ffd86b";
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText(`${item.rank || "-"} / ${seriesName} / ${categoryName}`, detailX, rect.y + 82);
-    let infoY = rect.y + 104;
-    if (shopKind === "weapon") {
-      ctx.fillStyle = "#dce9dc";
-      ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-      drawFittedTownText(`装備可能者: ${getWeaponAllowedUnitLabelsForTown(item)}`, detailX, infoY, detailW, 800, 13, 10, "#dce9dc");
-      infoY += 20;
-    }
+    let infoY = drawEquipmentAllowedUnitsForTown(item, detailX, rect.y + 104, detailW);
     ctx.fillStyle = enabled ? "#ffd86b" : "rgba(220,233,220,0.55)";
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const stateText = tab === "reset"
       ? needsOwned ? "未所持" : currentLevel <= 0 ? "+0 / リセット済み" : `+${currentLevel} -> +0`
       : tab === "upgrade"
@@ -3262,37 +3257,37 @@
         : `所持 ${owned}`;
     ctx.fillText(stateText, detailX, infoY);
     ctx.fillStyle = "#dce9dc";
-    ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const descriptionLines = wrapCanvasText(item.simpleDescription || item.description || "説明なし", detailW);
     let cursorY = infoY + 30;
     for (const line of descriptionLines.slice(0, 2)) {
       ctx.fillText(line, detailX, cursorY);
-      cursorY += 18;
+      cursorY += 20;
     }
 
     cursorY += 8;
     ctx.fillStyle = "#f7fff6";
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText("ステータス", detailX, cursorY);
-    cursorY += 20;
+    cursorY += 22;
     const statEntries = getEquipmentItemStatEntriesForTown(item);
     if (!statEntries.length) {
       ctx.fillStyle = "#dce9dc";
-      ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillText("ステータスなし", detailX, cursorY);
-      cursorY += 20;
+      cursorY += 22;
     } else {
       const statValueX = detailX + Math.min(detailW, 188);
       for (const entry of statEntries.slice(0, 8)) {
         ctx.fillStyle = "#dce9dc";
-        ctx.font = "700 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-        drawFittedTownText(entry.label, detailX, cursorY, Math.max(48, statValueX - detailX - 12), 700, 13, 10, "#dce9dc");
+        ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+        drawFittedTownText(entry.label, detailX, cursorY, Math.max(48, statValueX - detailX - 12), 700, 14, 11, "#dce9dc");
         ctx.fillStyle = entry.negative ? "#ffb4a8" : "#8ff0a4";
-        ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+        ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
         ctx.textAlign = "right";
         ctx.fillText(entry.value, statValueX, cursorY);
         ctx.textAlign = "left";
-        cursorY += 18;
+        cursorY += 20;
       }
     }
 
@@ -3303,18 +3298,18 @@
 
     cursorY += 8;
     ctx.fillStyle = "#f7fff6";
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillText("必要素材", detailX, cursorY);
-    cursorY += 20;
+    cursorY += 22;
     const requirementEntries = getRecipeRequirementEntriesForTown(recipe, tab);
     const requirementValueX = detailX + Math.min(detailW, 230);
     for (const entry of requirementEntries.slice(0, 6)) {
-      drawFittedTownText(entry.label, detailX, cursorY, Math.max(60, requirementValueX - detailX - 14), 700, 13, 10, "#dce9dc");
+      drawFittedTownText(entry.label, detailX, cursorY, Math.max(60, requirementValueX - detailX - 14), 700, 14, 11, "#dce9dc");
       drawRecipeRequirementValue(entry, requirementValueX, cursorY);
-      cursorY += 18;
+      cursorY += 20;
     }
     ctx.fillStyle = "#ffd86b";
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const equippedText = getEquipmentEquippedTextForTown(item);
     ctx.fillText(equippedText || `所持 ${owned}`, detailX, Math.min(rect.y + rect.h - 66, cursorY + 8));
     ctx.restore();
@@ -3370,14 +3365,14 @@
   }
 
   function drawEquipmentDetailSectionTitleForTown(title, x, y, maxY) {
-    if (y + 18 > maxY) {
+    if (y + 20 > maxY) {
       return null;
     }
     ctx.fillStyle = "#f7fff6";
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(title, x, y);
-    return y + 20;
+    return y + 22;
   }
 
   function drawWeaponNormalAttackDetailForTown(item, x, y, w, maxY) {
@@ -3391,22 +3386,22 @@
     const skill = getSkillByIdForTown(item.normalAttackSkillId);
     if (!skill || cursorY > maxY) {
       ctx.fillStyle = "#dce9dc";
-      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillText("説明なし", x, cursorY);
-      return cursorY + 16;
+      return cursorY + 20;
     }
     if (cursorY > maxY) {
       return cursorY;
     }
     ctx.fillStyle = "#dce9dc";
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const lines = wrapCanvasText(getTownDescription(skill) || "説明なし", w);
     for (const line of lines.slice(0, 2)) {
       if (cursorY > maxY) {
         break;
       }
       ctx.fillText(line, x, cursorY);
-      cursorY += 16;
+      cursorY += 20;
     }
     return cursorY;
   }
@@ -3445,13 +3440,13 @@
       const text = `${entry.threshold}セット ${effect.name || "セット効果"}: ${description}`;
       const lines = wrapCanvasText(text, w);
       ctx.fillStyle = "#dce9dc";
-      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       for (const line of lines.slice(0, 2)) {
         if (cursorY > maxY) {
           break;
         }
         ctx.fillText(line, x, cursorY);
-        cursorY += 16;
+        cursorY += 20;
       }
     }
     return cursorY;
@@ -3525,7 +3520,7 @@
 
   function drawRecipeRequirementValue(entry, rightX, y) {
     ctx.save();
-    ctx.font = "900 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const requiredText = entry && entry.requiredText;
     const ownedText = entry && entry.ownedText;
     if (!requiredText || !ownedText) {
@@ -4059,11 +4054,204 @@
     return WEAPON_ALLOWED_UNIT_FALLBACK[item && item.weaponType] || [];
   }
 
-  function getWeaponAllowedUnitLabelsForTown(item) {
-    const labels = getWeaponAllowedUnitIdsForTown(item)
-      .map((unitId) => getTownUnitShortName(unitId))
-      .filter(Boolean);
-    return labels.length ? labels.join(" / ") : "-";
+  function getEquipmentAllowedUnitIdsForTown(item) {
+    if (Array.isArray(item && item.allowedUnitIds) && item.allowedUnitIds.length) {
+      return item.allowedUnitIds.slice();
+    }
+    if (item && item.slot === "weapon") {
+      return getWeaponAllowedUnitIdsForTown(item);
+    }
+    return EQUIPMENT_SHOP_UNITS.map((unit) => unit.id);
+  }
+
+  function getTownUnitForEquipmentArt(unitId) {
+    const displayUnit = getInnDisplayUnit(unitId);
+    if (displayUnit) {
+      return displayUnit;
+    }
+    const definition = CHARACTER_DEFS && CHARACTER_DEFS[unitId] || {};
+    return {
+      id: unitId,
+      color: definition.color || "#57c7c9",
+    };
+  }
+
+  function drawEquipmentAllowedUnitsForTown(item, x, y, w) {
+    const allowedIds = new Set(getEquipmentAllowedUnitIdsForTown(item));
+    const units = EQUIPMENT_SHOP_UNITS;
+    const gap = 8;
+    const cardW = Math.max(40, Math.floor((w - gap * Math.max(0, units.length - 1)) / units.length));
+    const previews = units.map(({ id }) => ({
+      unitId: id,
+      allowed: allowedIds.has(id),
+      changes: allowedIds.has(id) ? getEquipmentPreviewStatChangesForTown(id, item) : [],
+    }));
+    const maxChangeRows = Math.max(1, ...previews.map((preview) => Math.max(1, preview.changes.length)));
+    const portraitH = Math.max(74, Math.min(88, Math.floor(cardW * 1.15)));
+    const changeLineH = 17;
+    const cardH = portraitH + 16 + maxChangeRows * changeLineH + 18;
+    const cardY = y + 10;
+    const artSize = Math.max(18, Math.min(32, Math.floor((portraitH - 8) / 2.45), Math.floor(cardW * 0.42)));
+
+    ctx.save();
+    ctx.fillStyle = "#f7fff6";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("装備可能者（付替時の変化）", x, y);
+
+    for (let index = 0; index < previews.length; index += 1) {
+      const preview = previews[index];
+      const unitId = preview.unitId;
+      const cardX = x + index * (cardW + gap);
+      const allowed = preview.allowed;
+      ctx.fillStyle = allowed ? "rgba(255,255,255,0.075)" : "rgba(10,14,12,0.52)";
+      ctx.strokeStyle = allowed ? "rgba(143,240,164,0.42)" : "rgba(255,180,168,0.42)";
+      ctx.lineWidth = 1;
+      roundRect(cardX, cardY, cardW, cardH, 7);
+      ctx.fill();
+      ctx.stroke();
+
+      if (typeof drawEquipmentCharacterArt === "function") {
+        const artY = cardY + portraitH - 4 - artSize * 1.42;
+        drawEquipmentCharacterArt(getTownUnitForEquipmentArt(unitId), cardX + cardW / 2, artY, artSize);
+      }
+      if (!allowed) {
+        const inset = Math.max(8, Math.min(14, cardW * 0.16));
+        ctx.strokeStyle = "#ff705f";
+        ctx.lineWidth = Math.max(2.5, Math.min(4, cardW * 0.06));
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(cardX + inset, cardY + inset);
+        ctx.lineTo(cardX + cardW - inset, cardY + portraitH - inset);
+        ctx.moveTo(cardX + cardW - inset, cardY + inset);
+        ctx.lineTo(cardX + inset, cardY + portraitH - inset);
+        ctx.stroke();
+      }
+
+      const changeY = cardY + portraitH + 16;
+      if (!allowed) {
+        drawFittedTownText("装備不可", cardX + cardW / 2, changeY, cardW - 8, 800, 12, 9, "#ffb4a8", "center");
+        continue;
+      }
+      if (!preview.changes.length) {
+        drawFittedTownText("変化なし", cardX + cardW / 2, changeY, cardW - 8, 700, 12, 9, "#aebdb4", "center");
+        continue;
+      }
+      for (let changeIndex = 0; changeIndex < preview.changes.length; changeIndex += 1) {
+        const change = preview.changes[changeIndex];
+        const color = change.direction > 0 ? "#8ff0a4" : change.direction < 0 ? "#ffb4a8" : "#dce9dc";
+        drawFittedTownText(
+          `${getTownPreviewStatLabel(change.label)}:${change.afterValue}:${change.deltaText}`,
+          cardX + cardW / 2,
+          changeY + changeIndex * changeLineH,
+          cardW - 8,
+          800,
+          12,
+          9,
+          color,
+          "center"
+        );
+      }
+    }
+    ctx.restore();
+    return cardY + cardH + 30;
+  }
+
+  function getEquipmentPreviewStatChangesForTown(unitId, item) {
+    if (!item || !item.slot || !statPresenter || typeof statPresenter.getDetailedStats !== "function") {
+      return [];
+    }
+    const unit = getTownUnitForEquipmentArt(unitId);
+    const itemRef = getEquipmentRefForTown(item);
+    if (!unit || !itemRef) {
+      return [];
+    }
+    const previewUnit = {
+      ...unit,
+      equipment: {
+        ...(unit.equipment || {}),
+        [item.slot]: itemRef,
+      },
+    };
+    const beforeRows = getEquipmentPreviewStatRowsForTown(unit);
+    const afterRows = getEquipmentPreviewStatRowsForTown(previewUnit);
+    const afterByLabel = new Map(afterRows.filter((row) => row && row.label).map((row) => [row.label, row]));
+    const changes = [];
+    for (const before of beforeRows) {
+      if (!before || !before.label) {
+        continue;
+      }
+      const after = afterByLabel.get(before.label);
+      if (!after || String(before.value) === String(after.value)) {
+        continue;
+      }
+      const delta = getTownPreviewNumericValue(after.value) - getTownPreviewNumericValue(before.value);
+      changes.push({
+        label: before.label,
+        afterValue: after.value,
+        direction: Number.isFinite(delta) ? Math.sign(delta) : 0,
+        deltaText: getTownPreviewDeltaText(before.value, after.value),
+      });
+    }
+    return changes;
+  }
+
+  function getEquipmentPreviewStatRowsForTown(unit) {
+    const resourceRows = [
+      { label: "HP", value: String(getInnMemberMaxResource(unit, "maxHp")) },
+      { label: "MP", value: String(getInnMemberMaxResource(unit, "maxMp")) },
+    ];
+    const detailedRows = statPresenter && typeof statPresenter.getDetailedStats === "function"
+      ? statPresenter.getDetailedStats(unit, { includeBattleState: false }) || []
+      : [];
+    return [...resourceRows, ...detailedRows];
+  }
+
+  function getTownPreviewNumericValue(value) {
+    const normalized = String(value === undefined || value === null ? "" : value).replace(/[^0-9+.\-]/g, "");
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) ? numeric : NaN;
+  }
+
+  function getTownPreviewDeltaText(beforeValue, afterValue) {
+    const before = getTownPreviewNumericValue(beforeValue);
+    const after = getTownPreviewNumericValue(afterValue);
+    const suffix = String(afterValue || "").includes("%") ? "%" : "";
+    if (Number.isFinite(before) && Number.isFinite(after)) {
+      const delta = Math.round((after - before) * 100) / 100;
+      if (delta !== 0) {
+        return `${delta > 0 ? "+" : ""}${delta}${suffix}`;
+      }
+    }
+    return `${beforeValue}→${afterValue}`;
+  }
+
+  function getTownPreviewStatLabel(label) {
+    const labels = {
+      "攻撃力": "攻",
+      "魔力": "魔",
+      "防御力": "防",
+      "魔法防御力": "魔防",
+      "会心率": "会",
+      "会心ダメージ": "会ダ",
+      "ガード率": "ガ",
+      "ガード軽減率": "ガ軽",
+      "与ダメージ率": "与ダ",
+      "被ダメージ率": "被ダ",
+      "物理与ダメージ率": "物与",
+      "物理被ダメージ率": "物被",
+      "魔法与ダメージ率": "魔与",
+      "魔法被ダメージ率": "魔被",
+      "HP再生率": "HP再",
+      "MP再生率": "MP再",
+      "詠唱速度": "詠唱",
+      "スキル速度": "技速",
+      "行動速度": "行動",
+      "ゲージ上昇率": "ゲージ",
+      "移動速度": "移動",
+    };
+    return labels[label] || label;
   }
 
   function matchArmorShopFilters(item, filters) {
@@ -4888,12 +5076,12 @@
 
     const w = Math.min(920, view.w - 28);
     const x = (view.w - w) / 2;
-    const fontSize = view.w < 560 ? 15 : 17;
-    const lineHeight = fontSize + 10;
+    const fontSize = view.w < 560 ? 17 : 20;
+    const lineHeight = fontSize + 11;
     const textFont = `700 ${fontSize}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
     ctx.font = textFont;
     const textLines = wrapCanvasText(entry.text, w - 58);
-    const h = Math.min(view.h - 28, Math.max(154, 100 + textLines.length * lineHeight));
+    const h = Math.min(view.h - 28, Math.max(170, 108 + textLines.length * lineHeight));
     const y = Math.max(14, view.h - h - 22);
     const speaker = entry.speaker || "システム";
 
@@ -4910,7 +5098,7 @@
     ctx.stroke();
 
     ctx.fillStyle = "#111714";
-    ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     ctx.fillText(speaker, x + 42, y + 42);
@@ -4922,7 +5110,7 @@
     }
 
     ctx.textAlign = "right";
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "rgba(247,255,246,0.78)";
     ctx.fillText(`${town.story.index + 1}/${town.story.lines.length}`, x + w - 30, y + 34);
     ctx.fillStyle = "#ffffff";

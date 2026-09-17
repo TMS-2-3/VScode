@@ -90,6 +90,7 @@
     const statPresenter = window.createHealerStatPresenter(context);
     const townRenderer = window.createHealerTownRenderer({
       ...context,
+      statPresenter,
       drawEquipmentCharacterArt,
     });
     const statusRenderer = window.createHealerStatusRenderer({ ...context, statPresenter });
@@ -144,6 +145,7 @@
       ? window.HEALER_CONFIG.defaultFpsLimit
       : 60;
     const equipmentTooltipTargets = [];
+    const inventoryTooltipTargets = [];
     const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
 
   function createEquipmentCharacterArtImages() {
@@ -545,7 +547,15 @@
     if (!step) {
       return;
     }
-    if (step.type === "script" || step.type === "run") {
+    if (step.type === "script") {
+      return;
+    }
+    if (step.type === "run") {
+      drawBattleTutorialMessage({
+        type: "run",
+        text: "様子を見ていよう！",
+        hideGuide: true,
+      }, tutorial, getBattleTutorialRenderHelpers());
       return;
     }
     const state = game.battleTutorial || {};
@@ -704,9 +714,9 @@
     const text = tutorial.formatStepText(step, helpers);
     const speaker = tutorial.getStepSpeaker(step, helpers);
     const maxW = Math.min(view.w - 48, 780);
-    const lines = wrapBattleTutorialText(text, maxW - 40, "900 20px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif");
+    const lines = wrapBattleTutorialText(text, maxW - 44, "900 22px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif");
     const feedback = String(state.feedback || "");
-    const panelH = Math.min(view.h - 120, Math.max(118, 78 + lines.length * 28 + (feedback ? 26 : 0)));
+    const panelH = Math.min(view.h - 120, Math.max(126, 82 + lines.length * 31 + (feedback ? 29 : 0)));
     const panelW = maxW;
     const x = view.w / 2 - panelW / 2;
     const bottomReserve = clamp(view.h * 0.19, 130, 170);
@@ -720,36 +730,38 @@
     ctx.stroke();
 
     const innerX = x + 22;
-    let ty = y + 26;
+    let ty = y + 28;
     if (speaker) {
       ctx.fillStyle = "#8de2a1";
-      ctx.font = "900 15px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+      ctx.font = "900 16px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       ctx.fillText(speaker, innerX, ty);
-      ty += 28;
+      ty += 30;
     }
     ctx.fillStyle = "#f7fff6";
-    ctx.font = "900 20px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+    ctx.font = "900 22px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     for (const line of lines) {
       ctx.fillText(line, innerX, ty);
-      ty += 28;
+      ty += 31;
     }
     if (feedback) {
       ctx.fillStyle = "#ffd56b";
-      ctx.font = "900 14px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
+      ctx.font = "900 15px 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif";
       ctx.fillText(feedback, innerX, ty + 6);
     }
-    const guide = step.type === "line"
-      ? `${getBattleTutorialInteractLabel()}で進む`
-      : getBattleTutorialWaitGuide(step, state);
-    ctx.fillStyle = "rgba(247, 255, 246, 0.72)";
-    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText(guide, x + panelW - 22, y + panelH - 18);
+    if (!step.hideGuide) {
+      const guide = step.type === "line"
+        ? `${getBattleTutorialInteractLabel()}で進む`
+        : getBattleTutorialWaitGuide(step, state);
+      ctx.fillStyle = "rgba(247, 255, 246, 0.72)";
+      ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(guide, x + panelW - 22, y + panelH - 18);
+    }
     ctx.restore();
   }
 
@@ -2362,7 +2374,6 @@
       drawInventoryMessage(game.inventoryMessage, getResultMessageContentRect());
     }
     ctx.restore();
-    drawTopRightGoldBadge(getSystemMenuButtonRect());
   }
 
   function drawDefeatRestartPanel(centerX, y) {
@@ -2647,6 +2658,9 @@
     if (!Number.isFinite(game.systemMenu.panelScrollMax)) {
       game.systemMenu.panelScrollMax = 0;
     }
+    if (!["item", "material", "equipment", "skill"].includes(game.systemMenu.inventoryCategory)) {
+      game.systemMenu.inventoryCategory = "item";
+    }
     if (!game.systemMenu.equipment || typeof game.systemMenu.equipment !== "object") {
       game.systemMenu.equipment = {};
     }
@@ -2826,63 +2840,38 @@
     menu.targets.length = 0;
     const menuButton = getSystemMenuButtonRect();
     if (game.state !== "town" && game.state !== "playing") {
-      if (game.state !== "playing") {
-        drawTopRightGoldBadge(menuButton);
-      }
       return;
     }
     if (game.state === "town" && townRendererHasBlockingPanel()) {
       menu.open = false;
       menu.panel = null;
       menu.confirm = null;
-      drawTopRightGoldBadge(menuButton);
       return;
     }
     if (game.state === "playing" && menu.open && !menu.panel && !menu.confirm) {
       drawSystemMenuBackdrop(0.52, "停止中");
     }
     if (menu.panel) {
-      const panelType = menu.panel.type;
       drawSystemFullPanel(menu.panel);
-      if (game.state !== "playing" && panelType !== "inventory") {
-        drawTopRightGoldBadge(menuButton);
-      }
       return;
     }
     if (menu.confirm) {
       drawSystemConfirm(menu.confirm);
-      if (game.state !== "playing") {
-        drawTopRightGoldBadge(menuButton);
-      }
       return;
     }
     const showButton = canShowSystemMenuButton() || menu.open;
     if (!showButton) {
-      if (game.state !== "playing") {
-        drawTopRightGoldBadge(menuButton);
-      }
       return;
     }
     drawSystemMenuButton(menuButton, menu.open);
-    if (game.state !== "playing") {
-      drawTopRightGoldBadge(menuButton);
-    }
     if (menu.open) {
       drawSystemMenuDropdown(menuButton);
     }
   }
 
   function getSystemMenuButtonRect() {
-    const size = 38;
+    const size = 50;
     return { x: view.w - size - 16, y: 16, w: size, h: size };
-  }
-
-  function drawTopRightGoldBadge(anchorRect) {
-    const text = getGoldText();
-    const size = getGoldBadgeSize(text);
-    const x = Math.max(12, anchorRect.x - size.w - 8);
-    const y = anchorRect.y + Math.max(0, (anchorRect.h - size.h) / 2);
-    drawGoldBadge(x, y, { text, ...size, mode: "dark" });
   }
 
   function drawInventoryGoldBadge(panelX, panelY, panelW) {
@@ -2940,13 +2929,16 @@
     ctx.fill();
     ctx.stroke();
     ctx.strokeStyle = active ? "#172018" : "#f7fff6";
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 2.8;
     ctx.lineCap = "round";
+    const lineInset = Math.round(rect.w * 0.27);
+    const lineGap = Math.round(rect.h * 0.21);
+    const firstLineY = rect.y + rect.h / 2 - lineGap;
     for (let i = 0; i < 3; i += 1) {
-      const y = rect.y + 11 + i * 8;
+      const y = firstLineY + i * lineGap;
       ctx.beginPath();
-      ctx.moveTo(rect.x + 10, y);
-      ctx.lineTo(rect.x + rect.w - 10, y);
+      ctx.moveTo(rect.x + lineInset, y);
+      ctx.lineTo(rect.x + rect.w - lineInset, y);
       ctx.stroke();
     }
     ctx.restore();
@@ -2972,8 +2964,8 @@
 
   function drawSystemMenuDropdown(button) {
     const items = getSystemMenuItems();
-    const w = 188;
-    const rowH = 38;
+    const w = 212;
+    const rowH = 44;
     const x = Math.max(12, button.x + button.w - w);
     const y = button.y + button.h + 8;
     const h = items.length * rowH + 12;
@@ -2998,7 +2990,7 @@
         ctx.stroke();
       }
       ctx.fillStyle = item.action === "openSystemConfirm" ? "#ffe0c2" : "#f7fff6";
-      ctx.fillText(item.label, x + 16, iy + rowH / 2);
+      ctx.fillText(item.label, x + 18, iy + rowH / 2);
       addSystemMenuTarget({
         action: item.action,
         panelType: item.panelType || null,
@@ -3188,11 +3180,15 @@
     const h = Math.min(560, view.h - 40);
     const x = (view.w - w) / 2;
     const y = (view.h - h) / 2;
-    const content = { x: x + 28, y: y + 82, w: w - 56, h: h - 112 };
-    const rows = getInventoryRows();
-    const contentH = rows.reduce((sum, row) => sum + row.h, 0);
+    const tabsRect = { x: x + 28, y: y + 76, w: w - 56, h: 36 };
+    const content = { x: x + 28, y: y + 124, w: w - 56, h: h - 154 };
+    const category = getInventoryCategory(menu);
+    const rows = getInventoryRows(category);
+    const grid = getInventoryGridLayout(content, rows.length);
+    const contentH = grid.contentH;
     menu.panelScrollMax = Math.max(0, contentH - content.h);
     menu.panelScroll = Math.max(0, Math.min(menu.panelScrollMax, menu.panelScroll || 0));
+    inventoryTooltipTargets.length = 0;
 
     ctx.save();
     ctx.fillStyle = "rgba(247,255,246,0.97)";
@@ -3208,20 +3204,9 @@
     ctx.fillText(panel.title || "持ち物確認", x + 28, y + 26);
     drawSystemCloseButton(x + w - 48, y + 18, "closeSystemPanel");
     drawInventoryGoldBadge(x, y, w);
+    drawInventoryCategoryTabs(tabsRect, category);
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(content.x, content.y, content.w, content.h);
-    ctx.clip();
-    let cursorY = content.y - menu.panelScroll;
-    for (const row of rows) {
-      const rowRect = { x: content.x, y: cursorY, w: content.w, h: row.h };
-      if (rowRect.y + rowRect.h >= content.y && rowRect.y <= content.y + content.h) {
-        drawInventoryRow(rowRect, row);
-      }
-      cursorY += row.h;
-    }
-    ctx.restore();
+    drawInventoryGrid(content, grid, rows, menu.panelScroll);
     drawSettingsScrollbar(content, menu.panelScroll, menu.panelScrollMax, {
       scrollState: menu,
       valueKey: "panelScroll",
@@ -3229,44 +3214,236 @@
     });
     if (game.inventoryMessage) {
       drawInventoryMessage(game.inventoryMessage, content);
+    } else {
+      drawInventoryHoverTooltip();
     }
     ctx.restore();
   }
 
-  function getInventoryRows() {
-    const rows = [];
-    rows.push({ type: "section", title: "アイテム", h: 34 });
-    const itemRows = getInventoryItemRows();
-    if (!itemRows.length) {
-      rows.push({ type: "empty", text: "所持アイテムなし", h: 34 });
-    } else {
-      rows.push(...itemRows);
+  function getInventoryCategory(menu = getSystemMenu()) {
+    const category = menu && menu.inventoryCategory;
+    return ["item", "material", "equipment", "skill"].includes(category) ? category : "item";
+  }
+
+  function drawInventoryCategoryTabs(rect, activeCategory) {
+    const tabs = [
+      { id: "item", label: "アイテム" },
+      { id: "material", label: "素材" },
+      { id: "equipment", label: "装備" },
+      { id: "skill", label: "スキル" },
+    ];
+    const gap = 8;
+    const tabW = Math.max(52, (rect.w - gap * (tabs.length - 1)) / tabs.length);
+    for (let index = 0; index < tabs.length; index += 1) {
+      const tab = tabs[index];
+      const x = rect.x + index * (tabW + gap);
+      const selected = tab.id === activeCategory;
+      ctx.save();
+      ctx.fillStyle = selected ? "#246b4a" : "rgba(16,32,24,0.08)";
+      ctx.strokeStyle = selected ? "#1c573c" : "rgba(16,32,24,0.22)";
+      ctx.lineWidth = selected ? 1.5 : 1;
+      roundRect(x, rect.y, tabW, rect.h, 7);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = selected ? "#f7fff6" : "#102018";
+      ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(tab.label, x + tabW / 2, rect.y + rect.h / 2 + 0.5);
+      ctx.restore();
+      addSystemMenuTarget({ action: "selectInventoryCategory", category: tab.id, x, y: rect.y, w: tabW, h: rect.h });
+    }
+  }
+
+  function getInventoryRows(category = "item") {
+    const definitions = {
+      item: { emptyText: "所持アイテムなし", rows: getInventoryItemRows },
+      material: { emptyText: "所持素材なし", rows: getInventoryMaterialRows },
+      equipment: { emptyText: "所持装備なし", rows: getInventoryEquipmentRows },
+      skill: { emptyText: "所持スキルなし", rows: getInventorySkillRows },
+    };
+    const definition = definitions[category] || definitions.item;
+    const rows = definition.rows();
+    return rows.length ? rows : [{ type: "empty", text: definition.emptyText, h: 44 }];
+  }
+
+  function getInventoryGridLayout(content, itemCount) {
+    const gap = 8;
+    const preferredSlotSize = 80;
+    const columns = Math.max(1, Math.floor((content.w + gap) / (preferredSlotSize + gap)));
+    const slotSize = Math.max(64, Math.min(88, Math.floor((content.w - gap * (columns - 1)) / columns)));
+    const rows = Math.max(1, Math.ceil(Math.max(1, itemCount) / columns));
+    const gridW = columns * slotSize + Math.max(0, columns - 1) * gap;
+    return {
+      columns,
+      gap,
+      slotSize,
+      startX: content.x + Math.max(0, (content.w - gridW) / 2),
+      contentH: rows * slotSize + Math.max(0, rows - 1) * gap,
+    };
+  }
+
+  function drawInventoryGrid(content, grid, rows, scroll) {
+    if (rows.length === 1 && rows[0].type === "empty") {
+      ctx.save();
+      ctx.fillStyle = "#7b8880";
+      ctx.font = "700 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(rows[0].text, content.x + content.w / 2, content.y + 38);
+      ctx.restore();
+      return;
     }
 
-    rows.push({ type: "section", title: "素材", h: 34 });
-    const materialRows = getInventoryMaterialRows();
-    if (!materialRows.length) {
-      rows.push({ type: "empty", text: "所持素材なし", h: 34 });
-    } else {
-      rows.push(...materialRows);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(content.x, content.y, content.w, content.h);
+    ctx.clip();
+    const clipRect = content;
+    for (let index = 0; index < rows.length; index += 1) {
+      const column = index % grid.columns;
+      const row = Math.floor(index / grid.columns);
+      const slotRect = {
+        x: grid.startX + column * (grid.slotSize + grid.gap),
+        y: content.y + row * (grid.slotSize + grid.gap) - scroll,
+        w: grid.slotSize,
+        h: grid.slotSize,
+      };
+      if (!rectIntersects(slotRect, clipRect)) {
+        continue;
+      }
+      drawInventorySlot(slotRect, rows[index]);
     }
+    ctx.restore();
+  }
 
-    rows.push({ type: "section", title: "装備", h: 34 });
-    const equipmentRows = getInventoryEquipmentRows();
-    if (!equipmentRows.length) {
-      rows.push({ type: "empty", text: "所持装備なし", h: 34 });
-    } else {
-      rows.push(...equipmentRows);
-    }
+  function drawInventorySlot(rect, row) {
+    const canUse = row.type === "item" && row.usable;
+    const hovered = input && input.mouse
+      && input.mouse.x >= rect.x && input.mouse.x <= rect.x + rect.w
+      && input.mouse.y >= rect.y && input.mouse.y <= rect.y + rect.h;
+    ctx.save();
+    ctx.fillStyle = hovered ? "#fff7d7" : "#ffffff";
+    ctx.strokeStyle = hovered ? "#d8a73f" : "rgba(16,32,24,0.22)";
+    ctx.lineWidth = hovered ? 2 : 1;
+    roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fill();
+    ctx.stroke();
 
-    rows.push({ type: "section", title: "スキル", h: 34 });
-    const skillRows = getInventorySkillRows();
-    if (!skillRows.length) {
-      rows.push({ type: "empty", text: "所持スキルなし", h: 34 });
-    } else {
-      rows.push(...skillRows);
+    const iconSize = Math.max(34, Math.min(48, rect.w - 28));
+    const iconX = rect.x + rect.w / 2 - iconSize / 2;
+    const iconY = rect.y + 9;
+    ctx.fillStyle = row.color || "#60756a";
+    roundRect(iconX, iconY, iconSize, iconSize, 7);
+    ctx.fill();
+    drawFittedSystemText(row.icon || "?", rect.x + rect.w / 2, iconY + iconSize / 2, iconSize - 10, 900, 19, 12, "#f7fff6", "center", "middle");
+    drawFittedSystemText(row.title || "-", rect.x + rect.w / 2, rect.y + rect.h - 11, rect.w - 12, 800, 12, 9, "#102018", "center", "middle");
+
+    if (Number.isFinite(row.quantity) && row.quantity > 0) {
+      drawInventoryCountBadge(rect.x + rect.w - 6, rect.y + rect.h - 6, row.quantity);
     }
-    return rows;
+    if (row.equipped) {
+      drawEquippedBadge(rect.x + rect.w - 16, rect.y + 4, "current");
+    }
+    if (row.type === "skill") {
+      drawSkillLevelBadge(rect.x + rect.w - 4, rect.y + rect.h - 4, row.level || 0);
+    }
+    if (row.openAll) {
+      drawInventoryBulkUseBadge(rect.x + 4, rect.y + 4);
+    }
+    ctx.restore();
+
+    registerInventoryTooltip(rect, getInventoryRowTooltip(row));
+    addSystemMenuTarget({
+      action: canUse ? "useInventoryItem" : "absorbSystemClick",
+      itemId: row.itemId || null,
+      x: rect.x,
+      y: rect.y,
+      w: rect.w,
+      h: rect.h,
+    });
+    if (row.openAll) {
+      addSystemMenuTarget({
+        action: "useAllInventoryPowerCrystals",
+        itemId: row.itemId || null,
+        x: rect.x + 3,
+        y: rect.y + 3,
+        w: 22,
+        h: 22,
+      });
+    }
+  }
+
+  function drawInventoryCountBadge(right, bottom, quantity) {
+    const label = String(Math.max(0, Math.floor(quantity)));
+    ctx.save();
+    ctx.font = "900 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    const w = Math.max(19, ctx.measureText(label).width + 10);
+    const h = 16;
+    const x = right - w;
+    const y = bottom - h;
+    ctx.fillStyle = "#26352e";
+    ctx.strokeStyle = "#f7fff6";
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, h, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f7fff6";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2 + 0.5);
+    ctx.restore();
+  }
+
+  function drawInventoryBulkUseBadge(x, y) {
+    ctx.save();
+    ctx.fillStyle = "#d6a83a";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    roundRect(x, y, 20, 20, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#102018";
+    ctx.font = "900 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("全", x + 10, y + 10.5);
+    ctx.restore();
+  }
+
+  function getInventoryRowTooltip(row) {
+    const lines = [];
+    if (row.detail) {
+      lines.push(row.detail);
+    }
+    if (row.type === "item" && row.usable) {
+      lines.push("クリックで使用");
+    }
+    if (row.openAll) {
+      lines.push("左上の全: 全て開ける");
+    }
+    return { title: row.title || "持ち物", lines };
+  }
+
+  function registerInventoryTooltip(rect, tooltip) {
+    if (!tooltip) {
+      return;
+    }
+    inventoryTooltipTargets.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h, tooltip });
+  }
+
+  function drawInventoryHoverTooltip() {
+    if (!input || !input.mouse || !inventoryTooltipTargets.length) {
+      return;
+    }
+    const mouse = input.mouse;
+    for (let index = inventoryTooltipTargets.length - 1; index >= 0; index -= 1) {
+      const target = inventoryTooltipTargets[index];
+      if (mouse.x >= target.x && mouse.x <= target.x + target.w && mouse.y >= target.y && mouse.y <= target.y + target.h) {
+        drawEquipmentTooltipBox(target.tooltip, mouse.x, mouse.y);
+        return;
+      }
+    }
   }
 
   function getInventoryMaterialRows() {
@@ -3282,6 +3459,7 @@
           color: "#8a9b68",
           title: material.name || key,
           detail: `所持数: ${Math.floor(count)}`,
+          quantity: Math.floor(count),
           h: 46,
         };
       });
@@ -3307,6 +3485,8 @@
           color: getEquipmentIconColor(instanceItem.slot),
           title: getInventoryEquipmentTitle(instanceItem),
           detail: getInventoryEquipmentDetail(instanceItem),
+          quantity: 1,
+          equipped: Boolean(getEquipmentEquippedText(instanceItem)),
           h: 46,
         });
       }
@@ -3385,6 +3565,7 @@
           title: passive.name || key,
           detail: getInventoryPassiveSkillDetail(owner, key, passive),
           level: 0,
+          equipped: Boolean(getPassiveSkillEquippedText(owner, key, passive)),
           h: 46,
         });
       }
@@ -3420,6 +3601,7 @@
           title: displaySkill.name || sourceKey,
           detail: getInventoryActiveSkillDetail(sourceOwner, sourceKey, displaySkill, level),
           level,
+          equipped: Boolean(getSkillEquippedText(sourceOwner, sourceKey, displaySkill)),
           h: 46,
         });
       }
@@ -3602,6 +3784,8 @@
         itemId: entry.item.id,
         usable: entry.usable,
         openAll: entry.item.id === "d_power_flag" && entry.inventory > 0,
+        quantity: entry.inventory,
+        equipped: entry.equipped > 0,
         h: 46,
       }));
   }
@@ -3626,11 +3810,11 @@
     if (!lines.length) {
       return;
     }
-    const lineH = 18;
+    const lineH = 23;
     const panelW = Math.min(content.w - 28, 760);
     const wrappedLines = wrapInventoryMessageLines(lines, panelW - 40);
-    const baseH = 164;
-    const panelH = Math.min(content.h - 16, Math.max(210, baseH + Math.max(0, wrappedLines.length - 3) * lineH));
+    const baseH = 172;
+    const panelH = Math.min(content.h - 16, Math.max(224, baseH + Math.max(0, wrappedLines.length - 3) * lineH));
     const x = content.x + (content.w - panelW) / 2;
     const y = Math.max(content.y + 8, Math.min(content.y + content.h - panelH - 8, content.y + (content.h - panelH) / 2));
     ctx.save();
@@ -3642,7 +3826,7 @@
     ctx.stroke();
     addSystemMenuTarget({ action: "absorbSystemClick", x, y, w: panelW, h: panelH });
     ctx.fillStyle = "#2f6d4c";
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("使用結果", x + 20, y + 16);
@@ -3664,7 +3848,7 @@
       if (!line) {
         continue;
       }
-      drawFittedSystemText(line, x + 20, textY + i * lineH, panelW - 40, 800, i === 0 ? 13 : 12, 8, i === 0 ? "#102018" : "#52665b", "left", "top");
+      drawFittedSystemText(line, x + 20, textY + i * lineH, panelW - 40, 800, i === 0 ? 16 : 15, 11, i === 0 ? "#102018" : "#52665b", "left", "top");
     }
     const crystalState = battleRewardCrystalMessage
       ? getBattleRewardPowerCrystalAutoState()
@@ -3834,7 +4018,7 @@
   function wrapInventoryMessageLines(rawLines, maxWidth) {
     const wrapped = [];
     ctx.save();
-    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     for (const raw of rawLines) {
       const text = String(raw || "");
       if (!text) {
@@ -4417,7 +4601,7 @@
     const fallbackUnitId = availableUnits[0] || "finald";
     const unit = getEquipmentDisplayUnit(ui.selectedUnitId) || getEquipmentDisplayUnit(fallbackUnitId);
     const readOnly = Boolean(panel.readOnly);
-    const layout = getEquipmentPanelLayout(rect);
+    const layout = getEquipmentPanelLayout(rect, unit);
     equipmentTooltipTargets.length = 0;
 
     ctx.save();
@@ -4443,6 +4627,7 @@
     drawEquipmentUnitList(layout.nav, unit);
     if (unit) {
       drawEquipmentStage(layout.stage, unit, readOnly);
+      drawEquipmentSkillSlots(layout.skills, unit, readOnly);
       drawEquipmentStats(layout.stats, unit);
     }
     if (ui.picker || ui.preset) {
@@ -4475,7 +4660,7 @@
     };
   }
 
-  function getEquipmentPanelLayout(rect) {
+  function getEquipmentPanelLayout(rect, unit) {
     const pad = 22;
     const top = rect.y + 66;
     const bottom = rect.y + rect.h - 24;
@@ -4485,8 +4670,12 @@
     const stats = { x: rect.x + rect.w - pad - statsW, y: top, w: statsW, h: bottom - top };
     const contentX = nav.x + nav.w + 18;
     const contentW = stats.x - contentX - 18;
-    const skillH = rect.h >= 610 ? 128 : 108;
-    const skills = { x: contentX, y: bottom - skillH, w: contentW, h: skillH };
+    const hasThirdSkillRow = unit && unit.id === "finald";
+    const skillH = hasThirdSkillRow
+      ? rect.h >= 610 ? 176 : 150
+      : rect.h >= 610 ? 132 : 112;
+    const skillBottomGap = Math.min(28, Math.max(18, rect.h * 0.035));
+    const skills = { x: contentX, y: bottom - skillH - skillBottomGap, w: contentW, h: skillH };
     const stage = { x: contentX, y: top, w: contentW, h: Math.max(190, skills.y - top - 16) };
     const preset = { x: Math.min(stats.x - 128, rect.x + rect.w - pad - statsW - 150), y: rect.y + 20, w: 126, h: 32 };
     return { nav, stage, skills, stats, preset, rect };
@@ -4576,7 +4765,7 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = readOnly ? "#516058" : "#f7fff6";
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("プリセット", rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5);
@@ -4585,7 +4774,7 @@
   }
 
   function drawEquipmentUnitList(rect, selectedUnit) {
-    const rowH = 46;
+    const rowH = 52;
     ctx.save();
     ctx.fillStyle = "rgba(16,32,24,0.06)";
     ctx.strokeStyle = "rgba(16,32,24,0.14)";
@@ -4600,12 +4789,12 @@
       const active = unit && selectedUnit && unit.id === selectedUnit.id;
       ctx.fillStyle = active ? "#102018" : "rgba(255,255,255,0.64)";
       ctx.strokeStyle = active ? "#102018" : "rgba(16,32,24,0.12)";
-      roundRect(rect.x + 10, y, rect.w - 20, 36, 7);
+      roundRect(rect.x + 10, y, rect.w - 20, 42, 7);
       ctx.fill();
       ctx.stroke();
-      drawFittedSystemText(getEquipmentShortName(unit), rect.x + 22, y + 18, rect.w - 44, 800, 14, 10, active ? "#f7fff6" : "#102018", "left");
+      drawFittedSystemText(getEquipmentShortName(unit), rect.x + 22, y + 21, rect.w - 44, 800, 16, 12, active ? "#f7fff6" : "#102018", "left");
       if (unit) {
-        addSystemMenuTarget({ action: "selectEquipmentUnit", unitId: unit.id, x: rect.x + 10, y, w: rect.w - 20, h: 36 });
+        addSystemMenuTarget({ action: "selectEquipmentUnit", unitId: unit.id, x: rect.x + 10, y, w: rect.w - 20, h: 42 });
       }
     }
     ctx.restore();
@@ -4626,7 +4815,7 @@
     drawEquipmentCharacterArt(unit, centerX, artY, artSize);
 
     const slotW = Math.min(100, Math.max(78, rect.w * 0.19));
-    const slotH = 54;
+    const slotH = 60;
     const gapY = Math.min(18, Math.max(10, rect.h * 0.045));
     const sideOffset = Math.max(76, Math.min(102, rect.w * 0.16));
     const leftX = Math.max(rect.x + slotW + 24, centerX - slotW - sideOffset);
@@ -4658,17 +4847,6 @@
     };
     drawEquipmentCharacterItemSlot(itemRect, unit, readOnly);
     drawEquipmentSlot(weaponRect, unit, equipmentSlotLayout.weapon, readOnly);
-    const skillAreaH = unit && unit.id === "finald"
-      ? Math.min(166, Math.max(150, rect.h * 0.34))
-      : Math.min(126, Math.max(112, rect.h * 0.27));
-    const skillAreaY = Math.max(artY + artSize * 1.68, rect.y + rect.h - skillAreaH - 122);
-    const skillRect = {
-      x: rect.x + 16,
-      y: Math.min(skillAreaY, rect.y + rect.h - skillAreaH - 14),
-      w: rect.w - 32,
-      h: skillAreaH,
-    };
-    drawEquipmentSkillSlots(skillRect, unit, readOnly);
     ctx.restore();
   }
 
@@ -4761,11 +4939,11 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#728077";
-    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(slot ? slot.name : slotKey, rect.x + 10, rect.y + 7);
-    drawFittedSystemText(item ? item.name : "未装備", rect.x + 10, rect.y + 31, rect.w - 20, 800, 13, 9, item ? "#102018" : "#8a948f", "left");
+    ctx.fillText(slot ? slot.name : slotKey, rect.x + 10, rect.y + 8);
+    drawFittedSystemText(item ? item.name : "未装備", rect.x + 10, rect.y + 35, rect.w - 20, 800, 15, 11, item ? "#102018" : "#8a948f", "left");
     ctx.restore();
     addSystemMenuTarget({
       action: "openEquipmentPicker",
@@ -4788,12 +4966,12 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#728077";
-    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText("アイテム", rect.x + 10, rect.y + 7);
+    ctx.fillText("アイテム", rect.x + 10, rect.y + 8);
     const label = item ? `${item.name || item.id}${Number.isFinite(item.count) ? ` x${item.count}` : ""}` : "未所持";
-    drawFittedSystemText(label, rect.x + 10, rect.y + 31, rect.w - 20, 800, 13, 9, item ? "#102018" : "#8a948f", "left");
+    drawFittedSystemText(label, rect.x + 10, rect.y + 35, rect.w - 20, 800, 15, 11, item ? "#102018" : "#8a948f", "left");
     ctx.restore();
     registerEquipmentTooltip(rect, buildCharacterItemTooltip(item));
     addSystemMenuTarget({
@@ -4850,8 +5028,8 @@
     }
     const gap = 7;
     const headerY = rect.y + 6;
-    const slotY = rect.y + 30;
-    const slotH = Math.max(34, Math.min(42, (rect.h - 34 - (rows - 1) * gap) / rows));
+    const slotY = rect.y + 32;
+    const slotH = Math.max(40, Math.min(48, (rect.h - 36 - (rows - 1) * gap) / rows));
     const cellW = Math.max(46, (rect.w - 24 - gap * (cols - 1)) / cols);
 
     ctx.save();
@@ -4862,7 +5040,7 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#102018";
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("スキル枠", rect.x + 12, headerY);
@@ -4921,11 +5099,11 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = locked ? "#63706a" : "#102018";
-    ctx.font = "900 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(badge, rect.x + 7, rect.y + 5);
-    drawFittedSystemText(label, rect.x + 7, rect.y + rect.h - 12, rect.w - 14, 800, 11, 8, label === "空き" || label === "未装備" ? "#8a948f" : locked ? "#516058" : "#102018", "left");
+    drawFittedSystemText(label, rect.x + 7, rect.y + rect.h - 13, rect.w - 14, 800, 12, 9, label === "空き" || label === "未装備" ? "#8a948f" : locked ? "#516058" : "#102018", "left");
     drawSkillLevelBadge(rect.x + rect.w - 4, rect.y + rect.h - 4, level);
     if (unavailable) {
       drawUnavailableMark(rect);
@@ -4950,29 +5128,29 @@
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     drawFittedSystemText(fullName, rect.x + 18, rect.y + 18, rect.w - 36, 900, 20, 13, "#102018", "left");
-    ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#63706a";
     ctx.fillText(getEquipmentRoleLabel(unit), rect.x + 18, rect.y + 45);
 
-    const resourcesY = rect.y + 70;
+    const resourcesY = rect.y + 74;
     const resourcesUsedH = drawEquipmentResourceBars(unit, rect.x + 18, resourcesY, rect.w - 36);
     const rowY = resourcesY + resourcesUsedH + 14;
     const statUsedH = drawEquipmentStatGrid(rows, rect.x + 18, rowY, rect.w - 36, 0);
     const setY = rowY + statUsedH + 12;
-    const setLineY = setY + 27;
-    const availableSetLines = Math.max(0, Math.floor((rect.y + rect.h - setLineY - 8) / 22));
+    const setLineY = setY + 29;
+    const availableSetLines = Math.max(0, Math.floor((rect.y + rect.h - setLineY - 8) / 25));
     if (availableSetLines > 0) {
       ctx.fillStyle = "#102018";
-      ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "900 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillText("発動中のセット効果", rect.x + 18, setY);
-      ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.fillStyle = "#63706a";
       if (!setEffects.length) {
         ctx.fillText("なし", rect.x + 18, setLineY);
       } else {
         const lines = getEquipmentSetEffectLines(setEffects).slice(0, availableSetLines);
         for (let i = 0; i < lines.length; i += 1) {
-          drawFittedSystemText(lines[i].text, rect.x + 18, setLineY + i * 22, rect.w - 36, lines[i].header ? 900 : 700, lines[i].header ? 13 : 12, 9, lines[i].header ? "#102018" : "#63706a", "left");
+          drawFittedSystemText(lines[i].text, rect.x + 18, setLineY + i * 25, rect.w - 36, lines[i].header ? 900 : 700, lines[i].header ? 15 : 14, 11, lines[i].header ? "#102018" : "#63706a", "left");
         }
       }
     }
@@ -4984,8 +5162,8 @@
       { label: "HP", currentKey: "hp", maxKey: "maxHp", back: "#dbe9dd", fill: COLORS.hp || "#72df82" },
       { label: "MP", currentKey: "mp", maxKey: "maxMp", back: "#dbe4f4", fill: COLORS.mp || "#73a7ff" },
     ];
-    const rowH = 24;
-    const barH = 8;
+    const rowH = 27;
+    const barH = 10;
     for (let i = 0; i < entries.length; i += 1) {
       const entry = entries[i];
       const rowY = y + i * rowH;
@@ -4993,12 +5171,12 @@
       const current = getEquipmentResourceCurrent(unit, entry.currentKey, max);
       const ratio = max > 0 ? current / max : 0;
       ctx.fillStyle = "#63706a";
-      ctx.font = "800 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+      ctx.font = "800 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       ctx.fillText(entry.label, x, rowY);
-      drawFittedSystemText(`現在 ${formatSystemNumber(current)} / 最大 ${formatSystemNumber(max)}`, x + w, rowY - 1, w - 28, 800, 12, 8, "#102018", "right");
-      drawBar(x, rowY + 14, w, barH, ratio, entry.back, entry.fill);
+      drawFittedSystemText(`現在 ${formatSystemNumber(current)} / 最大 ${formatSystemNumber(max)}`, x + w, rowY + 1, w - 28, 800, 14, 10, "#102018", "right");
+      drawBar(x, rowY + 16, w, barH, ratio, entry.back, entry.fill);
     }
     return rowH * entries.length;
   }
@@ -5018,7 +5196,7 @@
   function drawEquipmentStatGrid(rows, x, y, w, h) {
     const columns = 4;
     const colGap = 7;
-    const rowH = 30;
+    const rowH = 36;
     const colW = Math.max(32, (w - colGap * (columns - 1)) / columns);
     let cellIndex = 0;
     let extraY = 0;
@@ -5048,11 +5226,11 @@
 
   function drawEquipmentStatCell(stat, x, y, w) {
     ctx.fillStyle = "#7b8880";
-    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    drawFittedSystemText(stat.label, x, y, w, 700, 11, 8, "#7b8880", "left");
-    drawFittedSystemText(stat.value, x, y + 14, w, 900, 13, 8, "#102018", "left");
+    drawFittedSystemText(stat.label, x, y, w, 700, 12, 9, "#7b8880", "left");
+    drawFittedSystemText(stat.value, x, y + 16, w, 900, 15, 10, "#102018", "left");
   }
 
   function drawEquipmentPicker(layout, unit, readOnly) {
@@ -5064,7 +5242,7 @@
     if (!Number.isFinite(picker.scrollMax)) {
       picker.scrollMax = 0;
     }
-    const pickerH = Math.max(184, Math.min(244, layout.rect.h - 112));
+    const pickerH = Math.max(202, Math.min(268, layout.rect.h - 96));
     const rect = {
       x: layout.rect.x + 24,
       y: Math.max(layout.rect.y + 82, layout.rect.y + layout.rect.h - pickerH - 24),
@@ -5095,17 +5273,17 @@
     ctx.restore();
   }
 
-    function drawEquipmentItemPicker(rect, unit, slotKey, readOnly) {
+  function drawEquipmentItemPicker(rect, unit, slotKey, readOnly) {
       const slot = getEquipmentSlotDef(slotKey);
       const current = typeof getEquippedSlotItem === "function" ? getEquippedSlotItem(unit, slotKey) : null;
       const candidates = getEquipmentItemCandidates(unit, slotKey);
     const equippedItemIds = getEquippedItemIds(unit);
     ctx.fillStyle = "#102018";
-    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(`${slot ? slot.name : slotKey}枠`, rect.x + 18, rect.y + 18);
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#63706a";
     ctx.fillText(current ? `現在: ${current.name}` : "現在: 未装備", rect.x + 18, rect.y + 45);
     if (current && !readOnly && !(slot && slot.required)) {
@@ -5137,11 +5315,11 @@
     const selectedItem = getSelectedCharacterItemCandidate(candidates, picker, current);
     const quantityInfo = selectedItem ? getCharacterItemQuantityInfo(unit, selectedItem, current, picker) : null;
     ctx.fillStyle = "#102018";
-    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("アイテム枠", rect.x + 18, rect.y + 18);
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#63706a";
     ctx.fillText(current ? `現在: ${current.name}${Number.isFinite(current.count) ? ` x${current.count}` : ""}` : "現在: 未所持", rect.x + 18, rect.y + 45);
     if (current && !readOnly) {
@@ -5270,11 +5448,11 @@
       (entry) => canEquipSkillWithCurrentWeapon(unit, entry.skill)
     );
     ctx.fillStyle = "#102018";
-    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(`スキル枠 ${slotIndex + 1}`, rect.x + 18, rect.y + 18);
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#63706a";
     ctx.fillText(current ? `現在: ${current.name}` : "現在: 空き", rect.x + 18, rect.y + 45);
     if (current && !readOnly) {
@@ -5311,11 +5489,11 @@
       (entry) => canEquipSkillWithCurrentWeapon(unit, entry.passive)
     );
     ctx.fillStyle = "#102018";
-    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("パッシブ枠", rect.x + 18, rect.y + 18);
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#63706a";
     ctx.fillText(current ? `現在: ${current.name}` : "現在: 未装備", rect.x + 18, rect.y + 45);
     drawCandidateIconGrid(candidates, rect.x + 18, rect.y + 78, rect.w - 36, rect.h - 92, {
@@ -5345,11 +5523,11 @@
       (entry) => canEquipSkillWithCurrentWeapon(unit, entry.skill)
     );
     ctx.fillStyle = "#102018";
-    ctx.font = "900 18px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 20px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("必殺技枠", rect.x + 18, rect.y + 18);
-    ctx.font = "700 12px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "700 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.fillStyle = "#63706a";
     ctx.fillText(currentEntry.skill ? `現在: ${currentEntry.skill.name}` : "現在: 未装備", rect.x + 18, rect.y + 45);
     drawCandidateIconGrid(candidates, rect.x + 18, rect.y + 78, rect.w - 36, rect.h - 92, {
@@ -5373,7 +5551,7 @@
   }
 
   function drawCandidateIconGrid(items, x, y, w, h, options) {
-    const iconSize = 46;
+    const iconSize = 52;
     const gap = 10;
     const columns = Math.max(1, Math.floor((w + gap) / (iconSize + gap)));
     if (!items.length) {
@@ -5446,9 +5624,9 @@
     ctx.fillStyle = icon.color || "#60756a";
     roundRect(rect.x + 8, rect.y + 7, rect.w - 16, rect.h - 18, 7);
     ctx.fill();
-    drawFittedSystemText(icon.label || "?", rect.x + rect.w / 2, rect.y + rect.h / 2 - 2, rect.w - 20, 900, 15, 9, "#f7fff6", "center", "middle");
+    drawFittedSystemText(icon.label || "?", rect.x + rect.w / 2, rect.y + rect.h / 2 - 2, rect.w - 20, 900, 17, 11, "#f7fff6", "center", "middle");
     ctx.fillStyle = icon.selected ? "#9c7123" : "#63706a";
-    ctx.font = "900 8px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "900 10px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(icon.subtitle || "", rect.x + rect.w / 2, rect.y + rect.h - 3);
@@ -6112,11 +6290,11 @@
     if (alpha <= 0) {
       return;
     }
-    const lines = getEquipmentMessageLines(ui.message, Math.max(160, panelRect.w - 104));
-    const lineH = 16;
-    const h = Math.max(36, 18 + lines.length * lineH);
+    const lines = getEquipmentMessageLines(ui.message, Math.max(180, panelRect.w - 112));
+    const lineH = 22;
+    const h = Math.max(46, 20 + lines.length * lineH);
     ctx.save();
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     const textW = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
     ctx.restore();
     const minW = 180;
@@ -6134,7 +6312,7 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let i = 0; i < lines.length; i += 1) {
-      drawFittedSystemText(lines[i], x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * lineH, w - 32, 800, 13, 9, "#f7fff6", "center", "middle");
+      drawFittedSystemText(lines[i], x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * lineH, w - 32, 800, 16, 11, "#f7fff6", "center", "middle");
     }
     ctx.restore();
   }
@@ -6142,7 +6320,7 @@
   function getEquipmentMessageLines(message, maxWidth) {
     const text = String(message || "");
     ctx.save();
-    ctx.font = "800 13px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 16px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     if (ctx.measureText(text).width <= maxWidth) {
       ctx.restore();
       return [text];

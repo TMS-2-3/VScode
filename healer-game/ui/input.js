@@ -3044,7 +3044,16 @@
             menu.panel = { type: target.panelType || null, title: target.title, lines: target.lines || [] };
             menu.panelScroll = 0;
             menu.panelScrollMax = 0;
+            if (target.panelType === "inventory") {
+              menu.inventoryCategory = "item";
+            }
             clearMovementKeys();
+          }
+        } else if (target.action === "selectInventoryCategory") {
+          if (["item", "material", "equipment", "skill"].includes(target.category)) {
+            menu.inventoryCategory = target.category;
+            menu.panelScroll = 0;
+            menu.panelScrollMax = 0;
           }
         } else if (target.action === "useInventoryItem") {
           if (typeof useInventoryItem === "function") {

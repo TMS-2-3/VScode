@@ -1517,7 +1517,16 @@
       }
       showTownQuestNoticePopup(quest, {
         onComplete: () => {
-          game.message = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
+          const acceptedStoryLines = typeof getQuestAcceptedStory === "function" ? getQuestAcceptedStory(quest) : [];
+          const acceptedMessage = `${quest.name}を受けました。${getTownQuestDestinationName(quest) || "出現場所"}へ向かいましょう。`;
+          if (Array.isArray(acceptedStoryLines) && acceptedStoryLines.length > 0) {
+            startTownStory(`questAccepted:${quest.id}`, acceptedStoryLines, () => {
+              game.message = acceptedMessage;
+              game.messageTimer = 5;
+            });
+            return;
+          }
+          game.message = acceptedMessage;
           game.messageTimer = 5;
         },
       });
