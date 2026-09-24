@@ -442,6 +442,14 @@
   function beginWaitAction(step, target, game, helpers, state) {
     const player = helpers.player;
     const before = makeWaitSnapshot(step, target, helpers);
+    const forceCommandSuccess = step.id === "defendSushia" && step.skillKey === "commandDefend" && target && target.id === "sushia";
+    if (forceCommandSuccess) {
+      state.forceCommandSuccess = {
+        skillKey: step.skillKey,
+        targetUnitId: target.id,
+        sourceUnitId: player && player.id || "finald",
+      };
+    }
     let started = false;
     if (step.skillKey === "heal" && typeof helpers.castHeal === "function") {
       started = helpers.castHeal(target);
@@ -451,6 +459,9 @@
       started = helpers.usePlayerCommand(step.skillKey, target);
     }
     if (!started) {
+      if (forceCommandSuccess) {
+        state.forceCommandSuccess = null;
+      }
       return reject(game, "発動できません");
     }
     state.pendingWait = {
@@ -596,6 +607,7 @@
   function finishWaitStep(game, helpers, state) {
     const pending = state.pendingWait;
     state.pendingWait = null;
+    state.forceCommandSuccess = null;
     state.index += 1;
     state.selectedSkillKey = null;
     state.feedback = "";

@@ -4251,6 +4251,9 @@
     }
 
     function shouldIgnoreCommandBiasChange(unit, delta, source, key, skill) {
+      if (isTutorialCommandSuccessGuaranteed(unit, source, key)) {
+        return false;
+      }
       if (!unit || unit.mood === null) {
         return false;
       }
@@ -4262,6 +4265,17 @@
         return Math.random() < ignoreChance;
       }
       return false;
+    }
+
+    function isTutorialCommandSuccessGuaranteed(unit, source, key) {
+      const tutorial = ctx.game && ctx.game.battleTutorial;
+      const forced = tutorial && tutorial.forceCommandSuccess;
+      return Boolean(
+        forced
+        && forced.skillKey === key
+        && forced.targetUnitId === (unit && unit.id)
+        && forced.sourceUnitId === (source && source.id)
+      );
     }
 
     function getCommandFloatText(delta) {
