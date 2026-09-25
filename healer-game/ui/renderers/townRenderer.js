@@ -60,6 +60,7 @@
     } = context;
 
   const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
+  const FIELD_CAMERA_SCALE = 1.6;
   const MAX_ACCEPTED_FREE_QUESTS = 3;
   const PARTY_DEBUG_HIT_RADIUS_FALLBACK = 15;
   const PARTY_DEBUG_HIT_UNIT_IDS = new Set(["finald", "ulpes", "rihas", "sushia"]);
@@ -258,7 +259,9 @@
   const townWalkImages = createTownWalkImages();
   const profileAppearanceImages = createProfileAppearanceImages();
   let townTileMapRenderCache = null;
+  let townMarginBaseRenderCache = null;
   let townMarginDepthRenderCache = null;
+  let townPassableTileBoundsCache = null;
   let townDebugGridCache = null;
   let lastTownMapDebugMode = false;
 
@@ -361,6 +364,63 @@
 
   function getTownFullMapViewport(map, mapSize = getTownMapPixelSize(map)) {
     return { x: 0, y: 0, w: Math.max(1, mapSize.w || 1), h: Math.max(1, mapSize.h || 1) };
+  }
+
+  function getTownPassableTileBounds(map) {
+    const mapWidth = Math.max(1, Math.floor(Number(map && map.width) || 0));
+    const mapHeight = Math.max(1, Math.floor(Number(map && map.height) || 0));
+    const key = `${getTownMapCacheId(map)}|${mapWidth}|${mapHeight}`;
+    if (townPassableTileBoundsCache && townPassableTileBoundsCache.key === key) {
+      return townPassableTileBoundsCache.bounds;
+    }
+    if (!tileMapSystem || typeof tileMapSystem.isTileCoordPassable !== "function") {
+      const bounds = { minCol: 0, minRow: 0, maxCol: mapWidth - 1, maxRow: mapHeight - 1 };
+      townPassableTileBoundsCache = { key, bounds };
+      return bounds;
+    }
+    let minCol = mapWidth - 1;
+    let minRow = mapHeight - 1;
+    let maxCol = 0;
+    let maxRow = 0;
+    let found = false;
+    for (let row = 0; row < mapHeight; row += 1) {
+      for (let col = 0; col < mapWidth; col += 1) {
+        if (!tileMapSystem.isTileCoordPassable(map, col, row)) {
+          continue;
+        }
+        found = true;
+        minCol = Math.min(minCol, col);
+        minRow = Math.min(minRow, row);
+        maxCol = Math.max(maxCol, col);
+        maxRow = Math.max(maxRow, row);
+      }
+    }
+    const bounds = found
+      ? { minCol, minRow, maxCol, maxRow }
+      : { minCol: 0, minRow: 0, maxCol: mapWidth - 1, maxRow: mapHeight - 1 };
+    townPassableTileBoundsCache = { key, bounds };
+    return bounds;
+  }
+
+  function getTownMarginPreloadViewport(map) {
+    const tileSize = tileMapSystem && typeof tileMapSystem.getTileSize === "function"
+      ? tileMapSystem.getTileSize(map)
+      : COMMON_TILE_SIZE;
+    // Build exactly the exterior the camera can reveal from any walkable tile.
+    const passable = getTownPassableTileBounds(map);
+    const scale = Math.max(0.001, FIELD_CAMERA_SCALE);
+    const cameraPaddingX = Math.ceil((view.w / scale) / 2 / tileSize) + TOWN_MARGIN_DEPTH_DRAW_PADDING + 1;
+    const cameraPaddingY = Math.ceil((view.h / scale) / 2 / tileSize) + TOWN_MARGIN_DEPTH_DRAW_PADDING + 1;
+    const minCol = passable.minCol - cameraPaddingX;
+    const minRow = passable.minRow - cameraPaddingY;
+    const maxCol = passable.maxCol + cameraPaddingX + 1;
+    const maxRow = passable.maxRow + cameraPaddingY + 1;
+    return {
+      x: minCol * tileSize,
+      y: minRow * tileSize,
+      w: Math.max(tileSize, (maxCol - minCol) * tileSize),
+      h: Math.max(tileSize, (maxRow - minRow) * tileSize),
+    };
   }
 
   function normalizeTownTileId(tileEntry) {
@@ -488,6 +548,68 @@
       });
     }
     return canvas;
+  }
+
+  function getTownMarginBaseCacheKey(map, mapCache, viewport) {
+    return [
+      mapCache && mapCache.key,
+      "margin-base",
+      Math.floor(Number(viewport && viewport.x) || 0),
+      Math.floor(Number(viewport && viewport.y) || 0),
+      Math.ceil(Number(viewport && viewport.w) || 0),
+      Math.ceil(Number(viewport && viewport.h) || 0),
+      JSON.stringify((map && (map.marginTiles || map.marginTile)) || null),
+    ].join("|");
+  }
+
+  function getTownMarginCacheViewport(map) {
+    const bounds = getTownMarginDepthBounds(map, getTownMarginPreloadViewport(map));
+    return {
+      x: bounds.minCol * bounds.tileSize,
+      y: bounds.minRow * bounds.tileSize,
+      w: Math.max(bounds.tileSize, (bounds.maxCol - bounds.minCol + 1) * bounds.tileSize),
+      h: Math.max(bounds.tileSize, (bounds.maxRow - bounds.minRow + 1) * bounds.tileSize),
+    };
+  }
+
+  function getTownMarginBaseRenderCache(map, mapCache) {
+    if (!map || !mapCache || !mapCache.ready || !mapCache.baseCanvas || !tileMapSystem || typeof tileMapSystem.drawMarginTile !== "function") {
+      return null;
+    }
+    const preloadViewport = getTownMarginPreloadViewport(map);
+    const cacheViewport = getTownMarginCacheViewport(map);
+    const key = getTownMarginBaseCacheKey(map, mapCache, cacheViewport);
+    if (townMarginBaseRenderCache && townMarginBaseRenderCache.key === key) {
+      return townMarginBaseRenderCache;
+    }
+    const groundLayerIds = getTownGroundTileLayerIds(map);
+    if (!areTownMarginDepthImagesReady(map, groundLayerIds, preloadViewport)) {
+      return null;
+    }
+    const canvas = createTownRenderCanvas(cacheViewport.w, cacheViewport.h);
+    const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
+    if (!cacheCtx) {
+      return null;
+    }
+    cacheCtx.imageSmoothingEnabled = false;
+    cacheCtx.translate(-cacheViewport.x, -cacheViewport.y);
+    tileMapSystem.drawMarginTile(cacheCtx, map, {
+      drawFallback: true,
+      layerIds: groundLayerIds,
+      useCache: false,
+      viewport: preloadViewport,
+      drawPadding: TOWN_MARGIN_DEPTH_DRAW_PADDING,
+    });
+    cacheCtx.drawImage(mapCache.baseCanvas, 0, 0);
+    townMarginBaseRenderCache = {
+      key,
+      canvas,
+      viewport: cacheViewport,
+    };
+    if (typeof tileMapSystem.clearMarginTileCache === "function") {
+      tileMapSystem.clearMarginTileCache(map);
+    }
+    return townMarginBaseRenderCache;
   }
 
   function buildTownTileMapDepthGroups(map, mapSize) {
@@ -693,18 +815,19 @@
     return groups;
   }
 
-  function getTownMarginDepthRenderCache(map, layerIds, viewport) {
+  function getTownMarginDepthRenderCache(map, layerIds) {
     if (!map || !layerIds.length || !tileMapSystem || typeof tileMapSystem.forEachMarginTileEntry !== "function") {
       return null;
     }
-    const bounds = getTownMarginDepthBounds(map, viewport);
+    const preloadViewport = getTownMarginPreloadViewport(map);
+    const bounds = getTownMarginDepthBounds(map, preloadViewport);
     if (bounds.minCol >= 0 && bounds.minRow >= 0 && bounds.maxCol < bounds.mapWidth && bounds.maxRow < bounds.mapHeight) {
       return { key: "", ready: true, groups: [] };
     }
     const key = getTownMarginDepthCacheKey(map, layerIds, bounds);
     if (townMarginDepthRenderCache && townMarginDepthRenderCache.key === key) {
-      if (!townMarginDepthRenderCache.ready && areTownMarginDepthImagesReady(map, layerIds, viewport)) {
-        townMarginDepthRenderCache.groups = buildTownMarginDepthGroups(map, layerIds, viewport) || [];
+      if (!townMarginDepthRenderCache.ready && areTownMarginDepthImagesReady(map, layerIds, preloadViewport)) {
+        townMarginDepthRenderCache.groups = buildTownMarginDepthGroups(map, layerIds, preloadViewport) || [];
         townMarginDepthRenderCache.ready = true;
       }
       return townMarginDepthRenderCache;
@@ -714,8 +837,8 @@
       ready: false,
       groups: [],
     };
-    if (areTownMarginDepthImagesReady(map, layerIds, viewport)) {
-      townMarginDepthRenderCache.groups = buildTownMarginDepthGroups(map, layerIds, viewport) || [];
+    if (areTownMarginDepthImagesReady(map, layerIds, preloadViewport)) {
+      townMarginDepthRenderCache.groups = buildTownMarginDepthGroups(map, layerIds, preloadViewport) || [];
       townMarginDepthRenderCache.ready = true;
     }
     return townMarginDepthRenderCache;
@@ -725,7 +848,7 @@
     if (!Array.isArray(drawables)) {
       return;
     }
-    const cache = getTownMarginDepthRenderCache(map, layerIds, viewport);
+    const cache = getTownMarginDepthRenderCache(map, layerIds);
     if (!cache || !cache.ready) {
       return;
     }
@@ -785,6 +908,38 @@
       return false;
     }
     ctx.drawImage(canvas, sx, sy, sw, sh, sx, sy, sw, sh);
+    return true;
+  }
+
+  function drawCachedTownWorldCanvas(canvas, canvasViewport, viewport) {
+    if (!canvas || !canvasViewport || !viewport) {
+      return false;
+    }
+    const originX = Number(canvasViewport.x) || 0;
+    const originY = Number(canvasViewport.y) || 0;
+    const right = originX + Math.max(1, Number(canvasViewport.w) || canvas.width || 1);
+    const bottom = originY + Math.max(1, Number(canvasViewport.h) || canvas.height || 1);
+    const viewLeft = Number(viewport.x) || 0;
+    const viewTop = Number(viewport.y) || 0;
+    const viewRight = viewLeft + Math.max(0, Number(viewport.w) || 0);
+    const viewBottom = viewTop + Math.max(0, Number(viewport.h) || 0);
+    const left = Math.max(originX, viewLeft);
+    const top = Math.max(originY, viewTop);
+    const clippedRight = Math.min(right, viewRight);
+    const clippedBottom = Math.min(bottom, viewBottom);
+    if (left > viewLeft || top > viewTop || clippedRight < viewRight || clippedBottom < viewBottom) {
+      return false;
+    }
+    const sx = Math.max(0, Math.floor(left - originX));
+    const sy = Math.max(0, Math.floor(top - originY));
+    const sourceRight = Math.min(canvas.width, Math.ceil(clippedRight - originX));
+    const sourceBottom = Math.min(canvas.height, Math.ceil(clippedBottom - originY));
+    const sw = sourceRight - sx;
+    const sh = sourceBottom - sy;
+    if (sw <= 0 || sh <= 0) {
+      return false;
+    }
+    ctx.drawImage(canvas, sx, sy, sw, sh, originX + sx, originY + sy, sw, sh);
     return true;
   }
 
@@ -858,35 +1013,24 @@
   }
 
   function getTownTileMapTransform(tileMap) {
-    const mapSize = tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function"
-      ? tileMapSystem.getMapPixelSize(tileMap)
-      : { w: TOWN_WIDTH, h: TOWN_HEIGHT };
-    const mapW = Math.max(1, Number.isFinite(mapSize.w) ? mapSize.w : TOWN_WIDTH);
-    const mapH = Math.max(1, Number.isFinite(mapSize.h) ? mapSize.h : TOWN_HEIGHT);
-    const scale = 1;
+    const scale = FIELD_CAMERA_SCALE;
     const visibleW = Math.max(1, view.w / scale);
     const visibleH = Math.max(1, view.h / scale);
-    const mapFitsX = mapW <= visibleW;
-    const mapFitsY = mapH <= visibleH;
-    const cameraX = mapFitsX ? 0 : clampTownView(town.player.x - visibleW / 2, 0, mapW - visibleW);
-    const cameraY = mapFitsY ? 0 : clampTownView(town.player.y - visibleH / 2, 0, mapH - visibleH);
+    const cameraX = (Number(town && town.player && town.player.x) || 0) - visibleW / 2;
+    const cameraY = (Number(town && town.player && town.player.y) || 0) - visibleH / 2;
     if (town.camera) {
       town.camera.x = cameraX;
       town.camera.y = cameraY;
     }
     return {
       scale,
-      x: mapFitsX ? Math.max(0, (view.w - mapW * scale) / 2) : 0,
-      y: mapFitsY ? Math.max(0, (view.h - mapH * scale) / 2) : 0,
+      x: 0,
+      y: 0,
       cameraX,
       cameraY,
       viewportW: visibleW,
       viewportH: visibleH,
     };
-  }
-
-  function clampTownView(value, min, max) {
-    return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
   }
 
   function getTownVisibleWorldViewport(transform) {
@@ -949,6 +1093,12 @@
     const mapSize = tileMapSystem && typeof tileMapSystem.getMapPixelSize === "function"
       ? tileMapSystem.getMapPixelSize(map)
       : { w: TOWN_WIDTH, h: TOWN_HEIGHT };
+    const cache = getTownTileMapRenderCache(map);
+    const viewport = getTownTileMapViewport(transform);
+    const marginCache = getTownMarginBaseRenderCache(map, cache);
+    if (marginCache && drawCachedTownWorldCanvas(marginCache.canvas, marginCache.viewport, viewport)) {
+      return true;
+    }
     if (typeof tileMapSystem.drawMarginTile === "function") {
       tileMapSystem.drawMarginTile(ctx, map, {
         drawFallback: true,
@@ -957,8 +1107,6 @@
         viewport: getTownVisibleWorldViewport(transform),
       });
     }
-    const cache = getTownTileMapRenderCache(map);
-    const viewport = getTownTileMapViewport(transform);
     if (cache && cache.ready && cache.baseCanvas && drawCachedTownCanvas(cache.baseCanvas, viewport, cache.mapSize || mapSize)) {
       return true;
     }
@@ -1863,7 +2011,7 @@
   }
 
   function drawTownActiveStoryQuestHud() {
-    if (town.panel || town.story || (game.systemMenu && game.systemMenu.open)) {
+    if (town.panel || town.story) {
       return;
     }
     const activeStoryQuest = getActiveStoryQuestForTownField();

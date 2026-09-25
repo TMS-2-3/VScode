@@ -146,6 +146,8 @@
       : 60;
     const equipmentTooltipTargets = [];
     const inventoryTooltipTargets = [];
+    let inventoryRowsCache = null;
+    const systemTooltipLayoutCache = new WeakMap();
     const SKILL_LEVEL_ROMAN = ["", "I", "II", "III", "IV", "V"];
 
   function createEquipmentCharacterArtImages() {
@@ -2870,8 +2872,8 @@
   }
 
   function getSystemMenuButtonRect() {
-    const size = 50;
-    return { x: view.w - size - 16, y: 16, w: size, h: size };
+    const size = 56;
+    return { x: view.w - size - 14, y: 14, w: size, h: size };
   }
 
   function drawInventoryGoldBadge(panelX, panelY, panelW) {
@@ -2929,7 +2931,7 @@
     ctx.fill();
     ctx.stroke();
     ctx.strokeStyle = active ? "#172018" : "#f7fff6";
-    ctx.lineWidth = 2.8;
+    ctx.lineWidth = 3;
     ctx.lineCap = "round";
     const lineInset = Math.round(rect.w * 0.27);
     const lineGap = Math.round(rect.h * 0.21);
@@ -2964,10 +2966,10 @@
 
   function drawSystemMenuDropdown(button) {
     const items = getSystemMenuItems();
-    const w = 212;
-    const rowH = 44;
+    const w = 228;
+    const rowH = 48;
     const x = Math.max(12, button.x + button.w - w);
-    const y = button.y + button.h + 8;
+    const y = button.y + button.h + 10;
     const h = items.length * rowH + 12;
     ctx.save();
     ctx.fillStyle = "rgba(10,16,13,0.94)";
@@ -2976,7 +2978,7 @@
     roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
-    ctx.font = "800 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    ctx.font = "800 15px 'Segoe UI', 'Yu Gothic UI', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     for (let i = 0; i < items.length; i += 1) {
@@ -3177,13 +3179,13 @@
     const menu = getSystemMenu();
     drawSystemMenuBackdrop(game.state === "playing" ? 0.52 : 0.28);
     const w = Math.min(820, view.w - 40);
-    const h = Math.min(560, view.h - 40);
+    const h = Math.min(610, view.h - 40);
     const x = (view.w - w) / 2;
     const y = (view.h - h) / 2;
     const tabsRect = { x: x + 28, y: y + 76, w: w - 56, h: 36 };
     const content = { x: x + 28, y: y + 124, w: w - 56, h: h - 154 };
     const category = getInventoryCategory(menu);
-    const rows = getInventoryRows(category);
+    const rows = getCachedInventoryRows(panel, category);
     const grid = getInventoryGridLayout(content, rows.length);
     const contentH = grid.contentH;
     menu.panelScrollMax = Math.max(0, contentH - content.h);
@@ -3223,6 +3225,21 @@
   function getInventoryCategory(menu = getSystemMenu()) {
     const category = menu && menu.inventoryCategory;
     return ["item", "material", "equipment", "skill"].includes(category) ? category : "item";
+  }
+
+  function getCachedInventoryRows(panel, category) {
+    const messageVisible = Boolean(game.inventoryMessage);
+    if (
+      inventoryRowsCache
+      && inventoryRowsCache.panel === panel
+      && inventoryRowsCache.category === category
+      && inventoryRowsCache.messageVisible === messageVisible
+    ) {
+      return inventoryRowsCache.rows;
+    }
+    const rows = getInventoryRows(category);
+    inventoryRowsCache = { panel, category, messageVisible, rows };
+    return rows;
   }
 
   function drawInventoryCategoryTabs(rect, activeCategory) {
@@ -3268,10 +3285,10 @@
   }
 
   function getInventoryGridLayout(content, itemCount) {
-    const gap = 8;
-    const preferredSlotSize = 80;
+    const gap = 6;
+    const preferredSlotSize = 70;
     const columns = Math.max(1, Math.floor((content.w + gap) / (preferredSlotSize + gap)));
-    const slotSize = Math.max(64, Math.min(88, Math.floor((content.w - gap * (columns - 1)) / columns)));
+    const slotSize = Math.max(56, Math.min(72, Math.floor((content.w - gap * (columns - 1)) / columns)));
     const rows = Math.max(1, Math.ceil(Math.max(1, itemCount) / columns));
     const gridW = columns * slotSize + Math.max(0, columns - 1) * gap;
     return {
@@ -3353,7 +3370,8 @@
     }
     ctx.restore();
 
-    registerInventoryTooltip(rect, getInventoryRowTooltip(row));
+    const tooltip = row.tooltip || (row.tooltip = getInventoryRowTooltip(row));
+    registerInventoryTooltip(rect, tooltip);
     addSystemMenuTarget({
       action: canUse ? "useInventoryItem" : "absorbSystemClick",
       itemId: row.itemId || null,
@@ -4670,10 +4688,7 @@
     const stats = { x: rect.x + rect.w - pad - statsW, y: top, w: statsW, h: bottom - top };
     const contentX = nav.x + nav.w + 18;
     const contentW = stats.x - contentX - 18;
-    const hasThirdSkillRow = unit && unit.id === "finald";
-    const skillH = hasThirdSkillRow
-      ? rect.h >= 610 ? 176 : 150
-      : rect.h >= 610 ? 132 : 112;
+    const skillH = rect.h >= 610 ? 218 : 150;
     const skillBottomGap = Math.min(28, Math.max(18, rect.h * 0.035));
     const skills = { x: contentX, y: bottom - skillH - skillBottomGap, w: contentW, h: skillH };
     const stage = { x: contentX, y: top, w: contentW, h: Math.max(190, skills.y - top - 16) };
@@ -4810,17 +4825,30 @@
     ctx.stroke();
 
     const centerX = rect.x + rect.w / 2;
-    const artSize = Math.min(84, rect.h * 0.21);
-    const artY = rect.y + Math.max(74, rect.h * 0.27);
-    drawEquipmentCharacterArt(unit, centerX, artY, artSize);
+    const artSize = Math.min(122, Math.max(68, Math.min(rect.h * 0.34, (rect.h - 28) / 2.45)));
+    const artImage = getEquipmentCharacterArtImage(unit);
+    const artRatio = isSystemImageReady(artImage)
+      ? artImage.naturalWidth / artImage.naturalHeight
+      : 0.7;
+    const artHalfW = artSize * 2.45 * artRatio / 2;
 
-    const slotW = Math.min(100, Math.max(78, rect.w * 0.19));
-    const slotH = 60;
-    const gapY = Math.min(18, Math.max(10, rect.h * 0.045));
-    const sideOffset = Math.max(76, Math.min(102, rect.w * 0.16));
+    const slotW = Math.min(126, Math.max(84, rect.w * 0.21));
+    const gapY = Math.min(20, Math.max(10, rect.h * 0.05));
+    const slotH = Math.max(44, Math.min(82, (rect.h - 28 - gapY * 2) / 3));
+    const sideOffset = Math.max(90, Math.min(148, rect.w * 0.19));
     const leftX = Math.max(rect.x + slotW + 24, centerX - slotW - sideOffset);
-    const rightX = Math.min(rect.x + rect.w - slotW - 16, centerX + sideOffset);
-    const startY = rect.y + Math.max(28, rect.h * 0.14);
+    const rightLimit = rect.x + rect.w - slotW - 16;
+    const minArtX = leftX + slotW + artHalfW + 8;
+    const maxArtX = rightLimit - artHalfW - 8;
+    const preferredArtX = centerX + Math.min(64, Math.max(32, rect.w * 0.1));
+    const artX = maxArtX >= minArtX
+      ? Math.max(minArtX, Math.min(maxArtX, preferredArtX))
+      : maxArtX;
+    const rightX = Math.min(rightLimit, Math.max(centerX + sideOffset, artX + artHalfW + 8));
+    const slotStackH = slotH * 3 + gapY * 2;
+    const startY = rect.y + Math.max(14, (rect.h - slotStackH) / 2);
+    const artY = rect.y + rect.h / 2 - artSize * 0.195;
+    drawEquipmentCharacterArt(unit, artX, artY, artSize);
     const leftSlotRects = [];
     for (let i = 0; i < equipmentSlotLayout.left.length; i += 1) {
       const slotKey = equipmentSlotLayout.left[i];
@@ -5026,11 +5054,12 @@
         tooltip: buildSkillCandidateTooltip(skill, unit),
       };
     }
-    const gap = 7;
-    const headerY = rect.y + 6;
-    const slotY = rect.y + 32;
-    const slotH = Math.max(40, Math.min(48, (rect.h - 36 - (rows - 1) * gap) / rows));
-    const cellW = Math.max(46, (rect.w - 24 - gap * (cols - 1)) / cols);
+    const gap = 8;
+    const headerY = rect.y + 8;
+    const slotY = rect.y + 36;
+    const maxSlotH = rows === 2 ? 78 : 60;
+    const slotH = Math.max(40, Math.min(maxSlotH, (rect.h - 44 - (rows - 1) * gap) / rows));
+    const cellW = Math.max(48, (rect.w - 28 - gap * (cols - 1)) / cols);
 
     ctx.save();
     ctx.fillStyle = "rgba(16,32,24,0.045)";
@@ -5050,8 +5079,8 @@
       const col = i % cols;
       const row = Math.floor(i / cols);
       const slotRect = {
-        x: rect.x + 12 + col * (cellW + gap),
-        y: slotY + row * (slotH + 7),
+        x: rect.x + 14 + col * (cellW + gap),
+        y: slotY + row * (slotH + gap),
         w: cellW,
         h: slotH,
       };
@@ -5958,20 +5987,12 @@
   function drawEquipmentTooltipBox(tooltip, mouseX, mouseY) {
     const title = tooltip && tooltip.title ? tooltip.title : "";
     const rawLines = Array.isArray(tooltip && tooltip.lines) ? tooltip.lines.filter(Boolean) : [];
-    const textW = 248;
-    const lines = wrapSystemTooltipLines(rawLines, textW);
-    const lineH = 18;
-    const h = 44 + lines.length * lineH;
-    ctx.save();
-    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    let w = Math.max(160, ctx.measureText(title).width + 28);
-    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
-    for (const line of lines) {
-      w = Math.max(w, ctx.measureText(line).width + 28);
-    }
-    w = Math.min(300, Math.max(w, textW + 28));
+    const layout = getSystemTooltipLayout(tooltip, title, rawLines);
+    const { lines, w, h } = layout;
+    const lineH = layout.lineH;
     const x = clamp(mouseX + 18, 12, view.w - w - 12);
     const y = clamp(mouseY + 18, 12, view.h - h - 12);
+    ctx.save();
     ctx.fillStyle = "rgba(16,32,24,0.96)";
     ctx.strokeStyle = "rgba(247,255,246,0.22)";
     ctx.lineWidth = 1;
@@ -5987,6 +6008,36 @@
       ctx.fillText(lines[i], x + 14, y + 34 + i * lineH);
     }
     ctx.restore();
+  }
+
+  function getSystemTooltipLayout(tooltip, title, rawLines) {
+    const textW = 248;
+    const cacheKey = `${title}\u0000${rawLines.join("\u0001")}\u0000${Math.floor(view.h)}`;
+    const cached = tooltip && typeof tooltip === "object" ? systemTooltipLayoutCache.get(tooltip) : null;
+    if (cached && cached.key === cacheKey) {
+      return cached;
+    }
+    const lines = wrapSystemTooltipLines(rawLines, textW);
+    const lineH = 18;
+    ctx.save();
+    ctx.font = "900 14px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    let w = Math.max(160, ctx.measureText(title).width + 28);
+    ctx.font = "700 11px 'Segoe UI', 'Yu Gothic UI', sans-serif";
+    for (const line of lines) {
+      w = Math.max(w, ctx.measureText(line).width + 28);
+    }
+    ctx.restore();
+    const layout = {
+      key: cacheKey,
+      lines,
+      lineH,
+      w: Math.min(300, Math.max(w, textW + 28)),
+      h: 44 + lines.length * lineH,
+    };
+    if (tooltip && typeof tooltip === "object") {
+      systemTooltipLayoutCache.set(tooltip, layout);
+    }
+    return layout;
   }
 
   function wrapSystemTooltipLines(rawLines, maxWidth) {
