@@ -188,8 +188,7 @@
     drawDangerCardFlash(unit, x, y, w, h);
     statusUiButtons.push({ action: "consume", x, y, w, h });
 
-    drawFittedText(getStatusDisplayName(unit), iconCenterX, y + pad + 11, iconAreaW + 10, 800, compact ? 11 : 13, 9, "#f7fff6", "center");
-    drawFittedText(getRoleLabel(unit), iconCenterX, y + pad + 26, iconAreaW + 10, 700, compact ? 9 : 10, 8, "#cfe0d2", "center");
+    drawFittedText(getStatusShortName(unit), iconCenterX, y + pad + 15, iconAreaW + 12, 900, compact ? 14 : 16, 10, "#f7fff6", "center");
 
     drawCharacterUiPortrait(unit, portraitX, portraitY, portraitSize);
 
@@ -587,16 +586,18 @@
     ctx.restore();
   }
 
-  function getRoleLabel(unit) {
-    if (unit.id === "ulpes") return "勇者";
-    if (unit.id === "rihas") return "モンク";
-    if (unit.id === "sushia") return "黒魔法士";
-    if (unit.id === "finald") return "白魔法士";
-    return unit.role || "";
-  }
-
   function getStatusDisplayName(unit) {
     return STATUS_FULL_NAMES[unit.id] || unit.name;
+  }
+
+  function getStatusShortName(unit) {
+    if (!unit) {
+      return "";
+    }
+    if (unit.id === "finald" && typeof getPlayerFirstName === "function") {
+      return getPlayerFirstName();
+    }
+    return unit.name || unit.label || getStatusDisplayName(unit) || "";
   }
 
   function isLowHp(unit) {
@@ -1309,13 +1310,7 @@
   }
 
   function getUltimateOwnerShortName(unit) {
-    if (!unit) {
-      return "";
-    }
-    if (unit.id === "finald" && typeof getPlayerFirstName === "function") {
-      return getPlayerFirstName();
-    }
-    return unit.name || unit.label || getStatusDisplayName(unit) || "";
+    return getStatusShortName(unit);
   }
   function getUnitUltimatePanelEntry(unit) {
     if (!unit) {
@@ -1398,8 +1393,8 @@
 
     const mainTextColor = moodLocked || equipmentLocked ? "#ffe4e4" : "#102018";
     const subTextColor = moodLocked || equipmentLocked ? "#ffd0d0" : "#4c6758";
-    drawFittedText(skill ? skill.name : "必殺技", x + w / 2, y + h * 0.6, w - 10, 900, 11, 8, mainTextColor, "center");
-    drawFittedText(skill && skill.skillType ? skill.skillType : "必殺技", x + w / 2, y + h * 0.78, w - 10, 800, 10, 7, subTextColor, "center");
+    drawFittedText(skill ? skill.name : "必殺技", x + w / 2, y + h * 0.6, w - 10, 900, 14, 9, mainTextColor, "center");
+    drawFittedText(skill && skill.skillType ? skill.skillType : "必殺技", x + w / 2, y + h * 0.8, w - 10, 800, 12, 8, subTextColor, "center");
     drawSkillLevelBadge(x + w - 5, y + h - 5, entry.level || 0);
     drawUltimateStateBadge(x, y, w, h, available, moodLocked);
     if (equipmentLocked) {
@@ -1633,6 +1628,27 @@
     ctx.fillText(text, x, y);
   }
 
+  function drawOutlinedFittedText(text, x, y, maxWidth, weight, maxSize, minSize, color, strokeColor) {
+    const value = String(text || "");
+    let size = maxSize;
+    ctx.save();
+    do {
+      ctx.font = `${weight} ${size}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
+      if (ctx.measureText(value).width <= maxWidth || size <= minSize) {
+        break;
+      }
+      size -= 1;
+    } while (size > minSize);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = strokeColor;
+    ctx.strokeText(value, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(value, x, y);
+    ctx.restore();
+  }
+
   function drawLabeledBar(label, x, y, w, h, ratio, back, fill, options = {}) {
     const labelW = 26;
     const valueW = options.text ? clamp(w * 0.31, 48, 72) : 0;
@@ -1730,16 +1746,19 @@
       const shadowRatio = clamp(skill.cd / Math.max(0.1, skill.max), 0, 1);
       drawSkillCooldownShadow(sx, itemY, itemW, itemH, shadowRatio);
       drawSkillInputBadge(skill.input, sx + 8, itemY + 7, itemW - 16);
-      ctx.fillStyle = unavailable ? "#ffe4e4" : "#102018";
-      ctx.font = `800 ${itemW < 92 ? 11 : 12}px 'Segoe UI', 'Yu Gothic UI', sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = unavailable ? "rgba(40,12,12,0.7)" : "rgba(247,255,246,0.86)";
-      ctx.strokeText(skill.name, sx + itemW / 2, nameY);
-      ctx.fillText(skill.name, sx + itemW / 2, nameY);
+      drawOutlinedFittedText(
+        skill.name,
+        sx + itemW / 2,
+        nameY,
+        itemW - 10,
+        900,
+        itemW < 92 ? 14 : 15,
+        10,
+        unavailable ? "#ffe4e4" : "#102018",
+        unavailable ? "rgba(40,12,12,0.7)" : "rgba(247,255,246,0.86)"
+      );
       if (skill.skillType) {
-        drawFittedText(skill.skillType, sx + itemW / 2, typeY, itemW - 10, 800, itemW < 92 ? 9 : 10, 7, unavailable ? "#ffd0d0" : "#4c6758", "center");
+        drawFittedText(skill.skillType, sx + itemW / 2, typeY, itemW - 10, 800, itemW < 92 ? 11 : 12, 8, unavailable ? "#ffd0d0" : "#4c6758", "center");
       }
       drawSkillLevelBadge(sx + itemW - 5, itemY + itemH - 5, skill.level || 0);
       if (unavailable) {
