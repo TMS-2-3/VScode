@@ -1,0 +1,62 @@
+body {
+    margin : 0;
+    background-color:limegreen;/*ブラウザ自体の背景色指定*/
+
+}
+
+#map {
+    width: 300px;/*横幅の指定*/
+    height: 200px;/*高さの指定*/
+    position: relative;/*相対位置指定*/
+
+}
+
+#grid {
+    position: absolute;/*親を配置基準にする*/
+    width: 100%;/*横幅の指定*/
+    height: 100%;/*高さの指定*/
+
+}
+
+.x-line {
+    position: absolute;/*親を配置基準にする*/
+    width: 100%;/*横幅の指定*/
+    height: 1px;/*高さの指定*/
+    top: 5px;/*topの指定*/
+
+    /*background: repeating-linear-gradient(
+        90deg,
+        white 0px,
+        white 2px,
+        transparent 2px,
+        transparent 4px
+    );*/
+
+    background: repeating-linear-gradient(
+        90deg,
+        white 0px,
+        white 5px
+    );
+
+}
+
+.y-line {
+    position: absolute;/*親を配置基準にする*/
+    width: 1px;/*横幅の指定*/
+    height: 100%;/*高さの指定*/
+    left: 5px;/*leftの指定*/
+
+    /*background: repeating-linear-gradient(
+        180deg,
+        white 0px,
+        white 2px,
+        transparent 2px,
+        transparent 4px
+    );*/
+
+    background: repeating-linear-gradient(
+        180deg,
+        white 0px,
+        white 5px
+    );
+}
