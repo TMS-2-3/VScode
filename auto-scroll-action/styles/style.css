@@ -1,1 +1,43 @@
-/* Visual team's global styles live here. */
+:root {
+  color-scheme: dark;
+  background: #16141b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  background: #16141b;
+}
+
+#app {
+  position: relative;
+  width: min(100%, 1280px);
+  aspect-ratio: 16 / 9;
+  max-height: 100svh;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+
+#game-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
