@@ -52,3 +52,13 @@ body {
         white 5px
     );
 }
+
+.way-tile {
+    position: absolute;/*親を配置基準にする*/
+    width: 1px;/*横幅の指定*/
+    height: 1px;/*高さの指定*/
+    top: 0px;/*topの指定*/
+    left: 0px;/*leftの指定*/
+
+    background-color: black;/*背景色の指定*/
+}
