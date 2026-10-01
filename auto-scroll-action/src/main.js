@@ -10,7 +10,7 @@ if (!(canvas instanceof HTMLCanvasElement)) {
 }
 
 const lanes = createLaneManager();
-const player = createPlayerController();
+const player = createPlayerController(lanes);
 const renderer = createRenderer(canvas, lanes);
 
 function resizeGame() {

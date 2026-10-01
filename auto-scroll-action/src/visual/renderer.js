@@ -57,31 +57,22 @@ export function createRenderer(canvas, lanes) {
     const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
 
     if (playerImage?.complete && playerImage.naturalWidth > 0) {
-      const imageHeight = height * 0.09;
-      const imageWidth = imageHeight * (playerImage.naturalWidth / playerImage.naturalHeight);
-      context.drawImage(playerImage, footX - imageWidth / 2, footY - imageHeight, imageWidth, imageHeight);
+      context.drawImage(
+        playerImage,
+        footX - player.hitbox.width / 2,
+        footY - player.hitbox.height,
+        player.hitbox.width,
+        player.hitbox.height,
+      );
       return;
     }
 
-    drawFallbackPlayer(footX, footY, player.isDucking);
+    drawFallbackPlayer(footX, footY, player.hitbox);
   }
 
-  function drawFallbackPlayer(footX, footY, isDucking) {
-    const characterHeight = height * (isDucking ? 0.045 : 0.09);
-    const characterWidth = height * (isDucking ? 0.065 : 0.042);
-    const bodyTop = footY - characterHeight;
-
+  function drawFallbackPlayer(footX, footY, hitbox) {
     context.fillStyle = "#56b6a7";
-    context.fillRect(footX - characterWidth / 2, bodyTop + characterHeight * 0.38, characterWidth, characterHeight * 0.62);
-
-    context.fillStyle = "#f18a4b";
-    context.beginPath();
-    context.arc(footX, bodyTop + characterHeight * 0.23, characterWidth * 0.48, 0, Math.PI * 2);
-    context.fill();
-
-    context.fillStyle = "#312337";
-    context.fillRect(footX - characterWidth * 0.2, bodyTop + characterHeight * 0.2, characterWidth * 0.1, characterWidth * 0.1);
-    context.fillRect(footX + characterWidth * 0.1, bodyTop + characterHeight * 0.2, characterWidth * 0.1, characterWidth * 0.1);
+    context.fillRect(footX - hitbox.width / 2, footY - hitbox.height, hitbox.width, hitbox.height);
   }
 
   return {
