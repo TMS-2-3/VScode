@@ -24,17 +24,13 @@ body {
     height: 1px;/*高さの指定*/
     top: 5px;/*topの指定*/
 
-    /*background: repeating-linear-gradient(
+    background: repeating-linear-gradient(
         90deg,
         white 0px,
         white 2px,
         transparent 2px,
-        transparent 4px
-    );*/
-
-    background: repeating-linear-gradient(
-        90deg,
-        white 0px,
+        transparent 4px,
+        white 4px,
         white 5px
     );
 
@@ -46,17 +42,13 @@ body {
     height: 100%;/*高さの指定*/
     left: 5px;/*leftの指定*/
 
-    /*background: repeating-linear-gradient(
+    background: repeating-linear-gradient(
         180deg,
         white 0px,
         white 2px,
         transparent 2px,
-        transparent 4px
-    );*/
-
-    background: repeating-linear-gradient(
-        180deg,
-        white 0px,
+        transparent 4px,
+        white 4px,
         white 5px
     );
 }

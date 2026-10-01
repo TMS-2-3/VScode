@@ -8,8 +8,12 @@
   </head>
   <body>
     <main id="app">
-      <canvas id="game-canvas" aria-label="ゲーム画面"></canvas>
+      <canvas id="game-canvas" tabindex="-1" aria-label="ゲーム画面"></canvas>
       <section id="game-hud" aria-live="polite"></section>
+      <section id="title-screen" aria-labelledby="game-title">
+        <h1 id="game-title">横自動スクロールアクション</h1>
+        <button id="start-button" type="button">スタート</button>
+      </section>
     </main>
     <script type="module" src="./src/main.js"></script>
   </body>

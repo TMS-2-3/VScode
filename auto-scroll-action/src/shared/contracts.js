@@ -16,6 +16,12 @@ export const RUN_STATE = Object.freeze({
   GAME_OVER: "gameOver",
 });
 
+export const LANE_ENTITY_KIND = Object.freeze({
+  OBSTACLE: "obstacle",
+  COIN: "coin",
+  ITEM: "item",
+});
+
 export const OBSTACLE_TYPE = Object.freeze({
   DEFAULT: "default",
   DUCK: "duck",

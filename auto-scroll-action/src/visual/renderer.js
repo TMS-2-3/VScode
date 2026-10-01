@@ -1,4 +1,4 @@
-// Set an image path here when artwork is ready. Null values use the fallback drawings.
+// Set an image path here when artwork is ready. A null value uses the fallback drawing.
 const ASSET_PATHS = Object.freeze({
   player: null,
 });

@@ -41,3 +41,54 @@ body {
   inset: 0;
   pointer-events: none;
 }
+
+#title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 32px;
+  color: #26343a;
+  background: #b8e8ef;
+}
+
+#title-screen[hidden] {
+  display: none;
+}
+
+#game-title {
+  margin: 0;
+  font-family: sans-serif;
+  font-size: 40px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+#start-button {
+  min-width: 160px;
+  min-height: 52px;
+  padding: 10px 24px;
+  border: 2px solid #854823;
+  border-radius: 6px;
+  color: #201b18;
+  background: #dc853d;
+  font: 700 18px/1 sans-serif;
+  cursor: pointer;
+}
+
+#start-button:hover {
+  background: #ed9a53;
+}
+
+#start-button:focus-visible {
+  outline: 3px solid #26343a;
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  #game-title {
+    font-size: 24px;
+  }
+}
