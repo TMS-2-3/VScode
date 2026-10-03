@@ -60,5 +60,33 @@ body {
     top: 0px;/*topの指定*/
     left: 0px;/*leftの指定*/
 
-    background-color: black;/*背景色の指定*/
+    background-color: black;/*色の指定*/
+}
+
+.object {
+    position: absolute;/*親を配置基準にする*/
+    width: 1px;/*横幅の指定*/
+    height: 1px;/*高さの指定*/
+    top: 0px;/*topの指定*/
+    left: 0px;/*leftの指定*/
+
+    background-color: red;/*色の指定*/
+}
+
+#user {
+    position: absolute;/*親を配置基準にする*/
+    width: 1px;/*横幅の指定*/
+    height: 1px;/*高さの指定*/
+    top: 0px;/*topの指定*/
+    left: 0px;/*leftの指定*/
+
+    background-color: purple;/*色の指定*/
+}
+
+.route-tile {
+    position: absolute;/*親を配置基準にする*/
+    width: 1px;/*横幅の指定*/
+    height: 1px;/*高さの指定*/
+
+    background-color: blue;/*色の指定*/
 }
