@@ -3,6 +3,8 @@ for (let i = 0; i < object_array.length; i++) {
     object.className = "object";/*変数objectのクラス名をobjectにする*/
     object.style.top = object_array[i].y + "px";/*変数objectのtopをobject_array[i].y"px"にする*/
     object.style.left = object_array[i].x + "px";/*変数objectのleftをobject_array[i].x"px"にする*/
+    object.style.width = object_array[i].size_x + "px";/*変数objectのwidthをobject_array[i].size_x"px"にする*/
+    object.style.height = object_array[i].size_y + "px";/*変数objectのheightをobject_array[i].size_y"px"にする*/
     object.addEventListener("click", function() {/*クリックされたときの処理*/
         console.log("click test");
         search_route(object_array[i].goal_x, object_array[i].goal_y, function(route_data) {/*search_route関数を呼び出す*/

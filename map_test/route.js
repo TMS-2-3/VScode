@@ -1,4 +1,10 @@
 function search_route(goal_x, goal_y, callback) {
+
+    if (position_x < 0 || position_x >= map_array[0].length || position_y < 0 || position_y >= map_array.length) {
+        console.log("map_data_index_out_of_bounds");
+        return;
+    }
+
     let start_x;
     let start_y;
 
