@@ -6,7 +6,7 @@ for (let i = 0; i < object_array.length; i++) {
     object.style.width = object_array[i].size_x + "px";/*変数objectのwidthをobject_array[i].size_x"px"にする*/
     object.style.height = object_array[i].size_y + "px";/*変数objectのheightをobject_array[i].size_y"px"にする*/
     object.addEventListener("click", function() {/*クリックされたときの処理*/
-        console.log("click test");
+         console.log("click " + object_array[i].name);
         search_route(object_array[i].goal_x, object_array[i].goal_y, function(route_data) {/*search_route関数を呼び出す*/
             create_route(route_data);/*ルートを表示する*/
         });

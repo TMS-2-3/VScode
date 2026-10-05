@@ -1,5 +1,9 @@
-// Set an image path here when artwork is ready. A null value uses the fallback drawing.
+const BACKGROUND_SOURCE_GUIDES = [0, 0.315, 0.545, 0.8, 1];
+const BACKGROUND_TARGET_GUIDES = [0, 0.35, 0.6, 0.85, 1];
+
+// Set image paths here when artwork is ready. A null value uses the fallback drawing.
 const ASSET_PATHS = Object.freeze({
+  background: "./img/halloween-town-background-v6.png",
   player: null,
 });
 
@@ -10,6 +14,7 @@ export function createRenderer(canvas, lanes) {
     throw new Error("Canvas 2D context を作成できません。");
   }
 
+  const backgroundImage = loadImage(ASSET_PATHS.background);
   const playerImage = loadImage(ASSET_PATHS.player);
   let width = 0;
   let height = 0;
@@ -28,7 +33,6 @@ export function createRenderer(canvas, lanes) {
 
   function render(player) {
     drawBackground();
-    drawLanes();
     drawPlayer(player);
   }
 
@@ -36,24 +40,37 @@ export function createRenderer(canvas, lanes) {
     context.clearRect(0, 0, width, height);
     context.fillStyle = "#b8e8ef";
     context.fillRect(0, 0, width, height);
+
+    if (backgroundImage?.complete && backgroundImage.naturalWidth > 0) {
+      drawAlignedBackground();
+    }
   }
 
-  function drawLanes() {
-    const laneData = lanes.getSnapshot();
+  function drawAlignedBackground() {
+    for (let index = 0; index < BACKGROUND_SOURCE_GUIDES.length - 1; index += 1) {
+      const sourceY = Math.round(backgroundImage.naturalHeight * BACKGROUND_SOURCE_GUIDES[index]);
+      const sourceBottom = Math.round(
+        backgroundImage.naturalHeight * BACKGROUND_SOURCE_GUIDES[index + 1],
+      );
+      const targetY = Math.round(height * BACKGROUND_TARGET_GUIDES[index]);
+      const targetBottom = Math.round(height * BACKGROUND_TARGET_GUIDES[index + 1]);
 
-    for (const lane of laneData) {
-      context.strokeStyle = "#dc853d";
-      context.lineWidth = Math.max(3, height * 0.005);
-      context.lineCap = "round";
-      context.beginPath();
-      context.moveTo(lane.startX, lane.y);
-      context.lineTo(lane.endX, lane.y);
-      context.stroke();
+      context.drawImage(
+        backgroundImage,
+        0,
+        sourceY,
+        backgroundImage.naturalWidth,
+        sourceBottom - sourceY,
+        0,
+        targetY,
+        width,
+        targetBottom - targetY,
+      );
     }
   }
 
   function drawPlayer(player) {
-    const footX = width * 0.26;
+    const footX = width * 0.2;
     const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
 
     if (playerImage?.complete && playerImage.naturalWidth > 0) {

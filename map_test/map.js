@@ -7,6 +7,9 @@ for (let i = 0; i < map_array.length; i++) {
             tile.className = "way-tile";/*変数tileのクラス名をway-tileにする*/
             tile.style.top = i + "px";/*変数tileのtopをi"px"にする*/
             tile.style.left = j + "px";/*変数tileのleftをj"px"にする*/
+            tile.addEventListener("click", function() {/*クリックされたときの処理*/
+                console.log("Tile clicked:", j, i);/*クリックされたタイルの座標を表示する*/
+            });
             document.getElementById("map").appendChild(tile);/*mapを取得し、変数tileを子要素として追加する*/
         } 
     }
@@ -24,10 +27,9 @@ function create_route(route_data) {
     if (show_route) {
         route_delete();/*ルート表示中なら、ルートを削除する*/
     }
-    console.log("ルートデータ:", route_data);
     if (route_data != null) {
         show_route = true;/*ルート表示中かを判定する変数をtrueにする*/
-        for (let i = 0; i < route_data.length; i++) {
+        for (let i = 1; i < route_data.length; i++) {
          const route_tile = document.createElement("div");/*要素divを変数route_tileに作る*/
          route_tile.className = "route-tile";/*変数route_tileのクラス名をroute-tileにする*/
             route_tile.style.top = route_data[i].y + "px";/*変数route_tileのtopをroute_data[i].y"px"にする*/

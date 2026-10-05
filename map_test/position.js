@@ -29,7 +29,14 @@ console.log("現在緯度:", latitude);
 console.log("上端緯度:", map_top_position);
 console.log("下端緯度:", map_bottom_position);
 
-if (show_route && position_x === route_goal_x && position_y === route_goal_y) {
-    route_delete();
+if (show_route) {
+    if (position_x === route_goal_x && position_y === route_goal_y) {/*ゴールについたなら*/
+        route_delete();
+    }else {/*まだついていないなら*/
+        search_route(route_goal_x, route_goal_y, function(route_data) {/*ルートを再取得*/
+            create_route(route_data);/*ルートを表示*/
+        });
+    }
 }
+
 });
