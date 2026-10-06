@@ -2,6 +2,7 @@
 
 export const LANE_COUNT = 3;
 export const DEFAULT_LIVES = 1;
+export const PLAYER_SCREEN_X_RATIO = 0.2;
 
 export const PLAYER_ACTION = Object.freeze({
   DUCK: "duck",
@@ -23,17 +24,14 @@ export const LANE_ENTITY_KIND = Object.freeze({
 });
 
 export const OBSTACLE_TYPE = Object.freeze({
-  DEFAULT: "default",
-  DUCK: "duck",
+  LANE_BLOCKER: "laneBlocker",
   JUMP: "jump",
-  MOVING: "moving",
-  PROJECTILE: "projectile",
-  ENEMY: "enemy",
+  DUCK: "duck",
 });
 
 export const COLLECTIBLE_TYPE = Object.freeze({
   COIN: "coin",
-  STAR_COIN: "starCoin",
+  SPECIAL_COIN: "specialCoin",
   BARRIER: "barrier",
   SPEED_UP: "speedUp",
   SCORE_UP: "scoreUp",
