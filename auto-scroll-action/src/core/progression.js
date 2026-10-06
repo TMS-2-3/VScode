@@ -7,6 +7,7 @@ export function createProgression() {
   let scrollSpeedInLanes = BASE_SCROLL_SPEED_IN_LANES;
   let scrollSpeed = 0;
   let scrollAcceleration = 0;
+  let speedRatio = 1;
 
   function update(deltaSeconds, collectedCandyValue, laneGap) {
     const safeDeltaSeconds = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
@@ -19,6 +20,7 @@ export function createProgression() {
     );
     scrollSpeed = safeLaneGap * scrollSpeedInLanes;
     scrollAcceleration = safeLaneGap * accelerationInLanes;
+    speedRatio = scrollSpeedInLanes / BASE_SCROLL_SPEED_IN_LANES;
     const frameDistance = scrollSpeed * safeDeltaSeconds;
     traveledDistance += frameDistance;
 
@@ -26,6 +28,7 @@ export function createProgression() {
       frameDistance,
       scrollAcceleration,
       scrollSpeed,
+      speedRatio,
       traveledDistance,
     };
   }
@@ -35,10 +38,11 @@ export function createProgression() {
     scrollSpeedInLanes = BASE_SCROLL_SPEED_IN_LANES;
     scrollSpeed = 0;
     scrollAcceleration = 0;
+    speedRatio = 1;
   }
 
   return {
-    getSnapshot: () => ({ scrollAcceleration, scrollSpeed, traveledDistance }),
+    getSnapshot: () => ({ scrollAcceleration, scrollSpeed, speedRatio, traveledDistance }),
     reset,
     update,
   };

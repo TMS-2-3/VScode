@@ -68,12 +68,12 @@ function frame(currentTime) {
   const deltaSeconds = Math.min((currentTime - previousTime) / 1000, 0.05);
   previousTime = currentTime;
 
-  player.update(deltaSeconds);
   const movement = progression.update(
     deltaSeconds,
     coins.getCollectedCandyValue(),
     lanes.getLaneGap(),
   );
+  player.update(deltaSeconds, movement.speedRatio);
   coins.moveCoins(-movement.frameDistance);
   obstacles.moveObstacles(-movement.frameDistance);
   renderer.setBackgroundOffset(movement.traveledDistance);
