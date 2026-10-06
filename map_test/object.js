@@ -7,9 +7,13 @@ for (let i = 0; i < object_array.length; i++) {
     object.style.height = object_array[i].size_y + "px";/*変数objectのheightをobject_array[i].size_y"px"にする*/
     object.addEventListener("click", function() {/*クリックされたときの処理*/
          console.log("click " + object_array[i].name);
-        search_route(object_array[i].goal_x, object_array[i].goal_y, function(route_data) {/*search_route関数を呼び出す*/
-            create_route(route_data);/*ルートを表示する*/
-        });
+         if (position_x !== undefined || position_y !== undefined) {/*現在地取得済み*/
+            search_route(object_array[i].goal_x, object_array[i].goal_y, function(route_data) {/*search_route関数を呼び出す*/
+                create_route(route_data);/*ルートを表示する*/
+            });
+        }else {/*現在地未取得*/
+            console.log("現在地未習得")
+        }
     });
     document.getElementById("map").appendChild(object);/*mapを取得し、変数objectを子要素として追加する*/
 }
