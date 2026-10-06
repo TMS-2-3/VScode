@@ -8,7 +8,9 @@ body {
     width: 300px;/*横幅の指定*/
     height: 200px;/*高さの指定*/
     position: relative;/*相対位置指定*/
-    transform: scale(2);/*マップの拡大率指定*/
+
+    transform: scale(3);/*マップUIの拡大率指定*/
+
     background-image: url("img/map_ss.png");/*背景画像の指定*/
     background-size: 100% 100%;/*背景画像のサイズ指定*/
     background-repeat: no-repeat;/*背景画像の繰り返しオフ*/
@@ -78,6 +80,21 @@ body {
     left: 0px;/*leftの指定*/
 
     background-color: red;/*色の指定*/
+}
+
+.object-name-panel {
+    position: absolute;/*親を配置基準にする*/
+
+    border: 0.5px solid black;/*外枠の設定*/
+    background-color: white;/*色の指定*/
+    font-size: 3px;
+    padding: 1px 2px;/*余白サイズの指定*/
+    border-radius: 3px;/*角を丸くする*/
+    white-space: nowrap;/*改行しない*/
+
+    left: 50%;
+    bottom: 120%;
+    transform: translatex(-50%);/*位置の調整*/
 }
 
 #user {
