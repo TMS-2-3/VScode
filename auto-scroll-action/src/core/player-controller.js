@@ -53,17 +53,19 @@ export function createPlayerController(lanes) {
     if (jumpCount === 1) {
       jumpCount = 2;
 
+      const originLaneIndex = Math.round(jumpOriginLane);
       const isLateSecondJump =
         verticalSpeed < 0 && elevation <= lanes.getLaneGap() * LATE_SECOND_JUMP_RATIO;
+      const isTopLaneJump = originLaneIndex === 0;
 
-      if (isLateSecondJump) {
+      // 最上段では2回目も、1段ジャンプと同じ高さを上限にする。
+      if (isLateSecondJump || isTopLaneJump) {
         upperLandingLane = null;
         startJump(FIRST_JUMP_PEAK_RATIO);
         return;
       }
 
-      const originLaneIndex = Math.round(jumpOriginLane);
-      upperLandingLane = originLaneIndex > 0 ? originLaneIndex - 1 : null;
+      upperLandingLane = originLaneIndex - 1;
       startJump(DOUBLE_JUMP_PEAK_RATIO);
     }
   }

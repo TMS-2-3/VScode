@@ -8,6 +8,8 @@ import { COIN_DEFINITIONS } from "./coins.js";
 import { ITEM_DEFINITIONS } from "./items.js";
 import { OBSTACLE_DEFINITIONS } from "./obstacles.js";
 
+export { PLACEMENT_PATTERNS } from "./patterns.js";
+
 // A future spawn system can select definitions from these arrays.
 export const SPAWN_POOLS = {
   [LANE_ENTITY_KIND.OBSTACLE]: OBSTACLE_DEFINITIONS,
