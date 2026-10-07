@@ -5,6 +5,7 @@ import { createProgression } from "./core/progression.js";
 import { createCoinManager } from "./lane/coins.js";
 import { createLaneManager } from "./lane/lane-manager.js";
 import { createObstacleManager } from "./lane/obstacles.js";
+import { createObstacleSpawner } from "./lane/spawner.js";
 import { createHud } from "./visual/hud.js";
 import { createRenderer } from "./visual/renderer.js";
 
@@ -29,6 +30,7 @@ const lanes = createLaneManager();
 const player = createPlayerController(lanes);
 const coins = createCoinManager();
 const obstacles = createObstacleManager();
+const obstacleSpawner = createObstacleSpawner(obstacles, coins);
 const collisions = createCollisionSystem(lanes);
 const progression = createProgression();
 const hud = createHud(hudRoot);
@@ -55,6 +57,7 @@ function startGame() {
   }
 
   isStarted = true;
+  obstacleSpawner.reset();
   titleScreen.hidden = true;
   input = createInputController((action, isActive) => {
     player.handleAction(action, isActive);
@@ -76,12 +79,13 @@ function frame(currentTime) {
   player.update(deltaSeconds, movement.speedRatio);
   coins.moveCoins(-movement.frameDistance);
   obstacles.moveObstacles(-movement.frameDistance);
+  const viewportWidth = canvas.getBoundingClientRect().width;
+  obstacleSpawner.update(movement.traveledDistance, viewportWidth, lanes.getLaneGap());
   renderer.setBackgroundOffset(movement.traveledDistance);
 
   const playerSnapshot = player.getSnapshot();
   let coinSnapshot = coins.getSnapshot();
   const obstacleSnapshot = obstacles.getSnapshot();
-  const viewportWidth = canvas.getBoundingClientRect().width;
   const collectedCoinIds = collisions.findCollectedCoinIds(
     playerSnapshot,
     coinSnapshot,
