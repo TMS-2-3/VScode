@@ -1,4 +1,7 @@
-import { LANE_ENTITY_KIND } from "../shared/contracts.js";
+import {
+  COLLECTIBLE_TYPE,
+  LANE_ENTITY_KIND,
+} from "../shared/contracts.js";
 import { COIN_DEFINITIONS } from "./coins.js";
 import { ITEM_DEFINITIONS } from "./items.js";
 import { OBSTACLE_DEFINITIONS } from "./obstacles.js";
@@ -18,7 +21,16 @@ export const SPAWN_POOLS = {
   [LANE_ENTITY_KIND.ITEM]: ITEM_DEFINITIONS,
 };
 
-export function createObstacleSpawner(obstacleManager, coinManager) {
+export const INTER_PATTERN_ITEM_RULES = Object.freeze({
+  speedBoostChance: 0.25,
+});
+
+export function createObstacleSpawner(
+  obstacleManager,
+  coinManager,
+  itemManager = null,
+  random = Math.random,
+) {
   let nextSpawnDistance = null;
   let previousPatternId = null;
 
@@ -39,7 +51,7 @@ export function createObstacleSpawner(obstacleManager, coinManager) {
 
     while (nextSpawnDistance <= traveledDistance + viewportWidth) {
       const x = viewportWidth + nextSpawnDistance - traveledDistance;
-      const pattern = choosePlacementPattern(previousPatternId);
+      const pattern = choosePlacementPattern(previousPatternId, random);
       previousPatternId = pattern.id;
       pattern.objects.forEach((object) => {
         const objectX = x + object.distanceRatio * laneGap;
@@ -50,7 +62,19 @@ export function createObstacleSpawner(obstacleManager, coinManager) {
           coinManager.addCoin({ x: objectX, lane: object.lane, type: object.type });
         }
       });
-      nextSpawnDistance += getPatternSpacing(pattern, viewportWidth, laneGap);
+      const patternSpacing = getPatternSpacing(pattern, viewportWidth, laneGap);
+
+      if (itemManager && random() < INTER_PATTERN_ITEM_RULES.speedBoostChance) {
+        const patternEndX = x + pattern.lengthRatio * laneGap;
+        const nextPatternStartX = x + patternSpacing;
+
+        itemManager.addItem({
+          x: (patternEndX + nextPatternStartX) / 2,
+          type: COLLECTIBLE_TYPE.SPEED_UP,
+        });
+      }
+
+      nextSpawnDistance += patternSpacing;
     }
 
     obstacleManager.getSnapshot().forEach((obstacle) => {
@@ -63,6 +87,11 @@ export function createObstacleSpawner(obstacleManager, coinManager) {
         coinManager.removeCoin(coin.id);
       }
     });
+    itemManager?.getSnapshot().forEach((item) => {
+      if (item.x < -laneGap) {
+        itemManager.removeItem(item.id);
+      }
+    });
   }
 
   function reset() {
@@ -70,6 +99,7 @@ export function createObstacleSpawner(obstacleManager, coinManager) {
     previousPatternId = null;
     obstacleManager.reset();
     coinManager.reset();
+    itemManager?.reset();
   }
 
   return { reset, update };

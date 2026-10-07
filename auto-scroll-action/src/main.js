@@ -5,10 +5,11 @@ import { createInputController } from "./core/input-controller.js";
 import { createPlayerController } from "./core/player-controller.js";
 import { createProgression } from "./core/progression.js";
 import { createCoinManager } from "./lane/coins.js";
+import { createItemManager } from "./lane/items.js";
 import { createLaneManager } from "./lane/lane-manager.js";
 import { createObstacleManager } from "./lane/obstacles.js";
 import { createObstacleSpawner } from "./lane/spawner.js";
-import { PLAYER_ACTION } from "./shared/contracts.js";
+import { COLLECTIBLE_TYPE, PLAYER_ACTION } from "./shared/contracts.js";
 import { createHud } from "./visual/hud.js";
 import { createRenderer } from "./visual/renderer.js";
 
@@ -38,8 +39,9 @@ const game = createGameController();
 const lanes = createLaneManager();
 const player = createPlayerController(lanes);
 const coins = createCoinManager();
+const items = createItemManager();
 const obstacles = createObstacleManager();
-const obstacleSpawner = createObstacleSpawner(obstacles, coins);
+const obstacleSpawner = createObstacleSpawner(obstacles, coins, items);
 const collisions = createCollisionSystem(lanes);
 const progression = createProgression();
 const hud = createHud(hudRoot);
@@ -52,6 +54,7 @@ function resizeGame() {
   renderer.resize();
   renderer.render(player.getSnapshot(), {
     coins: coins.getSnapshot(),
+    items: items.getSnapshot(),
     obstacles: obstacles.getSnapshot(),
   });
 }
@@ -100,8 +103,13 @@ function frame(currentTime) {
     coins.getCollectedCandyValue(),
     lanes.getLaneGap(),
   );
-  player.update(deltaSeconds, movement.speedRatio);
+  player.update(
+    deltaSeconds,
+    movement.jumpTimeScale,
+    movement.speedRatio,
+  );
   coins.moveCoins(-movement.frameDistance);
+  items.updateItems(-movement.frameDistance, deltaSeconds);
   obstacles.moveObstacles(-movement.frameDistance);
   const viewportWidth = canvas.getBoundingClientRect().width;
   obstacleSpawner.update(movement.traveledDistance, viewportWidth, lanes.getLaneGap());
@@ -109,6 +117,7 @@ function frame(currentTime) {
 
   const playerSnapshot = player.getSnapshot();
   let coinSnapshot = coins.getSnapshot();
+  let itemSnapshot = items.getSnapshot();
   const obstacleSnapshot = obstacles.getSnapshot();
   const collectedCoinIds = collisions.findCollectedCoinIds(
     playerSnapshot,
@@ -120,6 +129,11 @@ function frame(currentTime) {
     obstacleSnapshot,
     viewportWidth,
   );
+  const triggeredItemIds = collisions.findTriggeredItemIds(
+    playerSnapshot,
+    itemSnapshot,
+    viewportWidth,
+  );
 
   if (collectedCoinIds.length > 0) {
     collectedCoinIds.forEach((id) => coins.collectCoin(id));
@@ -128,8 +142,20 @@ function frame(currentTime) {
     coinSnapshot = coins.getSnapshot();
   }
 
+  if (triggeredItemIds.length > 0) {
+    triggeredItemIds.forEach((id) => {
+      const triggeredItem = items.triggerItem(id, playerSnapshot.lanePosition);
+
+      if (triggeredItem?.type === COLLECTIBLE_TYPE.SPEED_UP) {
+        progression.activateSpeedBoost();
+      }
+    });
+    itemSnapshot = items.getSnapshot();
+  }
+
   renderer.render(playerSnapshot, {
     coins: coinSnapshot,
+    items: itemSnapshot,
     obstacles: obstacleSnapshot,
     hitObstacleIds,
   });

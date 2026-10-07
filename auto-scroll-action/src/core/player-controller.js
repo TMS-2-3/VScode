@@ -169,17 +169,28 @@ export function createPlayerController(lanes) {
     return false;
   }
 
-  function update(deltaSeconds, jumpTimeScale = 1) {
+  function update(
+    deltaSeconds,
+    jumpTimeScale = 1,
+    laneDropTimeScale = jumpTimeScale,
+  ) {
     if (jumpCount === 0) {
       return;
     }
+
+    const safeJumpTimeScale = Number.isFinite(jumpTimeScale)
+      ? Math.max(1, jumpTimeScale)
+      : 1;
+    const safeLaneDropTimeScale = Number.isFinite(laneDropTimeScale)
+      ? Math.max(1, laneDropTimeScale)
+      : 1;
 
     if (isDroppingLane) {
       const safeDeltaSeconds = Number.isFinite(deltaSeconds)
         ? Math.max(0, deltaSeconds)
         : 0;
       const laneGap = lanes.getLaneGap();
-      laneDropElapsedSeconds += safeDeltaSeconds;
+      laneDropElapsedSeconds += safeDeltaSeconds * safeLaneDropTimeScale;
       const linearProgress = Math.min(
         1,
         laneDropElapsedSeconds / LANE_DROP_DURATION_SECONDS,
@@ -202,9 +213,6 @@ export function createPlayerController(lanes) {
       return;
     }
 
-    const safeJumpTimeScale = Number.isFinite(jumpTimeScale)
-      ? Math.max(1, jumpTimeScale)
-      : 1;
     const jumpDeltaSeconds = deltaSeconds * safeJumpTimeScale;
     const wasAscending = verticalSpeed > 0;
     const activeGravity = wasAscending ? GRAVITY : GRAVITY * FALL_GRAVITY_MULTIPLIER;

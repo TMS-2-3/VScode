@@ -1,4 +1,8 @@
-import { PLAYER_SCREEN_X_RATIO } from "../shared/contracts.js";
+import {
+  COLLECTIBLE_TYPE,
+  PLAYER_SCREEN_X_RATIO,
+} from "../shared/contracts.js";
+import { getItemBounds } from "../lane/items.js";
 import { getObstacleBounds } from "../lane/obstacles.js";
 
 export function createCollisionSystem(lanes) {
@@ -18,9 +22,25 @@ export function createCollisionSystem(lanes) {
       .map((obstacle) => obstacle.id);
   }
 
+  function findTriggeredItemIds(player, items, viewportWidth) {
+    const playerBounds = getPlayerBounds(player, lanes, viewportWidth);
+    const playerX = viewportWidth * PLAYER_SCREEN_X_RATIO;
+
+    return items
+      .filter(
+        (item) =>
+          !item.isTriggered &&
+          (item.type === COLLECTIBLE_TYPE.SPEED_UP
+            ? item.x <= playerX
+            : rectanglesOverlap(playerBounds, getItemBounds(item, lanes))),
+      )
+      .map((item) => item.id);
+  }
+
   return {
     findCollectedCoinIds,
     findHitObstacleIds,
+    findTriggeredItemIds,
   };
 }
 

@@ -17,7 +17,7 @@ export const OBSTACLE_DEFINITIONS = [
     kind: LANE_ENTITY_KIND.OBSTACLE,
     type: OBSTACLE_TYPE.JUMP,
     widthRatio: 0.24,
-    heightRatio: 0.4,
+    heightRatio: 0.3,
     bottomOffsetRatio: 0,
   },
   {
