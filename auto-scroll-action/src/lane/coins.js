@@ -1,14 +1,31 @@
 import { COLLECTIBLE_TYPE, LANE_COUNT, LANE_ENTITY_KIND } from "../shared/contracts.js";
 
+const NORMAL_COIN_PROPERTIES = {
+  kind: LANE_ENTITY_KIND.COIN,
+  value: 1,
+  widthRatio: 0.16,
+  heightRatio: 0.16,
+  pickupRadiusRatio: 0.05,
+};
+
+// elevationRatioはレーン面からコイン中心までの高さ、pickupRadiusRatioは取得半径です。
+// どちらも現在のレーン間隔を1とした割合で指定します。
 // Add an entry here when a new coin type becomes available for spawning.
 export const COIN_DEFINITIONS = [
   {
-    kind: LANE_ENTITY_KIND.COIN,
-    type: COLLECTIBLE_TYPE.COIN,
-    value: 1,
-    widthRatio: 0.16,
-    heightRatio: 0.16,
-    bottomOffsetRatio: 0.12,
+    ...NORMAL_COIN_PROPERTIES,
+    type: COLLECTIBLE_TYPE.COIN_HIGH,
+    elevationRatio: 0.7,
+  },
+  {
+    ...NORMAL_COIN_PROPERTIES,
+    type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+    elevationRatio: 0.39,
+  },
+  {
+    ...NORMAL_COIN_PROPERTIES,
+    type: COLLECTIBLE_TYPE.COIN_LOW,
+    elevationRatio: 0.1,
   },
   {
     kind: LANE_ENTITY_KIND.COIN,
@@ -16,7 +33,8 @@ export const COIN_DEFINITIONS = [
     value: 30,
     widthRatio: 0.26,
     heightRatio: 0.3,
-    bottomOffsetRatio: 0.08,
+    elevationRatio: 0.23,
+    pickupRadiusRatio: 0.13,
   },
 ];
 
@@ -29,7 +47,7 @@ export function createCoinManager() {
   let nextId = 1;
   let collectedCandyValue = 0;
 
-  function addCoin({ x, lane, type = COLLECTIBLE_TYPE.COIN } = {}) {
+  function addCoin({ x, lane, type = COLLECTIBLE_TYPE.COIN_LOW } = {}) {
     const definition = COIN_DEFINITIONS_BY_TYPE.get(type);
 
     if (!definition) {

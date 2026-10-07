@@ -177,8 +177,7 @@ export function createRenderer(canvas, lanes) {
     coins.forEach((coin) => {
       const coinWidth = laneGap * coin.widthRatio;
       const coinHeight = laneGap * coin.heightRatio;
-      const bottomY = lanes.getLaneY(coin.lane) - laneGap * coin.bottomOffsetRatio;
-      const centerY = bottomY - coinHeight / 2;
+      const centerY = lanes.getLaneY(coin.lane) - laneGap * coin.elevationRatio;
       const isSpecialCoin = coin.type === COLLECTIBLE_TYPE.SPECIAL_COIN;
       const coinArtwork = isSpecialCoin ? specialCoinImage : coinImage;
 

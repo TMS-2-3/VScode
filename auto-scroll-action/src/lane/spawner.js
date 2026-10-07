@@ -26,7 +26,9 @@ export function createObstacleSpawner(obstacleManager, coinManager) {
     if (
       !Number.isFinite(traveledDistance) ||
       !Number.isFinite(viewportWidth) ||
-      viewportWidth <= 0
+      viewportWidth <= 0 ||
+      !Number.isFinite(laneGap) ||
+      laneGap <= 0
     ) {
       return;
     }
