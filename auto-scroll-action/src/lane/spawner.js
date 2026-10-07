@@ -11,7 +11,7 @@ import {
 
 export { PLACEMENT_PATTERNS };
 
-// A future spawn system can select definitions from these arrays.
+// 各種類の定義を一覧で参照したいときに使います。
 export const SPAWN_POOLS = {
   [LANE_ENTITY_KIND.OBSTACLE]: OBSTACLE_DEFINITIONS,
   [LANE_ENTITY_KIND.COIN]: COIN_DEFINITIONS,

@@ -203,15 +203,54 @@ export function createRenderer(canvas, lanes) {
   }
 
   function drawFallbackCandy(centerX, centerY, candyWidth, candyHeight) {
-    const size = Math.min(candyWidth, candyHeight) * 0.8;
+    const bodyHalfWidth = candyWidth * 0.28;
+    const bodyHalfHeight = candyHeight * 0.32;
+    const outlineWidth = Math.max(1, candyHeight * 0.06);
 
     context.save();
     context.translate(centerX, centerY);
-    context.fillStyle = "#ffd43b";
-    context.fillRect(-size / 2, -size / 2, size, size);
-    context.lineWidth = Math.max(1.5, size * 0.08);
-    context.strokeStyle = "#5d4322";
-    context.strokeRect(-size / 2, -size / 2, size, size);
+    context.rotate(-Math.PI / 18);
+    context.lineJoin = "round";
+    context.lineWidth = outlineWidth;
+    context.strokeStyle = "#4b2740";
+    context.fillStyle = "#ff9b55";
+
+    context.beginPath();
+    context.moveTo(-bodyHalfWidth, -bodyHalfHeight * 0.72);
+    context.lineTo(-candyWidth / 2, -candyHeight * 0.34);
+    context.lineTo(-candyWidth * 0.44, candyHeight * 0.35);
+    context.lineTo(-bodyHalfWidth, bodyHalfHeight * 0.72);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(bodyHalfWidth, -bodyHalfHeight * 0.72);
+    context.lineTo(candyWidth / 2, -candyHeight * 0.34);
+    context.lineTo(candyWidth * 0.44, candyHeight * 0.35);
+    context.lineTo(bodyHalfWidth, bodyHalfHeight * 0.72);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    context.fillStyle = "#ee5f72";
+    context.beginPath();
+    context.ellipse(0, 0, bodyHalfWidth, bodyHalfHeight, 0, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+
+    context.fillStyle = "rgba(255, 244, 210, 0.82)";
+    context.beginPath();
+    context.ellipse(
+      -bodyHalfWidth * 0.3,
+      -bodyHalfHeight * 0.3,
+      bodyHalfWidth * 0.2,
+      bodyHalfHeight * 0.18,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    context.fill();
     context.restore();
   }
 
