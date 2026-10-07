@@ -9,7 +9,12 @@
   <body>
     <main id="app">
       <canvas id="game-canvas" tabindex="-1" aria-label="ゲーム画面"></canvas>
-      <section id="game-hud" aria-live="polite"></section>
+      <section id="game-hud" aria-live="polite">
+        <div id="candy-counter">
+          <span>集めたお菓子</span>
+          <output id="candy-count">0</output>
+        </div>
+      </section>
       <section id="title-screen" aria-labelledby="game-title">
         <h1 id="game-title">横自動スクロールアクション</h1>
         <button id="start-button" type="button">スタート</button>

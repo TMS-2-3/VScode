@@ -39,7 +39,33 @@ body {
 #game-hud {
   position: absolute;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
+}
+
+#candy-counter {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  min-width: 156px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 216, 107, 0.7);
+  border-radius: 6px;
+  color: #fff4d2;
+  background: rgba(28, 20, 42, 0.82);
+  font: 700 15px/1.2 sans-serif;
+}
+
+#candy-count {
+  min-width: 2ch;
+  color: #ffd86b;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 #title-screen {
@@ -90,5 +116,18 @@ body {
 @media (max-width: 520px) {
   #game-title {
     font-size: 24px;
+  }
+
+  #candy-counter {
+    right: 10px;
+    bottom: 10px;
+    min-width: 138px;
+    gap: 10px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  #candy-count {
+    font-size: 18px;
   }
 }

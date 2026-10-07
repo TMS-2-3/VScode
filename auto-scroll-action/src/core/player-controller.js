@@ -68,15 +68,21 @@ export function createPlayerController(lanes) {
     }
   }
 
-  function update(deltaSeconds) {
+  function update(deltaSeconds, jumpTimeScale = 1) {
     if (jumpCount === 0) {
       lanePosition += (targetLane - lanePosition) * Math.min(1, LANE_CHANGE_SPEED * deltaSeconds);
       return;
     }
 
+    const safeJumpTimeScale = Number.isFinite(jumpTimeScale)
+      ? Math.max(1, jumpTimeScale)
+      : 1;
+    const jumpDeltaSeconds = deltaSeconds * safeJumpTimeScale;
     const wasAscending = verticalSpeed > 0;
-    elevation += verticalSpeed * deltaSeconds - (GRAVITY * deltaSeconds * deltaSeconds) / 2;
-    verticalSpeed -= GRAVITY * deltaSeconds;
+    elevation +=
+      verticalSpeed * jumpDeltaSeconds -
+      (GRAVITY * jumpDeltaSeconds * jumpDeltaSeconds) / 2;
+    verticalSpeed -= GRAVITY * jumpDeltaSeconds;
 
     if (wasAscending && elevation >= jumpPeak) {
       elevation = jumpPeak;
