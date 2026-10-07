@@ -41,4 +41,124 @@ export const PLACEMENT_PATTERNS = [
       },
     ],
   },
+  // 上と下のレーンを障害物でふさぎます。
+  {
+    id: "upper-and-lower",
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 0,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+    ],
+  },
+  // 上と中央のレーンを障害物でふさぎます。
+  {
+    id: "upper-and-middle",
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 0,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+    ],
+  },
+  // 中央と下のレーンを障害物でふさぎます。
+  {
+    id: "middle-and-lower",
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 0,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+    ],
+  },
+  // 上のレーンだけに障害物を置きます。
+  {
+    id: "upper-only",
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+    ],
+  },
+  // 中央のレーンだけに障害物を置きます。
+  {
+    id: "middle-only",
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+    ],
+  },
+  // 下のレーンだけに障害物を置きます。
+  {
+    id: "lower-only",
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+    ],
+  },
 ];
+
+// ランダム配置時の初期位置と、パターン間隔を設定します。
+export const PATTERN_RULES = {
+  initialOffsetViewportRatio: 0.56,
+  minimumSpacingViewportRatio: 0.36,
+  minimumSpacingLaneGapRatio: 0.72,
+};
+
+export function choosePlacementPattern(previousPatternId, random = Math.random) {
+  const candidates = PLACEMENT_PATTERNS.filter((pattern) => pattern.id !== previousPatternId);
+  return candidates[Math.floor(random() * candidates.length)];
+}
+
+export function getInitialSpawnDistance(traveledDistance, viewportWidth) {
+  return traveledDistance - viewportWidth * PATTERN_RULES.initialOffsetViewportRatio;
+}
+
+export function getPatternSpacing(pattern, viewportWidth, laneGap) {
+  return Math.max(
+    viewportWidth * PATTERN_RULES.minimumSpacingViewportRatio,
+    laneGap * Math.max(pattern.lengthRatio, PATTERN_RULES.minimumSpacingLaneGapRatio),
+  );
+}
+
