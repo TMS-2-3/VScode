@@ -4,12 +4,19 @@ body {
 
 }
 
+#map-operate {
+    width: 100vw;/*横幅の指定*/
+    height: 100vh;/*高さの指定*/
+    position: relative;/*相対位置指定*/
+    overflow: hidden;/*範囲外の表示オフ*/
+}
+
 #map {
     width: 300px;/*横幅の指定*/
     height: 200px;/*高さの指定*/
     position: relative;/*相対位置指定*/
 
-    transform: scale(3);/*マップUIの拡大率指定*/
+    transform: scale(4);/*マップUIの拡大率指定*/
 
     background-image: url("img/map_ss.png");/*背景画像の指定*/
     background-size: 100% 100%;/*背景画像のサイズ指定*/
