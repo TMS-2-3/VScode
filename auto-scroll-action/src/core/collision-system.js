@@ -1,4 +1,8 @@
-import { PLAYER_SCREEN_X_RATIO } from "../shared/contracts.js";
+import {
+  COLLECTIBLE_TYPE,
+  PLAYER_SCREEN_X_RATIO,
+} from "../shared/contracts.js";
+import { getItemBounds } from "../lane/items.js";
 import { getObstacleBounds } from "../lane/obstacles.js";
 
 export function createCollisionSystem(lanes) {
@@ -6,7 +10,7 @@ export function createCollisionSystem(lanes) {
     const playerBounds = getPlayerBounds(player, lanes, viewportWidth);
 
     return coins
-      .filter((coin) => rectanglesOverlap(playerBounds, getCoinBounds(coin, lanes)))
+      .filter((coin) => circleOverlapsRectangle(getCoinCircle(coin, lanes), playerBounds))
       .map((coin) => coin.id);
   }
 
@@ -18,9 +22,25 @@ export function createCollisionSystem(lanes) {
       .map((obstacle) => obstacle.id);
   }
 
+  function findTriggeredItemIds(player, items, viewportWidth) {
+    const playerBounds = getPlayerBounds(player, lanes, viewportWidth);
+    const playerX = viewportWidth * PLAYER_SCREEN_X_RATIO;
+
+    return items
+      .filter(
+        (item) =>
+          !item.isTriggered &&
+          (item.type === COLLECTIBLE_TYPE.SPEED_UP
+            ? item.x <= playerX
+            : rectanglesOverlap(playerBounds, getItemBounds(item, lanes))),
+      )
+      .map((item) => item.id);
+  }
+
   return {
     findCollectedCoinIds,
     findHitObstacleIds,
+    findTriggeredItemIds,
   };
 }
 
@@ -36,18 +56,23 @@ function getPlayerBounds(player, lanes, viewportWidth) {
   };
 }
 
-function getCoinBounds(coin, lanes) {
+function getCoinCircle(coin, lanes) {
   const laneGap = lanes.getLaneGap();
-  const width = laneGap * coin.widthRatio;
-  const height = laneGap * coin.heightRatio;
-  const bottom = lanes.getLaneY(coin.lane) - laneGap * coin.bottomOffsetRatio;
 
   return {
-    left: coin.x - width / 2,
-    right: coin.x + width / 2,
-    top: bottom - height,
-    bottom,
+    x: coin.x,
+    y: lanes.getLaneY(coin.lane) - laneGap * coin.elevationRatio,
+    radius: laneGap * coin.pickupRadiusRatio,
   };
+}
+
+function circleOverlapsRectangle(circle, rectangle) {
+  const closestX = Math.max(rectangle.left, Math.min(circle.x, rectangle.right));
+  const closestY = Math.max(rectangle.top, Math.min(circle.y, rectangle.bottom));
+  const distanceX = circle.x - closestX;
+  const distanceY = circle.y - closestY;
+
+  return distanceX * distanceX + distanceY * distanceY < circle.radius * circle.radius;
 }
 
 function rectanglesOverlap(first, second) {

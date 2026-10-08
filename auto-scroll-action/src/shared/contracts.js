@@ -3,6 +3,8 @@
 export const LANE_COUNT = 3;
 export const DEFAULT_LIVES = 1;
 export const PLAYER_SCREEN_X_RATIO = 0.2;
+// 1 gameplay unit equals the standing player's hitbox width.
+export const GAMEPLAY_UNIT_IN_LANE_GAPS = 0.17;
 
 export const PLAYER_ACTION = Object.freeze({
   DUCK: "duck",
@@ -30,7 +32,9 @@ export const OBSTACLE_TYPE = Object.freeze({
 });
 
 export const COLLECTIBLE_TYPE = Object.freeze({
-  COIN: "coin",
+  COIN_HIGH: "coinHigh",
+  COIN_MIDDLE: "coinMiddle",
+  COIN_LOW: "coinLow",
   SPECIAL_COIN: "specialCoin",
   BARRIER: "barrier",
   SPEED_UP: "speedUp",
