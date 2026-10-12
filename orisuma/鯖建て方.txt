@@ -1,0 +1,12 @@
+vscodeにて　Ctrl + @　でターミナルを開く
+
+cd C:\VScode\orisuma
+node server.js
+↑を貼ってエンター
+
+もう一つターミナルを開いて
+ipconfig
+を貼ってipv4アドレスを確認
+
+http://"ipv4アドレス":3000
+をブラウザで入力
