@@ -2,7 +2,7 @@
 const map = document.getElementById("map");/*mapを取得する*/
 let x_size = map.clientWidth;/*mapの横幅を取得する*/
 let y_size = map.clientHeight;/*mapの縦幅を取得する*/
-let dis = 5;/*10pxごとに線を表示*/
+let dis = parseFloat(getComputedStyle(document.querySelector(".x-line")).top);/*代表してx-lineのtopを取得する*/
 
 for (let i = dis * 2; i < y_size; i += dis) {
     const x = document.createElement("div");/*要素divを変数xに作る*/
