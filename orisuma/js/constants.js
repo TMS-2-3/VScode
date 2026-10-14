@@ -1,6 +1,7 @@
 import {
   CHARACTER_DEFINITIONS,
   DEFAULT_RULES as SHARED_DEFAULT_RULES,
+  PLAYER_LIMITS as SHARED_PLAYER_LIMITS,
   SHORT_HOP as SHARED_SHORT_HOP,
   SHORT_HOP_MODES as SHARED_SHORT_HOP_MODES,
   STAGES as SHARED_STAGES,
@@ -62,7 +63,16 @@ export const MODE_LABELS = {
   practice: "練習"
 };
 
-export const PLAYER_COLORS = ["#27d5b5", "#ffcf5a", "#6aa8ff", "#ff7676"];
+export const PLAYER_COLORS = [
+  "#27d5b5",
+  "#ffcf5a",
+  "#6aa8ff",
+  "#ff7676",
+  "#ff72bd",
+  "#95df62",
+  "#ff914d",
+  "#a98cff"
+];
 
 export const CHARACTER_ASSETS = Object.fromEntries(Object.values(CHARACTER_DEFINITIONS).map(character => [
   character.id,
@@ -75,6 +85,8 @@ export const CHARACTER_ASSETS = Object.fromEntries(Object.values(CHARACTER_DEFIN
 ]));
 
 export const DEFAULT_RULES = SHARED_DEFAULT_RULES;
+
+export const PLAYER_LIMITS = SHARED_PLAYER_LIMITS;
 
 export const SHORT_HOP = SHARED_SHORT_HOP;
 

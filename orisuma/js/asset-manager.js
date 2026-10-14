@@ -1,5 +1,5 @@
-import { CHARACTER_ASSETS, PLAYER_COLORS, STAGES } from "./constants.js";
-import { getMainPlatformTriangle, getNovaBackAirMotion, getNovaDownSmashMotion, getNovaDownTiltMotion, getNovaForwardAirMotion, getNovaSideSmashMotion, getNovaSideTiltMotion, getNovaUpAirMotion, getNovaUpSmashMotion, getNovaUpTiltMotion } from "./battle-data.js";
+import { CHARACTER_ASSETS, PLAYER_COLORS, PLAYER_LIMITS, STAGES } from "./constants.js";
+import { NOVA_CHARGE, NOVA_FINAL_SMASH, NOVA_RECOVERY, getMainPlatformTriangle, getMove, getNovaBackAirMotion, getNovaChargeMotion, getNovaDownSmashMotion, getNovaDownTiltMotion, getNovaFinalSmashMotion, getNovaForwardAirMotion, getNovaGrabMotion, getNovaNeutralSpecialMotion, getNovaRecoveryMotion, getScaledStageDefinition, getNovaSideSmashMotion, getNovaSideSpecialMotion, getNovaSideTiltMotion, getNovaThrowMotion, getNovaUpAirMotion, getNovaUpSmashMotion, getNovaUpTiltMotion } from "./battle-data.js";
 import { createRenderCanvas, roundRect } from "./utils.js";
 
 export const FIGHTER_POSE_FRAMES = Object.freeze({
@@ -14,6 +14,21 @@ export const FIGHTER_POSE_FRAMES = Object.freeze({
   smashUp: 14,
   smashDownCharge: 1,
   smashDown: 12,
+  grab: 8,
+  dashGrab: 10,
+  pivotGrab: 10,
+  grabHold: 1,
+  pummel: 7,
+  throwForward: 10,
+  throwBack: 13,
+  throwUp: 10,
+  throwDown: 13,
+  specialNeutral: 10,
+  specialSide: 14,
+  specialUp: 10,
+  specialFall: 1,
+  novaCharge: 12,
+  finalSmash: 16,
   dashAttack: 7,
   airNeutral: 8,
   airForward: 9,
@@ -41,15 +56,16 @@ export class AssetManager {
 
   preload(manifest) {
     const normalized = this.normalizeManifest(manifest);
-    const key = `${normalized.stage}|${normalized.characters.join(",")}`;
+    const stage = getScaledStageDefinition(normalized.stage, normalized.playerCount);
+    const key = `${normalized.stage}:${stage.scale}|${normalized.characters.join(",")}|${normalized.colorIndices.join(",")}`;
     if (this.manifests.has(key)) {
       this.lastManifestKey = key;
       return;
     }
 
-    this.getStageLayer(STAGES[normalized.stage], normalized.stage);
+    this.getStageLayer(stage, normalized.stage);
     for (const characterId of normalized.characters) {
-      for (let colorIndex = 0; colorIndex < PLAYER_COLORS.length; colorIndex += 1) {
+      for (const colorIndex of normalized.colorIndices) {
         for (const [pose, frameCount] of Object.entries(FIGHTER_POSE_FRAMES)) {
           for (let frame = 0; frame < frameCount; frame += 1) {
             this.getFighterSprite(characterId, colorIndex, pose, frame);
@@ -68,23 +84,39 @@ export class AssetManager {
     const characters = Array.isArray(source.characters) && source.characters.length
       ? source.characters
       : ["nova"];
+    const requestedColors = Array.isArray(source.colorIndices) && source.colorIndices.length
+      ? source.colorIndices
+      : [0];
+    const playerCount = Math.max(
+      PLAYER_LIMITS.min,
+      Math.min(PLAYER_LIMITS.max, Math.round(Number(source.playerCount) || PLAYER_LIMITS.min))
+    );
+    const colorIndices = Array.from(new Set(requestedColors.map(Number)))
+      .filter(index => Number.isInteger(index) && index >= 0 && index < PLAYER_COLORS.length)
+      .sort((a, b) => a - b);
     return {
       stage,
-      characters: Array.from(new Set(characters.map(id => CHARACTER_ASSETS[id] ? id : "nova"))).sort()
+      playerCount,
+      characters: Array.from(new Set(characters.map(id => CHARACTER_ASSETS[id] ? id : "nova"))).sort(),
+      colorIndices: colorIndices.length ? colorIndices : [0]
     };
   }
 
   manifestFromSnapshot(snapshot) {
     return {
       stage: snapshot && snapshot.rules ? snapshot.rules.stage : "battlefield",
+      playerCount: snapshot && Array.isArray(snapshot.fighters) ? snapshot.fighters.length : 2,
       characters: snapshot && Array.isArray(snapshot.fighters)
         ? snapshot.fighters.map(fighter => fighter.characterId || "nova")
-        : ["nova"]
+        : ["nova"],
+      colorIndices: snapshot && Array.isArray(snapshot.fighters)
+        ? snapshot.fighters.map(fighter => fighter.colorIndex || 0)
+        : [0]
     };
   }
 
   getStageLayer(stage, stageId) {
-    const key = stageId || stage.id || "battlefield";
+    const key = `${stageId || stage.id || "battlefield"}:${Number(stage?.scale) || 1}`;
     if (!this.stageLayers.has(key)) {
       this.stageLayers.set(key, this.createStageLayer(stage, key));
     }
@@ -188,18 +220,24 @@ export class AssetManager {
   }
 
   createFighterSprite(characterId, colorIndex, pose, frame) {
-    const canvas = createRenderCanvas(144, 144);
+    const widePose = ["grab", "dashGrab", "pivotGrab", "grabHold", "pummel", "throwForward", "throwBack", "throwUp", "throwDown", "specialSide"].includes(pose);
+    const spriteSize = widePose ? 240 : 144;
+    const center = spriteSize / 2;
+    const canvas = createRenderCanvas(spriteSize, spriteSize);
     const ctx = canvas.getContext("2d");
     const color = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
-    ctx.translate(72, 72);
+    ctx.translate(center, center);
     this.drawNovaSprite(ctx, color, pose, frame);
-    return { canvas, cx: 72, cy: 72, pose, frame };
+    return { canvas, cx: center, cy: center, pose, frame };
   }
 
   drawNovaSprite(ctx, accent, pose, frame) {
-    const active = pose === "attack" || pose.startsWith("jab") || pose.startsWith("smash") || pose === "dashAttack" || pose === "airNeutral" || pose === "airForward" || pose === "airBack" || pose === "airUp" || pose === "side" || pose === "up" || pose === "down" || pose === "getupAttack";
+    const grabPose = ["grab", "dashGrab", "pivotGrab", "grabHold", "pummel"].includes(pose);
+    const throwPose = ["throwForward", "throwBack", "throwUp", "throwDown"].includes(pose);
+    const specialPose = ["specialNeutral", "specialSide", "specialUp", "specialFall", "novaCharge", "finalSmash"].includes(pose);
+    const active = pose === "attack" || pose.startsWith("jab") || pose.startsWith("smash") || grabPose || throwPose || specialPose || pose === "dashAttack" || pose === "airNeutral" || pose === "airForward" || pose === "airBack" || pose === "airUp" || pose === "side" || pose === "up" || pose === "down" || pose === "getupAttack";
     const runSwing = pose === "run" ? Math.sin(frame / FIGHTER_POSE_FRAMES.run * Math.PI * 2) : 0;
-    const poseProgress = pose.startsWith("jab") || pose.startsWith("smash") || pose === "dashAttack" || pose === "airNeutral" || pose === "airForward" || pose === "airBack" || pose === "airUp" || pose === "side" || pose === "up" || pose === "down" || pose === "getupAttack" || pose === "downed"
+    const poseProgress = pose.startsWith("jab") || pose.startsWith("smash") || grabPose || throwPose || specialPose || pose === "dashAttack" || pose === "airNeutral" || pose === "airForward" || pose === "airBack" || pose === "airUp" || pose === "side" || pose === "up" || pose === "down" || pose === "getupAttack" || pose === "downed"
       ? frame / Math.max(1, FIGHTER_POSE_FRAMES[pose] - 1)
       : runSwing;
     const limbPose = this.getNovaLimbPose(pose, poseProgress);
@@ -286,9 +324,11 @@ export class AssetManager {
       backwardPunch: limbPose.rearArmBackward,
       reachScale: limbPose.rearArmReach
     });
-    this.drawNovaArm(ctx, 19, limbPose.frontArmRootY ?? -13, limbPose.frontArm, armor, accent, true, {
-      reachScale: limbPose.frontArmReach
-    });
+    if (limbPose.frontArmVisible !== false) {
+      this.drawNovaArm(ctx, 19, limbPose.frontArmRootY ?? -13, limbPose.frontArm, armor, accent, true, {
+        reachScale: limbPose.frontArmReach
+      });
+    }
 
     // Neck and head shell.
     ctx.fillStyle = "#101820";
@@ -418,6 +458,62 @@ export class AssetManager {
         frontArmRootY: downSmash.frontArmRootY,
         thruster: downSmash.force * 4
       };
+    }
+    if (["grab", "dashGrab", "pivotGrab", "grabHold", "pummel"].includes(pose)) {
+      const variant = pose === "dashGrab" ? "dash" : pose === "pivotGrab" ? "pivot" : "standing";
+      const holding = pose === "grabHold" || pose === "pummel";
+      const grab = getNovaGrabMotion(holding ? 1 : progress, variant, holding, pose === "pummel" ? progress : 0);
+      return {
+        rearLeg: grab.rearLeg,
+        frontLeg: grab.frontLeg,
+        rearArm: grab.rearArm,
+        rearArmReach: grab.rearArmReach,
+        rearArmForward: grab.rearArmForward,
+        rearArmRootY: grab.rearArmRootY,
+        frontArm: grab.frontArm,
+        frontArmReach: grab.frontArmReach,
+        frontArmRootY: grab.frontArmRootY,
+        thruster: grab.force * 3
+      };
+    }
+    if (["throwForward", "throwBack", "throwUp", "throwDown"].includes(pose)) {
+      const variant = pose.slice("throw".length).toLowerCase();
+      const move = getNovaThrowMotion(variant, progress * getMove("nova", pose).total);
+      return {
+        rearLeg: move.rearLeg,
+        frontLeg: move.frontLeg,
+        rearArm: move.rearArm,
+        rearArmReach: move.rearArmReach,
+        rearArmForward: move.rearArmForward,
+        rearArmRootY: move.rearArmRootY,
+        frontArm: move.frontArm,
+        frontArmReach: move.frontArmReach,
+        frontArmRootY: move.frontArmRootY,
+        thruster: move.force * 2
+      };
+    }
+    if (pose === "specialNeutral") {
+      const motion = getNovaNeutralSpecialMotion(progress * getMove("nova", pose).total);
+      return { ...motion, thruster: motion.force * 2 };
+    }
+    if (pose === "specialSide") {
+      const motion = getNovaSideSpecialMotion(progress * getMove("nova", pose).total);
+      return { ...motion, thruster: motion.force * 4 };
+    }
+    if (pose === "specialUp" || pose === "specialFall") {
+      const motion = getNovaRecoveryMotion(
+        progress * NOVA_RECOVERY.thrustDuration,
+        pose === "specialUp" ? "thrust" : "fall"
+      );
+      return { ...motion, thruster: motion.force * 10 };
+    }
+    if (pose === "novaCharge") {
+      const motion = getNovaChargeMotion(progress);
+      return { ...motion, thruster: motion.force * 2 };
+    }
+    if (pose === "finalSmash") {
+      const motion = getNovaFinalSmashMotion(progress * NOVA_FINAL_SMASH.totalDuration);
+      return { ...motion, thruster: motion.transform * 6 };
     }
     if (pose === "dashAttack") {
       const commit = progress <= 2 / 3

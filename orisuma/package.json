@@ -6,7 +6,8 @@
   "description": "Local network platform fighter prototype.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --watch --watch-preserve-output server.js",
+    "start:once": "node server.js",
     "test": "node --test --test-isolation=none"
   }
 }

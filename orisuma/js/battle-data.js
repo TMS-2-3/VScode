@@ -108,15 +108,38 @@ export const NOVA_MOVE_MOTION = {
   upAirRecoveryDuration: 60 / 60
 };
 
+export const NOVA_FINAL_SMASH = Object.freeze({
+  transformDuration: 0.55,
+  speechDuration: 1.2,
+  punchStart: 1.75,
+  punchTravelDuration: 0.18,
+  punchAt: 1.93,
+  punchActiveDuration: 0.16,
+  recoveryDuration: 0.52,
+  totalDuration: 2.61,
+  normalArmLength: 34,
+  loadedArmLength: 60,
+  maxArmLength: 178,
+  normalArmThickness: 16,
+  maxArmThickness: NOVA_BODY_SIZE.height * 1.08,
+  hitbox: Object.freeze({
+    offsetX: 107,
+    offsetY: -58,
+    width: 190,
+    height: 84
+  })
+});
+
 export const FINAL_SMASH = {
   maxGauge: 100,
   dealtGainPerDamage: 0.3,
   takenGainPerDamage: 0.5,
   fullGaugeAfterKo: 98,
   neutralInputThreshold: 0.35,
-  defaultActiveDuration: 1,
-  punchAt: 0.6,
-  punchActiveDuration: 0.16
+  defaultActiveDuration: NOVA_FINAL_SMASH.totalDuration,
+  punchStart: NOVA_FINAL_SMASH.punchStart,
+  punchAt: NOVA_FINAL_SMASH.punchAt,
+  punchActiveDuration: NOVA_FINAL_SMASH.punchActiveDuration
 };
 
 export const LEDGE = {
@@ -133,6 +156,7 @@ export const LEDGE = {
   rollDistanceMultiplier: 1.2,
   rollDuration: 0.42,
   jumpSpeedMultiplier: 1.3,
+  jumpInvuln: 0.4,
   dropSpeed: 130,
   cooldown: 0.38,
   invuln: 0.45,
@@ -173,13 +197,14 @@ export const DODGE = {
 export const SHIELD = {
   max: 60,
   regen: 8.5,
-  holdDrain: 4.2,
+  holdDrain: 7.56,
+  hitDrainPause: 0.5,
   minSize: 28,
   maxSize: 48,
   hitBase: 4,
   hitScale: 1.15,
   stunScale: 0.018,
-  breakStun: 2.45,
+  breakStun: 5,
   breakLaunchY: -520,
   perfectWindow: 5 / 60,
   perfectFlash: 0.18,
@@ -203,6 +228,30 @@ export const GRAB = {
     pivot: { startup: 0.16, active: 0.11, total: 0.58, offsetX: 24, offsetY: -38, w: 76, h: 54, velocityScale: 0.45 }
   }
 };
+
+export const NOVA_GRAB_MOTION = Object.freeze({
+  frontShoulderX: 19,
+  frontShoulderY: -13,
+  frontArmLength: 36,
+  holdReach: 1.64,
+  targetInset: 4,
+  pummelDuration: 0.2,
+  pummelRearReach: 3.15,
+  variantReach: Object.freeze({
+    standing: 1.64,
+    dash: 2.17,
+    pivot: 2.25
+  })
+});
+
+export const NOVA_THROW_MOTION = Object.freeze({
+  forwardReleaseAt: 0.17,
+  backTossAt: 0.13,
+  backReleaseAt: 0.31,
+  upReleaseAt: 0.2,
+  downTransferAt: 0.13,
+  downReleaseAt: 0.35
+});
 
 export const KNOCKBACK = {
   diMaxRadians: 18 * Math.PI / 180,
@@ -270,7 +319,11 @@ export const MOVEMENT = {
   jumpDurationMultiplier: 1.2,
   fastFallStartVy: -60,
   airControlWhenLaunched: 0.18,
-  hitstunFriction: 0.992
+  hitstunFriction: 0.992,
+  aerialAttackControl: Object.freeze({
+    airUp: Object.freeze({ accelerationScale: 0.3, maxSpeedScale: 0.55 }),
+    airDown: Object.freeze({ accelerationScale: 0.35, maxSpeedScale: 0.8 })
+  })
 };
 
 export const SHORT_HOP_MODES = Object.freeze({
@@ -300,6 +353,16 @@ export const TIME_LIMIT = {
   max: 900,
   step: 10
 };
+
+export const PLAYER_LIMITS = Object.freeze({ min: 2, max: 8 });
+
+export const STAGE_SCALE_BY_PLAYER_COUNT = Object.freeze({
+  4: 1.2,
+  5: 1.5,
+  6: 1.8,
+  7: 2,
+  8: 2.3
+});
 
 export const DEFAULT_RULES = {
   mode: "stock",
@@ -341,7 +404,11 @@ export const STAGES = {
       [300, 410],
       [980, 410],
       [520, 410],
-      [760, 410]
+      [760, 410],
+      [410, 410],
+      [870, 410],
+      [610, 410],
+      [670, 410]
     ],
     platforms: [
       { x: 240, y: 500, w: 800, h: 28, depth: MAIN_PLATFORM_DEPTH, shape: "invertedTriangle", type: "main" }
@@ -355,7 +422,11 @@ export const STAGES = {
       [300, 410],
       [980, 410],
       [475, 330],
-      [805, 330]
+      [805, 330],
+      [520, 410],
+      [760, 410],
+      [365, 330],
+      [915, 330]
     ],
     platforms: [
       { x: 240, y: 510, w: 800, h: 28, depth: MAIN_PLATFORM_DEPTH, shape: "invertedTriangle", type: "main" },
@@ -371,7 +442,11 @@ export const STAGES = {
       [300, 410],
       [980, 410],
       [475, 315],
-      [805, 315]
+      [805, 315],
+      [520, 410],
+      [760, 410],
+      [365, 315],
+      [915, 315]
     ],
     platforms: [
       { x: 240, y: 510, w: 800, h: 28, depth: MAIN_PLATFORM_DEPTH, shape: "invertedTriangle", type: "main" },
@@ -385,6 +460,42 @@ export const STAGES = {
 
 export function getStageDefinition(stageId = DEFAULT_RULES.stage) {
   return STAGES[stageId] || STAGES[DEFAULT_RULES.stage] || STAGES.battlefield;
+}
+
+export function getStageScaleForPlayerCount(playerCount = PLAYER_LIMITS.min) {
+  const count = Math.max(PLAYER_LIMITS.min, Math.min(PLAYER_LIMITS.max, Math.round(Number(playerCount) || 0)));
+  return STAGE_SCALE_BY_PLAYER_COUNT[count] || 1;
+}
+
+export function getScaledStageDefinition(stageId = DEFAULT_RULES.stage, playerCount = PLAYER_LIMITS.min) {
+  const stage = getStageDefinition(stageId);
+  const scale = getStageScaleForPlayerCount(playerCount);
+  const mainPlatform = stage.platforms.find(platform => platform.type === "main") || stage.platforms[0];
+  const anchorX = mainPlatform.x + mainPlatform.w / 2;
+  const scaleX = value => anchorX + (value - anchorX) * scale;
+  const mainRight = mainPlatform.x + mainPlatform.w;
+  const blastLeftGap = mainPlatform.x - stage.blast.left;
+  const blastRightGap = stage.blast.right - mainRight;
+  const scaledMainLeft = scaleX(mainPlatform.x);
+  const scaledMainRight = scaleX(mainRight);
+
+  return {
+    ...stage,
+    scale,
+    playerCount: Math.max(PLAYER_LIMITS.min, Math.min(PLAYER_LIMITS.max, Math.round(Number(playerCount) || 0))),
+    spawn: stage.spawn.map(([x, y]) => [scaleX(x), y]),
+    platforms: stage.platforms.map(platform => ({
+      ...platform,
+      x: scaleX(platform.x),
+      w: platform.w * scale
+    })),
+    blast: {
+      left: scaledMainLeft - blastLeftGap,
+      right: scaledMainRight + blastRightGap,
+      top: stage.blast.top,
+      bottom: stage.blast.bottom
+    }
+  };
 }
 
 const NOVA_JAB_ONE = {
@@ -416,7 +527,7 @@ const NOVA_MOVES = {
     label: "弱3",
     total: 0.437,
     velocityScale: 0.4,
-    hits: [{ id: "finish", start: 0.07, duration: 0.08, damage: 5, hpDamage: 5, baseKnockback: 190, knockbackGrowth: 3.8, angle: 40, hitlag: 0.055, shieldDamage: 7.5, mirror: true, offsetX: 34, offsetY: -44, w: 60, h: 38 }]
+    hits: [{ id: "finish", start: 0.07, duration: 0.08, damage: 5, hpDamage: 5, baseKnockback: 300, knockbackGrowth: 4, angle: 40, hitlag: 0.055, shieldDamage: 7.5, mirror: true, offsetX: 34, offsetY: -44, w: 60, h: 38 }]
   },
   dashAttack: {
     id: "dashAttack",
@@ -439,7 +550,7 @@ const NOVA_MOVES = {
     label: "横強攻撃",
     total: 0.34,
     velocityScale: 0.62,
-    hits: [{ id: "arm", start: 0.08, duration: 0.1, damage: 10, hpDamage: 10, baseKnockback: 340, knockbackGrowth: 4.2, angle: 60, hitlag: 0.07, shieldDamage: 14, mirror: true, offsetX: 48, offsetY: -43, w: 96, h: 38 }]
+    hits: [{ id: "arm", start: 0.08, duration: 0.1, damage: 10, hpDamage: 10, baseKnockback: 340, knockbackGrowth: 5, angle: 60, hitlag: 0.07, shieldDamage: 14, mirror: true, offsetX: 48, offsetY: -43, w: 96, h: 38 }]
   },
   up: {
     id: "up",
@@ -447,7 +558,7 @@ const NOVA_MOVES = {
     total: 0.58,
     velocityScale: 0.5,
     hits: [
-      { id: "spin1", start: 0.1, duration: 0.07, damage: 5, hpDamage: 5, baseKnockback: 70, knockbackGrowth: 0.7, angle: 90, hitlag: 0.04, shieldDamage: 6.5, mirror: true, offsetX: 0, offsetY: -96, w: 112, h: 46 },
+      { id: "spin1", start: 0.1, duration: 0.07, damage: 5, hpDamage: 5, baseKnockback: 540, knockbackGrowth: 0, angle: 135, hitlag: 0.04, shieldDamage: 6.5, mirror: true, offsetX: 0, offsetY: -96, w: 112, h: 46 },
       { id: "spin2", start: 0.2, duration: 0.09, damage: 8, hpDamage: 8, baseKnockback: 175, knockbackGrowth: 8.4, angle: 90, hitlag: 0.07, shieldDamage: 11, mirror: true, offsetX: 0, offsetY: -100, w: 122, h: 52 }
     ]
   },
@@ -456,7 +567,7 @@ const NOVA_MOVES = {
     label: "下強攻撃",
     total: 0.31,
     velocityScale: 0.55,
-    hits: [{ id: "flame", start: 0.07, duration: 0.1, damage: 8, hpDamage: 8, baseKnockback: 175, knockbackGrowth: 0.8, angle: 100, hitlag: 0.05, shieldDamage: 11, mirror: true, offsetX: 0, offsetY: 4, w: 154, h: 35 }]
+    hits: [{ id: "flame", start: 0.07, duration: 0.1, damage: 8, hpDamage: 8, baseKnockback: 350, knockbackGrowth: 0.8, angle: 100, hitlag: 0.05, shieldDamage: 11, mirror: true, offsetX: 0, offsetY: 4, w: 154, h: 35 }]
   },
   airNeutral: {
     id: "airNeutral",
@@ -464,7 +575,7 @@ const NOVA_MOVES = {
     total: 0.42,
     landingLag: 0.14,
     velocityScale: 0.92,
-    hits: [{ id: "shock", start: 0.07, duration: 0.16, damage: 7, hpDamage: 7, baseKnockback: 330, knockbackGrowth: 7, angle: 30, hitlag: 0.065, shieldDamage: 10, shape: "circle", radius: NOVA_BODY_SIZE.height * 0.7 * 1.3, mirror: true, offsetX: 0, offsetY: 0, clankType: "aerial" }]
+    hits: [{ id: "shock", start: 0.07, duration: 0.16, damage: 7, hpDamage: 7, baseKnockback: 330, knockbackGrowth: 5, angle: 30, hitlag: 0.065, shieldDamage: 10, shape: "circle", radius: NOVA_BODY_SIZE.height * 0.7 * 1.3, mirror: true, offsetX: 0, offsetY: 0, clankType: "aerial" }]
   },
   airForward: {
     id: "airForward",
@@ -472,7 +583,7 @@ const NOVA_MOVES = {
     total: 0.39,
     landingLag: 0.12,
     velocityScale: 0.88,
-    hits: [{ id: "swing", start: 0.09, duration: 0.09, damage: 4, hpDamage: 4, baseKnockback: 160, knockbackGrowth: 10.5, angle: 50, hitlag: 0.05, shieldDamage: 6, mirror: true, offsetX: 39, offsetY: -65, w: 74, h: 62, clankType: "aerial" }]
+    hits: [{ id: "swing", start: 0.09, duration: 0.09, damage: 4, hpDamage: 4, baseKnockback: 160, knockbackGrowth: 10, angle: 50, hitlag: 0.05, shieldDamage: 6, mirror: true, offsetX: 39, offsetY: -65, w: 74, h: 62, clankType: "aerial" }]
   },
   airBack: {
     id: "airBack",
@@ -485,7 +596,7 @@ const NOVA_MOVES = {
       { id: "flame1", start: 0.11, duration: 0.045, damage: 2, hpDamage: 2, baseKnockback: 45, knockbackGrowth: 0.4, angle: 10, hitlag: 0.025, shieldDamage: 2.8, mirror: true, flameLength: 82, flameThickness: 26, clankType: "aerial" },
       { id: "flame2", start: 0.17, duration: 0.045, damage: 2, hpDamage: 2, baseKnockback: 45, knockbackGrowth: 0.4, angle: 10, hitlag: 0.025, shieldDamage: 2.8, mirror: true, flameLength: 92, flameThickness: 28, clankType: "aerial" },
       { id: "flame3", start: 0.23, duration: 0.045, damage: 2, hpDamage: 2, baseKnockback: 45, knockbackGrowth: 0.4, angle: 10, hitlag: 0.025, shieldDamage: 2.8, mirror: true, flameLength: 102, flameThickness: 30, clankType: "aerial" },
-      { id: "finish", start: 0.31, duration: 0.08, requiresContact: true, damage: 14, hpDamage: 14, baseKnockback: 440, knockbackGrowth: 4.8, angle: 10, hitlag: 0.12, shieldDamage: 20, mirror: true, flameLength: 120, flameThickness: 42, clankType: "aerial" }
+      { id: "finish", start: 0.31, duration: 0.08, requiresContact: true, damage: 14, hpDamage: 14, baseKnockback: 390, knockbackGrowth: 8, angle: 10, hitlag: 0.12, shieldDamage: 20, mirror: true, flameLength: 120, flameThickness: 42, clankType: "aerial" }
     ]
   },
   airUp: {
@@ -577,7 +688,7 @@ const NOVA_MOVES = {
     jumpHeightRatio: NOVA_MOVE_MOTION.downSmashJumpHeightRatio,
     endsOnLanding: true,
     preservesGroundJump: true,
-    hits: [{ id: "split", start: NOVA_MOVE_MOTION.downSmashImpulseAt, duration: 0.12, damage: 16, hpDamage: 16, baseKnockback: 300, knockbackGrowth: 5.5, angle: 0, hitlag: 0.115, shieldDamage: 23, mirror: true, offsetX: 0, offsetY: 0, w: NOVA_DOWN_SMASH_EXPLOSION.width, h: 38 }]
+    hits: [{ id: "split", start: NOVA_MOVE_MOTION.downSmashImpulseAt, duration: 0.12, damage: 16, hpDamage: 16, baseKnockback: 300, knockbackGrowth: 5.5, angle: 10, hitlag: 0.115, shieldDamage: 23, mirror: true, offsetX: 0, offsetY: 0, w: NOVA_DOWN_SMASH_EXPLOSION.width, h: 38 }]
   },
   specialNeutral: {
     id: "specialNeutral",
@@ -699,7 +810,7 @@ const NOVA_MOVES = {
       { id: "flame1", start: 0.13, damage: 2, hpDamage: 2, noLaunch: true, hitlag: 0.025 },
       { id: "flame2", start: 0.2, damage: 2, hpDamage: 2, noLaunch: true, hitlag: 0.025 },
       { id: "flame3", start: 0.27, damage: 2, hpDamage: 2, noLaunch: true, hitlag: 0.025 },
-      { id: "finish", start: 0.35, damage: 4, hpDamage: 4, baseKnockback: 365, knockbackGrowth: 4.5, angle: 50, hitlag: 0.08 }
+      { id: "finish", start: 0.35, damage: 4, hpDamage: 4, baseKnockback: 365, knockbackGrowth: 4.5, angle: 130, hitlag: 0.08 }
     ]
   },
   finalPunch: {
@@ -716,10 +827,10 @@ const NOVA_MOVES = {
     hitstunMultiplier: 1.15,
     beatsShield: true,
     mirror: true,
-    offsetX: 107,
-    offsetY: -65,
-    w: 190,
-    h: 130
+    offsetX: NOVA_FINAL_SMASH.hitbox.offsetX,
+    offsetY: NOVA_FINAL_SMASH.hitbox.offsetY,
+    w: NOVA_FINAL_SMASH.hitbox.width,
+    h: NOVA_FINAL_SMASH.hitbox.height
   },
   getupAttack: {
     id: "getupAttack",
@@ -779,8 +890,8 @@ const NOVA_MOVES = {
         duration: 0.16,
         damage: 6.5,
         hpDamage: 6.5,
-        baseKnockback: 310,
-        knockbackGrowth: 4.2,
+        baseKnockback: 370,
+        knockbackGrowth: 4,
         angle: 30,
         hitlag: 0.065,
         shieldDamage: 9,
@@ -797,8 +908,8 @@ const NOVA_MOVES = {
         duration: 0.16,
         damage: 6.5,
         hpDamage: 6.5,
-        baseKnockback: 310,
-        knockbackGrowth: 4.2,
+        baseKnockback: 370,
+        knockbackGrowth: 4,
         angle: 30,
         hitlag: 0.065,
         shieldDamage: 9,
@@ -1102,6 +1213,7 @@ export function updateCoreTimers(fighter, dt) {
   fighter.dodgeInvuln = Math.max(0, (fighter.dodgeInvuln || 0) - dt);
   fighter.hitstun = Math.max(0, (fighter.hitstun || 0) - dt);
   fighter.shieldStun = Math.max(0, (fighter.shieldStun || 0) - dt);
+  fighter.shieldDrainPause = Math.max(0, (fighter.shieldDrainPause || 0) - dt);
   fighter.shieldReleaseLag = Math.max(0, (fighter.shieldReleaseLag || 0) - dt);
   fighter.clankLag = Math.max(0, (fighter.clankLag || 0) - dt);
   fighter.actionLock = Math.max(0, (fighter.actionLock || 0) - dt);
@@ -1129,7 +1241,9 @@ export function updateShieldState(fighter, input = {}, dt = 0) {
   fighter.shieldHp = clamp(fighter.shieldHp ?? fighter.shieldMax, 0, fighter.shieldMax);
 
   if (fighter.shield) {
-    fighter.shieldHp = Math.max(0, fighter.shieldHp - SHIELD.holdDrain * dt);
+    if ((fighter.shieldDrainPause || 0) <= 0) {
+      fighter.shieldHp = Math.max(0, fighter.shieldHp - SHIELD.holdDrain * dt);
+    }
     if (fighter.shieldHp <= 0) {
       breakShield(fighter);
       return "shieldBreak";
@@ -1148,6 +1262,7 @@ export function applyShieldDamage(fighter, move) {
   const damage = move.shieldDamage ?? (SHIELD.hitBase + move.damage * SHIELD.hitScale);
   fighter.shieldHp = Math.max(0, fighter.shieldHp - damage);
   fighter.shieldStun = Math.max(fighter.shieldStun || 0, damage * SHIELD.stunScale);
+  fighter.shieldDrainPause = Math.max(fighter.shieldDrainPause || 0, SHIELD.hitDrainPause);
 
   if (fighter.shieldHp > 0) return { broken: false, damage };
   breakShield(fighter);
@@ -1159,6 +1274,7 @@ export function breakShield(fighter) {
   clearDodge(fighter);
   fighter.shield = false;
   fighter.shieldReleaseLag = 0;
+  fighter.shieldDrainPause = 0;
   fighter.perfectShieldWindow = 0;
   fighter.perfectShieldFlash = 0;
   fighter.shieldHp = 0;
@@ -1180,6 +1296,7 @@ export function resetShield(fighter) {
   fighter.shield = false;
   fighter.shieldStun = 0;
   fighter.shieldReleaseLag = 0;
+  fighter.shieldDrainPause = 0;
   fighter.perfectShieldWindow = 0;
   fighter.perfectShieldFlash = 0;
 }
@@ -1200,6 +1317,7 @@ export function applyPerfectShield(defender, attacker, move = {}) {
   defender.perfectShieldFlash = SHIELD.perfectFlash;
   defender.shieldStun = 0;
   defender.shieldReleaseLag = 0;
+  defender.shieldDrainPause = Math.max(defender.shieldDrainPause || 0, SHIELD.hitDrainPause);
   defender.hitstun = 0;
   defender.hitlag = Math.max(defender.hitlag || 0, SHIELD.perfectDefenderFreeze);
   attacker.hitlag = Math.max(attacker.hitlag || 0, SHIELD.perfectAttackerFreeze, move.hitlag || 0);
@@ -1218,9 +1336,19 @@ export function applyHitlagSdi(fighter, input = {}, dt = 0, stage = null) {
   fighter.x += vector.x * amount;
   fighter.y += vector.y * amount;
   if (stage) {
+    const launchState = {
+      vx: fighter.vx,
+      vy: fighter.vy,
+      onGround: fighter.onGround,
+      jumps: fighter.jumps,
+      hasAirDodged: fighter.hasAirDodged,
+      jumpArcActive: fighter.jumpArcActive,
+      ledge: fighter.ledge
+    };
     resolveStageCollision(stage, fighter, prevX, prevY, input, {
       ignoreLandingVelocity: true
     });
+    Object.assign(fighter, launchState);
   }
 }
 
@@ -1297,7 +1425,8 @@ export function resolveImpactAfterCollision(fighter, collision, input = {}) {
     return collision.landed ? "land" : null;
   }
 
-  const teched = fighter.techWindow > 0 && impactSpeed <= TECH.maxSpeed;
+  const teched = fighter.techWindow > 0 &&
+    impactSpeed <= TECH.maxSpeed && totalImpactSpeed <= TECH.maxSpeed;
   if (teched) {
     const lag = surface === "ground"
       ? TECH.groundLag
@@ -1524,6 +1653,7 @@ export function updateLedgeHang(fighter, input = {}, jumpPressed = false, attack
     releaseLedge(fighter);
     fighter.vx = 0;
     fighter.vy = fighter.stats.airJumpSpeed / MOVEMENT.jumpDurationMultiplier * LEDGE.jumpSpeedMultiplier;
+    fighter.invuln = LEDGE.jumpInvuln;
     fighter.jumpArcActive = true;
     fighter.jumps = Math.max(0, fighter.maxJumps - 1);
     return "jump";
@@ -1855,6 +1985,411 @@ export function getNovaDownSmashMotion(progress, charging = false) {
     offsetX: 0,
     offsetY: 0,
     rotation: 0
+  };
+}
+
+export function getNovaGrabMotion(progress, variant = "standing", holding = false, pummelProgress = 0) {
+  const value = clamp(Number(progress) || 0, 0, 1);
+  const pummelValue = clamp(Number(pummelProgress) || 0, 0, 1);
+  const ease = amount => amount * amount * (3 - 2 * amount);
+  const interpolate = (from, to, amount) => from + (to - from) * amount;
+  const safeVariant = NOVA_GRAB_MOTION.variantReach[variant] ? variant : "standing";
+  const maxReach = NOVA_GRAB_MOTION.variantReach[safeVariant];
+
+  if (holding) {
+    const strike = Math.sin(pummelValue * Math.PI);
+    return {
+      force: strike,
+      rearLeg: 0.12 + strike * 0.12,
+      frontLeg: -0.12 - strike * 0.15,
+      rearArm: interpolate(0.12, -0.03, strike),
+      rearArmReach: interpolate(1, NOVA_GRAB_MOTION.pummelRearReach, strike),
+      rearArmForward: strike > 0.02,
+      rearArmRootY: -13,
+      frontArm: 0,
+      frontArmReach: NOVA_GRAB_MOTION.holdReach,
+      frontArmRootY: NOVA_GRAB_MOTION.frontShoulderY,
+      offsetX: strike * 2,
+      offsetY: 0,
+      rotation: strike * 0.035
+    };
+  }
+
+  let extension = 0;
+  if (value < 0.3) extension = ease(value / 0.3);
+  else if (value < 0.55) extension = 1;
+  else extension = 1 - ease((value - 0.55) / 0.45);
+  const variantLean = safeVariant === "dash" ? 1 : safeVariant === "pivot" ? 0.72 : 0.35;
+  return {
+    force: extension,
+    rearLeg: 0.04 + extension * 0.18 * variantLean,
+    frontLeg: -0.04 - extension * 0.22 * variantLean,
+    rearArm: 0.12 + extension * 0.12,
+    rearArmReach: 1,
+    rearArmForward: false,
+    rearArmRootY: -13,
+    frontArm: interpolate(1.2, 0, extension),
+    frontArmReach: interpolate(1, maxReach, extension),
+    frontArmRootY: NOVA_GRAB_MOTION.frontShoulderY,
+    offsetX: extension * 4 * variantLean,
+    offsetY: extension * variantLean,
+    rotation: extension * 0.055 * variantLean
+  };
+}
+
+export function getNovaGrabbedFighterOffset(targetWidth = NOVA_BODY_SIZE.width) {
+  const width = Math.max(0, Number(targetWidth) || NOVA_BODY_SIZE.width);
+  const handX = NOVA_GRAB_MOTION.frontShoulderX +
+    NOVA_GRAB_MOTION.frontArmLength * NOVA_GRAB_MOTION.holdReach;
+  return {
+    x: handX + width / 2 - NOVA_GRAB_MOTION.targetInset,
+    y: 0
+  };
+}
+
+function novaThrowVariant(variant) {
+  return ["forward", "back", "up", "down"].includes(variant) ? variant : "forward";
+}
+
+function novaThrowMoveId(variant) {
+  const safeVariant = novaThrowVariant(variant);
+  return `throw${safeVariant[0].toUpperCase()}${safeVariant.slice(1)}`;
+}
+
+function novaThrowProgress(variant, actionTime) {
+  const move = getMove("nova", novaThrowMoveId(variant));
+  return clamp((Number(actionTime) || 0) / Math.max(1 / 60, move.total || 1), 0, 1);
+}
+
+function novaThrowArmToPoint(rootX, rootY, pointX, pointY, baseLength) {
+  const distanceX = pointX - rootX;
+  const distanceY = pointY - rootY;
+  return {
+    angle: Math.atan2(distanceY, distanceX),
+    reach: Math.max(0.8, Math.hypot(distanceX, distanceY) / baseLength)
+  };
+}
+
+export function getNovaThrowTargetOffset(variant, actionTime, targetWidth = NOVA_BODY_SIZE.width) {
+  const safeVariant = novaThrowVariant(variant);
+  const time = Math.max(0, Number(actionTime) || 0);
+  const hold = getNovaGrabbedFighterOffset(targetWidth);
+  const ease = amount => {
+    const value = clamp(amount, 0, 1);
+    return value * value * (3 - 2 * value);
+  };
+  const interpolate = (from, to, amount) => from + (to - from) * amount;
+  const mixPoint = (from, to, amount) => ({
+    x: interpolate(from.x, to.x, amount),
+    y: interpolate(from.y, to.y, amount)
+  });
+
+  if (safeVariant === "forward") {
+    const releaseAt = NOVA_THROW_MOTION.forwardReleaseAt;
+    const phase = clamp(time / releaseAt, 0, 1);
+    const drawnBack = { x: 22, y: -24 };
+    if (phase < 0.42) return mixPoint(hold, drawnBack, ease(phase / 0.42));
+    return mixPoint(drawnBack, { x: 116, y: -8 }, ease((phase - 0.42) / 0.58));
+  }
+
+  if (safeVariant === "back") {
+    const phase = ease(time / NOVA_THROW_MOTION.backTossAt);
+    const control = { x: 4, y: -68 };
+    const end = { x: -76, y: -4 };
+    const inverse = 1 - phase;
+    return {
+      x: inverse * inverse * hold.x + 2 * inverse * phase * control.x + phase * phase * end.x,
+      y: inverse * inverse * hold.y + 2 * inverse * phase * control.y + phase * phase * end.y
+    };
+  }
+
+  if (safeVariant === "up") {
+    const phase = ease(time / NOVA_THROW_MOTION.upReleaseAt);
+    return mixPoint(hold, { x: 0, y: -84 }, phase);
+  }
+
+  const phase = ease(time / NOVA_THROW_MOTION.downTransferAt);
+  return mixPoint(hold, { x: 4, y: 34 }, phase);
+}
+
+export function getNovaThrowMotion(variant, actionTime) {
+  const safeVariant = novaThrowVariant(variant);
+  const time = Math.max(0, Number(actionTime) || 0);
+  const progress = novaThrowProgress(safeVariant, time);
+  const target = getNovaThrowTargetOffset(safeVariant, time);
+  const ease = amount => {
+    const value = clamp(amount, 0, 1);
+    return value * value * (3 - 2 * value);
+  };
+  const interpolate = (from, to, amount) => from + (to - from) * amount;
+  const pose = {
+    force: Math.sin(progress * Math.PI),
+    rearLeg: 0.1,
+    frontLeg: -0.1,
+    rearArm: 0.12,
+    rearArmReach: 1,
+    rearArmForward: false,
+    rearArmRootY: -13,
+    frontArm: 0,
+    frontArmReach: NOVA_GRAB_MOTION.holdReach,
+    frontArmRootY: NOVA_GRAB_MOTION.frontShoulderY,
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+    targetX: target.x,
+    targetY: target.y
+  };
+
+  if (safeVariant === "forward") {
+    const phase = clamp(time / NOVA_THROW_MOTION.forwardReleaseAt, 0, 1);
+    const targetHandX = target.x - NOVA_BODY_SIZE.width / 2 + NOVA_GRAB_MOTION.targetInset;
+    const front = novaThrowArmToPoint(19, -13, targetHandX, target.y, 36);
+    pose.frontArm = front.angle;
+    pose.frontArmReach = front.reach;
+    pose.rearLeg = 0.08 + Math.sin(phase * Math.PI) * 0.28;
+    pose.frontLeg = -0.08 - Math.sin(phase * Math.PI) * 0.36;
+    pose.offsetX = ease(Math.max(0, (phase - 0.42) / 0.58)) * 6;
+    pose.rotation = interpolate(-0.07, 0.12, phase);
+    return pose;
+  }
+
+  if (safeVariant === "back") {
+    const tossPhase = clamp(time / NOVA_THROW_MOTION.backTossAt, 0, 1);
+    const followPhase = clamp(
+      (time - NOVA_THROW_MOTION.backTossAt) /
+        (NOVA_THROW_MOTION.backReleaseAt - NOVA_THROW_MOTION.backTossAt),
+      0,
+      1
+    );
+    const followStrike = Math.sin(followPhase * Math.PI);
+    pose.rearLeg = 0.1 - tossPhase * 0.26;
+    pose.frontLeg = -0.1 + tossPhase * 0.3;
+    pose.frontArm = interpolate(0, -Math.PI, ease(tossPhase));
+    pose.frontArmReach = interpolate(NOVA_GRAB_MOTION.holdReach, 2.62, ease(tossPhase));
+    pose.offsetX = -followStrike * 3;
+    pose.rotation = -0.1 * Math.sin(tossPhase * Math.PI) + followStrike * 0.06;
+    return pose;
+  }
+
+  if (safeVariant === "up") {
+    const phase = ease(time / NOVA_THROW_MOTION.upReleaseAt);
+    const rear = novaThrowArmToPoint(-20, -13, -13, -65, 30);
+    const front = novaThrowArmToPoint(19, -13, 13, -65, 36);
+    pose.rearLeg = interpolate(0.1, 0.42, phase);
+    pose.frontLeg = interpolate(-0.1, -0.42, phase);
+    pose.rearArm = interpolate(0.12, rear.angle, phase);
+    pose.rearArmReach = interpolate(1, rear.reach, phase);
+    pose.rearArmForward = phase > 0.04;
+    pose.frontArm = interpolate(0, front.angle, phase);
+    pose.frontArmReach = interpolate(NOVA_GRAB_MOTION.holdReach, front.reach, phase);
+    pose.offsetY = -phase * 4;
+    return pose;
+  }
+
+  const transferPhase = ease(time / NOVA_THROW_MOTION.downTransferAt);
+  const rear = novaThrowArmToPoint(-20, -13, -8, 28, 30);
+  pose.rearLeg = interpolate(0.1, 0.34, transferPhase);
+  pose.frontLeg = interpolate(-0.1, -0.34, transferPhase);
+  pose.rearArm = interpolate(0.12, rear.angle, transferPhase);
+  pose.rearArmReach = interpolate(1, rear.reach, transferPhase);
+  pose.rearArmForward = transferPhase > 0.04;
+  pose.frontArm = interpolate(0, 1.2, transferPhase);
+  pose.frontArmReach = interpolate(NOVA_GRAB_MOTION.holdReach, 1, transferPhase);
+  pose.offsetY = transferPhase * 2;
+  return pose;
+}
+
+export function getNovaNeutralSpecialMotion(actionTime) {
+  const move = getMove("nova", "specialNeutral");
+  const time = Math.max(0, Number(actionTime) || 0);
+  const ease = amount => {
+    const value = clamp(amount, 0, 1);
+    return value * value * (3 - 2 * value);
+  };
+  const interpolate = (from, to, amount) => from + (to - from) * amount;
+  const focus = time <= move.spawnAt
+    ? ease(time / move.spawnAt)
+    : 1 - ease((time - move.spawnAt) / Math.max(1 / 60, move.total - move.spawnAt));
+  return {
+    force: focus,
+    rearLeg: 0.04 + focus * 0.12,
+    frontLeg: -0.04 - focus * 0.12,
+    rearArm: interpolate(0.12, -0.95, focus),
+    rearArmReach: interpolate(1, 0.86, focus),
+    rearArmForward: focus > 0.04,
+    rearArmRootY: -13,
+    frontArm: interpolate(1.2, -2.16, focus),
+    frontArmReach: interpolate(1, 0.82, focus),
+    frontArmRootY: -13,
+    offsetX: time >= move.spawnAt ? -Math.max(0, 1 - (time - move.spawnAt) / 0.1) * 2 : 0,
+    offsetY: -focus,
+    rotation: 0
+  };
+}
+
+export function getNovaSideSpecialMotion(actionTime) {
+  const move = getMove("nova", "specialSide");
+  const time = Math.max(0, Number(actionTime) || 0);
+  const ease = amount => {
+    const value = clamp(amount, 0, 1);
+    return value * value * (3 - 2 * value);
+  };
+  const interpolate = (from, to, amount) => from + (to - from) * amount;
+  const brace = time <= move.spawnAt
+    ? ease(time / move.spawnAt)
+    : 1 - ease((time - move.spawnAt) / Math.max(1 / 60, move.total - move.spawnAt));
+  const recoil = time >= move.spawnAt
+    ? Math.max(0, 1 - (time - move.spawnAt) / 0.12)
+    : 0;
+  return {
+    force: brace,
+    rearLeg: 0.04 + brace * 0.22,
+    frontLeg: -0.04 - brace * 0.28,
+    rearArm: interpolate(0.12, 0, brace),
+    rearArmReach: interpolate(1, 1.82, brace),
+    rearArmForward: brace > 0.04,
+    rearArmRootY: interpolate(-13, -26, brace),
+    frontArm: interpolate(1.2, 0, brace),
+    frontArmReach: interpolate(1, 1.95, brace),
+    frontArmRootY: interpolate(-13, -26, brace),
+    offsetX: brace * 4 - recoil * 3,
+    offsetY: brace,
+    rotation: brace * 0.06 - recoil * 0.04
+  };
+}
+
+export function getNovaRecoveryMotion(elapsed, phase = "thrust") {
+  const progress = clamp((Number(elapsed) || 0) / NOVA_RECOVERY.thrustDuration, 0, 1);
+  const thrusting = phase === "thrust";
+  const force = thrusting ? Math.min(1, progress * 6, (1 - progress) * 5 + 0.35) : 0;
+  return {
+    force,
+    rearLeg: 0.04 - force * 0.18,
+    frontLeg: -0.04 + force * 0.18,
+    rearArm: 0.12 - force * 0.34,
+    rearArmReach: 1,
+    rearArmForward: false,
+    rearArmRootY: -13,
+    frontArm: 1.2 + force * 0.34,
+    frontArmReach: 1,
+    frontArmRootY: -13,
+    offsetX: 0,
+    offsetY: -force * 2,
+    rotation: 0
+  };
+}
+
+export function getNovaChargeMotion(ratio) {
+  const value = clamp(Number(ratio) || 0, 0, 1);
+  const pulse = Math.sin(value * Math.PI * 8) * 0.06;
+  return {
+    force: value,
+    rearLeg: 0.12 + value * 0.18,
+    frontLeg: -0.12 - value * 0.18,
+    rearArm: 0.12 + value * 0.48 + pulse,
+    rearArmReach: 1 + value * 0.12,
+    rearArmForward: value > 0.02,
+    rearArmRootY: -13,
+    frontArm: 1.2 + value * 1.12 - pulse,
+    frontArmReach: 1,
+    frontArmRootY: -13,
+    offsetX: 0,
+    offsetY: value * 2,
+    rotation: 0
+  };
+}
+
+export function getNovaFinalSmashMotion(elapsed) {
+  const time = clamp(Number(elapsed) || 0, 0, NOVA_FINAL_SMASH.totalDuration);
+  const interpolate = (from, to, amount) => from + (to - from) * amount;
+  const transform = smoothStep(clamp(time / NOVA_FINAL_SMASH.transformDuration, 0, 1));
+  const punchProgress = smoothStep(clamp(
+    (time - NOVA_FINAL_SMASH.punchStart) / NOVA_FINAL_SMASH.punchTravelDuration,
+    0,
+    1
+  ));
+  const returnStart = NOVA_FINAL_SMASH.punchAt + NOVA_FINAL_SMASH.punchActiveDuration;
+  const returnProgress = smoothStep(clamp(
+    (time - returnStart) / NOVA_FINAL_SMASH.recoveryDuration,
+    0,
+    1
+  ));
+  const aimProgress = smoothStep(clamp(punchProgress / 0.55, 0, 1));
+  const thrustProgress = smoothStep(clamp((punchProgress - 0.35) / 0.65, 0, 1));
+  const loadedAngle = -2.72;
+  const aimedAngle = -0.16;
+  let armAngle = interpolate(1.2, loadedAngle, transform);
+  let armLength = interpolate(NOVA_FINAL_SMASH.normalArmLength, NOVA_FINAL_SMASH.loadedArmLength, transform);
+  let armThickness = interpolate(
+    NOVA_FINAL_SMASH.normalArmThickness,
+    NOVA_FINAL_SMASH.maxArmThickness,
+    transform
+  );
+
+  if (time >= NOVA_FINAL_SMASH.punchStart) {
+    armAngle = interpolate(loadedAngle, aimedAngle, aimProgress);
+    armAngle = interpolate(armAngle, 0, thrustProgress);
+    armLength = interpolate(NOVA_FINAL_SMASH.loadedArmLength, NOVA_FINAL_SMASH.maxArmLength, thrustProgress);
+  }
+  if (time >= returnStart) {
+    armAngle = interpolate(0, 1.2, returnProgress);
+    armLength = interpolate(NOVA_FINAL_SMASH.maxArmLength, NOVA_FINAL_SMASH.normalArmLength, returnProgress);
+    armThickness = interpolate(
+      NOVA_FINAL_SMASH.maxArmThickness,
+      NOVA_FINAL_SMASH.normalArmThickness,
+      returnProgress
+    );
+  }
+
+  const speechFadeIn = clamp(
+    (time - NOVA_FINAL_SMASH.transformDuration) / 0.12,
+    0,
+    1
+  );
+  const speechFadeOut = clamp(
+    (NOVA_FINAL_SMASH.punchStart - time) / 0.12,
+    0,
+    1
+  );
+  const punchForce = Math.sin(clamp(
+    (time - NOVA_FINAL_SMASH.punchStart) /
+      (NOVA_FINAL_SMASH.punchTravelDuration + NOVA_FINAL_SMASH.punchActiveDuration),
+    0,
+    1
+  ) * Math.PI);
+
+  return {
+    phase: time < NOVA_FINAL_SMASH.transformDuration
+      ? "transform"
+      : time < NOVA_FINAL_SMASH.punchStart
+      ? "hold"
+      : time < NOVA_FINAL_SMASH.punchAt
+      ? "punch"
+      : time < returnStart
+      ? "active"
+      : "recover",
+    timeFrozen: time < NOVA_FINAL_SMASH.punchAt,
+    showSpeech: time >= NOVA_FINAL_SMASH.transformDuration && time < NOVA_FINAL_SMASH.punchStart,
+    speechAlpha: speechFadeIn * speechFadeOut,
+    transform,
+    punchProgress,
+    returnProgress,
+    armAngle,
+    armLength,
+    armThickness,
+    frontArmVisible: false,
+    rearLeg: 0.04 + transform * 0.38 - returnProgress * 0.38,
+    frontLeg: -0.04 - transform * 0.5 + returnProgress * 0.5,
+    rearArm: 0.12 + transform * 0.42 - returnProgress * 0.42,
+    rearArmReach: 1 + transform * 0.16 - returnProgress * 0.16,
+    rearArmForward: transform > 0.05 && returnProgress < 0.95,
+    rearArmRootY: -13,
+    frontArm: 1.2,
+    frontArmReach: 1,
+    frontArmRootY: -18,
+    offsetX: punchForce * 7,
+    offsetY: -transform * 2 + returnProgress * 2,
+    rotation: punchForce * 0.055
   };
 }
 
@@ -2463,6 +2998,60 @@ function getNovaHurtboxPose(fighter) {
       offsetY: motion.offsetY,
       rotation: motion.rotation
     });
+  } else if (["grab", "dashGrab", "pivotGrab", "grabHold"].includes(action)) {
+    const variant = action === "dashGrab" ? "dash" : action === "pivotGrab" ? "pivot" : "standing";
+    const grabTotal = fighter.move?.total || GRAB.variants[variant].total;
+    const grabProgress = action === "grabHold"
+      ? 1
+      : clamp((fighter.actionTime || 0) / Math.max(1 / 60, grabTotal), 0, 1);
+    const pummelProgress = action === "grabHold" && fighter.pummelAnimation > 0
+      ? 1 - clamp(fighter.pummelAnimation / NOVA_GRAB_MOTION.pummelDuration, 0, 1)
+      : 0;
+    const motion = getNovaGrabMotion(grabProgress, variant, action === "grabHold", pummelProgress);
+    Object.assign(pose, {
+      rearLeg: motion.rearLeg,
+      frontLeg: motion.frontLeg,
+      rearArm: motion.rearArm,
+      rearArmReach: motion.rearArmReach,
+      rearArmForward: motion.rearArmForward,
+      rearArmRootY: motion.rearArmRootY,
+      frontArm: motion.frontArm,
+      frontArmReach: motion.frontArmReach,
+      frontArmRootY: motion.frontArmRootY,
+      offsetX: motion.offsetX,
+      offsetY: motion.offsetY,
+      rotation: motion.rotation
+    });
+  } else if (["throwForward", "throwBack", "throwUp", "throwDown"].includes(action)) {
+    const variant = action.slice("throw".length).toLowerCase();
+    const motion = getNovaThrowMotion(variant, fighter.actionTime || 0);
+    Object.assign(pose, {
+      rearLeg: motion.rearLeg,
+      frontLeg: motion.frontLeg,
+      rearArm: motion.rearArm,
+      rearArmReach: motion.rearArmReach,
+      rearArmForward: motion.rearArmForward,
+      rearArmRootY: motion.rearArmRootY,
+      frontArm: motion.frontArm,
+      frontArmReach: motion.frontArmReach,
+      frontArmRootY: motion.frontArmRootY,
+      offsetX: motion.offsetX,
+      offsetY: motion.offsetY,
+      rotation: motion.rotation
+    });
+  } else if (action === "specialNeutral") {
+    Object.assign(pose, getNovaNeutralSpecialMotion(fighter.actionTime || 0));
+  } else if (action === "specialSide") {
+    Object.assign(pose, getNovaSideSpecialMotion(fighter.actionTime || 0));
+  } else if (action === "specialUp" || action === "specialFall") {
+    Object.assign(pose, getNovaRecoveryMotion(
+      fighter.recovery?.elapsed || fighter.actionTime || 0,
+      fighter.recovery?.phase || (action === "specialUp" ? "thrust" : "fall")
+    ));
+  } else if (action === "novaCharge") {
+    Object.assign(pose, getNovaChargeMotion((fighter.novaCharge || 0) / NOVA_CHARGE.maxDuration));
+  } else if (action === "finalSmash") {
+    Object.assign(pose, getNovaFinalSmashMotion(fighter.actionTime || 0));
   } else if (action === "airForward") {
     const motion = getNovaForwardAirMotion(progress);
     pose.rearLeg += motion.force * 0.2;
@@ -2647,14 +3236,16 @@ export function fighterHurtboxes(fighter) {
     rearArmEnd,
     7
   ));
-  const frontLength = 36 * pose.frontArmReach;
-  boxes.push(novaSegmentHurtbox(fighter, pose, "frontArm", {
-    x: 19,
-    y: pose.frontArmRootY
-  }, {
-    x: 19 + Math.cos(pose.frontArm) * frontLength,
-    y: pose.frontArmRootY + Math.sin(pose.frontArm) * frontLength
-  }, 8));
+  if (pose.frontArmVisible !== false) {
+    const frontLength = 36 * pose.frontArmReach;
+    boxes.push(novaSegmentHurtbox(fighter, pose, "frontArm", {
+      x: 19,
+      y: pose.frontArmRootY
+    }, {
+      x: 19 + Math.cos(pose.frontArm) * frontLength,
+      y: pose.frontArmRootY + Math.sin(pose.frontArm) * frontLength
+    }, 8));
+  }
   return boxes;
 }
 

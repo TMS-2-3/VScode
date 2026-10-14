@@ -1,6 +1,6 @@
 import { PLAYER_COLORS } from "./constants.js";
 import { FIGHTER_POSE_FRAMES } from "./asset-manager.js";
-import { FINAL_SMASH, NOVA_CHARGE, NOVA_DOWN_SMASH_EXPLOSION, SHIELD, SMASH_CHARGE, getKnockdownBodyPose, getMainPlatformTriangle, getMove, getNovaBackAirFlame, getNovaBackAirMotion, getNovaBackAirPoseProgress, getNovaDownAirFlame, getNovaDownSmashMotion, getNovaDownSmashPoseProgress, getNovaDownTiltMotion, getNovaForwardAirMotion, getNovaSideSmashMotion, getNovaUpAirJet, getNovaUpAirMotion, getNovaUpAirPoseProgress, getNovaUpSmashMotion, getNovaUpSmashPoseProgress, getNovaUpTiltMotion } from "./battle-data.js";
+import { FINAL_SMASH, GRAB, NOVA_CHARGE, NOVA_DOWN_SMASH_EXPLOSION, NOVA_FINAL_SMASH, NOVA_GRAB_MOTION, NOVA_RECOVERY, SHIELD, SMASH_CHARGE, getKnockdownBodyPose, getMainPlatformTriangle, getMove, getNovaBackAirFlame, getNovaBackAirMotion, getNovaBackAirPoseProgress, getNovaChargeMotion, getNovaDownAirFlame, getNovaDownSmashMotion, getNovaDownSmashPoseProgress, getNovaDownTiltMotion, getNovaFinalSmashMotion, getNovaForwardAirMotion, getNovaGrabMotion, getNovaNeutralSpecialMotion, getNovaRecoveryMotion, getNovaSideSmashMotion, getNovaSideSpecialMotion, getNovaThrowMotion, getNovaUpAirJet, getNovaUpAirMotion, getNovaUpAirPoseProgress, getNovaUpSmashMotion, getNovaUpSmashPoseProgress, getNovaUpTiltMotion } from "./battle-data.js";
 import { formatTime, roundRect } from "./utils.js";
 
 const SCREEN_CENTER_X = 640;
@@ -260,6 +260,7 @@ export class CanvasRenderer {
       visual.frame
     );
     ctx.drawImage(sprite.canvas, -sprite.cx, -sprite.cy);
+    if (fighter.action === "finalSmash") this.drawNovaFinalSmashArm(ctx, fighter);
 
     if (fighter.shield || fighter.justGuard) {
       const shieldRatio = fighter.shieldMax ? fighter.shieldHp / fighter.shieldMax : 1;
@@ -280,6 +281,11 @@ export class CanvasRenderer {
     }
     ctx.restore();
 
+    if (fighter.action === "shieldBreak") {
+      this.drawShieldBreakStars(ctx, fighter, animationTimeMs);
+    }
+    if (fighter.action === "finalSmash") this.drawNovaFinalSmashSpeech(ctx, fighter);
+
     if (fighter.ledge && fighter.action !== "ledgeAttack") this.drawLedgeGrip(ctx, fighter);
     if (fighter.grabbedBy) this.drawGrabbedStatus(ctx, fighter);
 
@@ -295,6 +301,163 @@ export class CanvasRenderer {
     ctx.textAlign = "left";
 
     if (rules.debug) this.drawDebugFighter(ctx, fighter);
+  }
+
+  drawShieldBreakStars(ctx, fighter, animationTimeMs) {
+    const centerY = fighter.y - fighter.h * 0.52;
+    const orbit = Math.max(0, animationTimeMs) * 0.006;
+    const stars = Array.from({ length: 3 }, (_, index) => {
+      const angle = orbit + index * Math.PI * 2 / 3;
+      return {
+        angle,
+        x: fighter.x + Math.cos(angle) * 34,
+        y: centerY + Math.sin(angle) * 9
+      };
+    }).sort((first, second) => Math.sin(first.angle) - Math.sin(second.angle));
+
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(255,216,66,0.85)";
+    ctx.shadowBlur = 6;
+    for (const star of stars) {
+      const depth = (Math.sin(star.angle) + 1) / 2;
+      const outerRadius = 4.8 + depth * 1.8;
+      const innerRadius = outerRadius * 0.46;
+      ctx.globalAlpha = 0.68 + depth * 0.32;
+      ctx.fillStyle = "#ffd84d";
+      ctx.strokeStyle = "#7c5910";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      for (let point = 0; point < 10; point += 1) {
+        const radius = point % 2 === 0 ? outerRadius : innerRadius;
+        const angle = -Math.PI / 2 + point * Math.PI / 5;
+        const x = star.x + Math.cos(angle) * radius;
+        const y = star.y + Math.sin(angle) * radius;
+        if (point === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawNovaFinalSmashArm(ctx, fighter) {
+    const motion = getNovaFinalSmashMotion(fighter.actionTime || 0);
+    const accent = PLAYER_COLORS[(fighter.colorIndex || 0) % PLAYER_COLORS.length];
+    const length = motion.armLength;
+    const thickness = motion.armThickness;
+    const halfThickness = thickness / 2;
+    const panelInset = Math.min(7, thickness * 0.15);
+    const armorHeight = Math.max(8, thickness - panelInset * 2);
+
+    ctx.save();
+    ctx.translate(19, -18);
+    ctx.rotate(motion.armAngle);
+
+    const underframe = ctx.createLinearGradient(0, -halfThickness, length, halfThickness);
+    underframe.addColorStop(0, "#111923");
+    underframe.addColorStop(0.55, "#263746");
+    underframe.addColorStop(1, "#080e14");
+    ctx.fillStyle = underframe;
+    roundRect(ctx, -5, -halfThickness, length + 12, thickness, Math.min(15, halfThickness));
+    ctx.fill();
+    ctx.strokeStyle = "rgba(6,10,15,0.92)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const panelArea = Math.max(18, length - 37);
+    const panelGap = 4 + Math.sin(motion.transform * Math.PI) * 5;
+    const panelWidth = Math.max(8, (panelArea - panelGap * 2) / 3);
+    const armor = ctx.createLinearGradient(0, -halfThickness, 0, halfThickness);
+    armor.addColorStop(0, "#ffffff");
+    armor.addColorStop(0.48, "#dbe5ed");
+    armor.addColorStop(1, "#82929f");
+    for (let index = 0; index < 3; index += 1) {
+      const panelX = 3 + index * (panelWidth + panelGap);
+      ctx.fillStyle = armor;
+      roundRect(ctx, panelX, -halfThickness + panelInset, panelWidth, armorHeight, Math.min(9, armorHeight / 2));
+      ctx.fill();
+      ctx.strokeStyle = "rgba(83,101,115,0.92)";
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.fillStyle = accent;
+      roundRect(ctx, panelX + 4, -2.5, Math.max(3, panelWidth - 8), 5, 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = accent;
+    roundRect(ctx, length - 22, -halfThickness - 4, 32, thickness + 8, Math.min(16, halfThickness + 4));
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.78)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = "#081118";
+    roundRect(ctx, length - 12, -halfThickness + 5, 18, thickness - 10, Math.min(10, halfThickness));
+    ctx.fill();
+    ctx.fillStyle = "rgba(180,248,255,0.96)";
+    roundRect(ctx, length - 8, -halfThickness + 10, 8, Math.max(5, thickness - 20), 4);
+    ctx.fill();
+
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10 + motion.transform * 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(225,252,255,0.9)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const transformPulse = Math.sin(motion.transform * Math.PI);
+    if (transformPulse > 0.01) {
+      ctx.globalAlpha *= transformPulse;
+      ctx.strokeStyle = "rgba(255,224,93,0.96)";
+      ctx.lineWidth = 3;
+      for (let index = 0; index < 6; index += 1) {
+        const rayX = length * (0.16 + index * 0.13);
+        const rayLength = 10 + (index % 2) * 7;
+        ctx.beginPath();
+        ctx.moveTo(rayX, -halfThickness - 4);
+        ctx.lineTo(rayX, -halfThickness - rayLength);
+        ctx.moveTo(rayX, halfThickness + 4);
+        ctx.lineTo(rayX, halfThickness + rayLength);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  drawNovaFinalSmashSpeech(ctx, fighter) {
+    const motion = getNovaFinalSmashMotion(fighter.actionTime || 0);
+    if (!motion.showSpeech || motion.speechAlpha <= 0) return;
+    const width = 174;
+    const height = 46;
+    const centerX = fighter.x + fighter.facing * 28;
+    const x = centerX - width / 2;
+    const y = fighter.y - fighter.h / 2 - 98;
+    const tailX = fighter.x + fighter.facing * 16;
+
+    ctx.save();
+    ctx.globalAlpha *= motion.speechAlpha;
+    ctx.fillStyle = "rgba(255,255,255,0.96)";
+    ctx.strokeStyle = "rgba(21,28,35,0.94)";
+    ctx.lineWidth = 3;
+    roundRect(ctx, x, y, width, height, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tailX - 11, y + height - 1);
+    ctx.lineTo(tailX, y + height + 15);
+    ctx.lineTo(tailX + 10, y + height - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#101820";
+    ctx.font = "800 17px Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("出力限界突破…", centerX, y + 30, width - 18);
+    ctx.textAlign = "left";
+    ctx.restore();
   }
 
   fighterLabel(fighter) {
@@ -325,6 +488,22 @@ export class CanvasRenderer {
         rotation: (flightAngle + tumbleRock) * (fighter.facing || 1)
       };
     }
+    if (fighter.action === "finalSmash") {
+      const motion = getNovaFinalSmashMotion(fighter.actionTime || 0);
+      const progress = this.clamp(
+        (fighter.actionTime || 0) / NOVA_FINAL_SMASH.totalDuration,
+        0,
+        1
+      );
+      const frameCount = FIGHTER_POSE_FRAMES.finalSmash;
+      return {
+        pose: "finalSmash",
+        frame: Math.min(frameCount - 1, Math.floor(progress * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
+      };
+    }
     if (["jab1", "jab2", "jab3"].includes(fighter.action)) {
       const total = getMove(fighter.characterId || "nova", fighter.action)?.total || 1;
       const progress = this.clamp((fighter.actionTime || 0) / total, 0, 1);
@@ -340,6 +519,103 @@ export class CanvasRenderer {
           : fighter.action === "jab2"
             ? punch * -0.035
             : punch * 0.09
+      };
+    }
+    if (["grab", "dashGrab", "pivotGrab"].includes(fighter.action)) {
+      const variant = fighter.action === "dashGrab" ? "dash" : fighter.action === "pivotGrab" ? "pivot" : "standing";
+      const progress = this.clamp(
+        (fighter.actionTime || 0) / Math.max(1 / 60, GRAB.variants[variant].total),
+        0,
+        1
+      );
+      const motion = getNovaGrabMotion(progress, variant);
+      const frameCount = FIGHTER_POSE_FRAMES[fighter.action];
+      return {
+        pose: fighter.action,
+        frame: Math.min(frameCount - 1, Math.floor(progress * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
+      };
+    }
+    if (fighter.action === "grabHold") {
+      const pummeling = (fighter.pummelAnimation || 0) > 0;
+      const pummelProgress = pummeling
+        ? 1 - this.clamp(fighter.pummelAnimation / NOVA_GRAB_MOTION.pummelDuration, 0, 1)
+        : 0;
+      const motion = getNovaGrabMotion(1, "standing", true, pummelProgress);
+      const pose = pummeling ? "pummel" : "grabHold";
+      const frameCount = FIGHTER_POSE_FRAMES[pose];
+      return {
+        pose,
+        frame: Math.min(frameCount - 1, Math.floor(pummelProgress * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
+      };
+    }
+    if (["throwForward", "throwBack", "throwUp", "throwDown"].includes(fighter.action)) {
+      const variant = fighter.action.slice("throw".length).toLowerCase();
+      const motion = getNovaThrowMotion(variant, fighter.actionTime || 0);
+      const move = getMove(fighter.characterId || "nova", fighter.action);
+      const progress = this.clamp((fighter.actionTime || 0) / Math.max(1 / 60, move.total), 0, 1);
+      const frameCount = FIGHTER_POSE_FRAMES[fighter.action];
+      return {
+        pose: fighter.action,
+        frame: Math.min(frameCount - 1, Math.floor(progress * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
+      };
+    }
+    if (fighter.action === "specialNeutral" || fighter.action === "specialSide") {
+      const motion = fighter.action === "specialNeutral"
+        ? getNovaNeutralSpecialMotion(fighter.actionTime || 0)
+        : getNovaSideSpecialMotion(fighter.actionTime || 0);
+      const move = getMove(fighter.characterId || "nova", fighter.action);
+      const progress = this.clamp((fighter.actionTime || 0) / Math.max(1 / 60, move.total), 0, 1);
+      const frameCount = FIGHTER_POSE_FRAMES[fighter.action];
+      return {
+        pose: fighter.action,
+        frame: Math.min(frameCount - 1, Math.floor(progress * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
+      };
+    }
+    if (fighter.action === "specialUp" || fighter.action === "specialFall") {
+      const phase = fighter.recovery?.phase || (fighter.action === "specialUp" ? "thrust" : "fall");
+      const elapsed = fighter.recovery?.elapsed || fighter.actionTime || 0;
+      const motion = getNovaRecoveryMotion(elapsed, phase);
+      const pose = phase === "thrust" ? "specialUp" : "specialFall";
+      const frameCount = FIGHTER_POSE_FRAMES[pose];
+      const progress = phase === "thrust"
+        ? this.clamp(elapsed / NOVA_RECOVERY.thrustDuration, 0, 1)
+        : 0;
+      return {
+        pose,
+        frame: Math.min(frameCount - 1, Math.floor(progress * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
+      };
+    }
+    if (fighter.action === "novaCharge") {
+      const ratio = this.clamp(
+        Number.isFinite(fighter.novaChargeRatio)
+          ? fighter.novaChargeRatio
+          : (fighter.novaCharge || 0) / NOVA_CHARGE.maxDuration,
+        0,
+        1
+      );
+      const motion = getNovaChargeMotion(ratio);
+      const frameCount = FIGHTER_POSE_FRAMES.novaCharge;
+      return {
+        pose: "novaCharge",
+        frame: Math.min(frameCount - 1, Math.floor(ratio * frameCount)),
+        offsetX: motion.offsetX,
+        offsetY: motion.offsetY,
+        rotation: motion.rotation
       };
     }
     if (fighter.action === "smashCharge" && fighter.smashCharge?.moveId === "smashSide") {
@@ -621,22 +897,6 @@ export class CanvasRenderer {
     ctx.save();
     ctx.lineCap = "round";
 
-    if (["jab1", "jab2", "jab3", "ledgeAttack"].includes(action)) {
-      const reach = action === "jab3" ? 68 : action === "ledgeAttack" ? 82 : 54;
-      const jabProgress = action.startsWith("jab")
-        ? this.clamp(time / (getMove("nova", action)?.total || 1), 0, 1)
-        : 0.5;
-      const jabIntensity = action.startsWith("jab") ? Math.sin(jabProgress * Math.PI) : 1;
-      const previousAlpha = ctx.globalAlpha;
-      ctx.strokeStyle = action.startsWith("smash") ? "rgba(255,216,77,0.88)" : "rgba(115,239,255,0.72)";
-      ctx.globalAlpha = previousAlpha * (0.25 + jabIntensity * 0.75);
-      ctx.lineWidth = action.startsWith("smash") ? 13 : action === "jab3" ? 11 : 8;
-      ctx.beginPath();
-      ctx.moveTo(action === "jab2" ? -15 : 18, action === "jab2" ? -25 : -28);
-      ctx.quadraticCurveTo(reach * 0.55, action === "jab2" ? -12 : -55 - Math.sin(time * 24) * 8, reach, -30);
-      ctx.stroke();
-      ctx.globalAlpha = previousAlpha;
-    }
     if (action === "airNeutral") {
       const move = getMove("nova", "airNeutral");
       const hit = move?.hits?.[0] || {};
@@ -835,16 +1095,57 @@ export class CanvasRenderer {
       }
     }
     if (action === "throwDown") {
-      const x = 0;
-      const y = 18;
-      const flame = ctx.createRadialGradient(x, y, 2, x, y, 42);
-      flame.addColorStop(0, "rgba(255,246,170,0.95)");
-      flame.addColorStop(0.45, "rgba(255,119,45,0.82)");
-      flame.addColorStop(1, "rgba(255,65,30,0)");
-      ctx.fillStyle = flame;
-      ctx.beginPath();
-      ctx.ellipse(x, y, 58, 30, 0, 0, Math.PI * 2);
-      ctx.fill();
+      const move = getMove("nova", "throwDown");
+      const pulseAt = (at, duration) => {
+        const distance = Math.abs(time - at);
+        return distance >= duration ? 0 : 1 - distance / duration;
+      };
+      const smallPulse = Math.max(...move.hits.slice(0, 3).map(hit => pulseAt(hit.start, 0.085)));
+      const finishPulse = pulseAt(move.hits[3].start, 0.12);
+      const intensity = Math.max(smallPulse * 0.78, finishPulse);
+      if (intensity > 0) {
+        const previousAlpha = ctx.globalAlpha;
+        const originX = -3;
+        const originY = 15;
+        const length = 48 + intensity * 25 + finishPulse * 20;
+        const halfWidth = 17 + intensity * 9 + finishPulse * 8;
+        const flicker = Math.sin(time * 132) * 3;
+        const plume = ctx.createLinearGradient(originX, originY, originX + flicker, originY + length);
+        plume.addColorStop(0, "rgba(245,255,255,1)");
+        plume.addColorStop(0.2, "rgba(104,235,255,0.98)");
+        plume.addColorStop(0.52, "rgba(255,218,72,0.96)");
+        plume.addColorStop(0.78, "rgba(255,105,34,0.88)");
+        plume.addColorStop(1, "rgba(255,48,22,0)");
+        ctx.globalAlpha = previousAlpha * (0.72 + intensity * 0.28);
+        ctx.fillStyle = plume;
+        ctx.beginPath();
+        ctx.moveTo(originX - halfWidth * 0.48, originY);
+        ctx.quadraticCurveTo(originX - halfWidth, originY + length * 0.46, originX + flicker, originY + length);
+        ctx.quadraticCurveTo(originX + halfWidth, originY + length * 0.46, originX + halfWidth * 0.48, originY);
+        ctx.closePath();
+        ctx.fill();
+
+        const coreLength = length * 0.7;
+        const core = ctx.createLinearGradient(originX, originY, originX, originY + coreLength);
+        core.addColorStop(0, "rgba(255,255,255,1)");
+        core.addColorStop(0.45, "rgba(157,245,255,0.96)");
+        core.addColorStop(1, "rgba(255,225,102,0)");
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.moveTo(originX - halfWidth * 0.2, originY);
+        ctx.quadraticCurveTo(originX - halfWidth * 0.34, originY + coreLength * 0.52, originX, originY + coreLength);
+        ctx.quadraticCurveTo(originX + halfWidth * 0.34, originY + coreLength * 0.52, originX + halfWidth * 0.2, originY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.globalAlpha = previousAlpha * intensity;
+        ctx.strokeStyle = finishPulse > 0.4 ? "rgba(255,244,159,0.96)" : "rgba(142,239,255,0.9)";
+        ctx.lineWidth = 3 + finishPulse * 3;
+        ctx.beginPath();
+        ctx.ellipse(originX, originY + length * 0.72, halfWidth * 0.75, 8 + finishPulse * 5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = previousAlpha;
+      }
     }
     if (action === "dashAttack") {
       const move = getMove("nova", "dashAttack");
@@ -876,27 +1177,70 @@ export class CanvasRenderer {
       }
       ctx.globalAlpha = previousAlpha;
     }
-    if (action === "throwBack") {
-      ctx.strokeStyle = "rgba(115,239,255,0.84)";
-      ctx.lineWidth = 11;
+    if (action === "throwBack" && time >= 0.2 && time <= 0.34) {
+      const previousAlpha = ctx.globalAlpha;
+      const progress = this.clamp((time - 0.2) / 0.14, 0, 1);
+      ctx.globalAlpha = previousAlpha * Math.sin(progress * Math.PI) * 0.72;
+      ctx.strokeStyle = "rgba(115,239,255,0.88)";
+      ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.moveTo(-15, -27);
-      ctx.lineTo(-104, -34);
+      ctx.moveTo(-28, -10);
+      ctx.lineTo(-76 - progress * 18, -12);
       ctx.stroke();
+      ctx.globalAlpha = previousAlpha;
     }
     if (action === "specialNeutral") {
-      ctx.fillStyle = "rgba(145,244,255,0.9)";
+      const move = getMove("nova", "specialNeutral");
+      const focus = this.clamp(time / move.spawnAt, 0, 1);
+      const flash = time >= move.spawnAt ? Math.max(0, 1 - (time - move.spawnAt) / 0.14) : 0;
+      const previousAlpha = ctx.globalAlpha;
+      const radius = 5 + focus * 5 + flash * 8;
+      const glow = ctx.createRadialGradient(9, -32, 1, 9, -32, radius * 2.4);
+      glow.addColorStop(0, "rgba(255,255,255,1)");
+      glow.addColorStop(0.35, "rgba(130,241,255,0.98)");
+      glow.addColorStop(1, "rgba(56,181,255,0)");
+      ctx.globalAlpha = previousAlpha * (0.5 + focus * 0.5);
+      ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(13, -31, 6 + Math.sin(time * 28) * 2, 0, Math.PI * 2);
+      ctx.arc(9, -32, radius, 0, Math.PI * 2);
       ctx.fill();
+      if (flash > 0) {
+        ctx.globalAlpha = previousAlpha * flash;
+        ctx.strokeStyle = "rgba(204,250,255,0.96)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let index = 0; index < 8; index += 1) {
+          const angle = index / 8 * Math.PI * 2;
+          ctx.moveTo(9 + Math.cos(angle) * 11, -32 + Math.sin(angle) * 11);
+          ctx.lineTo(9 + Math.cos(angle) * (20 + flash * 9), -32 + Math.sin(angle) * (20 + flash * 9));
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = previousAlpha;
     }
     if (action === "specialSide") {
-      ctx.strokeStyle = "rgba(255,216,77,0.76)";
-      ctx.lineWidth = 9;
-      ctx.beginPath();
-      ctx.moveTo(18, -29);
-      ctx.lineTo(66, -29);
-      ctx.stroke();
+      const move = getMove("nova", "specialSide");
+      const flash = time >= move.spawnAt ? Math.max(0, 1 - (time - move.spawnAt) / 0.16) : 0;
+      if (flash > 0) {
+        const previousAlpha = ctx.globalAlpha;
+        const muzzleX = 91;
+        const muzzleY = -20;
+        const glow = ctx.createRadialGradient(muzzleX, muzzleY, 2, muzzleX, muzzleY, 30);
+        glow.addColorStop(0, "rgba(255,255,235,1)");
+        glow.addColorStop(0.35, "rgba(255,220,76,0.96)");
+        glow.addColorStop(1, "rgba(255,105,34,0)");
+        ctx.globalAlpha = previousAlpha * flash;
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(muzzleX, muzzleY, 14 + flash * 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,242,159,0.94)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(muzzleX, muzzleY, 17 + (1 - flash) * 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = previousAlpha;
+      }
     }
     if (action === "airUp") {
       const jet = getNovaUpAirJet(time);
@@ -923,24 +1267,98 @@ export class CanvasRenderer {
         ctx.globalAlpha = previousAlpha;
       }
     }
-    if (action === "specialUp" || action === "specialFall") {
-      ctx.fillStyle = "rgba(91,226,255,0.82)";
+    if (action === "specialUp" && fighter.recovery?.phase !== "fall") {
+      const previousAlpha = ctx.globalAlpha;
+      const recoveryProgress = this.clamp((fighter.recovery?.elapsed || time) / NOVA_RECOVERY.thrustDuration, 0, 1);
+      const force = Math.min(1, recoveryProgress * 8 + 0.25);
+      for (const [index, originX] of [-11, 11].entries()) {
+        const sway = Math.sin(time * 76 + index * 1.8) * 4;
+        const length = 72 + force * 38 + Math.sin(time * 113 + index) * 7;
+        const halfWidth = 12 + force * 5;
+        const originY = 23;
+        const flame = ctx.createLinearGradient(originX, originY, originX + sway, originY + length);
+        flame.addColorStop(0, "rgba(255,255,255,1)");
+        flame.addColorStop(0.2, "rgba(119,240,255,0.98)");
+        flame.addColorStop(0.55, "rgba(255,218,74,0.94)");
+        flame.addColorStop(0.8, "rgba(255,104,34,0.86)");
+        flame.addColorStop(1, "rgba(255,53,24,0)");
+        ctx.globalAlpha = previousAlpha * (0.85 + force * 0.15);
+        ctx.fillStyle = flame;
+        ctx.beginPath();
+        ctx.moveTo(originX - halfWidth * 0.48, originY);
+        ctx.quadraticCurveTo(originX - halfWidth, originY + length * 0.5, originX + sway, originY + length);
+        ctx.quadraticCurveTo(originX + halfWidth, originY + length * 0.5, originX + halfWidth * 0.48, originY);
+        ctx.closePath();
+        ctx.fill();
+
+        const coreLength = length * 0.62;
+        const core = ctx.createLinearGradient(originX, originY, originX, originY + coreLength);
+        core.addColorStop(0, "rgba(255,255,255,1)");
+        core.addColorStop(0.5, "rgba(177,248,255,0.96)");
+        core.addColorStop(1, "rgba(255,232,126,0)");
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.moveTo(originX - halfWidth * 0.2, originY);
+        ctx.quadraticCurveTo(originX - halfWidth * 0.34, originY + coreLength * 0.5, originX, originY + coreLength);
+        ctx.quadraticCurveTo(originX + halfWidth * 0.34, originY + coreLength * 0.5, originX + halfWidth * 0.2, originY);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = previousAlpha * (0.55 + force * 0.35);
+      ctx.strokeStyle = "rgba(155,244,255,0.92)";
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(-16, 24);
-      ctx.lineTo(-5, 24);
-      ctx.lineTo(-11, 74 + Math.sin(time * 34) * 8);
-      ctx.moveTo(6, 24);
-      ctx.lineTo(17, 24);
-      ctx.lineTo(12, 74 + Math.sin(time * 31) * 8);
-      ctx.fill();
+      ctx.ellipse(0, 57 + recoveryProgress * 34, 27 + force * 8, 9, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = previousAlpha;
     }
     if (action === "novaCharge") {
-      const ratio = this.clamp(fighter.novaChargeRatio || 0, 0, 1);
-      ctx.strokeStyle = ratio >= 1 ? "#ffffff" : "rgba(68,232,206,0.9)";
-      ctx.lineWidth = 5;
+      const ratio = this.clamp(
+        Number.isFinite(fighter.novaChargeRatio)
+          ? fighter.novaChargeRatio
+          : (fighter.novaCharge || 0) / NOVA_CHARGE.maxDuration,
+        0,
+        1
+      );
+      const previousAlpha = ctx.globalAlpha;
+      const pulse = 0.82 + Math.sin(animationTimeMs * 0.018) * 0.18;
+      ctx.strokeStyle = ratio >= 1 ? "#ffffff" : "rgba(82,244,211,0.96)";
+      ctx.lineWidth = 5 + ratio * 3;
       ctx.beginPath();
-      ctx.arc(0, -4, 38 + Math.sin(animationTimeMs * 0.016) * 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.05, ratio));
+      ctx.arc(0, -4, 38 + pulse * 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.05, ratio));
       ctx.stroke();
+
+      ctx.globalAlpha = previousAlpha * (0.35 + ratio * 0.5);
+      ctx.strokeStyle = "rgba(190,255,238,0.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, -4, 48 + ratio * 8 + pulse * 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const arrowColumns = [-38, -22, 22, 38];
+      for (let index = 0; index < arrowColumns.length; index += 1) {
+        const travel = ((animationTimeMs / 720) + index / 4) % 1;
+        const arrowY = 38 - travel * (92 + ratio * 34);
+        const arrowX = arrowColumns[index] + Math.sin(animationTimeMs * 0.004 + index) * 3;
+        const arrowScale = 0.95 + ratio * 0.4;
+        const fade = Math.sin(travel * Math.PI);
+        ctx.globalAlpha = previousAlpha * (0.52 + ratio * 0.28) * (0.55 + fade * 0.45);
+        ctx.fillStyle = ratio >= 1 ? "rgba(255,255,255,0.96)" : "rgba(105,255,218,0.92)";
+        ctx.strokeStyle = ratio >= 1 ? "rgba(255,244,139,0.96)" : "rgba(220,255,246,0.94)";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowY - 15 * arrowScale);
+        ctx.lineTo(arrowX - 10 * arrowScale, arrowY - 3 * arrowScale);
+        ctx.lineTo(arrowX - 4 * arrowScale, arrowY - 3 * arrowScale);
+        ctx.lineTo(arrowX - 4 * arrowScale, arrowY + 12 * arrowScale);
+        ctx.lineTo(arrowX + 4 * arrowScale, arrowY + 12 * arrowScale);
+        ctx.lineTo(arrowX + 4 * arrowScale, arrowY - 3 * arrowScale);
+        ctx.lineTo(arrowX + 10 * arrowScale, arrowY - 3 * arrowScale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.globalAlpha = previousAlpha;
     }
     ctx.restore();
   }
@@ -1333,28 +1751,30 @@ export class CanvasRenderer {
 
     const fighters = snapshot.fighters;
     const boxW = 1180 / Math.max(2, fighters.length);
+    const compactHud = fighters.length > 4;
     fighters.forEach((fighter, index) => {
       const x = 44 + index * boxW;
+      const textWidth = Math.max(44, boxW - 28);
       const color = PLAYER_COLORS[fighter.colorIndex % PLAYER_COLORS.length];
       ctx.fillStyle = color;
       roundRect(ctx, x, panelY + 16, 12, 42, 5);
       ctx.fill();
       ctx.fillStyle = "#f4f7fb";
-      ctx.font = "800 16px Segoe UI, sans-serif";
-      ctx.fillText(`P${fighter.slot} ${fighter.name}`, x + 20, textTop);
-      ctx.font = "700 18px Segoe UI, sans-serif";
+      ctx.font = `800 ${compactHud ? 12 : 16}px Segoe UI, sans-serif`;
+      ctx.fillText(`P${fighter.slot} ${fighter.name}`, x + 20, textTop, textWidth);
+      ctx.font = `700 ${compactHud ? 14 : 18}px Segoe UI, sans-serif`;
       const stat = snapshot.rules.mode === "practice"
         ? `${fighter.damage}%`
         : snapshot.rules.mode === "hp"
         ? `${fighter.hp} HP`
         : `${fighter.damage}% / ${snapshot.rules.mode === "stock" ? `${fighter.stocks} ST` : `${fighter.kills - fighter.falls} SCORE`}`;
-      ctx.fillText(stat, x + 20, textBottom);
+      ctx.fillText(stat, x + 20, textBottom, textWidth);
 
       if (fighter.characterId === "nova") {
         const ratio = this.clamp(fighter.novaCharge || 0, 0, NOVA_CHARGE.maxDuration) / NOVA_CHARGE.maxDuration;
         const gaugeX = x + 20;
         const gaugeY = panelY + 6;
-        const gaugeW = Math.max(74, boxW - 42);
+        const gaugeW = Math.max(44, boxW - 42);
         ctx.fillStyle = "rgba(5,8,12,0.76)";
         roundRect(ctx, gaugeX, gaugeY, gaugeW, 7, 3);
         ctx.fill();
@@ -1370,7 +1790,7 @@ export class CanvasRenderer {
         const ratio = gauge / FINAL_SMASH.maxGauge;
         const gaugeX = x + 20;
         const gaugeY = panelY + 67;
-        const gaugeW = Math.max(74, boxW - 42);
+        const gaugeW = Math.max(44, boxW - 42);
         const gaugeH = 13;
         ctx.fillStyle = "rgba(5,8,12,0.82)";
         roundRect(ctx, gaugeX, gaugeY, gaugeW, gaugeH, 5);

@@ -28,7 +28,12 @@ export class PracticeMode {
   }
 
   start(options) {
-    this.assets.preload({ stage: options.stage, characters: [options.player, options.enemy] });
+    this.assets.preload({
+      stage: options.stage,
+      playerCount: 2,
+      characters: [options.player, options.enemy],
+      colorIndices: [0, 1]
+    });
     this.data = this.createPractice(options);
     this.cachedSnapshot = null;
     this.active = true;
@@ -94,7 +99,7 @@ export class PracticeMode {
       stocks: 0,
       timeLimit: 0
     };
-    const match = this.simulation.createMatch({ id: "practice", rules });
+    const match = this.simulation.createMatch({ id: "practice", rules, playerCount: 2 });
     const stage = match.stage;
     const mainPlatform = stage.platforms.find(platform => platform.type === "main") || stage.platforms[0];
     const playerSpawn = stage.spawn[0] || [460, 410];

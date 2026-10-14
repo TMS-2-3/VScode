@@ -14,9 +14,13 @@ import {
   MOVEMENT,
   NOVA_AIR_DOWN_FLAME,
   NOVA_BODY_SIZE,
+  NOVA_CHARGE,
   NOVA_DOWN_SMASH_EXPLOSION,
+  NOVA_FINAL_SMASH,
+  NOVA_GRAB_MOTION,
   NOVA_MOVE_MOTION,
   NOVA_RECOVERY,
+  SHIELD,
   SHORT_HOP,
   SMASH_CHARGE,
   STAGE_BLAST_ZONE,
@@ -36,13 +40,22 @@ import {
   getNovaBackAirFlame,
   getNovaBackAirMotion,
   getNovaBackAirPoseProgress,
+  getNovaChargeMotion,
   getNovaDownAirFlame,
   getNovaDownSmashMotion,
   getNovaDownSmashPoseProgress,
   getNovaDownTiltMotion,
+  getNovaFinalSmashMotion,
   getNovaForwardAirMotion,
+  getNovaGrabbedFighterOffset,
+  getNovaGrabMotion,
+  getNovaNeutralSpecialMotion,
+  getNovaRecoveryMotion,
   getNovaSideSmashMotion,
+  getNovaSideSpecialMotion,
   getNovaSideTiltMotion,
+  getNovaThrowMotion,
+  getNovaThrowTargetOffset,
   getNovaUpAirJet,
   getNovaUpAirMotion,
   getNovaUpAirPoseProgress,
@@ -186,13 +199,52 @@ test("Nova down tilt and side special match the character workbook values", () =
   const downTilt = getMove("nova", "down").hits[0];
   const sideSpecial = getMove("nova", "specialSide");
 
-  assert.equal(downTilt.baseKnockback, 175);
+  assert.equal(downTilt.baseKnockback, 350);
   assert.equal(downTilt.knockbackGrowth, 0.8);
   assert.equal(sideSpecial.projectile.damage, 15);
   assert.equal(sideSpecial.projectile.hpDamage, 15);
   assert.equal(sideSpecial.projectile.clankDamage, 15);
   assert.equal(sideSpecial.spawnAt, 16 / 60);
   assert.equal(sideSpecial.total - sideSpecial.spawnAt, 70 / 60);
+});
+
+test("Nova's adjusted launch values match the character workbook", () => {
+  const launchValues = (moveId, hitIndex = 0) => {
+    const hit = getMove("nova", moveId).hits[hitIndex];
+    return [hit.baseKnockback, hit.knockbackGrowth, hit.angle];
+  };
+
+  assert.deepEqual(launchValues("jab3"), [300, 4, 40]);
+  assert.deepEqual(launchValues("side"), [340, 5, 60]);
+  assert.deepEqual(launchValues("up"), [540, 0, 135]);
+  assert.deepEqual(launchValues("down"), [350, 0.8, 100]);
+  assert.deepEqual(launchValues("airNeutral"), [330, 5, 30]);
+  assert.deepEqual(launchValues("airForward"), [160, 10, 50]);
+  assert.deepEqual(launchValues("airBack", 3), [390, 8, 10]);
+  assert.deepEqual(launchValues("smashDown"), [300, 5.5, 10]);
+  const upTiltOpener = getMove("nova", "up").hits[0];
+  const attacker = { x: 500, damage: 0, staleMoves: [] };
+  const target = { damage: 0, onGround: true, weightClass: "middle" };
+  const launchedRight = calculateLaunch({
+    move: upTiltOpener,
+    attacker,
+    target: { ...target, x: 550 }
+  });
+  const launchedLeft = calculateLaunch({
+    move: upTiltOpener,
+    attacker,
+    target: { ...target, x: 450 }
+  });
+  assert.ok(launchedRight.vx < 0);
+  assert.ok(launchedLeft.vx > 0);
+  assert.deepEqual(getMove("nova", "ledgeAttack").hits.map(hit => [
+    hit.baseKnockback,
+    hit.knockbackGrowth,
+    hit.angle
+  ]), [
+    [370, 4, 30],
+    [370, 4, 30]
+  ]);
 });
 
 test("Nova side tilt swings outward and retracts its arm-tracking hitbox", () => {
@@ -491,6 +543,282 @@ test("Nova down smash creates a wide explosion, floats briefly, and remains acti
   assert.equal(first.jumps, first.maxJumps);
 });
 
+test("Nova grabs with the front hand and pummels with the rear hand", () => {
+  const standing = getNovaGrabMotion(0.4, "standing");
+  const dash = getNovaGrabMotion(0.4, "dash");
+  const pivot = getNovaGrabMotion(0.4, "pivot");
+  assert.ok(Math.abs(standing.frontArm) < 0.001);
+  assert.equal(standing.frontArmReach, NOVA_GRAB_MOTION.variantReach.standing);
+  assert.ok(dash.frontArmReach > standing.frontArmReach);
+  assert.ok(pivot.frontArmReach > dash.frontArmReach);
+
+  const hold = getNovaGrabMotion(1, "standing", true, 0);
+  const pummel = getNovaGrabMotion(1, "standing", true, 0.5);
+  assert.equal(hold.frontArmReach, NOVA_GRAB_MOTION.holdReach);
+  assert.equal(pummel.frontArmReach, hold.frontArmReach);
+  assert.equal(hold.rearArmForward, false);
+  assert.equal(pummel.rearArmForward, true);
+  assert.equal(pummel.rearArmReach, NOVA_GRAB_MOTION.pummelRearReach);
+
+  const assets = new AssetManager();
+  for (const pose of ["grab", "dashGrab", "pivotGrab"]) {
+    assert.ok(FIGHTER_POSE_FRAMES[pose] > 1);
+    assert.ok(assets.getNovaLimbPose(pose, 0.4).frontArmReach > 1);
+  }
+  assert.equal(assets.getNovaLimbPose("grabHold", 0).frontArmReach, NOVA_GRAB_MOTION.holdReach);
+  assert.equal(assets.getNovaLimbPose("pummel", 0.5).rearArmForward, true);
+
+  const { simulation, match, first, second } = createBattle();
+  first.facing = 1;
+  simulation.startGrabHold(match, first, second);
+  const heldOffset = getNovaGrabbedFighterOffset(second.w);
+  assert.ok(Math.abs(second.x - (first.x + heldOffset.x)) < 0.001);
+
+  const heldFrontArm = fighterHurtboxes(first).find(box => box.part === "frontArm");
+  assert.ok(heldFrontArm.x + heldFrontArm.w >= second.x - second.w / 2);
+
+  stepFrames(simulation, match, 8);
+  simulation.step(match, inputs({ attack: true }), 1 / 60);
+  assert.equal(second.damage, 1.6);
+  assert.equal(first.pummelAnimation, NOVA_GRAB_MOTION.pummelDuration);
+
+  first.pummelAnimation = NOVA_GRAB_MOTION.pummelDuration / 2;
+  const pummelVisual = new CanvasRenderer({}).fighterVisualState(first, 0);
+  assert.equal(pummelVisual.pose, "pummel");
+  const rearArm = fighterHurtboxes(first).find(box => box.part === "rearArm");
+  assert.ok(rearArm.x + rearArm.w >= second.x - second.w / 2);
+
+  const snapshot = simulation.snapshot(match);
+  assert.equal(snapshot.fighters.find(fighter => fighter.id === first.id).pummelAnimation, 0.1);
+});
+
+test("grab input cannot start a grab while airborne", () => {
+  const { simulation, match, first } = createBattle();
+  first.onGround = false;
+  first.y = 300;
+  first.vy = 0;
+
+  simulation.step(match, inputs({ grab: true }), 1 / 60);
+
+  assert.equal(first.action, null);
+  assert.equal(first.move, null);
+  assert.equal(first.grabbing, null);
+
+  first.onGround = true;
+  first.y = 500 - first.h / 2;
+  simulation.step(match, inputs(), 1 / 60);
+  simulation.step(match, inputs({ grab: true }), 1 / 60);
+  assert.equal(first.action, "grab");
+});
+
+test("grab input is ignored while holding another fighter", () => {
+  const { simulation, match, first, second } = createBattle();
+  simulation.startGrabHold(match, first, second);
+
+  simulation.step(match, inputs({ grab: true }), 1 / 60);
+  simulation.step(match, inputs(), 1 / 60);
+  stepFrames(simulation, match, 12);
+
+  assert.equal(first.grabbing, second.id);
+  assert.equal(second.grabbedBy, first.id);
+  assert.equal(first.action, "grabHold");
+  assert.equal(first.throwState, null);
+  assert.equal(first.bufferedThrow, null);
+});
+
+test("Nova throw animations move the held fighter with the throwing arms", () => {
+  const forwardStart = getNovaThrowTargetOffset("forward", 0);
+  const forwardWindup = getNovaThrowTargetOffset("forward", 0.07);
+  const forwardRelease = getNovaThrowTargetOffset("forward", 0.17);
+  assert.ok(forwardWindup.x < forwardStart.x);
+  assert.ok(forwardRelease.x > forwardStart.x);
+  assert.ok(getNovaThrowMotion("forward", 0.17).frontArmReach > 2);
+
+  const backTarget = getNovaThrowTargetOffset("back", 0.13);
+  const backMotion = getNovaThrowMotion("back", 0.24);
+  assert.ok(backTarget.x < 0);
+  assert.ok(backMotion.frontArm < -3);
+  assert.ok(backMotion.frontArmReach > 2.5);
+
+  const upTarget = getNovaThrowTargetOffset("up", 0.2);
+  const upMotion = getNovaThrowMotion("up", 0.2);
+  assert.ok(upTarget.y < -80);
+  assert.equal(upMotion.rearArmForward, true);
+  assert.ok(upMotion.rearArm < -1.3);
+  assert.ok(upMotion.frontArm < -1.3);
+
+  const downTarget = getNovaThrowTargetOffset("down", 0.13);
+  const downMotion = getNovaThrowMotion("down", 0.2);
+  assert.ok(downTarget.y > 30);
+  assert.equal(downMotion.rearArmForward, true);
+  assert.ok(downMotion.rearArmReach > 1.3);
+  assert.equal(downMotion.frontArmReach, 1);
+
+  const assets = new AssetManager();
+  for (const pose of ["throwForward", "throwBack", "throwUp", "throwDown"]) {
+    assert.ok(FIGHTER_POSE_FRAMES[pose] > 1);
+  }
+  assert.equal(assets.getNovaLimbPose("throwUp", 0.4).rearArmForward, true);
+  assert.equal(assets.getNovaLimbPose("throwDown", 0.4).rearArmForward, true);
+
+  const { simulation, match, first, second } = createBattle();
+  first.facing = 1;
+  simulation.startGrabHold(match, first, second);
+  simulation.throwGrabbedFighter(match, first, second, "right");
+  first.throwState.elapsed = 0.07;
+  simulation.syncThrowPosition(match.stage, first, second);
+  const expected = getNovaThrowTargetOffset("forward", 0.07, second.w);
+  assert.ok(Math.abs(second.x - (first.x + expected.x)) < 0.001);
+  assert.ok(Math.abs(second.y - (first.y + expected.y)) < 0.001);
+
+  const renderer = new CanvasRenderer({});
+  let flameFills = 0;
+  let flameRings = 0;
+  const gradient = { addColorStop() {} };
+  renderer.drawNovaMoveEffect({
+    globalAlpha: 1,
+    save() {},
+    restore() {},
+    createLinearGradient() { return gradient; },
+    beginPath() {},
+    moveTo() {},
+    quadraticCurveTo() {},
+    closePath() {},
+    fill() { flameFills += 1; },
+    ellipse() { flameRings += 1; },
+    stroke() {}
+  }, {
+    characterId: "nova",
+    action: "throwDown",
+    actionTime: getMove("nova", "throwDown").hits[1].start
+  }, 0);
+  assert.equal(flameFills, 2);
+  assert.equal(flameRings, 1);
+});
+
+test("Nova special animations use their dedicated poses and effects", () => {
+  const neutralMove = getMove("nova", "specialNeutral");
+  const neutral = getNovaNeutralSpecialMotion(neutralMove.spawnAt);
+  assert.equal(neutral.rearArmForward, true);
+  assert.ok(neutral.rearArm < -0.8);
+  assert.ok(neutral.frontArm < -2);
+
+  const sideMove = getMove("nova", "specialSide");
+  const side = getNovaSideSpecialMotion(sideMove.spawnAt);
+  assert.equal(side.rearArmForward, true);
+  assert.ok(side.rearArmReach > 1.8);
+  assert.ok(side.frontArmReach > 1.9);
+  assert.ok(side.rearArmRootY < -25);
+  assert.ok(side.frontArmRootY < -25);
+
+  const thrust = getNovaRecoveryMotion(NOVA_RECOVERY.thrustDuration * 0.4, "thrust");
+  const falling = getNovaRecoveryMotion(NOVA_RECOVERY.thrustDuration, "fall");
+  assert.ok(thrust.force > 0.9);
+  assert.equal(falling.force, 0);
+
+  const lowCharge = getNovaChargeMotion(0.2);
+  const highCharge = getNovaChargeMotion(0.8);
+  assert.ok(highCharge.force > lowCharge.force);
+  assert.notEqual(highCharge.frontArm, lowCharge.frontArm);
+
+  const assets = new AssetManager();
+  for (const pose of ["specialNeutral", "specialSide", "specialUp", "novaCharge"]) {
+    assert.ok(FIGHTER_POSE_FRAMES[pose] > 1);
+  }
+  assert.equal(assets.getNovaLimbPose("specialNeutral", 0.35).rearArmForward, true);
+  assert.equal(assets.getNovaLimbPose("specialSide", 0.25).rearArmForward, true);
+  assert.ok(assets.getNovaLimbPose("specialUp", 0.4).thruster > 0);
+  assert.ok(assets.getNovaLimbPose("novaCharge", 0.8).frontArm > lowCharge.frontArm);
+
+  const renderer = new CanvasRenderer({});
+  assert.equal(renderer.fighterVisualState({
+    characterId: "nova",
+    action: "specialNeutral",
+    actionTime: neutralMove.spawnAt,
+    shield: false,
+    hitstun: 0
+  }).pose, "specialNeutral");
+  assert.equal(renderer.fighterVisualState({
+    characterId: "nova",
+    action: "specialSide",
+    actionTime: sideMove.spawnAt,
+    shield: false,
+    hitstun: 0
+  }).pose, "specialSide");
+  assert.equal(renderer.fighterVisualState({
+    characterId: "nova",
+    action: "specialUp",
+    actionTime: 0.2,
+    recovery: { phase: "thrust", elapsed: 0.2 },
+    shield: false,
+    hitstun: 0
+  }).pose, "specialUp");
+  assert.equal(renderer.fighterVisualState({
+    characterId: "nova",
+    action: "novaCharge",
+    novaCharge: NOVA_CHARGE.maxDuration * 0.75,
+    shield: false,
+    hitstun: 0
+  }).pose, "novaCharge");
+
+  const counts = { radial: 0, linear: 0, fills: 0, strokes: 0, ellipses: 0, lines: 0 };
+  const gradient = { addColorStop() {} };
+  const ctx = {
+    globalAlpha: 1,
+    save() {},
+    restore() {},
+    createRadialGradient() { counts.radial += 1; return gradient; },
+    createLinearGradient() { counts.linear += 1; return gradient; },
+    beginPath() {},
+    arc() {},
+    ellipse() { counts.ellipses += 1; },
+    moveTo() {},
+    lineTo() { counts.lines += 1; },
+    quadraticCurveTo() {},
+    closePath() {},
+    fill() { counts.fills += 1; },
+    stroke() { counts.strokes += 1; }
+  };
+
+  renderer.drawNovaMoveEffect(ctx, {
+    characterId: "nova",
+    action: "specialNeutral",
+    actionTime: neutralMove.spawnAt
+  }, 400);
+  assert.equal(counts.radial, 1);
+  assert.ok(counts.lines >= 8);
+
+  const sideRadials = counts.radial;
+  renderer.drawNovaMoveEffect(ctx, {
+    characterId: "nova",
+    action: "specialSide",
+    actionTime: sideMove.spawnAt
+  }, 400);
+  assert.equal(counts.radial, sideRadials + 1);
+
+  const upFills = counts.fills;
+  const upGradients = counts.linear;
+  renderer.drawNovaMoveEffect(ctx, {
+    characterId: "nova",
+    action: "specialUp",
+    actionTime: 0.2,
+    recovery: { phase: "thrust", elapsed: 0.2 }
+  }, 400);
+  assert.equal(counts.linear, upGradients + 4);
+  assert.equal(counts.fills, upFills + 4);
+  assert.ok(counts.ellipses >= 1);
+
+  const chargeFills = counts.fills;
+  const chargeStrokes = counts.strokes;
+  renderer.drawNovaMoveEffect(ctx, {
+    characterId: "nova",
+    action: "novaCharge",
+    novaCharge: NOVA_CHARGE.maxDuration * 0.75
+  }, 400);
+  assert.equal(counts.fills, chargeFills + 4);
+  assert.equal(counts.strokes, chargeStrokes + 6);
+});
+
 test("Nova up tilt swings the right hand clockwise before the left hand counterclockwise", () => {
   const rightStart = getNovaUpTiltMotion(0.12);
   const rightSwing = getNovaUpTiltMotion(0.24);
@@ -772,11 +1100,12 @@ test("a grounded down tilt hit does not displace the attacker to a ledge", () =>
   assert.equal(first.ledge, null);
 });
 
-test("victim SDI cannot move downward through a main platform", () => {
+test("victim SDI cannot move through a main platform or erase launch velocity", () => {
   const { first } = createBattle();
   first.x = 600;
   first.y = 500 - first.h / 2;
   first.onGround = false;
+  first.vx = 840;
   first.vy = -300;
   first.hitlag = 0.1;
 
@@ -784,7 +1113,9 @@ test("victim SDI cannot move downward through a main platform", () => {
 
   assert.equal(first.x, 600);
   assert.equal(first.y, 500 - first.h / 2);
-  assert.equal(first.onGround, true);
+  assert.equal(first.onGround, false);
+  assert.equal(first.vx, 840);
+  assert.equal(first.vy, -300);
 });
 
 test("hitlag SDI remains available while stage collision is enforced", () => {
@@ -1156,6 +1487,47 @@ test("Nova up air rises by exactly two Nova body heights and has 60 frames of re
   const activeEnd = Math.max(...move.hits.map(hit => hit.start + hit.duration));
   assert.equal(NOVA_MOVE_MOTION.upAirRecoveryFrames, 60);
   assert.ok(Math.abs((move.total - activeEnd) * 60 - NOVA_MOVE_MOTION.upAirRecoveryFrames) < 1e-9);
+});
+
+test("Nova can steer during up-air recovery and down-air with modest up-air control", () => {
+  const startAerialAction = (action, actionTime, input) => {
+    const { simulation, match, first, second } = createBattle();
+    second.x = 1100;
+    first.x = 600;
+    first.y = 260;
+    first.onGround = false;
+    first.vx = 0;
+    first.vy = 0;
+    first.facing = 1;
+    first.action = action;
+    first.move = getMove("nova", action);
+    first.moveState = {};
+    first.actionTime = actionTime;
+    simulation.step(match, inputs(input), 1 / 60);
+    return first;
+  };
+
+  const upAir = getMove("nova", "airUp");
+  const upAirActiveEnd = Math.max(...upAir.hits.map(hit => hit.start + hit.duration));
+  const recoveringUpAir = startAerialAction("airUp", upAirActiveEnd + 0.1, { moveX: 1 });
+  assert.ok(recoveringUpAir.vx > 0);
+  assert.equal(recoveringUpAir.facing, 1);
+  assert.ok(
+    recoveringUpAir.vx <= recoveringUpAir.stats.runSpeed * MOVEMENT.aerialAttackControl.airUp.maxSpeedScale
+  );
+
+  const downAir = getMove("nova", "airDown");
+  const activeDownAir = startAerialAction("airDown", downAir.hits[0].start, {
+    moveX: -1,
+    moveY: 1
+  });
+  assert.ok(activeDownAir.vx < 0);
+  assert.equal(activeDownAir.fastFalling, true);
+  assert.equal(activeDownAir.facing, 1);
+  assert.ok(
+    MOVEMENT.aerialAttackControl.airUp.maxSpeedScale <
+      MOVEMENT.aerialAttackControl.airDown.maxSpeedScale
+  );
 });
 
 test("Nova up air keeps its hands down, uses short foot jets, and protects only its head", () => {
@@ -1530,14 +1902,22 @@ test("Nova's stored charge is spent by the 2 percent opening of back throw", () 
   assert.equal(first.novaCharge, 0);
 });
 
-test("Nova down throw deals three 2 percent hits and a 4 percent finisher", () => {
-  const { simulation, match, first, second } = createBattle();
-  simulation.startGrabHold(match, first, second);
-  simulation.step(match, inputs({ moveY: 1 }), 1 / 60);
-  stepFrames(simulation, match, 100);
+test("Nova down throw deals three 2 percent hits and launches its 4 percent finisher backward", () => {
+  assert.equal(getMove("nova", "throwDown").hits[3].angle, 130);
 
-  assert.equal(second.damage, 10);
-  assert.equal(second.grabbedBy, null);
+  for (const facing of [-1, 1]) {
+    const { simulation, match, first, second } = createBattle();
+    first.facing = facing;
+    simulation.startGrabHold(match, first, second);
+    simulation.step(match, inputs({ moveY: 1 }), 1 / 60);
+    for (let frame = 0; frame < 90 && second.grabbedBy; frame += 1) {
+      simulation.step(match, inputs(), 1 / 60);
+    }
+
+    assert.equal(second.damage, 10);
+    assert.equal(second.grabbedBy, null);
+    assert.ok(second.vx * facing < 0);
+  }
 });
 
 test("air movement keeps facing while an air special may reverse it", () => {
@@ -1615,6 +1995,78 @@ test("final smash activation is resolved by the shared simulation", () => {
   assert.equal(first.finalGauge, 0);
 });
 
+test("Nova final smash transforms a giant arm, speaks, punches, and restores the arm", () => {
+  const transformed = getNovaFinalSmashMotion(NOVA_FINAL_SMASH.transformDuration);
+  const holding = getNovaFinalSmashMotion(NOVA_FINAL_SMASH.punchStart - 0.1);
+  const punchWindup = getNovaFinalSmashMotion(
+    (NOVA_FINAL_SMASH.punchStart + NOVA_FINAL_SMASH.punchAt) / 2
+  );
+  const punching = getNovaFinalSmashMotion(NOVA_FINAL_SMASH.punchAt);
+  const restored = getNovaFinalSmashMotion(NOVA_FINAL_SMASH.totalDuration);
+
+  assert.ok(transformed.armThickness > NOVA_BODY_SIZE.height);
+  assert.ok(transformed.armAngle < -2.5);
+  assert.equal(holding.showSpeech, true);
+  assert.equal(holding.timeFrozen, true);
+  assert.equal(punchWindup.timeFrozen, true);
+  assert.equal(punching.timeFrozen, false);
+  assert.equal(punching.armLength, NOVA_FINAL_SMASH.maxArmLength);
+  assert.equal(restored.armLength, NOVA_FINAL_SMASH.normalArmLength);
+  assert.equal(restored.armThickness, NOVA_FINAL_SMASH.normalArmThickness);
+
+  const punch = getMove("nova", "finalPunch");
+  assert.equal(punch.w, NOVA_FINAL_SMASH.hitbox.width);
+  assert.equal(punch.h, NOVA_FINAL_SMASH.hitbox.height);
+
+  const assets = new AssetManager();
+  assert.ok(FIGHTER_POSE_FRAMES.finalSmash > 1);
+  assert.equal(assets.getNovaLimbPose("finalSmash", 0.4).frontArmVisible, false);
+
+  const renderer = new CanvasRenderer({});
+  const visual = renderer.fighterVisualState({
+    characterId: "nova",
+    action: "finalSmash",
+    actionTime: NOVA_FINAL_SMASH.punchAt,
+    shield: false,
+    hitstun: 0
+  }, 0);
+  assert.equal(visual.pose, "finalSmash");
+
+  const text = [];
+  let armFills = 0;
+  const gradient = { addColorStop() {} };
+  const ctx = {
+    globalAlpha: 1,
+    save() {},
+    restore() {},
+    translate() {},
+    rotate() {},
+    createLinearGradient() { return gradient; },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    arcTo() {},
+    arc() {},
+    closePath() {},
+    fill() { armFills += 1; },
+    stroke() {},
+    fillText(value) { text.push(value); }
+  };
+  renderer.drawNovaFinalSmashArm(ctx, {
+    actionTime: NOVA_FINAL_SMASH.punchAt,
+    colorIndex: 0
+  });
+  renderer.drawNovaFinalSmashSpeech(ctx, {
+    actionTime: NOVA_FINAL_SMASH.transformDuration + 0.3,
+    x: 500,
+    y: 464,
+    h: NOVA_BODY_SIZE.height,
+    facing: 1
+  });
+  assert.ok(armFills >= 9);
+  assert.deepEqual(text, ["出力限界突破…"]);
+});
+
 test("final smash snapshots expose the same active hitbox used by the attack", () => {
   const { simulation, match, first } = createBattle({ finalSmash: true });
   first.finalGauge = FINAL_SMASH.maxGauge;
@@ -1674,24 +2126,70 @@ test("Nova final smash freezes time and hits multiple fighters with one wide pun
   const secondXBefore = second.x;
 
   simulation.step(match, inputs({ special: true }), 1 / 60);
-  for (let frame = 0; frame < 20; frame += 1) {
+  while (match.finalSmash.elapsed < FINAL_SMASH.punchAt - 1 / 60) {
     simulation.step(match, new Map(), 1 / 60);
   }
   assert.equal(second.damage, 0);
   assert.equal(second.x, secondXBefore);
+  assert.equal(match.elapsed, elapsedBefore);
+  assert.equal(match.finalSmash.timeFrozen, true);
+  assert.ok(first.invuln > 0);
 
-  for (let frame = 0; frame < 45 && match.finalSmash; frame += 1) {
+  while (match.finalSmash && match.finalSmash.elapsed < FINAL_SMASH.punchAt) {
+    simulation.step(match, new Map(), 1 / 60);
+  }
+  assert.ok(match.elapsed > elapsedBefore);
+  assert.equal(match.finalSmash.timeFrozen, false);
+  assert.equal(second.damage, 32.5);
+  assert.equal(third.damage, 32.5);
+
+  for (let frame = 0; frame < 90 && match.finalSmash; frame += 1) {
     simulation.step(match, new Map(), 1 / 60);
   }
 
-  assert.equal(match.elapsed, elapsedBefore);
-  assert.equal(second.damage, 32.5);
-  assert.equal(third.damage, 32.5);
   assert.equal(first.finalGauge, 0);
   assert.equal(second.finalGauge, 0);
   assert.equal(third.finalGauge, 0);
   assert.equal(first.novaCharge, 4);
+  assert.equal(first.invuln, 0);
+  assert.equal(first.action, null);
   assert.equal(match.finalSmash, null);
+});
+
+test("downward SDI against the floor cannot cancel final-smash launch", () => {
+  const { simulation, match, first, second } = createBattle({ finalSmash: true });
+  first.x = 500;
+  second.x = 650;
+  second.y = STAGES.final.platforms[0].y - second.h / 2;
+  second.onGround = true;
+  second.damage = 100;
+
+  simulation.applyHit(match, first, second, getMove("nova", "finalPunch"));
+  const launchVx = second.vx;
+  const launchVy = second.vy;
+  simulation.step(match, inputs({}, { moveY: 1 }), 1 / 60);
+
+  assert.equal(second.y, STAGES.final.platforms[0].y - second.h / 2);
+  assert.equal(second.onGround, false);
+  assert.equal(second.vx, launchVx);
+  assert.equal(second.vy, launchVy);
+  assert.ok(second.hitlag > 0);
+});
+
+test("Nova final smash pierces shield and perfect-guard timing", () => {
+  const { simulation, match, first, second } = createBattle({ finalSmash: true });
+  second.shield = true;
+  second.perfectShieldWindow = SHIELD.perfectWindow;
+  const shieldHp = second.shieldHp;
+
+  simulation.applyHit(match, first, second, getMove("nova", "finalPunch"));
+
+  assert.equal(second.damage, 32.5);
+  assert.equal(second.shieldHp, shieldHp);
+  assert.equal(second.shield, false);
+  assert.equal(second.perfectShieldWindow, 0);
+  assert.ok(second.hitstun > 0);
+  assert.notEqual(second.vx, 0);
 });
 
 test("the shared hit boundary rejects self hits including final smash attacks", () => {
@@ -2336,6 +2834,7 @@ test("ledge jump starts at the ledge and uses the shared jump multipliers", () =
   assert.equal(tryGrabLedge(STAGES.final, first, {}), true);
   const startX = first.x;
   const startY = first.y;
+  first.invuln = 0;
   assert.equal(updateLedgeHang(first, { jump: true }, true, false, false, 1 / 60), "jump");
   assert.equal(first.x, startX);
   assert.equal(first.y, startY);
@@ -2345,6 +2844,8 @@ test("ledge jump starts at the ledge and uses the shared jump multipliers", () =
     first.stats.airJumpSpeed / MOVEMENT.jumpDurationMultiplier * LEDGE.jumpSpeedMultiplier
   );
   assert.equal(first.jumpArcActive, true);
+  assert.equal(first.invuln, LEDGE.jumpInvuln);
+  assert.equal(LEDGE.jumpInvuln, 0.4);
 });
 
 test("dropping from the ledge with down or away leaves only the air jump", () => {
@@ -2510,6 +3011,30 @@ test("a timed shield press grants tech invulnerability and starts tech lockout",
   assert.equal(first.invuln, TECH.invuln);
   assert.equal(first.techWindow, 0);
   assert.equal(first.techLockout, TECH.lockout);
+});
+
+test("a high-speed shallow collision cannot be stopped by a buffered tech", () => {
+  const { first } = createBattle();
+  const impactVx = TECH.maxSpeed + 300;
+  const impactVy = 300;
+  first.hitstun = 0.5;
+  first.tumbling = true;
+  first.techWindow = TECH.window;
+
+  assert.equal(resolveImpactAfterCollision(first, {
+    landed: true,
+    hitWall: false,
+    hitSlope: false,
+    hitCeiling: false,
+    impactVx,
+    impactVy
+  }), "bounce");
+  assert.equal(first.action, "bounce");
+  assert.equal(first.onGround, false);
+  assert.equal(first.vx, impactVx * TECH.shallowGroundBounceRetention);
+  assert.equal(first.vy, -impactVy * TECH.shallowGroundBounceRetention);
+  assert.equal(first.techWindow, 0);
+  assert.equal(first.knockdownPending, true);
 });
 
 test("a strong shallow ground impact preserves its angle and continues as a bounce", () => {

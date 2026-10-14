@@ -7,6 +7,7 @@ import {
   KNOCKDOWN,
   MOVEMENT,
   NOVA_CHARGE,
+  NOVA_GRAB_MOTION,
   NOVA_RECOVERY,
   RESPAWN,
   SHIELD,
@@ -32,7 +33,9 @@ import {
   getHitbox,
   getActiveMoveHits,
   getMove,
-  getStageDefinition,
+  getNovaGrabbedFighterOffset,
+  getNovaThrowTargetOffset,
+  getScaledStageDefinition,
   hitboxOverlapsFighter,
   hitboxesOverlap,
   horizontalInput,
@@ -62,8 +65,8 @@ export class BattleSimulation {
     this.onEvent = onEvent;
   }
 
-  createMatch({ id, rules, countdown = 0 }) {
-    const stage = getStageDefinition(rules?.stage);
+  createMatch({ id, rules, countdown = 0, playerCount = 2 }) {
+    const stage = getScaledStageDefinition(rules?.stage, playerCount);
     return {
       id,
       frame: 0,
@@ -136,6 +139,7 @@ export class BattleSimulation {
       shieldHp: SHIELD.max,
       shieldMax: SHIELD.max,
       shieldStun: 0,
+      shieldDrainPause: 0,
       shieldReleaseLag: 0,
       clankLag: 0,
       actionLock: 0,
@@ -161,6 +165,7 @@ export class BattleSimulation {
       grabEscape: 0,
       bufferedThrow: null,
       pummelCooldown: 0,
+      pummelAnimation: 0,
       fastFalling: false,
       dashTimer: 0,
       dashDirection: 0,
@@ -218,10 +223,12 @@ export class BattleSimulation {
     this.resolveFinalSmashActivation(match, resolvedInputs);
     if (match.finalSmash) {
       this.updateFinalSmashState(match, dt);
-      for (const fighter of match.fighters.values()) {
-        fighter.lastInput = { ...resolvedInputs.get(fighter.id) };
+      if (match.finalSmash?.timeFrozen) {
+        for (const fighter of match.fighters.values()) {
+          fighter.lastInput = { ...resolvedInputs.get(fighter.id) };
+        }
+        return { active: true, dt, finished: false };
       }
-      return { active: true, dt, finished: false };
     }
 
     match.elapsed += dt;
@@ -243,25 +250,27 @@ export class BattleSimulation {
   updateFinalSmashState(match, dt) {
     const state = match.finalSmash;
     if (!match.rules.finalSmash || !state) {
-      match.finalSmash = null;
+      this.finishFinalSmash(match, state);
       return;
     }
 
     const fighter = match.fighters.get(state.fighterId);
     if (!fighter || !fighter.alive) {
-      match.finalSmash = null;
+      this.finishFinalSmash(match, state);
       return;
     }
 
     state.elapsed = (state.elapsed || 0) + dt;
     state.remaining = Math.max(0, FINAL_SMASH.defaultActiveDuration - state.elapsed);
+    state.timeFrozen = state.elapsed < FINAL_SMASH.punchAt;
     fighter.action = "finalSmash";
+    fighter.actionTime = state.elapsed;
     fighter.move = null;
     fighter.runTurn = null;
     fighter.vx = 0;
     fighter.vy = 0;
     fighter.shield = false;
-    fighter.invuln = Math.max(fighter.invuln || 0, state.remaining + 0.1);
+    fighter.invuln = Math.max(state.invulnBefore || 0, state.remaining);
 
     if (!state.punchDone && state.elapsed >= FINAL_SMASH.punchAt) {
       state.punchDone = true;
@@ -275,8 +284,16 @@ export class BattleSimulation {
     }
 
     if (state.remaining > 0) return;
-    fighter.action = null;
-    fighter.actionTime = 0;
+    this.finishFinalSmash(match, state);
+  }
+
+  finishFinalSmash(match, state = match.finalSmash) {
+    const fighter = state ? match.fighters.get(state.fighterId) : null;
+    if (fighter) {
+      if (fighter.action === "finalSmash") fighter.action = null;
+      fighter.actionTime = 0;
+      fighter.invuln = Math.max(0, state.invulnBefore || 0);
+    }
     match.finalSmash = null;
   }
 
@@ -301,7 +318,9 @@ export class BattleSimulation {
     match.finalSmash = {
       ...activation.state,
       elapsed: 0,
-      punchDone: false
+      punchDone: false,
+      timeFrozen: true,
+      invulnBefore: Math.max(0, activation.winner.invuln || 0)
     };
     this.addEvent(match, "finalSmash", activation.winner.id, activation.winner.id, {
       x: activation.winner.x,
@@ -321,6 +340,11 @@ export class BattleSimulation {
           this.addEvent(match, "respawn", fighter.id);
         }
       }
+      fighter.lastInput = { ...input };
+      return;
+    }
+
+    if (match.finalSmash?.fighterId === fighter.id) {
       fighter.lastInput = { ...input };
       return;
     }
@@ -351,6 +375,7 @@ export class BattleSimulation {
 
     updateCoreTimers(fighter, dt);
     fighter.pummelCooldown = Math.max(0, (fighter.pummelCooldown || 0) - dt);
+    fighter.pummelAnimation = Math.max(0, (fighter.pummelAnimation || 0) - dt);
     this.updateGroundJumpChoice(fighter, input, dt);
 
     if (fighter.grabbedBy) {
@@ -480,7 +505,7 @@ export class BattleSimulation {
         fighter.fastFalling = false;
         if (canceledRunTurn) fighter.runTurn = null;
         this.addEvent(match, "jump", fighter.id);
-      } else if (grabPressed) {
+      } else if (grabPressed && fighter.onGround) {
         performedShieldCancel = wasShielding;
         const variant = this.getGrabVariant(fighter, axis, facingAtFrameStart);
         if (variant === "pivot") fighter.facing = axis === 0 ? -facingAtFrameStart : Math.sign(axis);
@@ -521,12 +546,17 @@ export class BattleSimulation {
     const shieldEvent = updateShieldState(fighter, input, dt);
     if (shieldEvent) this.addEvent(match, shieldEvent, fighter.id);
     const canMove = fighter.inputEnabled !== false && canAct(fighter);
+    const aerialAttackControl = !fighter.onGround && fighter.inputEnabled !== false &&
+      fighter.hitstun <= 0 && !fighter.dodge
+      ? MOVEMENT.aerialAttackControl[fighter.action]
+      : null;
+    const canAirControl = canMove || Boolean(aerialAttackControl);
 
     fighter.crouching = Boolean(
       canMove && fighter.onGround && verticalAxis > 0.55 && !fighter.shield && !fighter.dodge
     );
 
-    if (canMove && !fighter.onGround && verticalAxis > 0.7 && lastVerticalAxis <= 0.7 && fighter.vy > -60) {
+    if (canAirControl && !fighter.onGround && verticalAxis > 0.7 && lastVerticalAxis <= 0.7 && fighter.vy > -60) {
       fighter.fastFalling = true;
       fighter.jumpArcActive = false;
     }
@@ -557,12 +587,24 @@ export class BattleSimulation {
       fighter.runRampDirection = 0;
     }
 
-    const maxSpeed = fighter.onGround ? stats.runSpeed * groundRunSpeedScale : stats.runSpeed;
+    const baseMaxSpeed = fighter.onGround ? stats.runSpeed * groundRunSpeedScale : stats.runSpeed;
+    const maxSpeed = aerialAttackControl
+      ? Math.max(
+          baseMaxSpeed * aerialAttackControl.maxSpeedScale,
+          Math.min(Math.abs(fighter.vx), baseMaxSpeed)
+        )
+      : baseMaxSpeed;
     const accel = fighter.onGround
       ? stats.groundAccel
       : stats.airAccel * MOVEMENT.airAccelerationMultiplier;
     const friction = fighter.onGround ? stats.groundFriction : stats.airFriction;
-    const controlScale = fighter.action ? 0.35 : fighter.hitstun > 0 ? 0.18 : 1;
+    const controlScale = aerialAttackControl
+      ? aerialAttackControl.accelerationScale
+      : fighter.action
+      ? 0.35
+      : fighter.hitstun > 0
+      ? 0.18
+      : 1;
 
     if (groundRunTurning) {
       const turn = fighter.runTurn;
@@ -578,7 +620,7 @@ export class BattleSimulation {
       }
     } else if (fighter.shield) {
       fighter.vx = 0;
-    } else if (canMove && !fighter.dodge && !fighter.crouching && Math.abs(axis) > 0.01) {
+    } else if (canAirControl && !fighter.dodge && !fighter.crouching && Math.abs(axis) > 0.01) {
       fighter.vx += axis * accel * controlScale * dt;
       fighter.vx = clamp(fighter.vx, -maxSpeed, maxSpeed);
     } else if (fighter.onGround && !fighter.dodge) {
@@ -1323,6 +1365,7 @@ export class BattleSimulation {
     attacker.grabEscape = Math.min(2.2, GRAB.holdTime + (target.damage || 0) * 0.004);
     attacker.bufferedThrow = null;
     attacker.pummelCooldown = 0.12;
+    attacker.pummelAnimation = 0;
     attacker.action = "grabHold";
     attacker.move = null;
     attacker.moveState = null;
@@ -1374,6 +1417,7 @@ export class BattleSimulation {
       const pummel = this.applyNovaCharge(attacker, getMove(attacker.characterId, "pummel"));
       this.dealFighterDamage(match, attacker, target, pummel.damage, pummel.hpDamage);
       attacker.pummelCooldown = GRAB.pummelCooldown;
+      attacker.pummelAnimation = NOVA_GRAB_MOTION.pummelDuration;
       attacker.grabEscape -= 0.08;
       this.addEvent(match, "pummel", target.id, attacker.id);
       if (match.rules.mode === "hp" && target.hp <= 0) {
@@ -1417,7 +1461,7 @@ export class BattleSimulation {
     if (state.verticalAxis > 0.55 && state.lastVerticalAxis <= 0.55) return "down";
     if (state.axis < -0.55 && state.lastAxis >= -0.55) return "left";
     if (state.axis > 0.55 && state.lastAxis <= 0.55) return "right";
-    return state.grabPressed ? "forward" : null;
+    return null;
   }
 
   throwGrabbedFighter(match, attacker, target, direction) {
@@ -1439,6 +1483,7 @@ export class BattleSimulation {
     attacker.moveState = { staleRecorded: false };
     attacker.actionTime = 0;
     attacker.bufferedThrow = null;
+    attacker.pummelAnimation = 0;
     attacker.vx = 0;
     this.syncThrowPosition(match.stage, attacker, target);
   }
@@ -1480,17 +1525,12 @@ export class BattleSimulation {
 
   syncThrowPosition(stage, attacker, target) {
     const state = attacker.throwState;
-    const variant = state?.variant;
-    let side = attacker.facing;
-    let offsetY = 0;
-    if (variant === "back" && state.elapsed >= 0.13) side = -attacker.facing;
-    if (variant === "down") {
-      side = -attacker.facing;
-      offsetY = attacker.h * 0.42;
-    }
-    if (variant === "up") offsetY = -attacker.h * 0.62;
-    const targetX = attacker.x + side * (attacker.w / 2 + target.w / 2 - 4);
-    const targetY = attacker.y + offsetY;
+    const variant = state?.variant || "forward";
+    const offset = attacker.characterId === "nova"
+      ? getNovaThrowTargetOffset(variant, state?.elapsed || 0, target.w)
+      : { x: attacker.w / 2 + target.w / 2 - 4, y: 0 };
+    const targetX = attacker.x + attacker.facing * offset.x;
+    const targetY = attacker.y + offset.y;
     placeFighterWithStageCollision(stage, target, targetX, targetY);
     target.facing = -attacker.facing;
     target.vx = 0;
@@ -1502,6 +1542,7 @@ export class BattleSimulation {
     attacker.grabTimer = 0;
     attacker.grabEscape = 0;
     attacker.bufferedThrow = null;
+    attacker.pummelAnimation = 0;
     attacker.throwState = null;
     attacker.action = null;
     attacker.moveState = null;
@@ -1518,6 +1559,7 @@ export class BattleSimulation {
       attacker.grabTimer = 0;
       attacker.grabEscape = 0;
       attacker.bufferedThrow = null;
+      attacker.pummelAnimation = 0;
       attacker.throwState = null;
       attacker.moveState = null;
       if (attacker.action === "grabHold" || wasThrowing) attacker.action = null;
@@ -1545,11 +1587,14 @@ export class BattleSimulation {
   }
 
   syncGrabbedPosition(stage, attacker, target) {
+    const offset = attacker.characterId === "nova"
+      ? getNovaGrabbedFighterOffset(target.w)
+      : { x: attacker.w / 2 + target.w / 2 - 4, y: 0 };
     placeFighterWithStageCollision(
       stage,
       target,
-      attacker.x + attacker.facing * (attacker.w / 2 + target.w / 2 - 4),
-      attacker.y
+      attacker.x + attacker.facing * offset.x,
+      attacker.y + offset.y
     );
     target.facing = -attacker.facing;
     target.vx = 0;
@@ -1558,8 +1603,10 @@ export class BattleSimulation {
 
   resolveFighterCollisions(match) {
     const fighters = Array.from(match.fighters.values());
+    const finalSmashFighterId = match.finalSmash?.fighterId || null;
     for (let firstIndex = 0; firstIndex < fighters.length; firstIndex += 1) {
       for (let secondIndex = firstIndex + 1; secondIndex < fighters.length; secondIndex += 1) {
+        if (fighters[firstIndex].id === finalSmashFighterId || fighters[secondIndex].id === finalSmashFighterId) continue;
         resolveFighterBodyCollision(fighters[firstIndex], fighters[secondIndex]);
       }
     }
@@ -1698,6 +1745,12 @@ export class BattleSimulation {
     }
 
     if (!blocked) {
+      if (move.beatsShield) {
+        target.shield = false;
+        target.shieldStun = 0;
+        target.shieldReleaseLag = 0;
+        target.perfectShieldWindow = 0;
+      }
       this.releaseFighterGrabRelations(match, target);
       this.dealFighterDamage(match, attacker, target, move.damage, move.hpDamage, {
         buildFinalGauge: move.buildsFinalGauge !== false
@@ -1916,6 +1969,7 @@ export class BattleSimulation {
     fighter.grabEscape = 0;
     fighter.bufferedThrow = null;
     fighter.pummelCooldown = 0;
+    fighter.pummelAnimation = 0;
     fighter.fastFalling = false;
     fighter.dashTimer = 0;
     fighter.dashDirection = 0;
@@ -2028,6 +2082,7 @@ export class BattleSimulation {
         remaining: roundValue(match.finalSmash.remaining),
         elapsed: roundValue(match.finalSmash.elapsed || 0),
         punchDone: Boolean(match.finalSmash.punchDone),
+        timeFrozen: Boolean(match.finalSmash.timeFrozen),
         hitbox: finalSmashHitbox
       } : null,
       fighters: Array.from(match.fighters.values()).map(fighter => ({
@@ -2079,6 +2134,7 @@ export class BattleSimulation {
         } : null,
         grabbing: fighter.grabbing,
         grabbedBy: fighter.grabbedBy,
+        pummelAnimation: roundValue(fighter.pummelAnimation || 0),
         landingLag: roundValue(fighter.landingLag),
         respawnPlatform: roundValue(fighter.respawnPlatform),
         ledge: fighter.ledge ? { ...fighter.ledge } : null,

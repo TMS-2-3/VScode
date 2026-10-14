@@ -1,4 +1,4 @@
-import { ACTIONS, CHARACTER_ASSETS, DEFAULT_RULES, MODE_LABELS, SHORT_HOP_MODES, STAGE_LABELS, TIME_LIMIT } from "./constants.js";
+import { ACTIONS, CHARACTER_ASSETS, DEFAULT_RULES, MODE_LABELS, PLAYER_LIMITS, SHORT_HOP_MODES, STAGE_LABELS, TIME_LIMIT } from "./constants.js";
 import { PRACTICE_GAME_SPEEDS } from "./practice-mode.js";
 import { bindingLabel, escapeAttr, escapeHtml, formatTime, padBindingLabel } from "./utils.js";
 
@@ -83,7 +83,7 @@ export class ViewRenderer {
           <section class="panel stack">
             <div class="panel-head">
               <h2>モード選択</h2>
-              <span class="pill">2〜4人</span>
+              <span class="pill">${PLAYER_LIMITS.min}〜${PLAYER_LIMITS.max}人</span>
             </div>
             <button class="mode-button button-primary" data-action="screen" data-screen="create">ローカル通信対戦</button>
             <button class="mode-button button-primary" data-action="screen" data-screen="practiceSetup">練習</button>
@@ -548,9 +548,12 @@ export class ViewRenderer {
         <div class="field">
           <label for="maxPlayers">人数</label>
           <select id="maxPlayers">
-            <option value="2" ${rules.maxPlayers === 2 ? "selected" : ""}>2人</option>
-            <option value="3" ${rules.maxPlayers === 3 ? "selected" : ""}>3人</option>
-            <option value="4" ${rules.maxPlayers === 4 ? "selected" : ""}>4人</option>
+            ${Array.from(
+              { length: PLAYER_LIMITS.max - PLAYER_LIMITS.min + 1 },
+              (_, index) => PLAYER_LIMITS.min + index
+            ).map(count => (
+              `<option value="${count}" ${rules.maxPlayers === count ? "selected" : ""}>${count}人</option>`
+            )).join("")}
           </select>
         </div>
         <div class="field">

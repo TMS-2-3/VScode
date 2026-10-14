@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   CHARACTER_IDS,
   DEFAULT_RULES,
+  PLAYER_LIMITS,
   STAGES,
   normalizeTimeLimit
 } from "./js/battle-data.js";
@@ -703,7 +704,8 @@ function startMatch(room) {
   room.match = battleSimulation.createMatch({
     id: crypto.randomUUID(),
     rules: room.rules,
-    countdown: 3.2
+    countdown: 3.2,
+    playerCount: players.length
   });
   const stage = room.match.stage;
   Object.assign(room.match, {
@@ -724,8 +726,7 @@ function startMatch(room) {
       colorIndex: index,
       spawn,
       facing: index % 2 === 0 ? 1 : -1,
-      rules: room.match.rules,
-      invuln: 2
+      rules: room.match.rules
     }));
   });
   room.match.rollback.capture(room.match);
@@ -865,12 +866,15 @@ function roomView(room, viewerId) {
 
 function buildAssetManifest(room) {
   const characters = new Set(["nova"]);
-  for (const player of room.players.values()) {
+  const activePlayers = Array.from(room.players.values()).filter(player => !player.waiting);
+  for (const player of activePlayers) {
     if (player.characterId) characters.add(player.characterId);
   }
   return {
     stage: room.rules.stage,
-    characters: Array.from(characters)
+    playerCount: activePlayers.length,
+    characters: Array.from(characters),
+    colorIndices: activePlayers.map((_, index) => index)
   };
 }
 
@@ -901,14 +905,14 @@ function makeRoomCode() {
 
 function nextSlot(room) {
   const used = new Set(Array.from(room.players.values()).map(player => player.slot));
-  for (let i = 1; i <= 4; i += 1) if (!used.has(i)) return i;
+  for (let i = 1; i <= PLAYER_LIMITS.max; i += 1) if (!used.has(i)) return i;
   return room.players.size + 1;
 }
 
 function normalizeRules(raw, fallback = DEFAULT_RULES, playerCount = 0) {
   const source = raw && typeof raw === "object" ? raw : {};
   const previous = fallback || DEFAULT_RULES;
-  const minPlayers = Math.max(2, playerCount || 0);
+  const minPlayers = Math.max(PLAYER_LIMITS.min, playerCount || 0);
   const mode = ["stock", "time", "hp"].includes(source.mode) ? source.mode : previous.mode;
   const stage = STAGES[source.stage] ? source.stage : previous.stage;
   return {
@@ -916,7 +920,7 @@ function normalizeRules(raw, fallback = DEFAULT_RULES, playerCount = 0) {
     stocks: clampInt(source.stocks, 1, 9, previous.stocks),
     timeLimit: normalizeTimeLimit(source.timeLimit, previous.timeLimit),
     hp: clampInt(source.hp, 50, 500, previous.hp),
-    maxPlayers: clampInt(source.maxPlayers, minPlayers, 4, previous.maxPlayers),
+    maxPlayers: clampInt(source.maxPlayers, minPlayers, PLAYER_LIMITS.max, previous.maxPlayers),
     stage,
     gameSpeed: clampNumber(Number(source.gameSpeed), 0.75, 1.25, previous.gameSpeed),
     inputDelay: clampInt(source.inputDelay, 0, 8, previous.inputDelay ?? DEFAULT_RULES.inputDelay),
