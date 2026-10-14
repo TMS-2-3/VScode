@@ -1,24 +1,66 @@
 export const SUPPLY_ITEM_EFFECT_TYPE = Object.freeze({
+  CANDY_BONUS: "candyBonus",
+  CANDY_LAUNCHER: "candyLauncher",
+  CANDY_PARTY: "candyParty",
+  PUMPKIN_BARRIER: "pumpkinBarrier",
   SPEED_BOOST: "speedBoost",
 });
 
 export const SUPPLY_ITEM_DEFINITIONS = [
   {
-    type: "testItem",
-    name: "仮アイテム",
-    symbol: "TEST",
-    description: "ちょっと加速",
-    accentColor: "#69d0c5",
+    type: "candyAssortment",
+    name: "おかしのつめあわせ",
+    symbol: "CANDY",
+    artwork: "candyBag",
+    description: "たくさんのおかし！",
+    accentColor: "#f0a44b",
     effect: {
-      type: SUPPLY_ITEM_EFFECT_TYPE.SPEED_BOOST,
-      durationSeconds: 3,
-      speedIncreaseRatio: 0.3,
+      type: SUPPLY_ITEM_EFFECT_TYPE.CANDY_BONUS,
+      amount: 15,
+    },
+  },
+  {
+    type: "pumpkinBarrier",
+    name: "かぼちゃバリア",
+    symbol: "BARRIER",
+    artwork: "pumpkinBarrier",
+    description: "１回だけかぼちゃが身代わりになってくれる",
+    accentColor: "#f28a32",
+    effect: {
+      type: SUPPLY_ITEM_EFFECT_TYPE.PUMPKIN_BARRIER,
+      durationSeconds: 15,
+    },
+  },
+  {
+    type: "candyLauncher",
+    name: "おかしランチャー",
+    symbol: "LAUNCH",
+    artwork: "candyLauncher",
+    description:
+      "おかしランチャーを発射する。障害物を破壊できるとおかしが周りに出てくる",
+    accentColor: "#5cc7bd",
+    effect: {
+      type: SUPPLY_ITEM_EFFECT_TYPE.CANDY_LAUNCHER,
+      countdownSeconds: 3,
+    },
+  },
+  {
+    type: "candyParty",
+    name: "おかしパーティータイム",
+    symbol: "PARTY",
+    artwork: "candyParty",
+    description: "おかしがたくさん出てくるようになる",
+    accentColor: "#cf62b8",
+    effect: {
+      type: SUPPLY_ITEM_EFFECT_TYPE.CANDY_PARTY,
+      durationSeconds: 10,
     },
   },
 ];
 
 export function createSupplyStationManager({
   itemDefinitions = SUPPLY_ITEM_DEFINITIONS,
+  isItemSelectable = () => true,
   random = Math.random,
   onUseItem = (item, context) => item.use?.(context),
 } = {}) {
@@ -59,7 +101,10 @@ export function createSupplyStationManager({
       return null;
     }
 
-    const item = chooseRandomItem(itemDefinitions, random);
+    const selectableItems = itemDefinitions.filter((itemDefinition) =>
+      isItemSelectable(itemDefinition),
+    );
+    const item = chooseRandomItem(selectableItems, random);
 
     if (!item) {
       return null;

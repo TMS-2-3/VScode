@@ -4,6 +4,9 @@ import { createGameController } from "./core/game-controller.js";
 import { createInputController } from "./core/input-controller.js";
 import { createPlayerController } from "./core/player-controller.js";
 import { createProgression } from "./core/progression.js";
+import { createPumpkinBarrier } from "./core/pumpkin-barrier.js";
+import { createCandyLauncherManager } from "./lane/candy-launcher.js";
+import { createCandyPartyManager } from "./lane/candy-party.js";
 import { createCoinManager } from "./lane/coins.js";
 import { createItemManager } from "./lane/items.js";
 import { createLaneManager } from "./lane/lane-manager.js";
@@ -24,6 +27,7 @@ const titleScreen = document.querySelector("#title-screen");
 const startButton = document.querySelector("#start-button");
 const runIntro = document.querySelector("#run-intro");
 const gameOverScreen = document.querySelector("#game-over-screen");
+const gameOverCandyCount = document.querySelector("#game-over-candy-count");
 const returnButton = document.querySelector("#return-button");
 const supplyRouletteRoot = document.querySelector("#supply-roulette");
 
@@ -37,6 +41,7 @@ if (
   !(startButton instanceof HTMLButtonElement) ||
   !(runIntro instanceof HTMLElement) ||
   !(gameOverScreen instanceof HTMLElement) ||
+  !(gameOverCandyCount instanceof HTMLOutputElement) ||
   !(returnButton instanceof HTMLButtonElement) ||
   !(supplyRouletteRoot instanceof HTMLElement)
 ) {
@@ -48,15 +53,72 @@ const game = createGameController();
 const lanes = createLaneManager();
 const player = createPlayerController(lanes);
 const coins = createCoinManager();
+const candyLauncher = createCandyLauncherManager();
+const candyParty = createCandyPartyManager({ coinManager: coins });
 const items = createItemManager();
 const progression = createProgression();
+const pumpkinBarrier = createPumpkinBarrier();
+const hud = createHud(hudRoot);
 const supplyStations = createSupplyStationManager({
+  isItemSelectable: isSupplyItemSelectable,
   onUseItem(item) {
     if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.SPEED_BOOST) {
       progression.activateTimedSpeedBoost(item.effect);
+      return;
+    }
+
+    if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.CANDY_BONUS) {
+      coins.addCandy(item.effect.amount);
+      hud.setCandyCount(coins.getCollectedCandyValue());
+      audio.playCandyCollect();
+      return;
+    }
+
+    if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.PUMPKIN_BARRIER) {
+      pumpkinBarrier.activate(item.effect.durationSeconds);
+      return;
+    }
+
+    if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.CANDY_LAUNCHER) {
+      candyLauncher.activate();
+      return;
+    }
+
+    if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.CANDY_PARTY) {
+      const viewportBounds = canvas.getBoundingClientRect();
+      candyParty.activate({
+        durationSeconds: item.effect.durationSeconds,
+        laneGap: lanes.getLaneGap(),
+        viewportHeight: viewportBounds.height,
+        viewportWidth: viewportBounds.width,
+      });
     }
   },
 });
+
+function isSupplyItemSelectable(item) {
+  if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.CANDY_LAUNCHER) {
+    return !candyLauncher.getSnapshot().isActive;
+  }
+
+  if (!Number.isFinite(item.effect?.durationSeconds)) {
+    return true;
+  }
+
+  if (item.effect.type === SUPPLY_ITEM_EFFECT_TYPE.CANDY_PARTY) {
+    return !candyParty.getSnapshot().isActive;
+  }
+
+  if (item.effect.type === SUPPLY_ITEM_EFFECT_TYPE.PUMPKIN_BARRIER) {
+    return !pumpkinBarrier.getSnapshot().isActive;
+  }
+
+  if (item.effect.type === SUPPLY_ITEM_EFFECT_TYPE.SPEED_BOOST) {
+    return progression.getSnapshot().timedSpeedBoostRemainingSeconds <= 0;
+  }
+
+  return true;
+}
 const obstacles = createObstacleManager();
 const obstacleSpawner = createObstacleSpawner(
   obstacles,
@@ -65,7 +127,6 @@ const obstacleSpawner = createObstacleSpawner(
   supplyStations,
 );
 const collisions = createCollisionSystem(lanes);
-const hud = createHud(hudRoot);
 const renderer = createRenderer(canvas, lanes);
 const supplyRoulette = createSupplyRoulette(supplyRouletteRoot);
 let input = null;
@@ -76,9 +137,12 @@ let previousTime = performance.now();
 function resizeGame() {
   renderer.resize();
   renderer.render(player.getSnapshot(), {
+    candyLauncher: candyLauncher.getSnapshot(),
     coins: coins.getSnapshot(),
+    candyParty: candyParty.getSnapshot(),
     items: items.getSnapshot(),
     obstacles: obstacles.getSnapshot(),
+    pumpkinBarrier: pumpkinBarrier.getSnapshot(),
     supplyStations: supplyStations.getSnapshot(),
   });
 }
@@ -93,13 +157,20 @@ function startGame() {
 
   player.reset();
   progression.reset();
+  pumpkinBarrier.reset();
+  candyLauncher.reset();
+  candyParty.reset();
   obstacleSpawner.reset();
   hud.setCandyCount(0);
+  gameOverCandyCount.value = "0";
   renderer.setBackgroundOffset(0);
   renderer.render(player.getSnapshot(), {
+    candyLauncher: candyLauncher.getSnapshot(),
     coins: coins.getSnapshot(),
+    candyParty: candyParty.getSnapshot(),
     items: items.getSnapshot(),
     obstacles: obstacles.getSnapshot(),
+    pumpkinBarrier: pumpkinBarrier.getSnapshot(),
     supplyStations: supplyStations.getSnapshot(),
   });
   supplyRoulette.reset();
@@ -160,6 +231,7 @@ function frame(currentTime) {
     coins.getCollectedCandyValue(),
     lanes.getLaneGap(),
   );
+  pumpkinBarrier.update(deltaSeconds);
   player.update(
     deltaSeconds,
     movement.jumpTimeScale,
@@ -169,15 +241,37 @@ function frame(currentTime) {
   items.updateItems(-movement.frameDistance, deltaSeconds);
   supplyStations.moveStations(-movement.frameDistance);
   obstacles.moveObstacles(-movement.frameDistance);
-  const viewportWidth = canvas.getBoundingClientRect().width;
+  const viewportBounds = canvas.getBoundingClientRect();
+  const viewportWidth = viewportBounds.width;
+  candyParty.update(deltaSeconds, {
+    laneGap: lanes.getLaneGap(),
+    viewportHeight: viewportBounds.height,
+    viewportWidth,
+  });
   obstacleSpawner.update(movement.traveledDistance, viewportWidth, lanes.getLaneGap());
   renderer.setBackgroundOffset(movement.traveledDistance);
 
   const playerSnapshot = player.getSnapshot();
+  const launcherResult = candyLauncher.update(deltaSeconds, {
+    laneGap: lanes.getLaneGap(),
+    obstacles: obstacles.getSnapshot(),
+    playerFootY:
+      lanes.getLaneY(playerSnapshot.lanePosition) - playerSnapshot.elevation,
+    playerLanePosition: playerSnapshot.lanePosition,
+    scrollSpeed: movement.scrollSpeed,
+    viewportWidth,
+  });
+
+  if (launcherResult.destroyedObstacleId) {
+    obstacles.removeObstacle(launcherResult.destroyedObstacleId);
+    launcherResult.candyDrops.forEach((drop) => coins.addCoin(drop));
+  }
+
   let coinSnapshot = coins.getSnapshot();
+  let candyPartySnapshot = candyParty.getSnapshot();
   let itemSnapshot = items.getSnapshot();
   const supplyStationSnapshot = supplyStations.getSnapshot();
-  const obstacleSnapshot = obstacles.getSnapshot();
+  let obstacleSnapshot = obstacles.getSnapshot();
   const collectedCoinIds = collisions.findCollectedCoinIds(
     playerSnapshot,
     coinSnapshot,
@@ -186,6 +280,11 @@ function frame(currentTime) {
   const hitObstacleIds = collisions.findHitObstacleIds(
     playerSnapshot,
     obstacleSnapshot,
+    viewportWidth,
+  );
+  const collectedPartyCandyIds = collisions.findCollectedPartyCandyIds(
+    playerSnapshot,
+    candyPartySnapshot.candies,
     viewportWidth,
   );
   const triggeredItemIds = collisions.findTriggeredItemIds(
@@ -197,12 +296,30 @@ function frame(currentTime) {
     supplyStationSnapshot,
     viewportWidth,
   );
+  let unprotectedHitObstacleIds = hitObstacleIds;
+
+  if (hitObstacleIds.length > 0 && pumpkinBarrier.consume()) {
+    hitObstacleIds.forEach((id) => obstacles.removeObstacle(id));
+    obstacleSnapshot = obstacles.getSnapshot();
+    unprotectedHitObstacleIds = [];
+  }
 
   if (collectedCoinIds.length > 0) {
     collectedCoinIds.forEach((id) => coins.collectCoin(id));
     hud.setCandyCount(coins.getCollectedCandyValue());
     audio.playCandyCollect();
     coinSnapshot = coins.getSnapshot();
+  }
+
+  if (collectedPartyCandyIds.length > 0) {
+    const collectedValue = collectedPartyCandyIds.reduce(
+      (total, id) => total + candyParty.collectCandy(id),
+      0,
+    );
+    coins.addCandy(collectedValue);
+    hud.setCandyCount(coins.getCollectedCandyValue());
+    audio.playCandyCollect();
+    candyPartySnapshot = candyParty.getSnapshot();
   }
 
   if (triggeredItemIds.length > 0) {
@@ -217,16 +334,20 @@ function frame(currentTime) {
   }
 
   renderer.render(playerSnapshot, {
+    candyLauncher: candyLauncher.getSnapshot(),
     coins: coinSnapshot,
+    candyParty: candyPartySnapshot,
     items: itemSnapshot,
     obstacles: obstacleSnapshot,
+    pumpkinBarrier: pumpkinBarrier.getSnapshot(),
     supplyStations: supplyStationSnapshot,
-    hitObstacleIds,
+    hitObstacleIds: unprotectedHitObstacleIds,
   });
 
-  if (game.tryGameOverFromObstacle(hitObstacleIds.length > 0)) {
+  if (game.tryGameOverFromObstacle(unprotectedHitObstacleIds.length > 0)) {
     disableInput();
     animationFrameId = null;
+    gameOverCandyCount.value = String(coins.getCollectedCandyValue());
     gameOverScreen.hidden = false;
     returnButton.focus();
     return;

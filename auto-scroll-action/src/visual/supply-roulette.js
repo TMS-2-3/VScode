@@ -206,6 +206,26 @@ export function createSupplyRoulette(root) {
   }
 
   function paintTemporaryItem(artworkContext, item, size) {
+    if (item.artwork === "candyBag") {
+      paintCandyAssortment(artworkContext, size);
+      return;
+    }
+
+    if (item.artwork === "pumpkinBarrier") {
+      paintPumpkinBarrierItem(artworkContext, size);
+      return;
+    }
+
+    if (item.artwork === "candyParty") {
+      paintCandyPartyItem(artworkContext, size);
+      return;
+    }
+
+    if (item.artwork === "candyLauncher") {
+      paintCandyLauncherItem(artworkContext, size);
+      return;
+    }
+
     const centerX = size / 2;
     const centerY = size / 2;
     const bottleWidth = size * 0.46;
@@ -256,6 +276,385 @@ export function createSupplyRoulette(root) {
     artworkContext.lineTo(-size * 0.06, size * 0.19);
     artworkContext.lineTo(size * 0.12, -size * 0.02);
     artworkContext.lineTo(size * 0.02, -size * 0.02);
+    artworkContext.closePath();
+    artworkContext.fill();
+    artworkContext.restore();
+  }
+
+  function paintPumpkinBarrierItem(artworkContext, size) {
+    const centerX = size / 2;
+    const centerY = size / 2;
+
+    artworkContext.save();
+    artworkContext.translate(centerX, centerY);
+    artworkContext.lineJoin = "round";
+    artworkContext.lineCap = "round";
+
+    artworkContext.fillStyle = "rgba(255, 191, 74, 0.2)";
+    artworkContext.strokeStyle = "#ffd45c";
+    artworkContext.lineWidth = size * 0.045;
+    artworkContext.beginPath();
+    artworkContext.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.strokeStyle = "rgba(242, 138, 50, 0.72)";
+    artworkContext.lineWidth = size * 0.025;
+    artworkContext.beginPath();
+    artworkContext.arc(0, 0, size * 0.32, 0, Math.PI * 2);
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#5d8e3e";
+    artworkContext.strokeStyle = "#30283a";
+    artworkContext.lineWidth = size * 0.035;
+    artworkContext.beginPath();
+    artworkContext.roundRect(
+      -size * 0.055,
+      -size * 0.32,
+      size * 0.11,
+      size * 0.14,
+      size * 0.025,
+    );
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#f28a32";
+    [-0.14, 0, 0.14].forEach((xRatio) => {
+      artworkContext.beginPath();
+      artworkContext.ellipse(
+        size * xRatio,
+        size * 0.02,
+        size * 0.19,
+        size * 0.25,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      artworkContext.fill();
+      artworkContext.stroke();
+    });
+
+    artworkContext.fillStyle = "#4a273f";
+    artworkContext.beginPath();
+    artworkContext.moveTo(-size * 0.17, -size * 0.01);
+    artworkContext.lineTo(-size * 0.06, -size * 0.07);
+    artworkContext.lineTo(-size * 0.08, size * 0.04);
+    artworkContext.closePath();
+    artworkContext.moveTo(size * 0.17, -size * 0.01);
+    artworkContext.lineTo(size * 0.06, -size * 0.07);
+    artworkContext.lineTo(size * 0.08, size * 0.04);
+    artworkContext.closePath();
+    artworkContext.fill();
+
+    artworkContext.strokeStyle = "#4a273f";
+    artworkContext.lineWidth = size * 0.035;
+    artworkContext.beginPath();
+    artworkContext.arc(0, size * 0.06, size * 0.13, 0.12, Math.PI - 0.12);
+    artworkContext.stroke();
+    artworkContext.restore();
+  }
+
+  function paintCandyPartyItem(artworkContext, size) {
+    const centerX = size / 2;
+    const centerY = size / 2;
+
+    artworkContext.save();
+    artworkContext.translate(centerX, centerY);
+    artworkContext.lineJoin = "round";
+    artworkContext.lineCap = "round";
+    artworkContext.strokeStyle = "#30283a";
+    artworkContext.lineWidth = size * 0.028;
+
+    const confetti = [
+      [-0.32, -0.3, -0.2, "#69d0c5"],
+      [-0.18, -0.43, 0.35, "#ffd45c"],
+      [0.05, -0.4, -0.4, "#ef8d45"],
+      [0.27, -0.34, 0.3, "#cf62b8"],
+      [0.36, -0.14, -0.25, "#69d0c5"],
+    ];
+
+    confetti.forEach(([xRatio, yRatio, rotation, color]) => {
+      artworkContext.save();
+      artworkContext.translate(size * xRatio, size * yRatio);
+      artworkContext.rotate(rotation);
+      artworkContext.fillStyle = color;
+      artworkContext.fillRect(
+        -size * 0.018,
+        -size * 0.055,
+        size * 0.036,
+        size * 0.11,
+      );
+      artworkContext.restore();
+    });
+
+    const candies = [
+      [-0.27, -0.16, "#ffd45c", -0.35],
+      [-0.08, -0.31, "#ef8d45", 0.2],
+      [0.15, -0.25, "#cf62b8", -0.15],
+      [0.31, -0.08, "#69d0c5", 0.4],
+    ];
+
+    candies.forEach(([xRatio, yRatio, color, rotation]) => {
+      artworkContext.save();
+      artworkContext.translate(size * xRatio, size * yRatio);
+      artworkContext.rotate(rotation);
+      artworkContext.fillStyle = color;
+      artworkContext.beginPath();
+      artworkContext.moveTo(-size * 0.07, 0);
+      artworkContext.lineTo(-size * 0.13, -size * 0.055);
+      artworkContext.lineTo(-size * 0.13, size * 0.055);
+      artworkContext.closePath();
+      artworkContext.moveTo(size * 0.07, 0);
+      artworkContext.lineTo(size * 0.13, -size * 0.055);
+      artworkContext.lineTo(size * 0.13, size * 0.055);
+      artworkContext.closePath();
+      artworkContext.fill();
+      artworkContext.stroke();
+      artworkContext.beginPath();
+      artworkContext.arc(0, 0, size * 0.075, 0, Math.PI * 2);
+      artworkContext.fill();
+      artworkContext.stroke();
+      artworkContext.restore();
+    });
+
+    const boxGradient = artworkContext.createLinearGradient(
+      0,
+      size * 0.05,
+      0,
+      size * 0.42,
+    );
+    boxGradient.addColorStop(0, "#9b55aa");
+    boxGradient.addColorStop(1, "#633a78");
+    artworkContext.fillStyle = boxGradient;
+    artworkContext.beginPath();
+    artworkContext.moveTo(-size * 0.34, size * 0.08);
+    artworkContext.lineTo(size * 0.34, size * 0.08);
+    artworkContext.lineTo(size * 0.26, size * 0.4);
+    artworkContext.lineTo(-size * 0.26, size * 0.4);
+    artworkContext.closePath();
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#f0a44b";
+    artworkContext.fillRect(
+      -size * 0.04,
+      size * 0.09,
+      size * 0.08,
+      size * 0.3,
+    );
+    artworkContext.strokeRect(
+      -size * 0.04,
+      size * 0.09,
+      size * 0.08,
+      size * 0.3,
+    );
+
+    artworkContext.fillStyle = "#ffd45c";
+    artworkContext.beginPath();
+    for (let pointIndex = 0; pointIndex < 10; pointIndex += 1) {
+      const radius = size * (pointIndex % 2 === 0 ? 0.09 : 0.04);
+      const angle = -Math.PI / 2 + pointIndex * Math.PI / 5;
+      const pointX = Math.cos(angle) * radius;
+      const pointY = size * 0.24 + Math.sin(angle) * radius;
+
+      if (pointIndex === 0) {
+        artworkContext.moveTo(pointX, pointY);
+      } else {
+        artworkContext.lineTo(pointX, pointY);
+      }
+    }
+    artworkContext.closePath();
+    artworkContext.fill();
+    artworkContext.stroke();
+    artworkContext.restore();
+  }
+
+  function paintCandyLauncherItem(artworkContext, size) {
+    artworkContext.save();
+    artworkContext.translate(size * 0.48, size * 0.52);
+    artworkContext.rotate(-0.13);
+    artworkContext.lineJoin = "round";
+    artworkContext.lineCap = "round";
+    artworkContext.lineWidth = size * 0.035;
+    artworkContext.strokeStyle = "#30243d";
+
+    const bodyGradient = artworkContext.createLinearGradient(
+      -size * 0.3,
+      0,
+      size * 0.28,
+      0,
+    );
+    bodyGradient.addColorStop(0, "#8453a8");
+    bodyGradient.addColorStop(0.55, "#cf62a5");
+    bodyGradient.addColorStop(1, "#5cc7bd");
+    artworkContext.fillStyle = bodyGradient;
+    artworkContext.beginPath();
+    artworkContext.roundRect(
+      -size * 0.31,
+      -size * 0.13,
+      size * 0.55,
+      size * 0.27,
+      size * 0.075,
+    );
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#f4a34d";
+    artworkContext.beginPath();
+    artworkContext.moveTo(size * 0.18, -size * 0.18);
+    artworkContext.lineTo(size * 0.34, -size * 0.24);
+    artworkContext.lineTo(size * 0.34, size * 0.24);
+    artworkContext.lineTo(size * 0.18, size * 0.18);
+    artworkContext.closePath();
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#5b3b72";
+    artworkContext.beginPath();
+    artworkContext.roundRect(
+      -size * 0.09,
+      size * 0.1,
+      size * 0.13,
+      size * 0.25,
+      size * 0.04,
+    );
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#ffd45c";
+    artworkContext.beginPath();
+    artworkContext.arc(-size * 0.22, 0, size * 0.075, 0, Math.PI * 2);
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.strokeStyle = "rgba(255, 244, 210, 0.82)";
+    artworkContext.lineWidth = size * 0.018;
+    [-0.12, 0, 0.12].forEach((xRatio) => {
+      artworkContext.beginPath();
+      artworkContext.moveTo(size * xRatio, -size * 0.11);
+      artworkContext.lineTo(size * (xRatio + 0.08), size * 0.11);
+      artworkContext.stroke();
+    });
+
+    const projectileGradient = artworkContext.createRadialGradient(
+      size * 0.48,
+      -size * 0.05,
+      0,
+      size * 0.52,
+      0,
+      size * 0.17,
+    );
+    projectileGradient.addColorStop(0, "#fff0a2");
+    projectileGradient.addColorStop(0.5, "#f49b4d");
+    projectileGradient.addColorStop(1, "#cf62a5");
+    artworkContext.fillStyle = projectileGradient;
+    artworkContext.strokeStyle = "#30243d";
+    artworkContext.lineWidth = size * 0.028;
+    artworkContext.beginPath();
+    artworkContext.arc(size * 0.52, 0, size * 0.14, 0, Math.PI * 2);
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#5cc7bd";
+    artworkContext.beginPath();
+    artworkContext.ellipse(
+      size * 0.48,
+      -size * 0.035,
+      size * 0.045,
+      size * 0.03,
+      -0.4,
+      0,
+      Math.PI * 2,
+    );
+    artworkContext.fill();
+    artworkContext.stroke();
+    artworkContext.restore();
+  }
+
+  function paintCandyAssortment(artworkContext, size) {
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const outlineWidth = size * 0.035;
+
+    artworkContext.save();
+    artworkContext.translate(centerX, centerY);
+    artworkContext.lineJoin = "round";
+    artworkContext.lineCap = "round";
+    artworkContext.lineWidth = outlineWidth;
+    artworkContext.strokeStyle = "#30283a";
+
+    const candies = [
+      { x: -size * 0.2, y: -size * 0.21, color: "#ffd45c" },
+      { x: 0, y: -size * 0.27, color: "#ef8d45" },
+      { x: size * 0.2, y: -size * 0.2, color: "#cf62b8" },
+    ];
+
+    candies.forEach((candy) => {
+      artworkContext.fillStyle = candy.color;
+      artworkContext.beginPath();
+      artworkContext.arc(candy.x, candy.y, size * 0.11, 0, Math.PI * 2);
+      artworkContext.fill();
+      artworkContext.stroke();
+    });
+
+    artworkContext.fillStyle = "#77458f";
+    artworkContext.beginPath();
+    artworkContext.moveTo(-size * 0.31, -size * 0.13);
+    artworkContext.quadraticCurveTo(
+      -size * 0.39,
+      size * 0.04,
+      -size * 0.29,
+      size * 0.34,
+    );
+    artworkContext.quadraticCurveTo(
+      0,
+      size * 0.45,
+      size * 0.29,
+      size * 0.34,
+    );
+    artworkContext.quadraticCurveTo(
+      size * 0.39,
+      size * 0.04,
+      size * 0.31,
+      -size * 0.13,
+    );
+    artworkContext.quadraticCurveTo(0, -size * 0.02, -size * 0.31, -size * 0.13);
+    artworkContext.closePath();
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#f0a44b";
+    artworkContext.beginPath();
+    artworkContext.roundRect(
+      -size * 0.27,
+      -size * 0.09,
+      size * 0.54,
+      size * 0.075,
+      size * 0.025,
+    );
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#fff4d2";
+    artworkContext.beginPath();
+    artworkContext.arc(0, size * 0.18, size * 0.17, 0, Math.PI * 2);
+    artworkContext.fill();
+    artworkContext.stroke();
+
+    artworkContext.fillStyle = "#ef8d45";
+    artworkContext.beginPath();
+    for (let pointIndex = 0; pointIndex < 10; pointIndex += 1) {
+      const radius = size * (pointIndex % 2 === 0 ? 0.105 : 0.047);
+      const angle = -Math.PI / 2 + pointIndex * Math.PI / 5;
+      const pointX = Math.cos(angle) * radius;
+      const pointY = size * 0.18 + Math.sin(angle) * radius;
+
+      if (pointIndex === 0) {
+        artworkContext.moveTo(pointX, pointY);
+      } else {
+        artworkContext.lineTo(pointX, pointY);
+      }
+    }
     artworkContext.closePath();
     artworkContext.fill();
     artworkContext.restore();

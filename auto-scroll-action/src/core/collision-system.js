@@ -14,6 +14,14 @@ export function createCollisionSystem(lanes) {
       .map((coin) => coin.id);
   }
 
+  function findCollectedPartyCandyIds(player, candies, viewportWidth) {
+    const playerBounds = getPlayerBounds(player, lanes, viewportWidth);
+
+    return candies
+      .filter((candy) => circleOverlapsRectangle(candy, playerBounds))
+      .map((candy) => candy.id);
+  }
+
   function findHitObstacleIds(player, obstacles, viewportWidth) {
     const playerBounds = getPlayerBounds(player, lanes, viewportWidth);
 
@@ -47,6 +55,7 @@ export function createCollisionSystem(lanes) {
 
   return {
     findCollectedCoinIds,
+    findCollectedPartyCandyIds,
     findHitObstacleIds,
     findReachedSupplyStationIds,
     findTriggeredItemIds,
