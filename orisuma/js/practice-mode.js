@@ -1,9 +1,15 @@
 import { BattleSimulation, normalizeBattleInput } from "./battle-simulation.js";
-import { STAGES } from "./constants.js";
 import { emptyInput } from "./utils.js";
 
 const FIXED_STEP = 1 / 60;
 const MAX_CATCH_UP_STEPS = 4;
+
+export const PRACTICE_GAME_SPEEDS = Object.freeze([1 / 16, 1 / 8, 1 / 4, 1 / 2, 1]);
+
+export function normalizePracticeGameSpeed(value) {
+  const speed = Number(value);
+  return PRACTICE_GAME_SPEEDS.includes(speed) ? speed : 1;
+}
 
 export class PracticeMode {
   constructor({ inputManager, audioManager, assetManager, playerNameProvider }) {
@@ -34,6 +40,15 @@ export class PracticeMode {
     this.active = false;
     this.data = null;
     this.cachedSnapshot = null;
+  }
+
+  setGameSpeed(value) {
+    const speed = normalizePracticeGameSpeed(value);
+    if (this.data) {
+      this.data.rules.gameSpeed = speed;
+      this.cachedSnapshot = null;
+    }
+    return speed;
   }
 
   update() {
@@ -69,19 +84,19 @@ export class PracticeMode {
   }
 
   createPractice(options) {
-    const stage = STAGES[options.stage] || STAGES.battlefield;
-    const mainPlatform = stage.platforms.find(platform => platform.type === "main") || stage.platforms[0];
     const rules = {
       mode: "practice",
-      stage: stage.id,
+      stage: options.stage,
       debug: options.debug,
-      gameSpeed: 1,
+      gameSpeed: normalizePracticeGameSpeed(options.gameSpeed),
       finalSmash: Boolean(options.finalSmash),
       hp: 999,
       stocks: 0,
       timeLimit: 0
     };
-    const match = this.simulation.createMatch({ id: "practice", rules, stage });
+    const match = this.simulation.createMatch({ id: "practice", rules });
+    const stage = match.stage;
+    const mainPlatform = stage.platforms.find(platform => platform.type === "main") || stage.platforms[0];
     const playerSpawn = stage.spawn[0] || [460, 410];
     const dummySpawn = stage.spawn[1] || [820, 410];
     const player = this.simulation.createFighter({

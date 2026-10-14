@@ -1,7 +1,10 @@
 import {
   CHARACTER_DEFINITIONS,
   DEFAULT_RULES as SHARED_DEFAULT_RULES,
+  SHORT_HOP as SHARED_SHORT_HOP,
+  SHORT_HOP_MODES as SHARED_SHORT_HOP_MODES,
   STAGES as SHARED_STAGES,
+  TIME_LIMIT as SHARED_TIME_LIMIT,
   WEIGHT_CLASSES
 } from "./battle-data.js";
 
@@ -19,6 +22,7 @@ export const ACTIONS = [
 ];
 
 export const DEFAULT_CONTROLS = {
+  shortHopMode: SHARED_SHORT_HOP.defaultMode,
   keyboard: {
     left: "KeyA",
     right: "KeyD",
@@ -71,5 +75,11 @@ export const CHARACTER_ASSETS = Object.fromEntries(Object.values(CHARACTER_DEFIN
 ]));
 
 export const DEFAULT_RULES = SHARED_DEFAULT_RULES;
+
+export const SHORT_HOP = SHARED_SHORT_HOP;
+
+export const SHORT_HOP_MODES = SHARED_SHORT_HOP_MODES;
+
+export const TIME_LIMIT = SHARED_TIME_LIMIT;
 
 export const STAGES = SHARED_STAGES;

@@ -1,4 +1,5 @@
-import { ACTIONS, CHARACTER_ASSETS, DEFAULT_RULES, MODE_LABELS, STAGE_LABELS } from "./constants.js";
+import { ACTIONS, CHARACTER_ASSETS, DEFAULT_RULES, MODE_LABELS, SHORT_HOP_MODES, STAGE_LABELS, TIME_LIMIT } from "./constants.js";
+import { PRACTICE_GAME_SPEEDS } from "./practice-mode.js";
 import { bindingLabel, escapeAttr, escapeHtml, formatTime, padBindingLabel } from "./utils.js";
 
 export class ViewRenderer {
@@ -26,6 +27,11 @@ export class ViewRenderer {
     this.drawCharacterPreviews();
   }
 
+  updatePing(ping) {
+    const element = document.querySelector("#networkPing");
+    if (element) element.textContent = ping === null ? "--" : `${ping}ms`;
+  }
+
   topbar() {
     const { state, network } = this.app;
     const roomText = this.app.practice.active ? "練習" : state.room ? `部屋 ${state.room.code}` : "未入室";
@@ -41,7 +47,7 @@ export class ViewRenderer {
           <span>${network.connected ? "接続中" : "未接続"}</span>
           <span class="pill">${escapeHtml(roomText)}</span>
           <span class="pill">${escapeHtml(state.name)}</span>
-          ${state.ping === null ? "" : `<span class="pill">${state.ping}ms</span>`}
+          <span class="pill" id="networkPing">${state.ping === null ? "--" : `${state.ping}ms`}</span>
           ${showSettings ? `<button class="icon-button" data-action="openSettings" title="設定" aria-label="設定">⚙</button>` : ""}
         </div>
       </header>
@@ -226,12 +232,48 @@ export class ViewRenderer {
   }
 
   practiceGameScreen() {
+    const speed = this.app.practice.data?.rules.gameSpeed || 1;
+    const speedLabels = new Map([
+      [1 / 16, "1/16"],
+      [1 / 8, "1/8"],
+      [1 / 4, "1/4"],
+      [1 / 2, "1/2"],
+      [1, "1"]
+    ]);
+    const settingsOpen = this.app.state.practiceSettingsOpen;
     return `
       <main class="play-screen">
         <section class="canvas-shell play-canvas">
           <canvas id="gameCanvas" width="1280" height="720"></canvas>
         </section>
-        <button class="floating-exit button-danger" data-action="exitPractice">退出</button>
+        <div class="practice-toolbar">
+          <button class="button-danger" data-action="exitPractice">退出</button>
+          <button
+            class="icon-button practice-settings-button ${settingsOpen ? "selected" : ""}"
+            data-action="togglePracticeSettings"
+            title="ゲーム速度"
+            aria-label="ゲーム速度"
+            aria-expanded="${settingsOpen}"
+          >⚙</button>
+        </div>
+        ${settingsOpen ? `
+          <section class="practice-speed-popover" aria-label="ゲーム速度設定">
+            <div class="panel-head">
+              <strong>ゲーム速度</strong>
+              <span class="pill">${speedLabels.get(speed) || "1"}倍</span>
+            </div>
+            <div class="segmented-control practice-speed-control">
+              ${PRACTICE_GAME_SPEEDS.map(value => `
+                <button
+                  class="${speed === value ? "selected" : ""}"
+                  data-action="setPracticeGameSpeed"
+                  data-speed="${value}"
+                  aria-pressed="${speed === value}"
+                >${speedLabels.get(value)}</button>
+              `).join("")}
+            </div>
+          </section>
+        ` : ""}
       </main>
     `;
   }
@@ -451,13 +493,30 @@ export class ViewRenderer {
           <h2>${compact ? "割り当て" : "操作設定"}</h2>
           <span class="pill">${input.hasGamepad() ? "パッド接続" : "パッド未検出"}</span>
         </div>
+        <div class="jump-mode-row">
+          <strong>小ジャンプ判定</strong>
+          <div class="segmented-control" role="group" aria-label="小ジャンプ判定">
+            ${[
+              [SHORT_HOP_MODES.release, "ボタンを離す"],
+              [SHORT_HOP_MODES.down, "下＋ジャンプ"],
+              [SHORT_HOP_MODES.both, "両方"]
+            ].map(([mode, label]) => `
+              <button
+                class="${input.controls.shortHopMode === mode ? "selected" : ""}"
+                data-action="setShortHopMode"
+                data-mode="${mode}"
+                aria-pressed="${input.controls.shortHopMode === mode}"
+              >${label}</button>
+            `).join("")}
+          </div>
+        </div>
         <div class="key-list">
           ${ACTIONS.map(([key, label]) => `
             <div class="key-row">
               <strong>${label}</strong>
               <span class="key-chip">${bindingLabel(input.controls.keyboard[key])}</span>
               <button data-action="captureKey" data-key="${key}">
-                ${input.captureKeyboard === key ? "キー入力中" : "キー変更"}
+                ${input.captureKeyboard === key ? "入力待ち" : "入力変更"}
               </button>
               <button data-action="capturePad" data-key="${key}">
                 ${input.captureGamepadAction === key ? "パッド入力中" : padBindingLabel(input.controls.gamepad[key])}
@@ -470,6 +529,8 @@ export class ViewRenderer {
   }
 
   rulesForm(rules = DEFAULT_RULES) {
+    const unlimitedTime = rules.timeLimit === TIME_LIMIT.infinite;
+    const finiteTime = unlimitedTime ? DEFAULT_RULES.timeLimit : rules.timeLimit;
     return `
       <div class="rule-grid">
         <div class="field">
@@ -498,7 +559,12 @@ export class ViewRenderer {
         </div>
         <div class="field">
           <label for="timeLimit">制限時間 秒</label>
-          <input id="timeLimit" type="number" min="60" max="900" step="30" value="${rules.timeLimit}">
+          <input id="timeLimit" type="number" min="${TIME_LIMIT.min}" max="${TIME_LIMIT.max}" step="${TIME_LIMIT.step}" value="${finiteTime}" ${unlimitedTime ? "disabled" : ""}>
+          <label class="toggle-control">
+            <input id="timeUnlimited" type="checkbox" ${unlimitedTime ? "checked" : ""}>
+            <span class="toggle-track" aria-hidden="true"></span>
+            <span>時間無限</span>
+          </label>
         </div>
         <div class="field">
           <label for="hp">体力</label>
@@ -547,7 +613,7 @@ export class ViewRenderer {
         <span class="pill">${STAGE_LABELS[rules.stage]}</span>
         <span class="pill">${rules.maxPlayers}人</span>
         <span class="pill">${rules.stocks}ストック</span>
-        <span class="pill">${formatTime(rules.timeLimit)}</span>
+        <span class="pill">${rules.timeLimit === TIME_LIMIT.infinite ? "時間無限" : formatTime(rules.timeLimit)}</span>
         <span class="pill">${rules.hp}HP</span>
         <span class="pill">${rules.gameSpeed}x</span>
         <span class="pill">遅延${rules.inputDelay ?? DEFAULT_RULES.inputDelay}F</span>

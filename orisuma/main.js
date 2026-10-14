@@ -1,7 +1,7 @@
 import { AssetManager } from "./js/asset-manager.js";
 import { AudioManager } from "./js/audio-manager.js";
 import { CanvasRenderer } from "./js/canvas-renderer.js";
-import { DEFAULT_RULES } from "./js/constants.js";
+import { DEFAULT_RULES, TIME_LIMIT } from "./js/constants.js";
 import { InputManager } from "./js/input-manager.js";
 import { NetworkClient } from "./js/network-client.js";
 import { PracticeMode } from "./js/practice-mode.js";
@@ -16,6 +16,7 @@ class OrisumaApp {
       myId: null,
       screen: "home",
       previousScreen: "home",
+      practiceSettingsOpen: false,
       room: null,
       match: null,
       lastPhase: null,
@@ -76,11 +77,21 @@ class OrisumaApp {
         this.state.joinCode = event.target.value.toUpperCase();
       }
     });
+
+    document.addEventListener("change", event => {
+      if (event.target.id === "timeUnlimited") {
+        const timeLimit = document.querySelector("#timeLimit");
+        if (timeLimit) timeLimit.disabled = event.target.checked;
+        return;
+      }
+      this.savePracticeSetupChange(event.target);
+    });
   }
 
   handleAction(action, data) {
     if (action === "screen") {
       this.state.screen = data.screen;
+      this.state.practiceSettingsOpen = false;
       this.render();
       return;
     }
@@ -115,6 +126,10 @@ class OrisumaApp {
       this.input.startGamepadCapture(data.key);
       return;
     }
+    if (action === "setShortHopMode") {
+      this.input.setShortHopMode(data.mode);
+      return;
+    }
     if (action === "resetControls") {
       this.input.resetControls();
       return;
@@ -130,6 +145,21 @@ class OrisumaApp {
       this.state.room = null;
       this.state.match = null;
       this.state.screen = "practiceGame";
+      this.state.practiceSettingsOpen = false;
+      this.audio.play("ui");
+      this.render();
+      return;
+    }
+    if (action === "togglePracticeSettings") {
+      if (!this.practice.active || this.state.screen !== "practiceGame") return;
+      this.state.practiceSettingsOpen = !this.state.practiceSettingsOpen;
+      this.audio.play("ui");
+      this.render();
+      return;
+    }
+    if (action === "setPracticeGameSpeed") {
+      if (!this.practice.active || this.state.screen !== "practiceGame") return;
+      this.practice.setGameSpeed(data.speed);
       this.audio.play("ui");
       this.render();
       return;
@@ -138,6 +168,7 @@ class OrisumaApp {
       this.practice.exit();
       this.state.match = null;
       this.state.screen = "home";
+      this.state.practiceSettingsOpen = false;
       this.audio.play("ui");
       this.render();
       return;
@@ -205,7 +236,7 @@ class OrisumaApp {
     if (message.type === "pong") {
       if (Number.isFinite(Number(message.t))) {
         this.state.ping = Math.max(0, Math.round(performance.now() - Number(message.t)));
-        if (this.state.screen !== "game" && this.state.screen !== "practiceGame") this.render();
+        this.view.updatePing(this.state.ping);
       }
       return;
     }
@@ -326,12 +357,15 @@ class OrisumaApp {
   }
 
   readRules() {
+    const unlimitedTime = document.querySelector("#timeUnlimited")?.checked;
     return {
       mode: document.querySelector("#ruleMode")?.value || DEFAULT_RULES.mode,
       stage: document.querySelector("#stage")?.value || DEFAULT_RULES.stage,
       maxPlayers: Number(document.querySelector("#maxPlayers")?.value || DEFAULT_RULES.maxPlayers),
       stocks: Number(document.querySelector("#stocks")?.value || DEFAULT_RULES.stocks),
-      timeLimit: Number(document.querySelector("#timeLimit")?.value || DEFAULT_RULES.timeLimit),
+      timeLimit: unlimitedTime
+        ? TIME_LIMIT.infinite
+        : Number(document.querySelector("#timeLimit")?.value || DEFAULT_RULES.timeLimit),
       hp: Number(document.querySelector("#hp")?.value || DEFAULT_RULES.hp),
       gameSpeed: Number(document.querySelector("#gameSpeed")?.value || DEFAULT_RULES.gameSpeed),
       inputDelay: Number(document.querySelector("#inputDelay")?.value || DEFAULT_RULES.inputDelay),
@@ -352,6 +386,16 @@ class OrisumaApp {
     localStorage.setItem("orisuma.practiceDebug", setup.debug ? "on" : "off");
     localStorage.setItem("orisuma.practiceFinalSmash", setup.finalSmash ? "on" : "off");
     return setup;
+  }
+
+  savePracticeSetupChange(target) {
+    if (target.id === "practiceStage") {
+      localStorage.setItem("orisuma.practiceStage", target.value);
+    } else if (target.id === "practiceDebug") {
+      localStorage.setItem("orisuma.practiceDebug", target.value);
+    } else if (target.id === "practiceFinalSmash") {
+      localStorage.setItem("orisuma.practiceFinalSmash", target.checked ? "on" : "off");
+    }
   }
 
   playSnapshotEvents(events) {

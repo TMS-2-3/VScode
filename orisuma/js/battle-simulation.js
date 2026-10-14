@@ -2,18 +2,21 @@ import {
   DEFAULT_RULES,
   FINAL_SMASH,
   GRAB,
+  JAB_COMBO,
   KNOCKBACK,
+  KNOCKDOWN,
   MOVEMENT,
   NOVA_CHARGE,
   NOVA_RECOVERY,
   RESPAWN,
   SHIELD,
+  SHORT_HOP,
+  SHORT_HOP_MODES,
   SMASH_CHARGE,
   addFinalGaugeFromDamage,
   applyClankRebound,
   applyFinalGaugeKoRule,
   applyHitlagSdi,
-  applyJumpCut,
   applyPerfectShield,
   applyShieldDamage,
   beginFinalSmash,
@@ -21,6 +24,7 @@ import {
   canAct,
   clearDodge,
   clearLedgeState,
+  fighterHurtboxes,
   fighterRect,
   getAirDodgeFromInput,
   getCharacterDefinition,
@@ -28,8 +32,13 @@ import {
   getHitbox,
   getActiveMoveHits,
   getMove,
+  getStageDefinition,
+  hitboxOverlapsFighter,
+  hitboxesOverlap,
   horizontalInput,
   noteDefenseInput,
+  normalizeShortHopMode,
+  placeFighterWithStageCollision,
   resetShield,
   resolveClankOutcome,
   resolveFighterBodyCollision,
@@ -53,13 +62,14 @@ export class BattleSimulation {
     this.onEvent = onEvent;
   }
 
-  createMatch({ id, rules, stage, countdown = 0 }) {
+  createMatch({ id, rules, countdown = 0 }) {
+    const stage = getStageDefinition(rules?.stage);
     return {
       id,
       frame: 0,
       elapsed: 0,
       countdown,
-      rules: { ...rules },
+      rules: { ...rules, stage: stage.id },
       stage,
       fighters: new Map(),
       events: [],
@@ -142,6 +152,8 @@ export class BattleSimulation {
       crouching: false,
       tumbling: false,
       meteor: false,
+      knockdown: null,
+      knockdownPending: false,
       staleMoves: [],
       grabbing: null,
       grabbedBy: null,
@@ -154,19 +166,23 @@ export class BattleSimulation {
       dashDirection: 0,
       runRampElapsed: 0,
       runRampDirection: 0,
-      jumpCutAvailable: false,
+      runTurn: null,
+      groundJump: null,
+      jumpArcActive: false,
       actionStartedAir: false,
       ledgeGrabCount: 0,
       respawnPlatform: 0,
       ledge: null,
       ledgeClimb: null,
       ledgeRoll: null,
+      ledgeAttack: null,
       ledgeHold: 0,
       ledgeHorizontalLocked: false,
       ledgeCooldown: 0,
       action: null,
       move: null,
       moveState: null,
+      jabContinuation: null,
       smashCharge: null,
       novaCharge: 0,
       novaCharging: false,
@@ -241,15 +257,18 @@ export class BattleSimulation {
     state.remaining = Math.max(0, FINAL_SMASH.defaultActiveDuration - state.elapsed);
     fighter.action = "finalSmash";
     fighter.move = null;
+    fighter.runTurn = null;
     fighter.vx = 0;
     fighter.vy = 0;
     fighter.shield = false;
     fighter.invuln = Math.max(fighter.invuln || 0, state.remaining + 0.1);
 
-    if (!state.punchDone && state.elapsed >= 0.6) {
+    if (!state.punchDone && state.elapsed >= FINAL_SMASH.punchAt) {
       state.punchDone = true;
       const punch = { ...getMove(fighter.characterId, "finalPunch"), ignoreNovaCharge: true };
-      for (const target of this.targetsInFront(match, fighter, 190, 130)) {
+      const hitbox = getHitbox(fighter, punch);
+      for (const target of match.fighters.values()) {
+        if (target.id === fighter.id || !target.alive || !hitboxOverlapsFighter(hitbox, target)) continue;
         this.applyHit(match, fighter, target, punch);
       }
       this.addEvent(match, "finalPunch", fighter.id, fighter.id, { x: fighter.x, y: fighter.y });
@@ -259,18 +278,6 @@ export class BattleSimulation {
     fighter.action = null;
     fighter.actionTime = 0;
     match.finalSmash = null;
-  }
-
-  targetsInFront(match, fighter, reach, height) {
-    const area = {
-      x: fighter.facing > 0 ? fighter.x + 12 : fighter.x - reach - 12,
-      y: fighter.y - height / 2,
-      w: reach,
-      h: height
-    };
-    return Array.from(match.fighters.values()).filter(target => (
-      target.id !== fighter.id && target.alive && rectsOverlap(area, fighterRect(target))
-    ));
   }
 
   resolveFinalSmashActivation(match, inputs) {
@@ -331,10 +338,12 @@ export class BattleSimulation {
     const smashPressed = input.smash && !fighter.lastInput.smash;
     const specialPressed = input.special && !fighter.lastInput.special && fighter.finalSmashInputFrame !== match.frame;
     const grabPressed = input.grab && !fighter.lastInput.grab;
+    const shieldGrabPressed = wasShielding && input.shield && attackPressed && fighter.onGround;
     noteDefenseInput(fighter, shieldPressed, shieldReleased);
 
     if (fighter.hitlag > 0) {
-      applyHitlagSdi(fighter, input, dt);
+      this.updateJabChainInput(fighter, input, attackPressed, fighter.actionTime);
+      applyHitlagSdi(fighter, input, dt, match.stage);
       fighter.hitlag = Math.max(0, fighter.hitlag - dt);
       fighter.lastInput = { ...input };
       return;
@@ -342,7 +351,7 @@ export class BattleSimulation {
 
     updateCoreTimers(fighter, dt);
     fighter.pummelCooldown = Math.max(0, (fighter.pummelCooldown || 0) - dt);
-    applyJumpCut(fighter, input, fighter.lastInput);
+    this.updateGroundJumpChoice(fighter, input, dt);
 
     if (fighter.grabbedBy) {
       this.updateGrabbedFighter(match, fighter, input);
@@ -358,6 +367,21 @@ export class BattleSimulation {
         verticalAxis,
         lastAxis,
         lastVerticalAxis
+      });
+      fighter.lastInput = { ...input };
+      return;
+    }
+
+    if (fighter.knockdown) {
+      this.updateKnockdownState(match, fighter, input, dt, {
+        axis,
+        verticalAxis,
+        lastAxis,
+        lastVerticalAxis,
+        jumpPressed,
+        attackPressed,
+        specialPressed,
+        shieldPressed
       });
       fighter.lastInput = { ...input };
       return;
@@ -403,30 +427,58 @@ export class BattleSimulation {
 
     if (fighter.smashCharge) this.updateSmashCharge(fighter, input, dt);
     if (fighter.move) this.updateMoveMechanics(match, fighter, input, attackPressed, dt);
+    this.updateJabContinuation(fighter, input, dt, {
+      axis,
+      verticalAxis,
+      attackPressed,
+      jumpPressed,
+      smashPressed,
+      specialPressed,
+      shieldPressed,
+      grabPressed
+    });
 
     const canControl = fighter.inputEnabled !== false && canAct(fighter);
-    if (canControl && !wasShielding && fighter.onGround && Math.abs(axis) > 0.05 && !input.shield && !grabPressed) {
+    if (canControl && !wasShielding && !input.shield && !grabPressed) {
+      this.startRunTurnIfNeeded(fighter, axis);
+    }
+    if (canControl && !fighter.runTurn && !wasShielding && fighter.onGround && Math.abs(axis) > 0.05 && !input.shield && !grabPressed) {
       fighter.facing = Math.sign(axis);
     }
     let performedShieldCancel = false;
 
     if (canControl && !fighter.action) {
-      if (!wasShielding && !input.shield) startDashIfNeeded(fighter, input, fighter.lastInput, axis);
-      const groundDodge = fighter.onGround ? getGroundDodgeFromInput(input, fighter.lastInput) : null;
+      if (!fighter.runTurn && !wasShielding && !input.shield) startDashIfNeeded(fighter, input, fighter.lastInput, axis);
+      const groundDodge = fighter.onGround && !fighter.runTurn
+        ? getGroundDodgeFromInput(input, fighter.lastInput)
+        : null;
       const airDodge = !fighter.onGround && !fighter.hasAirDodged ? getAirDodgeFromInput(input, fighter.lastInput) : null;
 
-      if (groundDodge && startDodge(fighter, groundDodge)) {
+      if (shieldGrabPressed) {
+        performedShieldCancel = true;
+        this.startMove(fighter, selectGrabMove(fighter.characterId, "standing"));
+      } else if (groundDodge && startDodge(fighter, groundDodge)) {
         performedShieldCancel = wasShielding;
         this.addEvent(match, "dodge", fighter.id);
       } else if (airDodge && startDodge(fighter, airDodge)) {
         this.addEvent(match, "dodge", fighter.id);
       } else if (jumpPressed && (fighter.onGround || fighter.jumps > 0)) {
         performedShieldCancel = wasShielding;
-        fighter.vy = fighter.onGround ? stats.jumpSpeed : stats.airJumpSpeed;
+        const canceledRunTurn = Boolean(fighter.onGround && fighter.runTurn);
+        if (fighter.onGround) {
+          this.startGroundJump(fighter, input, verticalAxis, dt);
+        } else {
+          const baseGravity = stats.gravity * MOVEMENT.normalGravityMultiplier;
+          const jumpGravity = baseGravity / MOVEMENT.jumpDurationMultiplier ** 2;
+          const fullRise = discreteJumpRise(stats.airJumpSpeed, baseGravity, dt);
+          fighter.vy = jumpVelocityForRise(fullRise, jumpGravity, dt, stats.airJumpSpeed);
+          fighter.groundJump = null;
+          fighter.jumpArcActive = true;
+        }
         fighter.onGround = false;
         fighter.jumps = Math.max(0, fighter.jumps - 1);
-        fighter.jumpCutAvailable = true;
         fighter.fastFalling = false;
+        if (canceledRunTurn) fighter.runTurn = null;
         this.addEvent(match, "jump", fighter.id);
       } else if (grabPressed) {
         performedShieldCancel = wasShielding;
@@ -449,18 +501,23 @@ export class BattleSimulation {
         const fullGroundRun = fighter.onGround && runDirection !== 0 &&
           fighter.runRampDirection === runDirection &&
           fighter.runRampElapsed >= MOVEMENT.groundRunRampDuration;
-        this.startMove(fighter, selectMoveFromInput(fighter.characterId, input, axis, "attack", {
+        const move = selectMoveFromInput(fighter.characterId, input, axis, "attack", {
           airborne: !fighter.onGround,
           facing: fighter.facing,
           dashing: fullGroundRun
-        }));
+        });
+        this.startMove(fighter, move);
       }
     }
 
     if (wasShielding && shieldReleased && !performedShieldCancel) {
       fighter.shieldReleaseLag = Math.max(fighter.shieldReleaseLag || 0, SHIELD.releaseLag);
     }
-    fighter.shield = Boolean(canControl && fighter.onGround && input.shield && !fighter.action);
+    const heldInShieldStun = wasShielding && fighter.shieldStun > 0;
+    fighter.shield = Boolean(
+      fighter.onGround && !fighter.action && !fighter.runTurn &&
+      (heldInShieldStun || (canControl && input.shield))
+    );
     const shieldEvent = updateShieldState(fighter, input, dt);
     if (shieldEvent) this.addEvent(match, shieldEvent, fighter.id);
     const canMove = fighter.inputEnabled !== false && canAct(fighter);
@@ -471,10 +528,12 @@ export class BattleSimulation {
 
     if (canMove && !fighter.onGround && verticalAxis > 0.7 && lastVerticalAxis <= 0.7 && fighter.vy > -60) {
       fighter.fastFalling = true;
+      fighter.jumpArcActive = false;
     }
 
     const groundRunDirection = canMove && fighter.onGround && !fighter.shield && !fighter.dodge &&
-      !fighter.crouching && Math.abs(axis) > 0.01 ? Math.sign(axis) : 0;
+      !fighter.crouching && !fighter.runTurn && Math.abs(axis) > 0.01 ? Math.sign(axis) : 0;
+    const groundRunTurning = Boolean(canMove && fighter.onGround && fighter.runTurn);
     let groundRunSpeedScale = 1;
     if (groundRunDirection !== 0) {
       if (fighter.runRampDirection !== groundRunDirection) {
@@ -505,7 +564,19 @@ export class BattleSimulation {
     const friction = fighter.onGround ? stats.groundFriction : stats.airFriction;
     const controlScale = fighter.action ? 0.35 : fighter.hitstun > 0 ? 0.18 : 1;
 
-    if (fighter.shield) {
+    if (groundRunTurning) {
+      const turn = fighter.runTurn;
+      turn.elapsed = Math.min(turn.duration, turn.elapsed + dt);
+      const brake = Math.max(stats.groundFriction, Math.abs(turn.startVelocity) / turn.duration);
+      fighter.vx = approach(fighter.vx, 0, brake * dt);
+      if (turn.elapsed >= turn.duration) {
+        const exitDirection = Math.abs(axis) > 0.35 ? Math.sign(axis) : turn.direction;
+        fighter.runTurn = null;
+        fighter.facing = exitDirection;
+        fighter.runRampDirection = exitDirection;
+        fighter.runRampElapsed = 0;
+      }
+    } else if (fighter.shield) {
       fighter.vx = 0;
     } else if (canMove && !fighter.dodge && !fighter.crouching && Math.abs(axis) > 0.01) {
       fighter.vx += axis * accel * controlScale * dt;
@@ -528,37 +599,67 @@ export class BattleSimulation {
     const dodging = Boolean(fighter.dodge);
     const groundRolling = fighter.dodge?.type === "roll";
     const gravityScale = fighter.dodge?.type === "airDodge" ? 0.38 : 1;
+    const jumpGravityScale = fighter.jumpArcActive && !fighter.fastFalling
+      ? 1 / MOVEMENT.jumpDurationMultiplier ** 2
+      : 1;
     const gravity = (
       fighter.fastFalling
         ? stats.fastFallGravity
         : stats.gravity * MOVEMENT.normalGravityMultiplier
-    ) * gravityScale;
+    ) * gravityScale * jumpGravityScale;
     const maxFallSpeed = fighter.fastFalling
       ? stats.fastFallMaxSpeed
       : stats.maxFallSpeed * MOVEMENT.normalFallSpeedMultiplier;
     const preserveDownwardLaunch = fighter.hitstun > 0 && fighter.tumbling && fighter.vy > maxFallSpeed;
-    fighter.vy = preserveDownwardLaunch
-      ? fighter.vy + gravity * dt
-      : Math.min(fighter.vy + gravity * dt, maxFallSpeed);
+    const fixedMotion = fighter.moveState?.pendingMotion || null;
+    if (fixedMotion?.lockX) fighter.vx = 0;
+    if (fixedMotion?.lockY) {
+      fighter.vy = 0;
+    } else {
+      fighter.vy = preserveDownwardLaunch
+        ? fighter.vy + gravity * dt
+        : Math.min(fighter.vy + gravity * dt, maxFallSpeed);
+    }
     if (dodging) updateDodge(fighter, dt);
 
     const prevX = fighter.x;
     const prevY = fighter.y;
-    fighter.x += fighter.vx * dt;
-    fighter.y += fighter.vy * dt;
+    fighter.x += fighter.vx * dt + (fixedMotion?.x || 0);
+    fighter.y += fighter.vy * dt + (fixedMotion?.y || 0);
+    this.enforceGroundJumpApex(fighter);
+    const intendedX = fighter.x;
+    const intendedY = fighter.y;
     fighter.onGround = false;
 
     const collision = resolveStageCollision(match.stage, fighter, prevX, prevY, input, {
-      groundRoll: groundRolling
+      groundRoll: groundRolling,
+      preventEdgeDrop: Boolean(fixedMotion?.preventEdgeDrop && wasOnGround)
     });
+    if (fighter.onGround) {
+      fighter.groundJump = null;
+    }
+    if (fixedMotion?.stopOnStage) {
+      const horizontalBlocked = fixedMotion.lockX && Math.abs(fighter.x - intendedX) > 0.001;
+      const verticalBlocked = fixedMotion.lockY && Math.abs(fighter.y - intendedY) > 0.001;
+      if (horizontalBlocked || verticalBlocked || collision.hitWall || collision.hitSlope || collision.hitCeiling) {
+        this.stopMoveMotion(fighter);
+      }
+    }
     const impact = resolveImpactAfterCollision(fighter, collision, input);
     if (["tech", "wallTech", "slopeTech", "ceilingTech"].includes(impact)) this.addEvent(match, "tech", fighter.id);
     if (["bounce", "wallBounce", "slopeBounce", "ceilingBounce"].includes(impact)) this.addEvent(match, "bounce", fighter.id);
-    if (!fighter.onGround && canControl && fighter.inputEnabled !== false && tryGrabLedge(match.stage, fighter, input)) {
+    if (
+      !fighter.onGround &&
+      !wasOnGround &&
+      canControl &&
+      fighter.inputEnabled !== false &&
+      tryGrabLedge(match.stage, fighter, input, { wasGrounded: wasOnGround })
+    ) {
       this.handleLedgeTrump(match, fighter);
       this.addEvent(match, "ledge", fighter.id);
     }
-    if (wasOnGround && !fighter.onGround && !fighter.ledge) {
+    const preservesGroundJump = fighter.move?.preservesGroundJump && fighter.moveState?.impulseApplied;
+    if (wasOnGround && !fighter.onGround && !fighter.ledge && !preservesGroundJump) {
       fighter.jumps = Math.min(fighter.jumps, Math.max(0, fighter.maxJumps - 1));
     }
 
@@ -567,23 +668,169 @@ export class BattleSimulation {
     fighter.lastInput = { ...input };
   }
 
+  startGroundJump(fighter, input, verticalAxis, dt) {
+    const mode = normalizeShortHopMode(input.shortHopMode);
+    const baseGravity = fighter.stats.gravity * MOVEMENT.normalGravityMultiplier;
+    const fullRise = discreteJumpRise(fighter.stats.jumpSpeed, baseGravity, dt);
+    const gravity = baseGravity / MOVEMENT.jumpDurationMultiplier ** 2;
+    const fullJumpSpeed = jumpVelocityForRise(fullRise, gravity, dt, fighter.stats.jumpSpeed);
+    const targetY = fighter.y - fullRise * SHORT_HOP.heightRatio;
+    const shortHop = (mode === SHORT_HOP_MODES.down || mode === SHORT_HOP_MODES.both) && verticalAxis > 0.55;
+    fighter.groundJump = {
+      mode,
+      targetY,
+      gravity,
+      fullJumpSpeed,
+      shortHop,
+      releaseWindowClosed: false
+    };
+    fighter.jumpArcActive = true;
+    fighter.vy = shortHop
+      ? jumpVelocityForRise(fighter.y - targetY, gravity, dt, fullJumpSpeed)
+      : fullJumpSpeed;
+  }
+
+  startRunTurnIfNeeded(fighter, axis) {
+    if (!fighter.onGround || fighter.runTurn || fighter.action || fighter.shield || fighter.dodge) return false;
+    const direction = Math.abs(axis) > 0.35 ? Math.sign(axis) : 0;
+    const velocityDirection = Math.abs(fighter.vx) > fighter.stats.runSpeed * 0.2
+      ? Math.sign(fighter.vx)
+      : 0;
+    const isRunning = fighter.runRampDirection === velocityDirection || fighter.dashTimer > 0;
+    if (!direction || !velocityDirection || !isRunning || direction === velocityDirection) return false;
+
+    fighter.runTurn = {
+      direction,
+      sourceDirection: velocityDirection,
+      elapsed: 0,
+      duration: fighter.stats.runTurnDuration || MOVEMENT.runTurnDuration,
+      startVelocity: fighter.vx
+    };
+    fighter.facing = direction;
+    fighter.dashTimer = 0;
+    fighter.dashDirection = direction;
+    fighter.runRampElapsed = 0;
+    fighter.runRampDirection = 0;
+    return true;
+  }
+
+  updateGroundJumpChoice(fighter, input, dt) {
+    const jump = fighter.groundJump;
+    if (!jump || jump.shortHop || jump.releaseWindowClosed) return;
+    if (fighter.y <= jump.targetY) {
+      jump.releaseWindowClosed = true;
+      return;
+    }
+    if (!fighter.lastInput.jump || input.jump) return;
+    const releaseEnabled = jump.mode === SHORT_HOP_MODES.release || jump.mode === SHORT_HOP_MODES.both;
+    if (!releaseEnabled) {
+      jump.releaseWindowClosed = true;
+      return;
+    }
+    jump.shortHop = true;
+    fighter.vy = jumpVelocityForRise(
+      fighter.y - jump.targetY,
+      jump.gravity,
+      dt,
+      jump.fullJumpSpeed
+    );
+  }
+
+  enforceGroundJumpApex(fighter) {
+    const jump = fighter.groundJump;
+    if (!jump) return;
+    if (jump.shortHop && fighter.y <= jump.targetY) {
+      fighter.y = jump.targetY;
+      fighter.vy = 0;
+      fighter.groundJump = null;
+      return;
+    }
+    if (!jump.shortHop && fighter.y <= jump.targetY) jump.releaseWindowClosed = true;
+    if (fighter.vy >= 0) fighter.groundJump = null;
+  }
+
+  updateKnockdownState(match, fighter, input, dt, stateInput) {
+    const state = fighter.knockdown;
+    if (!state) return;
+
+    state.elapsed += dt;
+    fighter.actionTime = state.elapsed;
+    fighter.vx = 0;
+    fighter.vy = 0;
+    fighter.onGround = true;
+    fighter.shield = false;
+    fighter.fastFalling = false;
+
+    if (state.phase === "getup") {
+      fighter.action = "getup";
+      fighter.crouching = false;
+      if (state.elapsed < KNOCKDOWN.getupDuration) return;
+      fighter.knockdown = null;
+      fighter.action = null;
+      fighter.actionTime = 0;
+      return;
+    }
+
+    fighter.action = "downed";
+    fighter.crouching = false;
+    const canChoose = fighter.inputEnabled !== false;
+    const directionPressed = canChoose && Math.abs(stateInput.axis) > 0.35 && (
+      Math.abs(stateInput.lastAxis) <= 0.35 || Math.sign(stateInput.axis) !== Math.sign(stateInput.lastAxis)
+    );
+    const upPressed = canChoose && stateInput.verticalAxis < -0.55 && stateInput.lastVerticalAxis >= -0.55;
+
+    if (canChoose && (stateInput.attackPressed || stateInput.specialPressed)) {
+      fighter.knockdown = null;
+      fighter.crouching = false;
+      fighter.action = null;
+      fighter.actionTime = 0;
+      this.startMove(fighter, getMove(fighter.characterId, "getupAttack"));
+      return;
+    }
+
+    if (directionPressed) {
+      fighter.knockdown = null;
+      fighter.crouching = false;
+      fighter.action = null;
+      fighter.actionTime = 0;
+      startDodge(fighter, { type: "roll", direction: Math.sign(stateInput.axis) });
+      this.addEvent(match, "dodge", fighter.id);
+      return;
+    }
+
+    const neutralGetup = canChoose && (
+      stateInput.jumpPressed || stateInput.shieldPressed || upPressed
+    );
+    if (!neutralGetup && state.elapsed + 1e-9 < KNOCKDOWN.maxDuration) return;
+    state.phase = "getup";
+    state.elapsed = 0;
+    fighter.action = "getup";
+    fighter.actionTime = 0;
+    fighter.crouching = false;
+    fighter.invuln = Math.max(fighter.invuln || 0, KNOCKDOWN.getupInvuln);
+  }
+
   startMove(fighter, move) {
     if (!move) return false;
     clearLedgeState(fighter, 0);
     clearDodge(fighter);
     fighter.smashCharge = null;
+    fighter.jabContinuation = null;
+    fighter.runTurn = null;
     fighter.actionStartedAir = !fighter.onGround;
     fighter.action = move.id;
     fighter.move = {
       ...move,
       ...(Array.isArray(move.hits) ? { hits: move.hits.map(hit => ({ ...hit })) } : {}),
-      ...(move.projectile ? { projectile: { ...move.projectile } } : {})
+      ...(move.projectile ? { projectile: { ...move.projectile } } : {}),
+      ...(move.motion ? { motion: { ...move.motion } } : {})
     };
     fighter.moveState = {
       contact: false,
       spawned: false,
       impulseApplied: false,
-      chainQueued: false
+      chainQueued: false,
+      chainInputUntil: 0
     };
     fighter.actionTime = 0;
     fighter.hitList = [];
@@ -607,6 +854,7 @@ export class BattleSimulation {
     clearLedgeState(fighter, 0);
     clearDodge(fighter);
     fighter.smashCharge = null;
+    fighter.runTurn = null;
     fighter.novaCharging = true;
     fighter.action = "novaCharge";
     fighter.move = null;
@@ -641,6 +889,7 @@ export class BattleSimulation {
     clearLedgeState(fighter, 0);
     clearDodge(fighter);
     fighter.smashCharge = null;
+    fighter.runTurn = null;
     fighter.novaCharging = false;
     fighter.recovery = { phase: "thrust", elapsed: 0 };
     fighter.action = "specialUp";
@@ -650,7 +899,8 @@ export class BattleSimulation {
     fighter.hitList = [];
     fighter.shield = false;
     fighter.onGround = false;
-    fighter.vy = Math.min(fighter.vy, NOVA_RECOVERY.neutralSpeed * 0.72);
+    fighter.jumpArcActive = false;
+    fighter.vy = Math.min(fighter.vy, NOVA_RECOVERY.neutralSpeed * NOVA_RECOVERY.verticalScale * 0.72);
     fighter.jumps = Math.min(fighter.jumps, Math.max(0, fighter.maxJumps - 1));
   }
 
@@ -672,7 +922,11 @@ export class BattleSimulation {
         : state.verticalAxis > 0.35
         ? NOVA_RECOVERY.downSpeed
         : NOVA_RECOVERY.neutralSpeed;
-      fighter.vy = approach(fighter.vy, targetSpeed, 980 * dt);
+      fighter.vy = approach(
+        fighter.vy,
+        targetSpeed * NOVA_RECOVERY.verticalScale,
+        980 * NOVA_RECOVERY.verticalScale * dt
+      );
     } else {
       const gravityScale = state.verticalAxis < -0.35
         ? NOVA_RECOVERY.slowFallGravityScale
@@ -713,19 +967,93 @@ export class BattleSimulation {
     const move = fighter.move;
     const state = fighter.moveState || (fighter.moveState = {});
     const nextTime = fighter.actionTime + dt;
-    if (move.chainTo && attackPressed) state.chainQueued = true;
+    state.pendingMotion = null;
+    this.updateJabChainInput(fighter, input, attackPressed, nextTime);
     if (!state.impulseApplied && Number.isFinite(move.impulseAt) && nextTime >= move.impulseAt) {
       state.impulseApplied = true;
       if (Number.isFinite(move.impulseX)) fighter.vx = fighter.facing * move.impulseX;
-      if (Number.isFinite(move.impulseY)) {
+      if (Number.isFinite(move.jumpHeightRatio)) {
+        const baseGravity = fighter.stats.gravity * MOVEMENT.normalGravityMultiplier;
+        const jumpGravity = baseGravity / MOVEMENT.jumpDurationMultiplier ** 2;
+        const fullRise = discreteJumpRise(fighter.stats.jumpSpeed, baseGravity, dt);
+        fighter.vy = jumpVelocityForRise(
+          fullRise * move.jumpHeightRatio,
+          jumpGravity,
+          dt,
+          fighter.stats.jumpSpeed
+        );
+        fighter.groundJump = null;
+        fighter.jumpArcActive = true;
+        fighter.onGround = false;
+      } else if (Number.isFinite(move.impulseY)) {
         fighter.vy = Math.min(fighter.vy, move.impulseY);
         fighter.onGround = false;
+      }
+    }
+    if (move.motion && !state.motionStopped) {
+      const start = Number(move.motion.start) || 0;
+      const duration = Math.max(1 / 60, Number(move.motion.duration) || 0);
+      const previousProgress = motionProgress((fighter.actionTime - start) / duration, move.motion.easing);
+      const nextProgress = motionProgress((nextTime - start) / duration, move.motion.easing);
+      const progressDelta = Math.max(0, nextProgress - previousProgress);
+      if (progressDelta > 0) {
+        state.pendingMotion = {
+          x: Number.isFinite(move.motion.distanceX)
+            ? fighter.facing * move.motion.distanceX * progressDelta
+            : 0,
+          y: Number.isFinite(move.motion.distanceY)
+            ? move.motion.distanceY * progressDelta
+            : 0,
+          lockX: Number.isFinite(move.motion.distanceX),
+          lockY: Number.isFinite(move.motion.distanceY),
+          stopOnStage: Boolean(move.motion.stopOnStage),
+          preventEdgeDrop: Boolean(move.motion.preventEdgeDrop)
+        };
       }
     }
     if (!state.spawned && move.projectile && nextTime >= move.spawnAt) {
       state.spawned = true;
       this.spawnProjectile(match, fighter, move.projectile, input);
     }
+  }
+
+  updateJabChainInput(fighter, input, attackPressed, atTime) {
+    const move = fighter.move;
+    const state = fighter.moveState;
+    if (!move?.chainTo || !state || state.chainQueued) return;
+    const chainOpen = move.chainOpen ?? move.total;
+    const chainClose = move.chainClose ?? move.total;
+    const bufferOpen = Math.max(0, chainOpen - JAB_COMBO.inputBuffer);
+    if (attackPressed && atTime >= bufferOpen && atTime <= chainClose) {
+      state.chainInputUntil = Math.min(chainClose, atTime + JAB_COMBO.inputBuffer);
+    }
+    const bufferedPress = (state.chainInputUntil || 0) >= atTime;
+    if (atTime >= chainOpen && atTime <= chainClose && (input.attack || bufferedPress)) {
+      state.chainQueued = true;
+      state.chainInputUntil = 0;
+    }
+  }
+
+  updateJabContinuation(fighter, input, dt, stateInput) {
+    const continuation = fighter.jabContinuation;
+    if (!continuation || fighter.action || !canAct(fighter)) return;
+
+    const moved = Math.abs(stateInput.axis) > 0.35 || Math.abs(stateInput.verticalAxis) > 0.35;
+    const usedAnotherAction = moved || stateInput.jumpPressed || stateInput.smashPressed ||
+      stateInput.specialPressed || stateInput.shieldPressed || stateInput.grabPressed ||
+      input.jump || input.smash || input.special || input.shield || input.grab;
+    if (usedAnotherAction) {
+      fighter.jabContinuation = null;
+      return;
+    }
+
+    if (stateInput.attackPressed) {
+      this.startMove(fighter, getMove(fighter.characterId, continuation.moveId));
+      return;
+    }
+
+    continuation.remaining = Math.max(0, continuation.remaining - dt);
+    if (continuation.remaining <= 0) fighter.jabContinuation = null;
   }
 
   spawnProjectile(match, fighter, config, input) {
@@ -764,6 +1092,8 @@ export class BattleSimulation {
     const projectiles = match.projectiles || [];
     for (const projectile of projectiles) {
       if (projectile.dead) continue;
+      const previousX = projectile.x;
+      const previousY = projectile.y;
       const dx = projectile.vx * dt;
       const dy = projectile.vy * dt;
       projectile.x += dx;
@@ -774,8 +1104,7 @@ export class BattleSimulation {
         projectile.dead = true;
         continue;
       }
-      const rect = this.projectileRect(projectile);
-      if (match.stage.platforms.some(platform => rectsOverlap(rect, platform))) projectile.dead = true;
+      if (this.projectileHitsStage(match.stage, projectile, previousX, previousY)) projectile.dead = true;
     }
 
     for (let firstIndex = 0; firstIndex < projectiles.length; firstIndex += 1) {
@@ -803,7 +1132,7 @@ export class BattleSimulation {
         let outcome = null;
         let fighterView = null;
         for (const move of getActiveMoveHits(fighter, fighter.move, fighter.actionTime)) {
-          if (move.clankMode === "none" || !rectsOverlap(rect, getHitbox(fighter, move))) continue;
+          if (move.clankMode === "none" || !hitboxesOverlap(rect, getHitbox(fighter, move))) continue;
           fighterView = { ...fighter, move };
           const projectileView = {
             id: projectile.id,
@@ -835,7 +1164,7 @@ export class BattleSimulation {
       const rect = this.projectileRect(projectile);
       for (const target of match.fighters.values()) {
         if (target.id === owner.id || !target.alive || target.invuln > 0 || target.dodgeInvuln > 0) continue;
-        if (!rectsOverlap(rect, fighterRect(target))) continue;
+        if (!hitboxOverlapsFighter(rect, target)) continue;
         this.applyHit(match, owner, target, projectile.move);
         projectile.dead = true;
         break;
@@ -854,9 +1183,28 @@ export class BattleSimulation {
     };
   }
 
+  projectileHitsStage(stage, projectile, previousX, previousY) {
+    const probe = {
+      x: projectile.x,
+      y: projectile.y,
+      w: projectile.w,
+      h: projectile.h,
+      vx: projectile.vx,
+      vy: projectile.vy,
+      onGround: false,
+      jumps: 0,
+      maxJumps: 0,
+      hasAirDodged: false,
+      ledge: null
+    };
+    const collision = resolveStageCollision(stage, probe, previousX, previousY);
+    return collision.landed || collision.hitCeiling || collision.hitWall || collision.hitSlope;
+  }
+
   startSmashCharge(fighter, move) {
     clearLedgeState(fighter, 0);
     clearDodge(fighter);
+    fighter.runTurn = null;
     fighter.smashCharge = {
       moveId: move.id,
       elapsed: 0,
@@ -876,58 +1224,53 @@ export class BattleSimulation {
     const charge = fighter.smashCharge;
     if (!charge) return null;
 
-    if (!input.smash) {
-      const baseMove = getMove(fighter.characterId, charge.moveId);
-      const maxDamageMultiplier = baseMove.smashChargeDamageMax ?? SMASH_CHARGE.maxDamageMultiplier;
-      const maxKnockbackMultiplier = baseMove.smashChargeKnockbackMax ?? SMASH_CHARGE.maxKnockbackMultiplier;
-      const damageMultiplier = 1 + charge.ratio * (maxDamageMultiplier - 1);
-      const knockbackMultiplier = 1 + charge.ratio * (maxKnockbackMultiplier - 1);
-      const scaleDamage = value => Number.isFinite(value) ? roundValue(value * damageMultiplier) : value;
-      const scaleHit = hit => ({
-        ...hit,
-        damage: scaleDamage(hit.damage),
-        hpDamage: scaleDamage(hit.hpDamage),
-        shieldDamage: scaleDamage(hit.shieldDamage),
-        chargeKnockbackMultiplier: knockbackMultiplier
-      });
-      const chargedHits = Array.isArray(baseMove.hits) ? baseMove.hits.map(scaleHit) : null;
-      const primaryHit = chargedHits?.[0] || scaleHit(baseMove);
-      const chargedMove = {
-        ...baseMove,
-        ...(chargedHits ? { hits: chargedHits } : primaryHit),
-        damage: primaryHit.damage,
-        hpDamage: primaryHit.hpDamage,
-        shieldDamage: primaryHit.shieldDamage,
-        chargeRatio: charge.ratio,
-        chargeDamageMultiplier: damageMultiplier,
-        chargeKnockbackMultiplier: knockbackMultiplier
-      };
-      fighter.smashCharge = null;
-      fighter.action = null;
-      this.startMove(fighter, chargedMove);
-      return "released";
-    }
+    if (!input.smash) return this.releaseSmashCharge(fighter, "released");
 
     charge.elapsed += dt;
     charge.ratio = clamp(charge.elapsed / SMASH_CHARGE.maxDuration, 0, 1);
     if (fighter.onGround) fighter.vx = 0;
-    if (charge.elapsed < SMASH_CHARGE.forcedCancelDuration) return "charging";
+    if (charge.elapsed < SMASH_CHARGE.autoReleaseDuration) return "charging";
+    return this.releaseSmashCharge(fighter, "autoReleased");
+  }
 
+  releaseSmashCharge(fighter, result = "released") {
+    const charge = fighter.smashCharge;
+    if (!charge) return null;
+    const baseMove = getMove(fighter.characterId, charge.moveId);
+    const maxDamageMultiplier = baseMove.smashChargeDamageMax ?? SMASH_CHARGE.maxDamageMultiplier;
+    const maxKnockbackMultiplier = baseMove.smashChargeKnockbackMax ?? SMASH_CHARGE.maxKnockbackMultiplier;
+    const damageMultiplier = 1 + charge.ratio * (maxDamageMultiplier - 1);
+    const knockbackMultiplier = 1 + charge.ratio * (maxKnockbackMultiplier - 1);
+    const scaleDamage = value => Number.isFinite(value) ? roundValue(value * damageMultiplier) : value;
+    const scaleHit = hit => ({
+      ...hit,
+      damage: scaleDamage(hit.damage),
+      hpDamage: scaleDamage(hit.hpDamage),
+      shieldDamage: scaleDamage(hit.shieldDamage),
+      chargeKnockbackMultiplier: knockbackMultiplier
+    });
+    const chargedHits = Array.isArray(baseMove.hits) ? baseMove.hits.map(scaleHit) : null;
+    const primaryHit = chargedHits?.[0] || scaleHit(baseMove);
+    const chargedMove = {
+      ...baseMove,
+      ...(chargedHits ? { hits: chargedHits } : primaryHit),
+      damage: primaryHit.damage,
+      hpDamage: primaryHit.hpDamage,
+      shieldDamage: primaryHit.shieldDamage,
+      chargeRatio: charge.ratio,
+      chargeDamageMultiplier: damageMultiplier,
+      chargeKnockbackMultiplier: knockbackMultiplier
+    };
     fighter.smashCharge = null;
-    fighter.action = "smashChargeCancel";
-    fighter.move = null;
-    fighter.moveState = null;
-    fighter.actionTime = 0;
-    fighter.hitList = [];
-    fighter.actionStartedAir = false;
-    fighter.actionLock = SMASH_CHARGE.forcedCancelLag;
-    return "forcedCancel";
+    fighter.action = null;
+    this.startMove(fighter, chargedMove);
+    return result;
   }
 
   clearSmashCharge(fighter) {
     fighter.smashCharge = null;
     fighter.actionLock = 0;
-    if (["smashCharge", "smashChargeCancel"].includes(fighter.action)) {
+    if (fighter.action === "smashCharge") {
       fighter.action = null;
       fighter.move = null;
       fighter.moveState = null;
@@ -940,13 +1283,19 @@ export class BattleSimulation {
   updateActionTimer(fighter, input, dt) {
     if (!fighter.action || !fighter.move) return;
     fighter.actionTime += dt;
-    if (fighter.actionTime < fighter.move.total) return;
+    const endsOnLanding = fighter.move.endsOnLanding && fighter.moveState?.impulseApplied;
+    if (endsOnLanding && !fighter.onGround) return;
+    if (!endsOnLanding && fighter.actionTime < fighter.move.total) return;
     const chainTo = fighter.move.chainTo;
-    const chainReady = chainTo && (fighter.moveState?.chainQueued || (input.attack && fighter.actionTime >= fighter.move.chainOpen));
+    const chainReady = chainTo && fighter.moveState?.chainQueued;
     if (chainReady) {
       this.startMove(fighter, getMove(fighter.characterId, chainTo));
       return;
     }
+    fighter.jabContinuation = chainTo ? {
+      moveId: chainTo,
+      remaining: JAB_COMBO.followupWindow
+    } : null;
     fighter.action = null;
     fighter.move = null;
     fighter.moveState = null;
@@ -988,11 +1337,15 @@ export class BattleSimulation {
     target.hitList = [];
     target.hitstun = 0;
     target.hitlag = 0;
+    target.knockdown = null;
+    target.knockdownPending = false;
+    target.runTurn = null;
+    target.crouching = false;
     target.vx = 0;
     target.vy = 0;
     target.shield = false;
     target.crouching = false;
-    this.syncGrabbedPosition(attacker, target);
+    this.syncGrabbedPosition(match.stage, attacker, target);
     this.addEvent(match, "grab", target.id, attacker.id);
     return true;
   }
@@ -1015,7 +1368,7 @@ export class BattleSimulation {
     attacker.vy = 0;
     attacker.shield = false;
     attacker.crouching = false;
-    this.syncGrabbedPosition(attacker, target);
+    this.syncGrabbedPosition(match.stage, attacker, target);
 
     if (state.attackPressed && attacker.pummelCooldown <= 0) {
       const pummel = this.applyNovaCharge(attacker, getMove(attacker.characterId, "pummel"));
@@ -1048,10 +1401,10 @@ export class BattleSimulation {
       return;
     }
     if (attacker.throwState) {
-      this.syncThrowPosition(attacker, target);
+      this.syncThrowPosition(match.stage, attacker, target);
       return;
     }
-    this.syncGrabbedPosition(attacker, target);
+    this.syncGrabbedPosition(match.stage, attacker, target);
     const buttonMash = ["jump", "attack", "smash", "special", "shield", "grab"]
       .reduce((count, action) => count + Number(input[action] && !target.lastInput[action]), 0);
     const stickMash = Number(Math.abs(horizontalInput(input) - horizontalInput(target.lastInput)) > 0.75)
@@ -1087,7 +1440,7 @@ export class BattleSimulation {
     attacker.actionTime = 0;
     attacker.bufferedThrow = null;
     attacker.vx = 0;
-    this.syncThrowPosition(attacker, target);
+    this.syncThrowPosition(match.stage, attacker, target);
   }
 
   updateThrowSequence(match, attacker, target, dt) {
@@ -1097,7 +1450,7 @@ export class BattleSimulation {
     attacker.actionTime = state.elapsed;
     attacker.vx = 0;
     attacker.vy = 0;
-    this.syncThrowPosition(attacker, target);
+    this.syncThrowPosition(match.stage, attacker, target);
 
     while (state.nextHit < move.hits.length && state.elapsed >= move.hits[state.nextHit].start) {
       let hit = { ...move.hits[state.nextHit], id: move.id, hitId: move.hits[state.nextHit].id };
@@ -1125,7 +1478,7 @@ export class BattleSimulation {
     if (state.elapsed >= move.total) this.releaseGrab(match, attacker, "throw", false);
   }
 
-  syncThrowPosition(attacker, target) {
+  syncThrowPosition(stage, attacker, target) {
     const state = attacker.throwState;
     const variant = state?.variant;
     let side = attacker.facing;
@@ -1136,12 +1489,12 @@ export class BattleSimulation {
       offsetY = attacker.h * 0.42;
     }
     if (variant === "up") offsetY = -attacker.h * 0.62;
-    target.x = attacker.x + side * (attacker.w / 2 + target.w / 2 - 4);
-    target.y = attacker.y + offsetY;
+    const targetX = attacker.x + side * (attacker.w / 2 + target.w / 2 - 4);
+    const targetY = attacker.y + offsetY;
+    placeFighterWithStageCollision(stage, target, targetX, targetY);
     target.facing = -attacker.facing;
     target.vx = 0;
     target.vy = 0;
-    target.onGround = attacker.onGround && variant !== "up";
   }
 
   detachGrabbedFighter(attacker, target) {
@@ -1174,7 +1527,12 @@ export class BattleSimulation {
     target.action = null;
     target.vx = attacker.facing * 75;
     target.vy = 0;
-    target.x = attacker.x + attacker.facing * (attacker.w / 2 + target.w / 2 + 10);
+    placeFighterWithStageCollision(
+      match.stage,
+      target,
+      attacker.x + attacker.facing * (attacker.w / 2 + target.w / 2 + 10),
+      target.y
+    );
     if (grantInvuln && reason !== "throw") target.invuln = Math.max(target.invuln || 0, GRAB.releaseInvuln);
   }
 
@@ -1186,13 +1544,16 @@ export class BattleSimulation {
     else fighter.grabbedBy = null;
   }
 
-  syncGrabbedPosition(attacker, target) {
-    target.x = attacker.x + attacker.facing * (attacker.w / 2 + target.w / 2 - 4);
-    target.y = attacker.y;
+  syncGrabbedPosition(stage, attacker, target) {
+    placeFighterWithStageCollision(
+      stage,
+      target,
+      attacker.x + attacker.facing * (attacker.w / 2 + target.w / 2 - 4),
+      attacker.y
+    );
     target.facing = -attacker.facing;
     target.vx = 0;
     target.vy = 0;
-    target.onGround = attacker.onGround;
   }
 
   resolveFighterCollisions(match) {
@@ -1219,7 +1580,7 @@ export class BattleSimulation {
         let secondView = null;
         for (const firstMove of firstHits) {
           for (const secondMove of secondHits) {
-            if (!rectsOverlap(getHitbox(first, firstMove), getHitbox(second, secondMove))) continue;
+            if (!hitboxesOverlap(getHitbox(first, firstMove), getHitbox(second, secondMove))) continue;
             firstView = { ...first, move: firstMove };
             secondView = { ...second, move: secondMove };
             outcome = resolveClankOutcome(firstView, secondView);
@@ -1262,7 +1623,7 @@ export class BattleSimulation {
           if (match.clankPairs.has(this.fighterPairKey(attacker.id, target.id))) continue;
           const hitKey = `${move.hitId || "main"}:${target.id}`;
           if (attacker.hitList.includes(hitKey)) continue;
-          if (!rectsOverlap(hitbox, fighterRect(target))) continue;
+          if (!hitboxOverlapsFighter(hitbox, target)) continue;
           attacker.hitList.push(hitKey);
           pendingHits.push({ attacker, target, move });
         }
@@ -1307,12 +1668,14 @@ export class BattleSimulation {
   }
 
   applyHit(match, attacker, target, move) {
+    if (!attacker || !target || attacker === target || attacker.id === target.id) return false;
     this.registerMoveContact(attacker, move);
     move = this.applyNovaCharge(attacker, move);
     move = this.resolveMoveAngle(attacker, target, move);
     const rules = match.rules;
     const perfectGuard = target.perfectShieldWindow > 0 && !move.beatsShield;
     const blocked = (target.shield || perfectGuard) && !move.beatsShield;
+    if (blocked && attacker.move?.motion?.stopOnShield) this.stopMoveMotion(attacker);
 
     if (blocked) {
       if (perfectGuard && applyPerfectShield(target, attacker, move)) {
@@ -1328,6 +1691,10 @@ export class BattleSimulation {
         this.addEvent(match, "shieldBreak", target.id, attacker.id);
         return;
       }
+      attacker.hitlag = Math.max(attacker.hitlag || 0, Math.min(0.08, move.hitlag || 0.05) * 0.65);
+      this.rememberMoveUse(attacker, move.id);
+      this.addEvent(match, "shield", target.id, attacker.id);
+      return true;
     }
 
     if (!blocked) {
@@ -1339,9 +1706,14 @@ export class BattleSimulation {
       target.action = null;
       target.move = null;
       target.moveState = null;
+      target.jabContinuation = null;
+      target.runTurn = null;
       target.actionTime = 0;
       target.hitList = [];
       target.actionStartedAir = false;
+      target.knockdown = null;
+      target.knockdownPending = false;
+      target.crouching = false;
     }
 
     if (move.noLaunch) {
@@ -1374,6 +1746,14 @@ export class BattleSimulation {
     if (Number.isFinite(attacker.move?.contactTotal)) {
       attacker.move.total = Math.max(attacker.move.total, attacker.move.contactTotal);
     }
+  }
+
+  stopMoveMotion(fighter) {
+    if (!fighter.moveState || !fighter.move?.motion) return;
+    fighter.moveState.motionStopped = true;
+    fighter.moveState.pendingMotion = null;
+    if (Number.isFinite(fighter.move.motion.distanceX)) fighter.vx = 0;
+    if (Number.isFinite(fighter.move.motion.distanceY)) fighter.vy = 0;
   }
 
   applyNovaCharge(attacker, move) {
@@ -1420,6 +1800,8 @@ export class BattleSimulation {
     target.recovery = null;
     target.throwState = null;
     target.moveState = null;
+    target.jabContinuation = null;
+    target.runTurn = null;
     target.vx = launch.vx;
     target.vy = launch.vy;
     target.hitstun = launch.hitstun;
@@ -1427,9 +1809,13 @@ export class BattleSimulation {
     target.tumbling = launch.tumble;
     target.meteor = launch.meteor;
     target.onGround = false;
+    target.groundJump = null;
+    target.jumpArcActive = false;
     target.jumps = Math.min(target.jumps, Math.max(0, target.maxJumps - 1));
     target.crouching = false;
     target.clankLag = 0;
+    target.knockdown = null;
+    target.knockdownPending = false;
   }
 
   rememberMoveUse(attacker, moveId) {
@@ -1457,6 +1843,7 @@ export class BattleSimulation {
     fighter.novaCharging = false;
     fighter.recovery = null;
     fighter.throwState = null;
+    fighter.runTurn = null;
     applyFinalGaugeKoRule(fighter, match.rules.finalSmash);
     fighter.falls += 1;
     if (fighter.lastHitBy && fighter.lastHitBy !== fighter.id) {
@@ -1521,6 +1908,8 @@ export class BattleSimulation {
     fighter.crouching = false;
     fighter.tumbling = false;
     fighter.meteor = false;
+    fighter.knockdown = null;
+    fighter.knockdownPending = false;
     fighter.grabbing = null;
     fighter.grabbedBy = null;
     fighter.grabTimer = 0;
@@ -1532,12 +1921,15 @@ export class BattleSimulation {
     fighter.dashDirection = 0;
     fighter.runRampElapsed = 0;
     fighter.runRampDirection = 0;
-    fighter.jumpCutAvailable = false;
+    fighter.runTurn = null;
+    fighter.groundJump = null;
+    fighter.jumpArcActive = false;
     fighter.actionStartedAir = false;
     fighter.ledgeGrabCount = 0;
     fighter.action = null;
     fighter.move = null;
     fighter.moveState = null;
+    fighter.jabContinuation = null;
     fighter.smashCharge = null;
     fighter.novaCharge = 0;
     fighter.novaCharging = false;
@@ -1554,7 +1946,9 @@ export class BattleSimulation {
     if (match.rules.mode === "practice") return false;
     const fighters = Array.from(match.fighters.values());
     if (fighters.length < 2) return true;
-    if (match.rules.mode === "time") return match.elapsed >= match.rules.timeLimit;
+    const timeLimit = Number(match.rules.timeLimit) || 0;
+    if (timeLimit > 0 && match.elapsed >= timeLimit) return true;
+    if (match.rules.mode === "time") return false;
     return fighters.filter(fighter => !fighter.eliminated).length <= 1;
   }
 
@@ -1614,6 +2008,7 @@ export class BattleSimulation {
   }
 
   snapshot(match, extras = {}) {
+    const finalSmashHitbox = this.getFinalSmashActiveHitbox(match);
     return {
       id: match.id,
       frame: match.frame,
@@ -1625,12 +2020,15 @@ export class BattleSimulation {
       ...(extras.net === undefined ? {} : { net: extras.net }),
       countdown: match.countdown,
       elapsed: match.elapsed,
-      remainingTime: match.rules.mode === "practice" ? 0 : Math.max(0, match.rules.timeLimit - match.elapsed),
+      remainingTime: match.rules.timeLimit > 0
+        ? Math.max(0, match.rules.timeLimit - match.elapsed)
+        : null,
       finalSmash: match.finalSmash ? {
         fighterId: match.finalSmash.fighterId,
         remaining: roundValue(match.finalSmash.remaining),
         elapsed: roundValue(match.finalSmash.elapsed || 0),
-        punchDone: Boolean(match.finalSmash.punchDone)
+        punchDone: Boolean(match.finalSmash.punchDone),
+        hitbox: finalSmashHitbox
       } : null,
       fighters: Array.from(match.fighters.values()).map(fighter => ({
         id: fighter.id,
@@ -1643,8 +2041,14 @@ export class BattleSimulation {
         y: roundValue(fighter.y),
         vx: roundValue(fighter.vx),
         vy: roundValue(fighter.vy),
+        onGround: Boolean(fighter.onGround),
         w: fighter.w,
         h: fighter.h,
+        hurtbox: snapshotRect(fighterRect(fighter)),
+        hurtboxes: fighterHurtboxes(fighter).map(hurtbox => ({
+          ...snapshotRect(hurtbox),
+          part: hurtbox.part
+        })),
         facing: fighter.facing,
         damage: roundValue(fighter.damage),
         finalGauge: roundValue(fighter.finalGauge || 0),
@@ -1663,10 +2067,16 @@ export class BattleSimulation {
         shieldReleaseLag: roundValue(fighter.shieldReleaseLag || 0),
         actionLock: roundValue(fighter.actionLock || 0),
         justGuard: fighter.perfectShieldFlash > 0,
+        hitlag: roundValue(fighter.hitlag || 0),
         hitstun: roundValue(fighter.hitstun),
         crouching: Boolean(fighter.crouching),
         tumbling: Boolean(fighter.tumbling),
         meteor: Boolean(fighter.meteor),
+        jumpArcActive: Boolean(fighter.jumpArcActive),
+        knockdown: fighter.knockdown ? {
+          phase: fighter.knockdown.phase,
+          elapsed: roundValue(fighter.knockdown.elapsed || 0)
+        } : null,
         grabbing: fighter.grabbing,
         grabbedBy: fighter.grabbedBy,
         landingLag: roundValue(fighter.landingLag),
@@ -1677,12 +2087,19 @@ export class BattleSimulation {
         inputSeq: fighter.inputSeq || 0,
         action: fighter.action,
         move: fighter.move ? fighter.move.id : null,
+        moveContact: Boolean(fighter.moveState?.contact),
         actionTime: roundValue(fighter.actionTime || 0),
+        runTurn: fighter.runTurn ? {
+          direction: fighter.runTurn.direction,
+          elapsed: roundValue(fighter.runTurn.elapsed),
+          duration: roundValue(fighter.runTurn.duration)
+        } : null,
         novaCharge: roundValue(fighter.novaCharge || 0),
         novaChargeRatio: roundValue((fighter.novaCharge || 0) / NOVA_CHARGE.maxDuration),
         novaCharging: Boolean(fighter.novaCharging),
         recovery: fighter.recovery ? { ...fighter.recovery, elapsed: roundValue(fighter.recovery.elapsed) } : null,
         smashCharge: fighter.smashCharge ? {
+          moveId: fighter.smashCharge.moveId,
           elapsed: roundValue(fighter.smashCharge.elapsed),
           ratio: roundValue(fighter.smashCharge.ratio),
           maxed: fighter.smashCharge.ratio >= 1
@@ -1708,6 +2125,19 @@ export class BattleSimulation {
       events: match.events
     };
   }
+
+  getFinalSmashActiveHitbox(match) {
+    const state = match.finalSmash;
+    if (!state) return null;
+    const elapsed = state.elapsed || 0;
+    if (elapsed < FINAL_SMASH.punchAt || elapsed >= FINAL_SMASH.punchAt + FINAL_SMASH.punchActiveDuration) {
+      return null;
+    }
+    const fighter = match.fighters.get(state.fighterId);
+    if (!fighter?.alive) return null;
+    const punch = getMove(fighter.characterId, "finalPunch");
+    return { ...getHitbox(fighter, punch), hitId: punch.id };
+  }
 }
 
 export function normalizeBattleInput(input = null) {
@@ -1724,6 +2154,7 @@ export function normalizeBattleInput(input = null) {
     up: moveY < -0.35,
     down: moveY > 0.35,
     jump: Boolean(source.jump),
+    shortHopMode: normalizeShortHopMode(source.shortHopMode),
     attack: Boolean(source.attack),
     smash: Boolean(source.smash),
     special: Boolean(source.special),
@@ -1732,8 +2163,45 @@ export function normalizeBattleInput(input = null) {
   };
 }
 
+function discreteJumpRise(initialVy, gravity, dt) {
+  let velocity = Math.min(0, Number(initialVy) || 0);
+  let rise = 0;
+  for (let frame = 0; frame < 240 && velocity < 0; frame += 1) {
+    velocity += gravity * dt;
+    if (velocity < 0) rise -= velocity * dt;
+  }
+  return rise;
+}
+
+function jumpVelocityForRise(targetRise, gravity, dt, fullJumpSpeed) {
+  const target = Math.max(0, targetRise);
+  let low = 0;
+  let high = Math.abs(fullJumpSpeed);
+  for (let iteration = 0; iteration < 24; iteration += 1) {
+    const middle = (low + high) / 2;
+    if (discreteJumpRise(-middle, gravity, dt) < target) low = middle;
+    else high = middle;
+  }
+  return -high;
+}
+
+function motionProgress(progress, easing) {
+  const value = clamp(progress, 0, 1);
+  if (easing === "easeOutQuad") return 1 - (1 - value) ** 2;
+  return value;
+}
+
 function finiteClamp(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function snapshotRect(rect) {
+  return {
+    x: roundValue(rect.x),
+    y: roundValue(rect.y),
+    w: roundValue(rect.w),
+    h: roundValue(rect.h)
+  };
 }

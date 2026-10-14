@@ -10,3 +10,13 @@ ipconfig
 
 http://"ipv4アドレス":3000
 をブラウザで入力
+
+
+
+ファイヤーウォール許可(管理者モードのパワーシェルで行う)
+
+許可↓
+New-NetFirewallRule -DisplayName "Orisuma LAN TCP 3000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000 -Profile Any -RemoteAddress LocalSubnet
+
+許可を無効化↓
+Remove-NetFirewallRule -DisplayName "Orisuma LAN TCP 3000"

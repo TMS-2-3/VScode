@@ -1,15 +1,18 @@
-import { ACTIONS, DEFAULT_CONTROLS } from "./constants.js";
+import { ACTIONS, DEFAULT_CONTROLS, SHORT_HOP_MODES } from "./constants.js";
 import { normalizeBattleInput } from "./battle-simulation.js";
 import { clone, emptyInput, isTyping } from "./utils.js";
 
 const STICK_DEADZONE = 0.2;
 const DIGITAL_THRESHOLD = 0.35;
+const WHEEL_INPUT_DURATION = 80;
 
 export class InputManager {
   constructor(onChange) {
     this.onChange = onChange;
     this.controls = this.loadControls();
     this.keys = new Set();
+    this.mouseButtons = new Set();
+    this.wheelUntil = new Map();
     this.captureKeyboard = null;
     this.captureGamepadAction = null;
   }
@@ -17,6 +20,17 @@ export class InputManager {
   bind() {
     window.addEventListener("keydown", event => this.onKeyDown(event));
     window.addEventListener("keyup", event => this.keys.delete(event.code));
+    window.addEventListener("mousedown", event => this.onMouseDown(event));
+    window.addEventListener("mouseup", event => this.mouseButtons.delete(`Mouse${event.button}`));
+    window.addEventListener("wheel", event => this.onWheel(event), { passive: false });
+    window.addEventListener("contextmenu", event => {
+      if (this.captureKeyboard || this.isBindingAssigned("Mouse2")) event.preventDefault();
+    });
+    window.addEventListener("blur", () => {
+      this.keys.clear();
+      this.mouseButtons.clear();
+      this.wheelUntil.clear();
+    });
     window.addEventListener("gamepadconnected", () => this.onChange());
     window.addEventListener("gamepaddisconnected", () => this.onChange());
   }
@@ -24,10 +38,7 @@ export class InputManager {
   onKeyDown(event) {
     if (this.captureKeyboard) {
       event.preventDefault();
-      this.controls.keyboard[this.captureKeyboard] = event.code;
-      this.captureKeyboard = null;
-      this.saveControls();
-      this.onChange();
+      this.finishKeyboardCapture(event.code);
       return;
     }
     if (isTyping()) return;
@@ -37,18 +48,50 @@ export class InputManager {
     }
   }
 
+  onMouseDown(event) {
+    const binding = `Mouse${event.button}`;
+    if (this.captureKeyboard) {
+      event.preventDefault();
+      this.finishKeyboardCapture(binding);
+      return;
+    }
+    if (isTyping() || (event.target instanceof Element && event.target.closest("button, input, select, textarea, label"))) return;
+    this.mouseButtons.add(binding);
+  }
+
+  onWheel(event) {
+    if (!event.deltaY) return;
+    const binding = event.deltaY < 0 ? "WheelUp" : "WheelDown";
+    if (this.captureKeyboard) {
+      event.preventDefault();
+      this.finishKeyboardCapture(binding);
+      return;
+    }
+    if (isTyping() || (event.target instanceof Element && event.target.closest("button, input, select, textarea, label"))) return;
+    this.wheelUntil.set(binding, performance.now() + WHEEL_INPUT_DURATION);
+    if (event.target instanceof Element && event.target.closest("#gameCanvas")) event.preventDefault();
+  }
+
+  finishKeyboardCapture(binding) {
+    this.controls.keyboard[this.captureKeyboard] = binding;
+    this.captureKeyboard = null;
+    this.saveControls();
+    this.onChange();
+  }
+
   readInput() {
     const input = emptyInput();
     for (const [action] of ACTIONS) {
       if (["left", "right", "up", "down"].includes(action)) continue;
       const code = this.controls.keyboard[action];
-      if (code && this.keys.has(code)) input[action] = true;
+      if (this.isBindingActive(code)) input[action] = true;
     }
 
-    const keyboardX = Number(this.keys.has(this.controls.keyboard.right)) - Number(this.keys.has(this.controls.keyboard.left));
-    const keyboardY = Number(this.keys.has(this.controls.keyboard.down)) - Number(this.keys.has(this.controls.keyboard.up));
+    const keyboardX = Number(this.isBindingActive(this.controls.keyboard.right)) - Number(this.isBindingActive(this.controls.keyboard.left));
+    const keyboardY = Number(this.isBindingActive(this.controls.keyboard.down)) - Number(this.isBindingActive(this.controls.keyboard.up));
     input.moveX = keyboardX;
     input.moveY = keyboardY;
+    input.shortHopMode = this.controls.shortHopMode;
 
     const pad = this.firstGamepad();
     if (pad) {
@@ -65,6 +108,21 @@ export class InputManager {
     }
 
     return normalizeBattleInput(input);
+  }
+
+  isBindingActive(binding) {
+    if (!binding) return false;
+    if (binding.startsWith("Mouse")) return this.mouseButtons.has(binding);
+    if (binding === "WheelUp" || binding === "WheelDown") {
+      const active = (this.wheelUntil.get(binding) || 0) > performance.now();
+      if (!active) this.wheelUntil.delete(binding);
+      return active;
+    }
+    return this.keys.has(binding);
+  }
+
+  isBindingAssigned(binding) {
+    return Object.values(this.controls.keyboard).includes(binding);
   }
 
   startKeyboardCapture(action) {
@@ -120,6 +178,13 @@ export class InputManager {
     this.onChange();
   }
 
+  setShortHopMode(mode) {
+    if (!Object.values(SHORT_HOP_MODES).includes(mode)) return;
+    this.controls.shortHopMode = mode;
+    this.saveControls();
+    this.onChange();
+  }
+
   hasGamepad() {
     return Boolean(this.firstGamepad());
   }
@@ -156,6 +221,9 @@ export class InputManager {
     try {
       const saved = JSON.parse(localStorage.getItem("orisuma.controls") || "null");
       return {
+        shortHopMode: Object.values(SHORT_HOP_MODES).includes(saved?.shortHopMode)
+          ? saved.shortHopMode
+          : DEFAULT_CONTROLS.shortHopMode,
         keyboard: { ...DEFAULT_CONTROLS.keyboard, ...(saved && saved.keyboard) },
         gamepad: { ...DEFAULT_CONTROLS.gamepad, ...(saved && saved.gamepad) }
       };

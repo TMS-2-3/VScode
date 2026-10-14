@@ -7,6 +7,7 @@ export function emptyInput() {
     up: false,
     down: false,
     jump: false,
+    shortHopMode: "both",
     attack: false,
     smash: false,
     special: false,
@@ -20,6 +21,16 @@ export function clone(value) {
 }
 
 export function bindingLabel(code) {
+  const pointerLabels = {
+    Mouse0: "左クリック",
+    Mouse1: "ホイールクリック",
+    Mouse2: "右クリック",
+    Mouse3: "サイドボタン1",
+    Mouse4: "サイドボタン2",
+    WheelUp: "ホイール上",
+    WheelDown: "ホイール下"
+  };
+  if (pointerLabels[code]) return pointerLabels[code];
   const labels = {
     Space: "Space",
     ArrowUp: "↑",

@@ -339,6 +339,38 @@ h3 {
   gap: 8px;
 }
 
+.jump-mode-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #151a20;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.segmented-control button {
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: var(--muted);
+  background: #11161b;
+}
+
+.segmented-control button.selected {
+  color: #071512;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .key-row {
   display: grid;
   grid-template-columns: 112px 1fr 118px 118px;
@@ -541,17 +573,52 @@ h3 {
   box-shadow: none;
 }
 
-.floating-exit {
+.practice-toolbar {
   position: fixed;
   top: 12px;
   left: 12px;
   z-index: 30;
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.practice-toolbar .button-danger {
   min-width: 78px;
   opacity: 0.86;
 }
 
-.floating-exit:hover {
+.practice-toolbar .button-danger:hover {
   opacity: 1;
+}
+
+.practice-settings-button {
+  height: 42px;
+  background: rgba(17, 22, 27, 0.92);
+}
+
+.practice-settings-button.selected {
+  color: #071512;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.practice-speed-popover {
+  position: fixed;
+  top: 62px;
+  left: 12px;
+  z-index: 30;
+  width: min(420px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 22, 27, 0.96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+}
+
+.practice-speed-control {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 10px;
 }
 
 #gameCanvas {
@@ -625,6 +692,10 @@ h3 {
 
   .key-row button {
     min-height: 36px;
+  }
+
+  .jump-mode-row {
+    grid-template-columns: 1fr;
   }
 
   .character-card,

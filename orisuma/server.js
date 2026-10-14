@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import {
   CHARACTER_IDS,
   DEFAULT_RULES,
-  STAGES
+  STAGES,
+  normalizeTimeLimit
 } from "./js/battle-data.js";
 import { RollbackManager } from "./js/rollback-manager.js";
 import { BattleSimulation, normalizeBattleInput } from "./js/battle-simulation.js";
@@ -566,7 +567,8 @@ function trimInputTimeline(player, beforeFrame) {
 function inputsEqual(a, b) {
   return a.moveX === b.moveX && a.moveY === b.moveY &&
     a.jump === b.jump && a.attack === b.attack && a.smash === b.smash &&
-    a.special === b.special && a.shield === b.shield && a.grab === b.grab;
+    a.special === b.special && a.shield === b.shield && a.grab === b.grab &&
+    a.shortHopMode === b.shortHopMode;
 }
 
 function recordFrameHistory(match, frameInputs) {
@@ -633,10 +635,14 @@ function calculateStateHash(match) {
     push((fighter.hitList || []).join(","));
     push(fighter.moveState?.impulseApplied ? 1 : 0);
     push(fighter.moveState?.chainQueued ? 1 : 0);
+    push(Math.round((fighter.moveState?.chainInputUntil || 0) * 1000));
+    push(fighter.jabContinuation?.moveId || "-");
+    push(Math.round((fighter.jabContinuation?.remaining || 0) * 1000));
     push(fighter.moveState?.staleRecorded ? 1 : 0);
     push(Math.round((fighter.lastInput?.moveX || 0) * 1000));
     push(Math.round((fighter.lastInput?.moveY || 0) * 1000));
     push(fighter.lastInput?.jump ? 1 : 0);
+    push(fighter.lastInput?.shortHopMode || "both");
     push(fighter.lastInput?.attack ? 1 : 0);
     push(fighter.lastInput?.smash ? 1 : 0);
     push(fighter.lastInput?.special ? 1 : 0);
@@ -651,7 +657,20 @@ function calculateStateHash(match) {
     push(fighter.grabbedBy || "-");
     push(fighter.crouching ? 1 : 0);
     push(fighter.tumbling ? 1 : 0);
+    push(fighter.knockdown?.phase || "-");
+    push(Math.round((fighter.knockdown?.elapsed || 0) * 1000));
+    push(fighter.knockdownPending ? 1 : 0);
     push(fighter.jumps);
+    push(fighter.jumpArcActive ? 1 : 0);
+    push(fighter.groundJump?.shortHop ? 1 : 0);
+    push(fighter.groundJump?.releaseWindowClosed ? 1 : 0);
+    push(Math.round((fighter.groundJump?.targetY || 0) * 10));
+    push(Math.round((fighter.groundJump?.gravity || 0) * 10));
+    push(Math.round((fighter.groundJump?.fullJumpSpeed || 0) * 10));
+    push(fighter.runTurn?.direction || 0);
+    push(Math.round((fighter.runTurn?.elapsed || 0) * 1000));
+    push(Math.round((fighter.runTurn?.duration || 0) * 1000));
+    push(Math.round((fighter.runTurn?.startVelocity || 0) * 10));
     push(fighter.ledgeHorizontalLocked ? 1 : 0);
     push(Math.round((fighter.ledgeClimb?.elapsed || 0) * 1000));
     push(Math.round((fighter.ledgeRoll?.elapsed || 0) * 1000));
@@ -678,16 +697,15 @@ function maybeStartMatch(room) {
 }
 
 function startMatch(room) {
-  const stage = STAGES[room.rules.stage] || STAGES.battlefield;
   const players = Array.from(room.players.values()).filter(player => !player.waiting).slice(0, room.rules.maxPlayers);
   room.phase = "game";
   room.result = null;
   room.match = battleSimulation.createMatch({
     id: crypto.randomUUID(),
     rules: room.rules,
-    stage,
     countdown: 3.2
   });
+  const stage = room.match.stage;
   Object.assign(room.match, {
     inputHistory: [],
     rollback: new RollbackManager(ROLLBACK_HISTORY_LIMIT),
@@ -724,7 +742,8 @@ function updateMatch(room, rawDt) {
   simulateMatchFrame(room, rawDt);
 
   if (battleSimulation.shouldFinish(room.match)) {
-    finishMatch(room, match.rules.mode === "time" ? "時間切れ" : "決着");
+    const timedOut = match.rules.timeLimit > 0 && match.elapsed >= match.rules.timeLimit;
+    finishMatch(room, timedOut ? "時間切れ" : "決着");
     return;
   }
 
@@ -895,7 +914,7 @@ function normalizeRules(raw, fallback = DEFAULT_RULES, playerCount = 0) {
   return {
     mode,
     stocks: clampInt(source.stocks, 1, 9, previous.stocks),
-    timeLimit: clampInt(source.timeLimit, 60, 900, previous.timeLimit),
+    timeLimit: normalizeTimeLimit(source.timeLimit, previous.timeLimit),
     hp: clampInt(source.hp, 50, 500, previous.hp),
     maxPlayers: clampInt(source.maxPlayers, minPlayers, 4, previous.maxPlayers),
     stage,
@@ -912,7 +931,9 @@ function rulesSummary(rules, previous) {
   if (!previous || rules.stage !== previous.stage) parts.push(`ステージ=${STAGES[rules.stage].name}`);
   if (!previous || rules.maxPlayers !== previous.maxPlayers) parts.push(`人数=${rules.maxPlayers}`);
   if (!previous || rules.stocks !== previous.stocks) parts.push(`ストック=${rules.stocks}`);
-  if (!previous || rules.timeLimit !== previous.timeLimit) parts.push(`時間=${formatTime(rules.timeLimit)}`);
+  if (!previous || rules.timeLimit !== previous.timeLimit) {
+    parts.push(`時間=${rules.timeLimit === 0 ? "無限" : formatTime(rules.timeLimit)}`);
+  }
   if (!previous || rules.hp !== previous.hp) parts.push(`体力=${rules.hp}`);
   if (!previous || rules.gameSpeed !== previous.gameSpeed) parts.push(`速度=${rules.gameSpeed}x`);
   if (!previous || rules.inputDelay !== previous.inputDelay) parts.push(`入力遅延=${rules.inputDelay}F`);
