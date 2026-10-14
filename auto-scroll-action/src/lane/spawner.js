@@ -22,15 +22,22 @@ export const SPAWN_POOLS = {
 };
 
 export const INTER_PATTERN_ITEM_RULES = Object.freeze({
-  speedBoostChance: 0.25,
+  speedBoostChance: 0.18,
+  supplyStationChance: 0.15,
 });
 
 export function createObstacleSpawner(
   obstacleManager,
   coinManager,
   itemManager = null,
+  supplyStationManager = null,
   random = Math.random,
 ) {
+  if (typeof supplyStationManager === "function") {
+    random = supplyStationManager;
+    supplyStationManager = null;
+  }
+
   let nextSpawnDistance = null;
   let previousPatternId = null;
 
@@ -64,14 +71,33 @@ export function createObstacleSpawner(
       });
       const patternSpacing = getPatternSpacing(pattern, viewportWidth, laneGap);
 
-      if (itemManager && random() < INTER_PATTERN_ITEM_RULES.speedBoostChance) {
-        const patternEndX = x + pattern.lengthRatio * laneGap;
-        const nextPatternStartX = x + patternSpacing;
+      const interPatternX = getInterPatternX(x, pattern, patternSpacing, laneGap);
+      const eventCandidates = [];
 
-        itemManager.addItem({
-          x: (patternEndX + nextPatternStartX) / 2,
-          type: COLLECTIBLE_TYPE.SPEED_UP,
+      if (itemManager && random() < INTER_PATTERN_ITEM_RULES.speedBoostChance) {
+        eventCandidates.push(() => {
+          itemManager.addItem({
+            x: interPatternX,
+            type: COLLECTIBLE_TYPE.SPEED_UP,
+          });
         });
+      }
+
+      if (
+        supplyStationManager &&
+        random() < INTER_PATTERN_ITEM_RULES.supplyStationChance
+      ) {
+        eventCandidates.push(() => {
+          supplyStationManager.addStation({ x: interPatternX });
+        });
+      }
+
+      if (eventCandidates.length > 0) {
+        const selectedIndex =
+          eventCandidates.length === 1
+            ? 0
+            : Math.floor(random() * eventCandidates.length);
+        eventCandidates[selectedIndex]();
       }
 
       nextSpawnDistance += patternSpacing;
@@ -92,6 +118,11 @@ export function createObstacleSpawner(
         itemManager.removeItem(item.id);
       }
     });
+    supplyStationManager?.getSnapshot().forEach((station) => {
+      if (station.x < -laneGap) {
+        supplyStationManager.removeStation(station.id);
+      }
+    });
   }
 
   function reset() {
@@ -100,7 +131,14 @@ export function createObstacleSpawner(
     obstacleManager.reset();
     coinManager.reset();
     itemManager?.reset();
+    supplyStationManager?.reset();
   }
 
   return { reset, update };
+}
+
+function getInterPatternX(patternStartX, pattern, patternSpacing, laneGap) {
+  const patternEndX = patternStartX + pattern.lengthRatio * laneGap;
+  const nextPatternStartX = patternStartX + patternSpacing;
+  return (patternEndX + nextPatternStartX) / 2;
 }

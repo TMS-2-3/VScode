@@ -37,9 +37,18 @@ export function createCollisionSystem(lanes) {
       .map((item) => item.id);
   }
 
+  function findReachedSupplyStationIds(stations, viewportWidth) {
+    const playerX = viewportWidth * PLAYER_SCREEN_X_RATIO;
+
+    return stations
+      .filter((station) => !station.isTriggered && station.x <= playerX)
+      .map((station) => station.id);
+  }
+
   return {
     findCollectedCoinIds,
     findHitObstacleIds,
+    findReachedSupplyStationIds,
     findTriggeredItemIds,
   };
 }

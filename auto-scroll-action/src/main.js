@@ -9,16 +9,23 @@ import { createItemManager } from "./lane/items.js";
 import { createLaneManager } from "./lane/lane-manager.js";
 import { createObstacleManager } from "./lane/obstacles.js";
 import { createObstacleSpawner } from "./lane/spawner.js";
+import {
+  createSupplyStationManager,
+  SUPPLY_ITEM_EFFECT_TYPE,
+} from "./lane/supply-stations.js";
 import { COLLECTIBLE_TYPE, PLAYER_ACTION } from "./shared/contracts.js";
 import { createHud } from "./visual/hud.js";
 import { createRenderer } from "./visual/renderer.js";
+import { createSupplyRoulette } from "./visual/supply-roulette.js";
 
 const canvas = document.querySelector("#game-canvas");
 const hudRoot = document.querySelector("#game-hud");
 const titleScreen = document.querySelector("#title-screen");
 const startButton = document.querySelector("#start-button");
+const runIntro = document.querySelector("#run-intro");
 const gameOverScreen = document.querySelector("#game-over-screen");
-const restartButton = document.querySelector("#restart-button");
+const returnButton = document.querySelector("#return-button");
+const supplyRouletteRoot = document.querySelector("#supply-roulette");
 
 if (!(canvas instanceof HTMLCanvasElement)) {
   throw new Error("#game-canvas が見つかりません。");
@@ -28,8 +35,10 @@ if (
   !(hudRoot instanceof HTMLElement) ||
   !(titleScreen instanceof HTMLElement) ||
   !(startButton instanceof HTMLButtonElement) ||
+  !(runIntro instanceof HTMLElement) ||
   !(gameOverScreen instanceof HTMLElement) ||
-  !(restartButton instanceof HTMLButtonElement)
+  !(returnButton instanceof HTMLButtonElement) ||
+  !(supplyRouletteRoot instanceof HTMLElement)
 ) {
   throw new Error("ゲーム画面のUI要素が見つかりません。");
 }
@@ -40,14 +49,28 @@ const lanes = createLaneManager();
 const player = createPlayerController(lanes);
 const coins = createCoinManager();
 const items = createItemManager();
-const obstacles = createObstacleManager();
-const obstacleSpawner = createObstacleSpawner(obstacles, coins, items);
-const collisions = createCollisionSystem(lanes);
 const progression = createProgression();
+const supplyStations = createSupplyStationManager({
+  onUseItem(item) {
+    if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.SPEED_BOOST) {
+      progression.activateTimedSpeedBoost(item.effect);
+    }
+  },
+});
+const obstacles = createObstacleManager();
+const obstacleSpawner = createObstacleSpawner(
+  obstacles,
+  coins,
+  items,
+  supplyStations,
+);
+const collisions = createCollisionSystem(lanes);
 const hud = createHud(hudRoot);
 const renderer = createRenderer(canvas, lanes);
+const supplyRoulette = createSupplyRoulette(supplyRouletteRoot);
 let input = null;
 let animationFrameId = null;
+let introTimeoutId = null;
 let previousTime = performance.now();
 
 function resizeGame() {
@@ -56,6 +79,7 @@ function resizeGame() {
     coins: coins.getSnapshot(),
     items: items.getSnapshot(),
     obstacles: obstacles.getSnapshot(),
+    supplyStations: supplyStations.getSnapshot(),
   });
 }
 
@@ -63,18 +87,39 @@ window.addEventListener("resize", resizeGame);
 resizeGame();
 
 function startGame() {
-  if (game.isPlaying()) {
+  if (game.isPlaying() || game.isSupplyPaused() || introTimeoutId !== null) {
     return;
   }
 
-  game.startRun();
   player.reset();
   progression.reset();
   obstacleSpawner.reset();
   hud.setCandyCount(0);
   renderer.setBackgroundOffset(0);
+  renderer.render(player.getSnapshot(), {
+    coins: coins.getSnapshot(),
+    items: items.getSnapshot(),
+    obstacles: obstacles.getSnapshot(),
+    supplyStations: supplyStations.getSnapshot(),
+  });
+  supplyRoulette.reset();
   titleScreen.hidden = true;
   gameOverScreen.hidden = true;
+  runIntro.hidden = false;
+  audio.unlock();
+
+  introTimeoutId = window.setTimeout(() => {
+    introTimeoutId = null;
+    runIntro.hidden = true;
+    game.startRun();
+    enableInput();
+    previousTime = performance.now();
+    canvas.focus();
+    animationFrameId = requestAnimationFrame(frame);
+  }, 2600);
+}
+
+function enableInput() {
   input?.destroy();
   input = createInputController((action, isActive) => {
     const wasAccepted = player.handleAction(action, isActive);
@@ -83,10 +128,22 @@ function startGame() {
       audio.playJump();
     }
   });
-  audio.unlock();
-  previousTime = performance.now();
-  canvas.focus();
-  animationFrameId = requestAnimationFrame(frame);
+}
+
+function disableInput() {
+  player.handleAction(PLAYER_ACTION.DUCK, false);
+  input?.destroy();
+  input = null;
+}
+
+function returnToTitle() {
+  disableInput();
+  game.returnToReady();
+  supplyRoulette.reset();
+  runIntro.hidden = true;
+  gameOverScreen.hidden = true;
+  titleScreen.hidden = false;
+  startButton.focus();
 }
 
 function frame(currentTime) {
@@ -110,6 +167,7 @@ function frame(currentTime) {
   );
   coins.moveCoins(-movement.frameDistance);
   items.updateItems(-movement.frameDistance, deltaSeconds);
+  supplyStations.moveStations(-movement.frameDistance);
   obstacles.moveObstacles(-movement.frameDistance);
   const viewportWidth = canvas.getBoundingClientRect().width;
   obstacleSpawner.update(movement.traveledDistance, viewportWidth, lanes.getLaneGap());
@@ -118,6 +176,7 @@ function frame(currentTime) {
   const playerSnapshot = player.getSnapshot();
   let coinSnapshot = coins.getSnapshot();
   let itemSnapshot = items.getSnapshot();
+  const supplyStationSnapshot = supplyStations.getSnapshot();
   const obstacleSnapshot = obstacles.getSnapshot();
   const collectedCoinIds = collisions.findCollectedCoinIds(
     playerSnapshot,
@@ -132,6 +191,10 @@ function frame(currentTime) {
   const triggeredItemIds = collisions.findTriggeredItemIds(
     playerSnapshot,
     itemSnapshot,
+    viewportWidth,
+  );
+  const reachedSupplyStationIds = collisions.findReachedSupplyStationIds(
+    supplyStationSnapshot,
     viewportWidth,
   );
 
@@ -157,15 +220,43 @@ function frame(currentTime) {
     coins: coinSnapshot,
     items: itemSnapshot,
     obstacles: obstacleSnapshot,
+    supplyStations: supplyStationSnapshot,
     hitObstacleIds,
   });
 
   if (game.tryGameOverFromObstacle(hitObstacleIds.length > 0)) {
-    input?.destroy();
-    input = null;
+    disableInput();
     animationFrameId = null;
     gameOverScreen.hidden = false;
-    restartButton.focus();
+    returnButton.focus();
+    return;
+  }
+
+  let supplyDraw = null;
+
+  reachedSupplyStationIds.some((id) => {
+    supplyDraw = supplyStations.openStation(id);
+    return supplyDraw !== null;
+  });
+
+  if (supplyDraw && game.pauseForSupply()) {
+    disableInput();
+    animationFrameId = null;
+    supplyRoulette.start(supplyDraw, {
+      onReveal: () => {
+        supplyStations.claimItem();
+      },
+      onGo: () => {
+        if (!game.resumeFromSupply()) {
+          return;
+        }
+
+        enableInput();
+        previousTime = performance.now();
+        canvas.focus();
+        animationFrameId = requestAnimationFrame(frame);
+      },
+    });
     return;
   }
 
@@ -173,12 +264,17 @@ function frame(currentTime) {
 }
 
 startButton.addEventListener("click", startGame);
-restartButton.addEventListener("click", startGame);
+returnButton.addEventListener("click", returnToTitle);
 
 window.addEventListener("beforeunload", () => {
-  input?.destroy();
+  disableInput();
+  supplyRoulette.reset();
 
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
+  }
+
+  if (introTimeoutId !== null) {
+    clearTimeout(introTimeoutId);
   }
 });

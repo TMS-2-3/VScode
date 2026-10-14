@@ -16,6 +16,7 @@ export const PLAYER_ACTION = Object.freeze({
 export const RUN_STATE = Object.freeze({
   READY: "ready",
   PLAYING: "playing",
+  SUPPLY: "supply",
   GAME_OVER: "gameOver",
 });
 
