@@ -2,7 +2,7 @@ import {
   COLLECTIBLE_TYPE,
   PLAYER_SCREEN_X_RATIO,
 } from "../shared/contracts.js";
-import { getItemBounds } from "../lane/items.js";
+import { getItemBounds, getItemWarningX } from "../lane/items.js";
 import { getObstacleBounds } from "../lane/obstacles.js";
 
 export function createCollisionSystem(lanes) {
@@ -38,7 +38,9 @@ export function createCollisionSystem(lanes) {
       .filter(
         (item) =>
           !item.isTriggered &&
-          (item.type === COLLECTIBLE_TYPE.SPEED_UP
+          (item.type === COLLECTIBLE_TYPE.CAMERA_PRANK
+            ? getItemWarningX(item, lanes.getLaneGap()) <= playerX
+            : item.affectsAllLanes
             ? item.x <= playerX
             : rectanglesOverlap(playerBounds, getItemBounds(item, lanes))),
       )
@@ -76,10 +78,12 @@ function getPlayerBounds(player, lanes, viewportWidth) {
 
 function getCoinCircle(coin, lanes) {
   const laneGap = lanes.getLaneGap();
+  const offsetX = Number.isFinite(coin.vacuumOffsetX) ? coin.vacuumOffsetX : 0;
+  const offsetY = Number.isFinite(coin.vacuumOffsetY) ? coin.vacuumOffsetY : 0;
 
   return {
-    x: coin.x,
-    y: lanes.getLaneY(coin.lane) - laneGap * coin.elevationRatio,
+    x: coin.x + offsetX,
+    y: lanes.getLaneY(coin.lane) - laneGap * coin.elevationRatio + offsetY,
     radius: laneGap * coin.pickupRadiusRatio,
   };
 }

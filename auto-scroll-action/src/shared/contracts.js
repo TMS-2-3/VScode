@@ -38,6 +38,7 @@ export const COLLECTIBLE_TYPE = Object.freeze({
   COIN_LOW: "coinLow",
   SPECIAL_COIN: "specialCoin",
   BARRIER: "barrier",
+  CAMERA_PRANK: "cameraPrank",
   SPEED_UP: "speedUp",
   SCORE_UP: "scoreUp",
   OBSTACLE_BREAKER: "obstacleBreaker",

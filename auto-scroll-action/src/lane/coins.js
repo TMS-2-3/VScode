@@ -1,4 +1,5 @@
 import { COLLECTIBLE_TYPE, LANE_COUNT, LANE_ENTITY_KIND } from "../shared/contracts.js";
+import { chooseCandyAppearance } from "../shared/candy-appearances.js";
 
 const NORMAL_COIN_PROPERTIES = {
   kind: LANE_ENTITY_KIND.COIN,
@@ -42,7 +43,7 @@ const COIN_DEFINITIONS_BY_TYPE = new Map(
   COIN_DEFINITIONS.map((definition) => [definition.type, definition]),
 );
 
-export function createCoinManager() {
+export function createCoinManager({ random = Math.random } = {}) {
   const activeCoins = new Map();
   let nextId = 1;
   let collectedCandyValue = 0;
@@ -54,6 +55,10 @@ export function createCoinManager() {
       id: `coin-${nextId}`,
       x,
       lane,
+      appearance:
+        definition.type === COLLECTIBLE_TYPE.SPECIAL_COIN
+          ? null
+          : chooseCandyAppearance(random),
     };
 
     nextId += 1;
@@ -131,6 +136,120 @@ export function createCoinManager() {
     });
   }
 
+  function updateVacuumAttraction({
+    deltaSeconds,
+    getLaneY,
+    isActive = false,
+    laneGap,
+    playerLanePosition,
+    playerX,
+    playerY,
+    pullStrength = 12,
+    rangeInLaneGaps = 1.75,
+    releaseStrength = 8,
+    rotationSpeed = 18,
+  } = {}) {
+    const safeDeltaSeconds = Number.isFinite(deltaSeconds)
+      ? Math.max(0, deltaSeconds)
+      : 0;
+    const safeLaneGap = Number.isFinite(laneGap) ? Math.max(0, laneGap) : 0;
+    const canAttract =
+      isActive &&
+      safeDeltaSeconds > 0 &&
+      safeLaneGap > 0 &&
+      Number.isFinite(playerX) &&
+      Number.isFinite(playerY) &&
+      Number.isFinite(playerLanePosition) &&
+      typeof getLaneY === "function";
+    const playerLane = canAttract
+      ? Math.min(LANE_COUNT - 1, Math.max(0, Math.round(playerLanePosition)))
+      : null;
+    const attractionRange = safeLaneGap * Math.max(0, rangeInLaneGaps);
+    const pullRatio = canAttract
+      ? 1 - Math.exp(-Math.max(0, pullStrength) * safeDeltaSeconds)
+      : 0;
+    const releaseRatio =
+      1 - Math.exp(-Math.max(0, releaseStrength) * safeDeltaSeconds);
+    let attractedCount = 0;
+
+    activeCoins.forEach((coin) => {
+      const offsetX = Number.isFinite(coin.vacuumOffsetX)
+        ? coin.vacuumOffsetX
+        : 0;
+      const offsetY = Number.isFinite(coin.vacuumOffsetY)
+        ? coin.vacuumOffsetY
+        : 0;
+      const actualX = coin.x + offsetX;
+      const isOrbiting =
+        Number.isFinite(coin.vacuumAngle) &&
+        Number.isFinite(coin.vacuumRadius);
+
+      if (
+        canAttract &&
+        Math.abs(coin.lane - playerLane) <= 1 &&
+        (isOrbiting || Math.abs(actualX - playerX) <= attractionRange)
+      ) {
+        attractedCount += 1;
+        const baseY =
+          getLaneY(coin.lane) - safeLaneGap * coin.elevationRatio;
+        const actualY = baseY + offsetY;
+        const startDistanceX = actualX - playerX;
+        const startDistanceY = actualY - playerY;
+
+        if (!isOrbiting) {
+          coin.vacuumAngle = Math.atan2(startDistanceY, startDistanceX);
+          coin.vacuumRadius = Math.hypot(startDistanceX, startDistanceY);
+        }
+
+        coin.vacuumAngle += Math.max(0, rotationSpeed) * safeDeltaSeconds;
+        coin.vacuumRadius *= 1 - pullRatio;
+
+        const attractedX =
+          playerX + Math.cos(coin.vacuumAngle) * coin.vacuumRadius;
+        const attractedY =
+          playerY + Math.sin(coin.vacuumAngle) * coin.vacuumRadius;
+
+        coin.vacuumOffsetX = attractedX - coin.x;
+        coin.vacuumOffsetY = attractedY - baseY;
+        return;
+      }
+
+      coin.vacuumAngle = null;
+      coin.vacuumRadius = null;
+      coin.vacuumOffsetX = approachZero(offsetX, releaseRatio);
+      coin.vacuumOffsetY = approachZero(offsetY, releaseRatio);
+    });
+
+    return attractedCount;
+  }
+
+  function resetVacuumAttraction() {
+    activeCoins.forEach((coin) => {
+      coin.vacuumOffsetX = 0;
+      coin.vacuumOffsetY = 0;
+      coin.vacuumAngle = null;
+      coin.vacuumRadius = null;
+    });
+  }
+
+  function discardVacuumingCoins() {
+    let discardedCount = 0;
+
+    activeCoins.forEach((coin, id) => {
+      if (
+        !Number.isFinite(coin.vacuumAngle) ||
+        !Number.isFinite(coin.vacuumRadius)
+      ) {
+        return;
+      }
+
+      activeCoins.delete(id);
+      discardedCount += 1;
+    });
+
+    return discardedCount;
+  }
+
   function collectCoin(id) {
     const coin = activeCoins.get(id);
 
@@ -169,6 +288,7 @@ export function createCoinManager() {
     addCandy,
     addCoin,
     collectCoin,
+    discardVacuumingCoins,
     disableSpawnDuplication,
     enableSpawnDuplication,
     getCollectedCandyValue: () => collectedCandyValue,
@@ -176,5 +296,12 @@ export function createCoinManager() {
     moveCoins,
     removeCoin,
     reset,
+    resetVacuumAttraction,
+    updateVacuumAttraction,
   };
+}
+
+function approachZero(value, ratio) {
+  const nextValue = value * (1 - ratio);
+  return Math.abs(nextValue) < 0.01 ? 0 : nextValue;
 }

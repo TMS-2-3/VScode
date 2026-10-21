@@ -4,26 +4,28 @@ import {
   OBSTACLE_TYPE,
 } from "../shared/contracts.js";
 
+const OBSTACLE_WIDTH_SCALE = 1 - 0.07 * 2;
+
 // Add an entry here when a new obstacle type becomes available for spawning.
 export const OBSTACLE_DEFINITIONS = [
   {
     kind: LANE_ENTITY_KIND.OBSTACLE,
     type: OBSTACLE_TYPE.LANE_BLOCKER,
-    widthRatio: 0.36,
+    widthRatio: 0.36 * OBSTACLE_WIDTH_SCALE,
     heightRatio: 0.85,
     bottomOffsetRatio: 0,
   },
   {
     kind: LANE_ENTITY_KIND.OBSTACLE,
     type: OBSTACLE_TYPE.JUMP,
-    widthRatio: 0.24,
+    widthRatio: 0.24 * OBSTACLE_WIDTH_SCALE,
     heightRatio: 0.3,
     bottomOffsetRatio: 0,
   },
   {
     kind: LANE_ENTITY_KIND.OBSTACLE,
     type: OBSTACLE_TYPE.DUCK,
-    widthRatio: 0.44,
+    widthRatio: 0.44 * OBSTACLE_WIDTH_SCALE,
     heightRatio: 0.75,
     bottomOffsetRatio: 0.25,
   },

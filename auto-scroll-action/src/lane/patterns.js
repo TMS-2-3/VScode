@@ -298,6 +298,306 @@ export const PLACEMENT_PATTERNS = [
       },
     ],
   },
+  // 中央をふさぎ、上段のジャンプ障害物を中段・上段・中段のコインで案内します。
+  {
+    id: "upper-jump-with-coins",
+    rare: false,
+    lengthRatio: 2.3,
+    objects: [
+      {
+        distanceRatio: 0.4,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 0.7,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 1,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.JUMP,
+      },
+      {
+        distanceRatio: 1,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 1.3,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 1.6,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 1.9,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+    ],
+  },
+  // 中央をふさぎ、下段レーンにもジャンプ障害物とコイン列を置きます。
+  {
+    id: "lower-jump-with-coins",
+    rare: false,
+    lengthRatio: 2.3,
+    objects: [
+      {
+        distanceRatio: 0.4,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 0.7,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 1,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.JUMP,
+      },
+      {
+        distanceRatio: 1,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 1.3,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 1.6,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 1.9,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+    ],
+  },
+  // 中央をふさぎ、上段のしゃがみ障害物の下に低いコインを2枚置きます。
+  {
+    id: "upper-duck-obstacle",
+    rare: false,
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0.85,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+      {
+        distanceRatio: 1,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.DUCK,
+      },
+      {
+        distanceRatio: 1,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 1.15,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+    ],
+  },
+  // 中央をふさぎ、下段のしゃがみ障害物の下に低いコインを2枚置きます。
+  {
+    id: "lower-duck-obstacle",
+    rare: false,
+    lengthRatio: 2,
+    objects: [
+      {
+        distanceRatio: 0.85,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+      {
+        distanceRatio: 1,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 1,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.DUCK,
+      },
+      {
+        distanceRatio: 1.15,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+    ],
+  },
+  // 中央をふさぎ、上段はジャンプで5枚、下段はしゃがんで2枚取れる分岐です。
+  {
+    id: "upper-jump-lower-duck",
+    rare: false,
+    lengthRatio: 2.3,
+    objects: [
+      {
+        distanceRatio: 0.4,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 0.7,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 0.85,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+      {
+        distanceRatio: 1,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.JUMP,
+      },
+      {
+        distanceRatio: 1,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 1,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.DUCK,
+      },
+      {
+        distanceRatio: 1.15,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+      {
+        distanceRatio: 1.3,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 1.6,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 1.9,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+    ],
+  },
+  // 中央をふさぎ、上段はしゃがんで2枚、下段はジャンプで5枚取れる分岐です。
+  {
+    id: "upper-duck-lower-jump",
+    rare: false,
+    lengthRatio: 2.3,
+    objects: [
+      {
+        distanceRatio: 0.4,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 0.7,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 0.85,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+      {
+        distanceRatio: 1,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.DUCK,
+      },
+      {
+        distanceRatio: 1,
+        lane: 1,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.LANE_BLOCKER,
+      },
+      {
+        distanceRatio: 1,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.OBSTACLE,
+        type: OBSTACLE_TYPE.JUMP,
+      },
+      {
+        distanceRatio: 1.15,
+        lane: 0,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_LOW,
+      },
+      {
+        distanceRatio: 1.3,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_HIGH,
+      },
+      {
+        distanceRatio: 1.6,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+      {
+        distanceRatio: 1.9,
+        lane: 2,
+        kind: LANE_ENTITY_KIND.COIN,
+        type: COLLECTIBLE_TYPE.COIN_MIDDLE,
+      },
+    ],
+  },
 ];
 
 // ランダム配置時の初期位置と、パターン間隔を設定します。
@@ -306,7 +606,7 @@ export const PATTERN_RULES = {
   initialOffsetViewportRatio: 0,
   minimumSpacingViewportRatio: 0.36,
   minimumSpacingLaneGapRatio: 0.72,
-  gapUnits: 2,
+  gapUnits: 4,
   rareAppearanceRate: 0.35,
 };
 

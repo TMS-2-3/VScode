@@ -8,6 +8,12 @@
   </head>
   <body>
     <main id="app">
+      <div id="game-background" aria-hidden="true">
+        <div class="game-background-track">
+          <canvas class="game-background-tile"></canvas>
+          <canvas class="game-background-tile"></canvas>
+        </div>
+      </div>
       <canvas id="game-canvas" tabindex="-1" aria-label="ゲーム画面"></canvas>
       <section id="game-hud" aria-live="polite">
         <div id="candy-counter">
@@ -16,6 +22,18 @@
         </div>
       </section>
       <section id="title-screen" aria-labelledby="game-title">
+        <button
+          id="settings-button"
+          class="settings-icon-button"
+          type="button"
+          aria-label="設定"
+          aria-haspopup="dialog"
+          aria-controls="settings-dialog"
+          aria-expanded="false"
+          title="設定"
+        >
+          <img src="./img/ui/settings.svg" width="24" height="24" alt="" />
+        </button>
         <h1 id="game-title">横自動スクロールアクション</h1>
         <ul id="title-controls" aria-label="操作方法">
           <li><kbd>W/↑</kbd><span>ジャンプ</span></li>
@@ -23,8 +41,73 @@
           <li><kbd>S/↓</kbd><span>降りる</span></li>
           <li><kbd>Space</kbd><span>しゃがむ</span></li>
         </ul>
-        <button id="start-button" type="button">スタート</button>
+        <div id="title-start-actions">
+          <button
+            id="start-button"
+            type="button"
+            aria-keyshortcuts="Space"
+          >
+            スタート
+          </button>
+          <p id="title-start-hint"><kbd>Space</kbd>でGO</p>
+        </div>
       </section>
+      <dialog id="settings-dialog" aria-labelledby="settings-title">
+        <header class="settings-header">
+          <h2 id="settings-title">設定</h2>
+          <button
+            class="settings-icon-button"
+            type="button"
+            data-settings-close
+            aria-label="閉じる"
+            title="閉じる"
+          >
+            <img src="./img/ui/x.svg" width="24" height="24" alt="" />
+          </button>
+        </header>
+        <fieldset class="volume-settings">
+          <legend>音量</legend>
+          <div class="volume-control">
+            <label for="master-volume">マスターボリューム</label>
+            <output for="master-volume">100%</output>
+            <input
+              id="master-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="100"
+              data-volume="master"
+            />
+          </div>
+          <div class="volume-control">
+            <label for="bgm-volume">BGM音量</label>
+            <output for="bgm-volume">100%</output>
+            <input
+              id="bgm-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="100"
+              data-volume="bgm"
+            />
+          </div>
+          <div class="volume-control">
+            <label for="se-volume">SE音量</label>
+            <output for="se-volume">100%</output>
+            <input
+              id="se-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="100"
+              data-volume="se"
+            />
+          </div>
+        </fieldset>
+      </dialog>
       <section id="run-intro" aria-live="assertive" hidden>
         <img
           src="./img/char/おかしをたくさんあつめよう！.png"
@@ -47,20 +130,48 @@
         aria-labelledby="supply-roulette-title"
         hidden
       >
+        <canvas id="supply-theft-canvas" aria-hidden="true" hidden></canvas>
         <div id="supply-roulette-panel">
           <h2 id="supply-roulette-title">補給アイテム</h2>
           <p id="supply-roulette-status" aria-live="polite">抽選中...</p>
-          <div id="supply-item-display">
-            <canvas
-              id="supply-item-canvas"
-              width="120"
-              height="120"
-              aria-hidden="true"
-            ></canvas>
-            <strong id="supply-item-name"></strong>
+          <div id="supply-slots">
+            <div id="supply-slot-left" class="supply-slot">
+              <div class="supply-item-display">
+                <canvas
+                  id="supply-item-canvas"
+                  class="supply-item-canvas"
+                  width="120"
+                  height="120"
+                  aria-hidden="true"
+                ></canvas>
+                <strong id="supply-item-name" class="supply-item-name"></strong>
+              </div>
+              <p
+                id="supply-item-description"
+                class="supply-item-description"
+              ></p>
+            </div>
+            <div id="supply-slot-right" class="supply-slot" hidden>
+              <div class="supply-item-display">
+                <canvas
+                  id="supply-item-canvas-right"
+                  class="supply-item-canvas"
+                  width="120"
+                  height="120"
+                  aria-hidden="true"
+                ></canvas>
+                <strong
+                  id="supply-item-name-right"
+                  class="supply-item-name"
+                ></strong>
+              </div>
+              <p
+                id="supply-item-description-right"
+                class="supply-item-description"
+              ></p>
+            </div>
           </div>
           <div id="supply-result" hidden>
-            <p id="supply-item-description"></p>
             <button
               id="supply-go-button"
               type="button"

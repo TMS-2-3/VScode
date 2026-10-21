@@ -1,4 +1,5 @@
 import { COIN_DEFINITIONS } from "./coins.js";
+import { chooseCandyAppearance } from "../shared/candy-appearances.js";
 
 export const CANDY_PARTY_DURATION_SECONDS = 10;
 
@@ -6,7 +7,7 @@ const PARTY_CANDY_TYPES = COIN_DEFINITIONS
   .filter((definition) => definition.value === 1)
   .map((definition) => definition.type);
 const CANDY_BURST_TIMES_SECONDS = [3, 6, 10];
-const CANDIES_PER_BURST = 14;
+const CANDIES_PER_BURST = 21;
 const BURST_TIME_EPSILON_SECONDS = 0.000001;
 const DUPLICATE_OFFSET_IN_LANE_GAPS = 0.1;
 const CANDY_SIZE_RATIOS = [0.105, 0.125, 0.145];
@@ -64,6 +65,7 @@ export function createCandyPartyManager({
     const safeDeltaSeconds = Number.isFinite(deltaSeconds)
       ? Math.max(0, deltaSeconds)
       : 0;
+    let burstCount = 0;
     updateDimensions(viewportWidth, viewportHeight, laneGap);
 
     const gravity = lastLaneGap * 1.9;
@@ -93,6 +95,7 @@ export function createCandyPartyManager({
           CANDY_BURST_TIMES_SECONDS[nextBurstIndex]
       ) {
         spawnBurst();
+        burstCount += 1;
         nextBurstIndex += 1;
       }
 
@@ -100,6 +103,8 @@ export function createCandyPartyManager({
         coinManager.disableSpawnDuplication();
       }
     }
+
+    return { burstCount };
   }
 
   function spawnBurst() {
@@ -137,6 +142,7 @@ export function createCandyPartyManager({
     const candy = {
       id: `party-candy-${nextId}`,
       type: availableCandyTypes[typeIndex],
+      appearance: chooseCandyAppearance(random),
       x:
         lastViewportWidth * FOUNTAIN_SOURCE_X_RATIO +
         (random() - 0.5) *

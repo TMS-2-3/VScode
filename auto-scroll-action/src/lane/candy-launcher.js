@@ -37,6 +37,7 @@ export function createCandyLauncherManager({ random = Math.random } = {}) {
   let projectile = null;
   let explosion = null;
   let nextSmokeId = 1;
+  let lastCountdownValue = null;
 
   function activate() {
     if (phase !== LAUNCHER_PHASE.IDLE) {
@@ -48,6 +49,7 @@ export function createCandyLauncherManager({ random = Math.random } = {}) {
     smokeElapsedSeconds = SMOKE_INTERVAL_SECONDS;
     projectile = null;
     explosion = null;
+    lastCountdownValue = null;
     return true;
   }
 
@@ -74,6 +76,7 @@ export function createCandyLauncherManager({ random = Math.random } = {}) {
       : 0;
     const result = {
       candyDrops: [],
+      countdownCue: null,
       destroyedObstacleId: null,
       didFire: false,
     };
@@ -98,6 +101,18 @@ export function createCandyLauncherManager({ random = Math.random } = {}) {
         0,
         countdownRemainingSeconds - safeDeltaSeconds,
       );
+
+      if (countdownRemainingSeconds > 0) {
+        const countdownValue = Math.max(
+          1,
+          Math.ceil(countdownRemainingSeconds),
+        );
+
+        if (countdownValue !== lastCountdownValue) {
+          lastCountdownValue = countdownValue;
+          result.countdownCue = countdownValue;
+        }
+      }
 
       if (countdownRemainingSeconds === 0) {
         const launchX =
@@ -206,6 +221,7 @@ export function createCandyLauncherManager({ random = Math.random } = {}) {
     targetLane = 0;
     projectile = null;
     explosion = null;
+    lastCountdownValue = null;
   }
 
   function spawnSmokePuff({ forceRatio = 1, laneGap, originX, originY }) {

@@ -80,7 +80,8 @@ export const CHARACTER_ASSETS = Object.fromEntries(Object.values(CHARACTER_DEFIN
     id: character.id,
     name: character.name,
     weightClass: character.weightClass,
-    weightLabel: WEIGHT_CLASSES[character.weightClass]?.label || WEIGHT_CLASSES.middle.label
+    weightLabel: WEIGHT_CLASSES[character.weightClass]?.label || WEIGHT_CLASSES.middle.label,
+    movesImplemented: character.movesImplemented !== false
   }
 ]));
 
