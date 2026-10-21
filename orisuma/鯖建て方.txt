@@ -1,0 +1,25 @@
+vscodeにて　Ctrl + @　でターミナルを開く
+
+cd C:\VScode\orisuma
+npm start
+↑を貼ってエンター
+
+技データや対戦処理を変更するとサーバーは自動で再起動します。
+自動再起動時は接続中の部屋が解散するため、調整は試合外で行ってください。
+
+もう一つターミナルを開いて
+ipconfig
+を貼ってipv4アドレスを確認
+
+http://"ipv4アドレス":3000
+をブラウザで入力
+
+
+
+ファイヤーウォール許可(管理者モードのパワーシェルで行う)
+
+許可↓
+New-NetFirewallRule -DisplayName "Orisuma LAN TCP 3000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000 -Profile Any -RemoteAddress LocalSubnet
+
+許可を無効化↓
+Remove-NetFirewallRule -DisplayName "Orisuma LAN TCP 3000"

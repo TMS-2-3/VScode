@@ -1,0 +1,13 @@
+{
+  "name": "orisuma",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local network platform fighter prototype.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --watch --watch-preserve-output server.js",
+    "start:once": "node server.js",
+    "test": "node --test --test-isolation=none"
+  }
+}

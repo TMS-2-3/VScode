@@ -1,11 +1,12 @@
 const BASE_SCROLL_SPEED_IN_LANES = 1;
-const SPEED_INCREASE_PER_CANDY_IN_LANES = 0.0065;
-const MAX_SCROLL_SPEED_IN_LANES = 4;
+const SPEED_INCREASE_PER_CANDY_IN_LANES = 0.0055;
+const MAX_SCROLL_SPEED_IN_LANES = 5;
 
 export const SPEED_BOOST_RULES = Object.freeze({
   durationSeconds: 7.5,
   fadeDurationSeconds: 1,
   speedIncreaseRatio: 0.6,
+  stackEffectMultiplier: 0.5,
   jumpDistanceIncreaseRatio: 0.1,
 });
 
@@ -16,14 +17,27 @@ export function createProgression() {
   let speedRatio = 1;
   let speedBoostRemainingSeconds = 0;
   let speedBoostRatio = 0;
+  let speedBoostFullRatio = 0;
+  let speedBoostStackCount = 0;
+  let timedSpeedBoostRemainingSeconds = 0;
+  let timedSpeedBoostRatio = 0;
 
   function update(deltaSeconds, collectedCandyValue, laneGap) {
     const safeDeltaSeconds = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
     const safeLaneGap = Number.isFinite(laneGap) ? Math.max(0, laneGap) : 0;
 
     const baseScrollSpeedInLanes = calculateScrollSpeedInLanes(collectedCandyValue);
-    speedBoostRatio = calculateSpeedBoostRatio(speedBoostRemainingSeconds);
-    scrollSpeedInLanes = baseScrollSpeedInLanes * (1 + speedBoostRatio);
+    speedBoostRatio = calculateSpeedBoostRatio(
+      speedBoostRemainingSeconds,
+      speedBoostFullRatio,
+    );
+    timedSpeedBoostRatio = timedSpeedBoostRemainingSeconds > 0
+      ? timedSpeedBoostRatio
+      : 0;
+    scrollSpeedInLanes =
+      baseScrollSpeedInLanes *
+      (1 + speedBoostRatio) *
+      (1 + timedSpeedBoostRatio);
     scrollSpeed = safeLaneGap * scrollSpeedInLanes;
     speedRatio = scrollSpeedInLanes / BASE_SCROLL_SPEED_IN_LANES;
     const jumpDistanceRatio = calculateBoostedJumpDistanceRatio(speedBoostRatio);
@@ -34,6 +48,14 @@ export function createProgression() {
       0,
       speedBoostRemainingSeconds - safeDeltaSeconds,
     );
+    if (speedBoostRemainingSeconds === 0) {
+      speedBoostFullRatio = 0;
+      speedBoostStackCount = 0;
+    }
+    timedSpeedBoostRemainingSeconds = Math.max(
+      0,
+      timedSpeedBoostRemainingSeconds - safeDeltaSeconds,
+    );
 
     return {
       frameDistance,
@@ -41,7 +63,9 @@ export function createProgression() {
       jumpTimeScale,
       scrollSpeed,
       speedBoostRatio,
+      speedBoostStackCount,
       speedRatio,
+      timedSpeedBoostRatio,
       traveledDistance,
     };
   }
@@ -53,20 +77,47 @@ export function createProgression() {
     speedRatio = 1;
     speedBoostRemainingSeconds = 0;
     speedBoostRatio = 0;
+    speedBoostFullRatio = 0;
+    speedBoostStackCount = 0;
+    timedSpeedBoostRemainingSeconds = 0;
+    timedSpeedBoostRatio = 0;
   }
 
   function activateSpeedBoost() {
+    speedBoostStackCount = speedBoostRemainingSeconds > 0
+      ? speedBoostStackCount + 1
+      : 1;
+    speedBoostFullRatio = calculateStackedSpeedBoostRatio(
+      speedBoostStackCount,
+    );
     speedBoostRemainingSeconds = SPEED_BOOST_RULES.durationSeconds;
-    speedBoostRatio = SPEED_BOOST_RULES.speedIncreaseRatio;
+    speedBoostRatio = speedBoostFullRatio;
+  }
+
+  function activateTimedSpeedBoost({ durationSeconds, speedIncreaseRatio } = {}) {
+    const safeDurationSeconds = Number.isFinite(durationSeconds)
+      ? Math.max(0, durationSeconds)
+      : 0;
+    const safeSpeedIncreaseRatio = Number.isFinite(speedIncreaseRatio)
+      ? Math.max(0, speedIncreaseRatio)
+      : 0;
+
+    timedSpeedBoostRemainingSeconds = safeDurationSeconds;
+    timedSpeedBoostRatio = safeSpeedIncreaseRatio;
   }
 
   return {
     activateSpeedBoost,
+    activateTimedSpeedBoost,
     getSnapshot: () => ({
       scrollSpeed,
+      speedBoostFullRatio,
       speedBoostRatio,
       speedBoostRemainingSeconds,
+      speedBoostStackCount,
       speedRatio,
+      timedSpeedBoostRatio,
+      timedSpeedBoostRemainingSeconds,
       traveledDistance,
     }),
     reset,
@@ -74,19 +125,40 @@ export function createProgression() {
   };
 }
 
-export function calculateSpeedBoostRatio(remainingSeconds) {
+export function calculateSpeedBoostRatio(
+  remainingSeconds,
+  fullSpeedBoostRatio = SPEED_BOOST_RULES.speedIncreaseRatio,
+) {
   const safeRemainingSeconds = Number.isFinite(remainingSeconds)
     ? Math.max(0, remainingSeconds)
+    : 0;
+  const safeFullSpeedBoostRatio = Number.isFinite(fullSpeedBoostRatio)
+    ? Math.max(0, fullSpeedBoostRatio)
     : 0;
 
   if (safeRemainingSeconds <= SPEED_BOOST_RULES.fadeDurationSeconds) {
     return (
-      SPEED_BOOST_RULES.speedIncreaseRatio *
+      safeFullSpeedBoostRatio *
       (safeRemainingSeconds / SPEED_BOOST_RULES.fadeDurationSeconds)
     );
   }
 
-  return SPEED_BOOST_RULES.speedIncreaseRatio;
+  return safeFullSpeedBoostRatio;
+}
+
+export function calculateStackedSpeedBoostRatio(stackCount) {
+  const safeStackCount = Number.isFinite(stackCount)
+    ? Math.max(0, Math.floor(stackCount))
+    : 0;
+  let stackedRatio = 0;
+
+  for (let index = 0; index < safeStackCount; index += 1) {
+    stackedRatio +=
+      SPEED_BOOST_RULES.speedIncreaseRatio *
+      SPEED_BOOST_RULES.stackEffectMultiplier ** index;
+  }
+
+  return stackedRatio;
 }
 
 export function calculateBoostedJumpDistanceRatio(speedBoostRatio) {

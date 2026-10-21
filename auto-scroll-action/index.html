@@ -17,11 +17,61 @@
       </section>
       <section id="title-screen" aria-labelledby="game-title">
         <h1 id="game-title">横自動スクロールアクション</h1>
+        <ul id="title-controls" aria-label="操作方法">
+          <li><kbd>W/↑</kbd><span>ジャンプ</span></li>
+          <li><kbd>WW/↑↑</kbd><span>2段ジャンプ</span></li>
+          <li><kbd>S/↓</kbd><span>降りる</span></li>
+          <li><kbd>Space</kbd><span>しゃがむ</span></li>
+        </ul>
         <button id="start-button" type="button">スタート</button>
+      </section>
+      <section id="run-intro" aria-live="assertive" hidden>
+        <img
+          src="./img/char/おかしをたくさんあつめよう！.png"
+          alt="おかしをたくさん あつめよう！"
+          fetchpriority="high"
+        />
       </section>
       <section id="game-over-screen" aria-labelledby="game-over-title" hidden>
         <h2 id="game-over-title">ゲームオーバー</h2>
-        <button id="restart-button" type="button">リスタート</button>
+        <p id="game-over-result">
+          <span>集めたお菓子</span>
+          <output id="game-over-candy-count">0</output>
+        </p>
+        <button id="return-button" type="button">戻る</button>
+      </section>
+      <section
+        id="supply-roulette"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="supply-roulette-title"
+        hidden
+      >
+        <div id="supply-roulette-panel">
+          <h2 id="supply-roulette-title">補給アイテム</h2>
+          <p id="supply-roulette-status" aria-live="polite">抽選中...</p>
+          <div id="supply-item-display">
+            <canvas
+              id="supply-item-canvas"
+              width="120"
+              height="120"
+              aria-hidden="true"
+            ></canvas>
+            <strong id="supply-item-name"></strong>
+          </div>
+          <div id="supply-result" hidden>
+            <p id="supply-item-description"></p>
+            <button
+              id="supply-go-button"
+              type="button"
+              aria-keyshortcuts="Space"
+              hidden
+            >
+              GO
+            </button>
+            <p id="supply-go-hint"><kbd>Space</kbd>でも決定</p>
+          </div>
+        </div>
       </section>
     </main>
     <script type="module" src="./src/main.js"></script>

@@ -46,6 +46,20 @@ export function createCoinManager() {
   const activeCoins = new Map();
   let nextId = 1;
   let collectedCandyValue = 0;
+  let spawnDuplicateOffsetX = 0;
+
+  function createCoin({ x, lane, definition }) {
+    const coin = {
+      ...definition,
+      id: `coin-${nextId}`,
+      x,
+      lane,
+    };
+
+    nextId += 1;
+    activeCoins.set(coin.id, coin);
+    return coin;
+  }
 
   function addCoin({ x, lane, type = COLLECTIBLE_TYPE.COIN_LOW } = {}) {
     const definition = COIN_DEFINITIONS_BY_TYPE.get(type);
@@ -62,16 +76,49 @@ export function createCoinManager() {
       throw new Error(`Coin lane must be between 0 and ${LANE_COUNT - 1}.`);
     }
 
-    const coin = {
-      ...definition,
-      id: `coin-${nextId}`,
-      x,
-      lane,
-    };
+    const coin = createCoin({ x, lane, definition });
 
-    nextId += 1;
-    activeCoins.set(coin.id, coin);
+    if (spawnDuplicateOffsetX > 0) {
+      createCoin({
+        x: x + spawnDuplicateOffsetX,
+        lane,
+        definition,
+      });
+    }
+
     return coin.id;
+  }
+
+  function enableSpawnDuplication(offsetX) {
+    const safeOffsetX = Number.isFinite(offsetX) ? Math.max(0, offsetX) : 0;
+
+    if (safeOffsetX <= 0) {
+      return 0;
+    }
+
+    if (spawnDuplicateOffsetX > 0) {
+      spawnDuplicateOffsetX = safeOffsetX;
+      return 0;
+    }
+
+    const existingCoins = Array.from(activeCoins.values());
+    spawnDuplicateOffsetX = safeOffsetX;
+    existingCoins.forEach((coin) => {
+      const definition = COIN_DEFINITIONS_BY_TYPE.get(coin.type);
+
+      if (definition) {
+        createCoin({
+          x: coin.x + spawnDuplicateOffsetX,
+          lane: coin.lane,
+          definition,
+        });
+      }
+    });
+    return existingCoins.length;
+  }
+
+  function disableSpawnDuplication() {
+    spawnDuplicateOffsetX = 0;
   }
 
   function moveCoins(deltaX) {
@@ -96,6 +143,14 @@ export function createCoinManager() {
     return coin.value;
   }
 
+  function addCandy(value) {
+    const safeValue = Number.isFinite(value)
+      ? Math.max(0, Math.floor(value))
+      : 0;
+    collectedCandyValue += safeValue;
+    return safeValue;
+  }
+
   function removeCoin(id) {
     return activeCoins.delete(id);
   }
@@ -107,11 +162,15 @@ export function createCoinManager() {
   function reset() {
     activeCoins.clear();
     collectedCandyValue = 0;
+    spawnDuplicateOffsetX = 0;
   }
 
   return {
+    addCandy,
     addCoin,
     collectCoin,
+    disableSpawnDuplication,
+    enableSpawnDuplication,
     getCollectedCandyValue: () => collectedCandyValue,
     getSnapshot,
     moveCoins,
