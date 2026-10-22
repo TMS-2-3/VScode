@@ -5,7 +5,10 @@ import {
 } from "../shared/contracts.js";
 import { getItemBounds, getItemWarningX } from "../lane/items.js";
 import { getObstacleBounds } from "../lane/obstacles.js";
-import { normalizeObstacleAppearance } from "../shared/obstacle-appearances.js";
+import {
+  normalizeObstacleAppearance,
+  OBSTACLE_APPEARANCE,
+} from "../shared/obstacle-appearances.js";
 import {
   CANDY_APPEARANCES,
   normalizeCandyAppearance,
@@ -13,7 +16,11 @@ import {
 import { paintCandyArtwork } from "./candy-art.js";
 import { normalizePlayerCharacter, paintPlayerArtwork, PLAYER_ARTWORK } from "./player-art.js";
 import { getPlayerDefeatMotion } from "./player-defeat.js";
-import { getObstacleArtworkLayout, paintObstacleArtwork } from "./obstacle-art.js";
+import {
+  getObstacleArtworkLayout,
+  paintObstacleArtwork,
+  paintSawBladeArtwork,
+} from "./obstacle-art.js";
 
 const GAME_CANVAS_PIXEL_RATIO = 1;
 
@@ -39,6 +46,7 @@ export function createRenderer(canvas, lanes) {
   let height = 0;
   const spriteCache = new Map();
   let playerCharacter = normalizePlayerCharacter(null);
+  let obstacleAnimationTime = 0;
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
@@ -71,6 +79,9 @@ export function createRenderer(canvas, lanes) {
     } = {},
   ) {
     context.clearRect(0, 0, width, height);
+    if (!playerDefeat) {
+      obstacleAnimationTime = performance.now() / 1000;
+    }
     const cameraScale = cameraPrank?.isActive && Number.isFinite(cameraPrank.scale)
       ? Math.max(1, cameraPrank.scale)
       : 1;
@@ -803,13 +814,22 @@ export function createRenderer(canvas, lanes) {
       const isHit = hitIds.has(obstacle.id);
       const appearance = normalizeObstacleAppearance(obstacle.type, obstacle.appearance, obstacle.lane);
       const artwork = getObstacleArtworkLayout(obstacle.type, appearance);
+
+      if (appearance === OBSTACLE_APPEARANCE.SAW_BLADE) {
+        drawSawObstacle(obstacle, bounds, artwork, isHit);
+        return;
+      }
+
+      const frame = artwork.frames
+        ? Math.floor(obstacleAnimationTime / artwork.frameDuration) % artwork.frames
+        : 0;
       const sprite = getCachedSprite(
-        `obstacle:${appearance}:${isHit}`,
+        `obstacle:${obstacle.type}:${appearance}:${isHit}:${frame}`,
         artwork.width,
         artwork.height,
         5,
         (spriteContext, spriteWidth, spriteHeight) => {
-          paintObstacleArtwork(spriteContext, obstacle.type, appearance, spriteWidth, spriteHeight, isHit);
+          paintObstacleArtwork(spriteContext, obstacle.type, appearance, spriteWidth, spriteHeight, isHit, frame);
         },
       );
 
@@ -821,6 +841,32 @@ export function createRenderer(canvas, lanes) {
         artworkWidth,
         bounds.height,
       );
+    });
+  }
+
+  function drawSawObstacle(obstacle, bounds, artwork, isHit) {
+    const sprite = getCachedSprite(
+      `obstacle:saw-blade:${isHit}`,
+      120,
+      120,
+      3,
+      (spriteContext, spriteWidth, spriteHeight) => {
+        paintSawBladeArtwork(spriteContext, spriteWidth, spriteHeight, isHit);
+      },
+    );
+    const artworkWidth = bounds.width * artwork.widthScale;
+    const scaleX = artworkWidth / artwork.width;
+    const scaleY = bounds.height / artwork.height;
+    const left = obstacle.x - artworkWidth / 2;
+
+    // Rotate a shared cached disk, not the stack or a freshly painted canvas.
+    artwork.blades.forEach((blade, index) => {
+      const diameter = blade.diameter * Math.min(scaleX, scaleY);
+      context.save();
+      context.translate(left + blade.x * scaleX, bounds.top + blade.y * scaleY);
+      context.rotate(obstacleAnimationTime * 2.8 * (index % 2 ? -1 : 1) + index * 0.5);
+      drawCachedSpriteCentered(sprite, 0, 0, diameter, diameter);
+      context.restore();
     });
   }
 

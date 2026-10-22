@@ -15,10 +15,44 @@ const LAYOUTS = Object.freeze({
 const FALLEN_BARREL_LAYOUT = { width: 216, height: 174, widthScale: 1.8 };
 // The ghost's trailing wisps extend behind its collision core, not toward the player.
 const FLOATING_GHOST_LAYOUT = { width: 252, height: 238, widthScale: 2.1 };
+const FLYING_WITCH_LAYOUT = { width: 276, height: 238, widthScale: 2.3 };
+const FLYING_BAT_LAYOUT = {
+  width: 300, height: 238, widthScale: 2.5, frames: 8, frameDuration: 0.075,
+};
+const SAW_LAYOUTS = Object.freeze({
+  [OBSTACLE_TYPE.JUMP]: {
+    width: 174, height: 174, widthScale: 1.45,
+    blades: [{ x: 87, y: 87, diameter: 168 }],
+  },
+  [OBSTACLE_TYPE.DUCK]: {
+    ...LAYOUTS[OBSTACLE_TYPE.DUCK],
+    blades: [{ x: 60, y: 60, diameter: 112 }, { x: 60, y: 178, diameter: 112 }],
+  },
+  [OBSTACLE_TYPE.LANE_BLOCKER]: {
+    ...LAYOUTS[OBSTACLE_TYPE.LANE_BLOCKER],
+    blades: [
+      { x: 60, y: 56, diameter: 106 },
+      { x: 60, y: 165, diameter: 106 },
+      { x: 60, y: 274, diameter: 106 },
+    ],
+  },
+});
 
 export function getObstacleArtworkLayout(type, appearance) {
+  if (appearance === A.SAW_BLADE) {
+    return SAW_LAYOUTS[type];
+  }
+
   if (type === OBSTACLE_TYPE.DUCK && appearance === A.FLOATING_GHOST) {
     return FLOATING_GHOST_LAYOUT;
+  }
+
+  if (type === OBSTACLE_TYPE.DUCK && appearance === A.FLYING_WITCH) {
+    return FLYING_WITCH_LAYOUT;
+  }
+
+  if (type === OBSTACLE_TYPE.DUCK && appearance === A.FLYING_BAT) {
+    return FLYING_BAT_LAYOUT;
   }
 
   return type === OBSTACLE_TYPE.JUMP && appearance === A.FALLEN_BARREL
@@ -26,14 +60,14 @@ export function getObstacleArtworkLayout(type, appearance) {
     : LAYOUTS[type];
 }
 
-export function paintObstacleArtwork(context, type, appearance, width, height, isHit = false) {
+export function paintObstacleArtwork(context, type, appearance, width, height, isHit = false, frame = 0) {
   const variant = normalizeObstacleAppearance(type, appearance);
   const layout = getObstacleArtworkLayout(type, variant);
   context.save();
   context.scale(width / layout.width, height / layout.height);
   context.lineCap = "round";
   context.lineJoin = "round";
-  PAINTERS[variant](context);
+  PAINTERS[variant](context, type, frame);
 
   if (isHit) {
     context.globalCompositeOperation = "source-atop";
@@ -401,6 +435,318 @@ function paintMummy(c) {
   line(c, "M99 218 Q108 242 100 249", "#9da09a", 1.5);
 }
 
+function paintSkeleton(c) {
+  const bone = (path, width = 7) => {
+    line(c, path, INK, width + 4);
+    line(c, path, "#ddd9c4", width);
+    line(c, path, "#fff4db", Math.max(1.5, width * 0.3));
+  };
+
+  bone("M44 228 Q40 247 38 267 M76 228 Q81 247 83 267", 9);
+  for (const x of [38, 83]) ellipse(c, x, 269, 7, 7, "#e2ddc6", 2.5);
+  bone("M34 278 L29 307 M43 278 L38 309 M78 278 L79 308 M87 277 L92 307", 4.5);
+  shape(c, "M27 305 Q36 301 41 308 L43 316 L50 321 L48 326 L18 326 Q11 321 20 317 Z M77 307 Q83 302 93 306 L96 315 L106 320 Q111 326 102 327 L74 326 L72 320 Z", "#e3ddc6", 3);
+  line(c, "M23 319 L23 324 M31 318 L31 324 M39 320 L39 325 M84 320 L84 325 M92 319 L92 325 M100 321 L100 325", "#928c8f", 1.5);
+
+  bone("M29 118 L15 162 M92 118 L108 162", 8);
+  ellipse(c, 15, 164, 6, 6, "#e8dfc8", 2);
+  ellipse(c, 108, 164, 6, 6, "#e8dfc8", 2);
+  bone("M12 172 Q17 189 23 201 M20 173 L29 200 M103 172 L94 202 M111 172 Q106 192 101 203", 4);
+  for (const [x, direction] of [[25, -1], [97, 1]]) {
+    ellipse(c, x, 210, 8, 10, "#e3dec8", 2.5);
+    for (let finger = 0; finger < 3; finger += 1) {
+      const startX = x - 5 + finger * 5;
+      bone(`M${startX} 215 L${startX + direction * 2} ${226 + finger % 2 * 3}`, 2.4);
+    }
+    bone(`M${x + direction * 7} 207 L${x + direction * 13} 216`, 3);
+  }
+
+  for (let y = 104; y < 205; y += 11) {
+    ellipse(c, 60, y, 5, 6, "#e2dcc5", 1.8);
+  }
+  bone("M29 114 Q43 101 57 112 M64 112 Q78 102 93 114", 7);
+  for (let row = 0; row < 4; row += 1) {
+    const y = 126 + row * 16;
+    bone(`M55 ${y} Q36 ${y - 7} 28 ${y + 5} Q30 ${y + 17} 51 ${y + 13}`, 5.5);
+    bone(`M65 ${y} Q85 ${y - 7} 93 ${y + 5} Q91 ${y + 17} 69 ${y + 13}`, 5.5);
+  }
+  bone("M60 118 L60 188", 6);
+  shape(c, "M38 194 Q60 205 82 194 L87 211 Q83 229 68 230 L60 220 L52 231 Q35 230 32 211 Z", gradient(c, 36, 196, 81, 228, ["#f3ead1", "#c7c6b8"]), 3);
+  ellipse(c, 45, 212, 7, 8, "#69616d", 1.8);
+  ellipse(c, 75, 212, 7, 8, "#69616d", 1.8);
+  shape(c, "M53 204 L67 204 L64 216 L57 216 Z", "#eee5cc", 1.5);
+
+  shape(c, "M18 40 Q13 11 48 6 Q87 0 101 27 L102 60 Q101 77 85 81 L83 94 Q60 103 36 94 L34 81 Q17 76 18 54 Z", gradient(c, 28, 15, 93, 92, ["#fff4da", "#dedccb", "#b2b6b0"]), 4);
+  line(c, "M27 33 Q28 17 45 17 M30 68 L34 73 M87 67 L92 62", "#fff9e9", 3);
+  shape(c, "M27 39 Q39 28 53 40 L53 57 Q40 68 29 57 Z M68 38 Q82 28 94 37 L94 55 Q82 66 69 56 Z", "#494252", 2.5);
+  ellipse(c, 38, 48, 4.5, 7, "#eac785", 0);
+  ellipse(c, 79, 47, 4, 6, "#eac785", 0);
+  ellipse(c, 37, 49, 1.8, 4, "#554051", 0);
+  ellipse(c, 78, 48, 1.6, 3, "#554051", 0);
+  shape(c, "M55 64 Q60 57 65 64 L69 73 L54 73 Z", "#69606a", 1.5);
+  shape(c, "M37 79 Q59 86 83 78 L81 93 Q60 101 38 92 Z", "#f0e8d2", 2);
+  line(c, "M39 86 Q60 92 81 85 M47 83 L47 94 M58 85 L58 95 M69 84 L69 95 M77 82 L77 92", "#77717b", 1.8);
+  line(c, "M74 9 L69 21 L78 27 L72 34 M25 61 L30 65", "#8e8a91", 1.8);
+  shape(c, "M45 101 L59 106 L74 100 L74 111 L60 108 L46 113 Z", "#b46c70", 2);
+  ellipse(c, 60, 107, 4, 4, "#e6b368", 1.5);
+}
+
+function paintFlyingBat(c, frame) {
+  const flap = Math.cos(frame * TAU / FLYING_BAT_LAYOUT.frames);
+  const tipY = 113 - flap * 92;
+  const scallop1 = tipY * 0.72 + 57;
+  const scallop2 = tipY * 0.42 + 105;
+  const scallop3 = tipY * 0.17 + 143;
+
+  const paintWing = (isFar) => {
+    c.save();
+    if (isFar) {
+      c.translate(24, 9);
+      c.scale(0.8, 0.82);
+    }
+    shape(c,
+      `M140 139 C171 110 210 ${tipY + 6} 294 ${tipY} L278 ${tipY + 23} Q263 ${scallop1 - 18} 244 ${scallop1} Q231 ${scallop2 - 14} 213 ${scallop2} Q194 ${scallop3 - 11} 178 ${scallop3} L148 166 Z`,
+      gradient(c, 151, 126, 278, tipY, isFar
+        ? ["#55415e", "#80617c", "#976e8a"]
+        : ["#533d60", "#946989", "#c396ad"]), 3.5,
+    );
+    line(c, `M147 137 Q213 ${tipY + 25} 287 ${tipY + 4}`, "#e1b9cb", 3);
+    line(c, `M149 141 Q204 ${scallop1 - 26} 244 ${scallop1} M149 147 Q190 ${scallop2 - 21} 213 ${scallop2} M150 153 L178 ${scallop3}`, "#493249", 3);
+    line(c, `M155 142 Q203 ${scallop1 - 16} 238 ${scallop1 - 2} M155 150 L207 ${scallop2 - 4}`, "#bd91aa", 1.7);
+    c.restore();
+  };
+
+  paintWing(true);
+  shape(c, "M172 157 L224 177 L238 199 L215 194 L203 218 L187 185 Z", "#73526e", 3);
+  line(c, "M177 172 L194 202 M166 174 L182 197", INK, 6);
+  line(c, "M188 208 L196 202 L203 205 M176 203 L184 197 L192 200", "#d7b7a5", 3);
+  shape(c, "M111 124 Q139 109 166 123 Q185 133 190 151 L181 171 Q152 192 123 174 L104 156 Z", gradient(c, 114, 123, 186, 177, ["#90758f", "#5a4868", "#363047"]), 3.5);
+  shape(c, "M112 144 Q123 146 135 138 L143 150 L156 157 L143 161 L140 174 L128 164 L115 163 Z", "#cdbcc1", 2);
+  line(c, "M120 150 L132 157 M127 159 L137 166", "#f2e3d7", 1.8);
+  paintWing(false);
+
+  shape(c, "M80 115 L85 67 L104 96 Q118 89 130 96 L144 67 L150 89 L146 123 Q153 142 135 156 Q119 167 99 158 L87 151 L73 151 Q61 151 64 140 L72 133 Q68 122 80 115 Z", gradient(c, 81, 99, 143, 151, ["#a087a1", "#725b7d", "#493b58"]), 3.5);
+  shape(c, "M88 83 L88 108 L99 100 Z M142 81 L134 109 L144 104 Z", "#ce9db5", 2);
+  line(c, "M108 103 L117 99 L121 106 L130 105", "#b79ab4", 2);
+  shape(c, "M77 119 Q85 108 97 115 Q106 125 97 136 Q86 143 77 134 Z", "#f7db9b", 2);
+  ellipse(c, 85, 126, 3.5, 7, "#3b3047", 0);
+  ellipse(c, 84, 122, 1.4, 2, "#fff8e0", 0);
+  line(c, "M77 108 Q86 103 97 108", "#43324d", 3);
+  shape(c, "M73 136 Q64 132 61 139 Q59 145 69 146 L78 142 Z", "#c78ca6", 2);
+  shape(c, "M75 150 Q88 158 106 143 Q102 165 87 166 Q78 163 75 150 Z", "#382e46", 2);
+  shape(c, "M80 153 L84 162 L88 155 M98 151 L100 158 L103 146", "#fff0d3", 1);
+  line(c, "M91 160 L97 156 M111 141 L116 137", "#d7adc2", 2.5);
+}
+
+function paintPumpkinPerson(c) {
+  shape(c, "M31 216 L57 216 L56 269 L49 312 L23 312 L28 265 Z M64 216 L89 216 L95 266 L99 312 L73 314 L65 266 Z", gradient(c, 29, 224, 88, 307, ["#78966c", "#405f58", "#2e464c"]), 3.5);
+  line(c, "M36 230 L35 266 L31 301 M77 230 L83 265 L85 301", "#a8b87e", 2.5);
+  shape(c, "M23 303 L48 304 L54 316 Q53 327 38 327 L10 327 Q4 319 18 314 Z M74 305 L96 303 L102 313 Q120 319 111 327 L82 327 Q70 327 70 319 Z", gradient(c, 18, 307, 99, 327, ["#705349", "#40343d"]), 3);
+  line(c, "M14 323 L43 323 M81 323 L108 323 M28 310 L40 311 M80 311 L92 310", "#bd9978", 2);
+
+  shape(c, "M31 112 Q15 117 10 142 L7 180 L22 188 L33 162 L39 134 L83 135 L90 164 L101 188 L115 179 L109 139 Q104 115 87 111 Z", gradient(c, 16, 121, 106, 185, ["#ad6377", "#73445e", "#4c394f"]), 3.5);
+  shape(c, "M8 173 L24 177 L25 190 L6 188 Z M97 177 L113 173 L117 188 L97 192 Z", "#9ab479", 2.5);
+  shape(c, "M8 187 Q18 182 24 191 L23 204 L17 212 L11 205 L7 212 L3 205 L4 194 Z M100 190 Q109 182 115 190 L118 204 L114 213 L108 206 L103 214 L98 205 Z", "#829f67", 2.5);
+  line(c, "M10 193 L10 201 M17 194 L17 202 M105 195 L105 203 M112 194 L112 202", "#c0ce91", 1.7);
+
+  shape(c, "M31 112 Q59 101 88 113 L97 166 L91 209 L78 222 L62 215 L46 224 L28 211 L22 169 Z", gradient(c, 28, 123, 89, 215, ["#a85f72", "#70445f", "#49374f"]), 4);
+  shape(c, "M39 120 L59 133 L79 118 L81 182 Q62 194 40 183 Z", gradient(c, 44, 132, 78, 181, ["#e8ad65", "#bd7046"]), 2.5);
+  line(c, "M49 139 Q44 160 48 176 M67 138 Q74 160 68 179", "#9b573e", 2);
+  shape(c, "M27 186 Q62 197 94 185 L92 199 Q62 209 29 199 Z", "#3d3d4a", 2.5);
+  shape(c, "M52 190 L71 190 L71 204 L52 204 Z", "#d9b16d", 2);
+  shape(c, "M57 194 L66 194 L66 200 L57 200 Z", "#534152", 0);
+  ellipse(c, 60, 146, 3.2, 3.5, "#f6d08b", 1.2);
+  ellipse(c, 60, 166, 3.2, 3.5, "#f6d08b", 1.2);
+  line(c, "M35 211 L45 212 M39 206 L38 217 M77 209 L86 208 M81 204 L82 215", "#c18a87", 1.8);
+  shape(c, "M28 109 L44 111 L50 101 L61 113 L74 102 L79 112 L94 108 L89 122 L98 129 L78 131 L69 141 L60 131 L48 141 L40 128 L25 127 L32 119 Z", gradient(c, 34, 106, 87, 136, ["#acc581", "#64895f", "#3f6455"]), 2.5);
+  line(c, "M46 117 L53 130 M75 117 L68 130", "#c6d391", 1.7);
+  pumpkin(c, 60, 67, 49, 43);
+}
+
+function paintJackInTheBox(c) {
+  shape(c, "M12 112 L6 90 L45 76 L57 98 Z", gradient(c, 11, 85, 48, 110, ["#b68da7", "#765071", "#47384f"]), 3);
+  line(c, "M14 96 L43 85 L48 96 L18 106 Z", "#e4bc78", 2);
+  shape(c, "M15 111 L99 108 L112 119 L99 129 L20 129 Z", "#42334f", 3);
+  line(c, "M22 116 L95 114", "#bd9ab5", 2);
+  const spring = "M60 81 C88 82 90 92 61 95 C34 97 33 103 61 106 C87 108 87 116 60 119";
+  line(c, spring, INK, 8);
+  line(c, spring, "#a7b6c3", 5);
+  line(c, "M63 84 Q84 85 78 89 M42 100 Q36 102 48 104 M69 111 Q85 113 72 116", "#f0e8dc", 1.8);
+  line(c, "M44 76 Q33 73 27 82 M79 76 Q91 74 95 83", "#657b8a", 6);
+  for (const x of [23, 98]) {
+    ellipse(c, x, 81, 9, 8, "#fff0da", 2.5);
+    line(c, `M${x - 3} 77 L${x - 2} 81 M${x + 2} 77 L${x + 2} 81`, "#c6a9a6", 1.3);
+  }
+  shape(c, "M40 74 L49 72 L60 79 L73 73 L83 77 L75 87 L65 84 L56 91 L45 85 Z", "#70a39a", 2.5);
+  ellipse(c, 60, 53, 27, 26, gradient(c, 40, 34, 82, 75, ["#fff5d7", "#ead7bc", "#ccb7b3"]), 3);
+  shape(c, "M35 39 Q25 18 46 24 Q53 8 63 19 Q82 9 88 25 L83 41 Z", "#b76583", 2.8);
+  shape(c, "M46 24 Q53 11 60 17 L61 38 L40 39 Z M65 21 Q78 13 84 22 L78 39 L63 38 Z", "#659990", 2);
+  for (const [x, y] of [[29, 19], [59, 10], [89, 21]]) ellipse(c, x, y, 4, 4, "#eac37e", 1.5);
+  shape(c, "M34 37 Q60 31 85 37 L84 44 Q60 40 34 44 Z", "#e3b775", 2);
+  ellipse(c, 50, 54, 4, 6, "#4d3c51", 0);
+  ellipse(c, 70, 54, 4, 6, "#4d3c51", 0);
+  ellipse(c, 49, 52, 1.4, 1.8, "#fff8e3", 0);
+  ellipse(c, 69, 52, 1.4, 1.8, "#fff8e3", 0);
+  ellipse(c, 60, 62, 6, 5, "#d37b77", 1.5);
+  ellipse(c, 40, 62, 4, 3, "#dfa2a2", 0);
+  ellipse(c, 80, 62, 4, 3, "#dfa2a2", 0);
+  line(c, "M49 70 Q60 81 72 69 M45 46 L53 44 M67 44 L75 46", "#795363", 2);
+
+  shape(c, "M98 118 L113 112 L115 164 L99 171 Z", gradient(c, 101, 118, 115, 166, ["#737f91", "#4b4c68"]), 3);
+  shape(c, "M15 119 L99 119 L99 171 L15 171 Z", gradient(c, 21, 123, 93, 168, ["#9f7799", "#785a84", "#534261"]), 3);
+  for (const x of [27, 64]) shape(c, `M${x} 124 L${x + 10} 124 L${x + 10} 164 L${x} 164 Z`, "#b78ba6", 0);
+  shape(c, "M15 119 L99 119 L99 127 L15 127 Z M15 163 L99 163 L99 171 L15 171 Z", "#dfb471", 2);
+  shape(c, "M57 130 L62 140 L74 142 L65 150 L67 161 L57 156 L47 161 L49 150 L40 142 L52 140 Z", "#f5d793", 2);
+  line(c, "M58 135 L60 143 L68 144", "#fff0c2", 1.5);
+  line(c, "M109 147 L115 142 L114 133", INK, 4);
+  ellipse(c, 114, 131, 4, 5, "#d88c84", 1.8);
+  for (const [x, y] of [[20, 123], [94, 123], [20, 167], [94, 167]]) ellipse(c, x, y, 1.7, 1.7, "#705454", 0);
+}
+
+function paintCauldron(c) {
+  line(c, "M28 162 L23 171 M90 160 L96 171", INK, 9);
+  line(c, "M28 161 L25 167 M90 160 L94 167", "#6b8491", 3);
+  for (const x of [13, 107]) {
+    ellipse(c, x, 91, 9, 16, "#303d4d", 3);
+    ellipse(c, x, 91, 4, 9, "#a5b8b8", 1.5);
+  }
+  shape(c, "M12 66 Q6 102 20 143 Q31 165 61 165 Q96 165 107 139 Q119 100 108 66 Z", gradient(c, 19, 73, 107, 155, ["#7d9f9e", "#3a5863", "#202e43"]), 4);
+  line(c, "M23 88 Q18 121 34 142 M29 153 Q58 170 87 153", "#9cb8b6", 3);
+  ellipse(c, 60, 67, 54, 16, "#273747", 4);
+  ellipse(c, 60, 64, 47, 10, gradient(c, 19, 57, 99, 69, ["#e9c3fc", "#bc7cdd", "#8c4ab8"]), 2);
+  shape(c, "M28 65 Q35 58 42 65 L43 87 Q42 94 36 92 L35 73 Q28 80 28 65 Z M76 63 Q84 56 91 64 L88 102 Q84 109 80 101 L82 75 Q73 77 76 63 Z", "#d699ef", 2, "#9d65bd");
+  line(c, "M20 70 Q23 83 23 95 M101 73 L101 86", "#d3e0db", 2.5);
+  ellipse(c, 60, 126, 19, 20, "#d09b51", 2.5);
+  ellipse(c, 60, 126, 14, 15, "#503f56", 1.5);
+  shape(c, "M59 115 L62 122 L70 123 L64 129 L66 137 L59 133 L52 137 L54 129 L48 124 L56 122 Z", "#f0cd79", 0);
+  for (const [x, y, r] of [[31, 40, 7], [77, 29, 9], [52, 15, 5], [95, 47, 5]]) {
+    ellipse(c, x, y, r, r, "#d5a6ee", 1.8);
+    ellipse(c, x - r * 0.25, y - r * 0.3, r * 0.3, r * 0.23, "#fbecff", 0);
+  }
+  line(c, "M48 53 Q57 45 52 38 M65 48 Q60 38 65 31", "#e8c6f5", 2.5);
+  line(c, "M13 66 Q18 57 30 55 M86 54 L102 58", "#d2e0d5", 2);
+}
+
+function paintCoffin(c) {
+  shape(c, "M34 5 L87 5 L113 64 L99 326 L22 326 L6 65 Z", gradient(c, 15, 19, 109, 318, ["#a17963", "#67505c", "#403648"]), 4);
+  shape(c, "M82 15 L102 67 L90 313 L67 313 L76 70 Z", "#252536", 2);
+  ellipse(c, 86, 119, 5, 8, "#f6cf77", 0);
+  ellipse(c, 96, 117, 4, 7, "#f6cf77", 0);
+  line(c, "M84 114 L87 123 M95 113 L95 121", "#ad643e", 2);
+  shape(c, "M34 14 L77 14 L94 68 L79 313 L27 313 L16 68 Z", gradient(c, 25, 20, 88, 302, ["#9c6f62", "#694d5a", "#493d50"]), 3.5);
+  line(c, "M37 23 L73 23 L84 70 L70 302 L35 302 L25 71 Z", "#c49870", 2.5);
+  line(c, "M46 29 L44 83 L47 133 M62 29 L60 85 L63 132 M39 193 L43 292 M62 200 L59 292", "#433448", 2);
+  line(c, "M49 39 L49 73 M35 99 Q40 110 36 126 M63 231 Q57 249 62 263 M71 83 L69 103", "#ba8770", 1.7);
+  shape(c, "M51 140 L63 140 L62 157 L75 158 L74 169 L62 169 L60 196 L48 195 L50 168 L37 168 L37 157 L50 157 Z", gradient(c, 38, 140, 68, 195, ["#e9c280", "#ac7d50"]), 2);
+  line(c, "M54 144 L53 160 L41 160 M54 172 L53 190", "#fae2a9", 1.5);
+  for (const y of [77, 253]) {
+    shape(c, `M12 ${y} L26 ${y + 1} L27 ${y + 15} L13 ${y + 14} Z`, "#b6a078", 2);
+    ellipse(c, 18, y + 7, 2, 2, "#e9d3a2", 0);
+  }
+  shape(c, "M78 201 L92 201 L91 224 L77 224 Z", "#aa8d64", 2);
+  ellipse(c, 84, 209, 3, 3, "#3d3344", 0);
+  line(c, "M84 211 L83 217", "#3d3344", 2);
+  for (const [x, y] of [[34, 20], [76, 20], [23, 69], [31, 305], [75, 305]]) {
+    ellipse(c, x, y, 2, 2, "#e4bf86", 1);
+  }
+  line(c, "M26 321 L94 321", "#b08b72", 2);
+}
+
+function paintFlyingWitch(c) {
+  line(c, "M229 72 L268 67 M238 112 L271 108 M235 155 L264 160", "#bbb8d9", 2.5);
+  shape(c, "M114 117 Q154 109 172 135 Q190 149 220 147 L204 167 L228 176 Q198 192 169 181 L152 199 L111 181 Z", gradient(c, 123, 120, 207, 183, ["#709d91", "#3f726d", "#304956"]), 3.5);
+  line(c, "M151 131 Q167 160 198 165 M153 151 L165 176", "#a1c4ac", 2.5);
+  shape(c, "M118 176 L147 178 L144 203 L123 211 L109 203 Z M139 180 L162 184 L160 210 L145 219 L130 213 Z", "#5b4564", 3);
+  line(c, "M124 188 L139 190 M141 198 L155 201", "#ce9b89", 6);
+  shape(c, "M109 201 L124 205 L126 215 Q112 229 91 224 L90 216 L109 211 Z M143 210 L158 211 L162 223 Q152 235 133 232 L125 226 Z", "#423443", 3);
+  line(c, "M96 220 L112 221 M134 228 L148 228", "#c5a080", 2);
+  line(c, "M20 211 Q126 198 237 209", INK, 9);
+  line(c, "M20 210 Q126 198 237 208", "#b68952", 4);
+  shape(c, "M214 196 Q241 188 269 199 L259 207 L272 214 L259 219 L265 230 Q239 237 211 220 Z", gradient(c, 215, 195, 265, 229, ["#e6bf76", "#ba844b", "#8c5e3d"]), 3);
+  for (const y of [201, 209, 218, 225]) line(c, `M224 ${y} Q244 ${y - 3} 259 ${y + 2}`, "#946637", 1.6);
+  shape(c, "M211 198 L222 197 L223 222 L212 220 Z", "#9a5363", 2);
+  line(c, "M215 200 L217 220", "#e1aa7d", 2);
+  shape(c, "M106 116 Q130 111 144 134 L155 178 Q133 193 108 178 L98 149 Z", "#42666a", 3.5);
+  shape(c, "M102 124 Q94 124 89 141 L82 175 L96 179 L112 145 Z", "#54857f", 3);
+  shape(c, "M80 169 Q70 167 68 176 Q67 185 78 187 L91 182 L92 174 Z", "#d9d4b4", 2.5);
+  line(c, "M75 178 L83 180", "#ae927f", 1.5);
+  shape(c, "M88 68 Q110 53 133 74 L138 108 L149 128 L128 130 L121 145 L107 132 L91 134 L93 117 L80 100 Z", "#8d798c", 3);
+  shape(c, "M91 72 Q117 65 122 88 L119 111 Q112 126 93 126 L80 118 L69 119 Q61 118 69 110 L76 101 Q72 86 91 72 Z", gradient(c, 78, 76, 117, 121, ["#f0dfbd", "#d6caa7", "#b4b393"]), 3);
+  shape(c, "M91 77 Q101 91 91 103 L101 102 L108 90 L112 111 L122 108 L128 86 L116 72 Z", "#8d798c", 2);
+  ellipse(c, 85, 100, 5, 7, "#fff4d9", 1.4);
+  ellipse(c, 83, 101, 2.2, 4, INK, 0);
+  line(c, "M79 90 L91 88 M77 114 Q86 119 94 113", "#54404d", 2.5);
+  ellipse(c, 102, 111, 5, 3, "#d39d98", 0);
+  shape(c, "M77 66 L99 30 Q119 8 154 8 L139 22 L129 28 L141 71 Z", gradient(c, 90, 25, 146, 70, ["#67536c", "#3e354e", "#302d40"]), 3.5);
+  shape(c, "M83 53 L132 49 L139 66 L76 72 Z", "#aa6075", 2);
+  shape(c, "M96 54 L112 53 L114 66 L98 67 Z", "#dcaf68", 2);
+  shape(c, "M101 57 L108 57 L109 63 L102 63 Z", "#65465e", 0);
+  shape(c, "M49 70 Q97 57 158 68 Q171 73 152 80 Q97 87 52 80 Q38 77 49 70 Z", "#41354f", 3.5);
+  line(c, "M58 73 Q105 63 144 72", "#8a6b84", 2);
+  shape(c, "M104 126 L117 133 L131 125 L133 138 L119 145 L107 138 Z", "#cc9e60", 2);
+  ellipse(c, 121, 156, 3, 3, "#e5c186", 1);
+}
+
+export function paintSawBladeArtwork(c, width, height, isHit = false) {
+  c.save();
+  c.scale(width / 120, height / 120);
+  c.translate(60, 60);
+  c.lineCap = "round";
+  c.lineJoin = "round";
+  const teeth = new Path2D();
+  for (let index = 0; index < 20; index += 1) {
+    for (const [offset, radius] of [[0, 46], [0.38, 56], [0.62, 53], [0.95, 46]]) {
+      const angle = (index + offset) * TAU / 20;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (index === 0 && offset === 0) teeth.moveTo(x, y);
+      else teeth.lineTo(x, y);
+    }
+  }
+  teeth.closePath();
+  c.fillStyle = gradient(c, -36, -42, 38, 46, ["#fff2b4", "#d6b56a", "#a1844c"]);
+  c.fill(teeth);
+  c.strokeStyle = INK;
+  c.lineWidth = 2.4;
+  c.stroke(teeth);
+  ellipse(c, 0, 0, 44, 44, gradient(c, -31, -35, 34, 35, ["#93b3a8", "#50777a", "#2d4958"]), 2);
+  c.strokeStyle = "#b9cbc0";
+  c.lineWidth = 1.4;
+  c.beginPath();
+  c.arc(0, 0, 40, -Math.PI * 0.95, -Math.PI * 0.2);
+  c.stroke();
+  for (let index = 0; index < 6; index += 1) {
+    c.save();
+    c.rotate(index * TAU / 6);
+    line(c, "M20 -25 Q31 -21 34 -10", "#263d4d", 2.5);
+    line(c, "M22 -28 Q34 -22 36 -12", "#9eb7ab", 1.1);
+    ellipse(c, 27, 4, 2, 2, "#d5c998", 1);
+    c.restore();
+  }
+  ellipse(c, 0, 0, 22, 22, "#dfb873", 2.2);
+  ellipse(c, 0, 0, 18, 18, gradient(c, -13, -14, 14, 16, ["#ffb077", "#d9564e", "#913f51"]), 1.8);
+  line(c, "M-11 -9 Q-6 -15 2 -13", "#ffd8ac", 2.5);
+  ellipse(c, 0, 1, 8, 8, "#394454", 2);
+  line(c, "M-4 -1 L4 3", "#e0bd78", 3.5);
+
+  if (isHit) {
+    c.globalCompositeOperation = "source-atop";
+    c.fillStyle = "rgba(255, 204, 107, 0.38)";
+    c.fillRect(-60, -60, 120, 120);
+  }
+  c.restore();
+}
+
+function paintSawObstacle(c, type) {
+  const artwork = SAW_LAYOUTS[type];
+  artwork.blades.forEach((blade) => {
+    c.save();
+    c.translate(blade.x - blade.diameter / 2, blade.y - blade.diameter / 2);
+    paintSawBladeArtwork(c, blade.diameter, blade.diameter);
+    c.restore();
+  });
+}
+
 function shape(c, data, fill, width = 3, stroke = INK) {
   const path = new Path2D(data);
   c.fillStyle = fill;
@@ -442,14 +788,22 @@ const PAINTERS = {
   [A.LOW_GHOST]: (c) => ghost(c, 174, false),
   [A.FALLEN_BARREL]: paintFallenBarrel,
   [A.ZOMBIE_HAND]: paintZombieHand,
+  [A.CAULDRON]: paintCauldron,
+  [A.JACK_IN_THE_BOX]: paintJackInTheBox,
   [A.FLOATING_GHOST]: paintFloatingGhost,
   [A.SPIKED_BALL]: paintSpikedBall,
   [A.HANGING_BAT]: paintHangingBat,
   [A.WEB_SPIDER]: paintWebSpider,
+  [A.FLYING_WITCH]: paintFlyingWitch,
+  [A.FLYING_BAT]: (c, type, frame) => paintFlyingBat(c, frame),
   [A.ZOMBIE]: paintZombie,
   [A.PUMPKIN_STACK]: paintPumpkinStack,
   [A.CRATE_STACK]: paintCrateStack,
   [A.BARREL]: paintBarrelStack,
   [A.SCARECROW]: paintScarecrow,
   [A.MUMMY]: paintMummy,
+  [A.COFFIN]: paintCoffin,
+  [A.SKELETON]: paintSkeleton,
+  [A.PUMPKIN_PERSON]: paintPumpkinPerson,
+  [A.SAW_BLADE]: paintSawObstacle,
 };

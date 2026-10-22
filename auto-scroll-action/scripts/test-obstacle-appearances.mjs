@@ -11,9 +11,9 @@ import {
 import { getObstacleArtworkLayout } from "../src/visual/obstacle-art.js";
 
 const expectedGeometry = {
-  [OBSTACLE_TYPE.JUMP]: { count: 5, width: 0.24 * 0.86, height: 0.3, offset: 0 },
-  [OBSTACLE_TYPE.DUCK]: { count: 4, width: 0.44 * 0.86, height: 0.75, offset: 0.25 },
-  [OBSTACLE_TYPE.LANE_BLOCKER]: { count: 6, width: 0.36 * 0.86, height: 0.85, offset: 0 },
+  [OBSTACLE_TYPE.JUMP]: { count: 8, width: 0.24 * 0.86, height: 0.3, offset: 0 },
+  [OBSTACLE_TYPE.DUCK]: { count: 7, width: 0.44 * 0.86, height: 0.75, offset: 0.25 },
+  [OBSTACLE_TYPE.LANE_BLOCKER]: { count: 10, width: 0.36 * 0.86, height: 0.85, offset: 0 },
 };
 const lanes = createLaneManager();
 lanes.resize(1280, 720);
@@ -51,8 +51,8 @@ for (const [type, expected] of Object.entries(expectedGeometry)) {
   assert.equal(normalizeObstacleAppearance(type, OBSTACLE_APPEARANCES[otherType][0]), pool[0]);
 }
 
-assert.equal(appearanceIds.size, 15);
-assert.equal(drawCount, 15);
+assert.equal(appearanceIds.size, 23);
+assert.equal(drawCount, 25);
 const before = manager.getSnapshot();
 manager.moveObstacles(-37);
 const after = manager.getSnapshot();
@@ -63,7 +63,7 @@ for (let index = 0; index < before.length; index += 1) {
 before[0].appearance = "changed";
 assert.notEqual(manager.getSnapshot()[0].appearance, "changed");
 manager.addObstacle({ type: OBSTACLE_TYPE.JUMP, x: 900, lane: 0, appearance: "gravestone" });
-assert.equal(drawCount, 15);
+assert.equal(drawCount, 25);
 assert.equal(manager.getSnapshot().at(-1).appearance, "gravestone");
 assert.throws(() => manager.addObstacle({ type: "bad", x: 1, lane: 1 }), /Unknown obstacle/);
 manager.reset();
@@ -71,7 +71,7 @@ assert.equal(manager.getSnapshot().length, 0);
 
 for (let lane = 0; lane < 3; lane += 1) {
   const pool = lane === 0
-    ? [A.FLOATING_GHOST, A.WEB_SPIDER]
+    ? [A.FLOATING_GHOST, A.WEB_SPIDER, A.FLYING_WITCH, A.SAW_BLADE, A.FLYING_BAT]
     : OBSTACLE_APPEARANCES[OBSTACLE_TYPE.DUCK];
 
   for (const [index, appearance] of pool.entries()) {
@@ -105,5 +105,31 @@ for (let lane = 0; lane < 3; lane += 1) {
     assert.equal(chooseObstacleAppearance(type, () => 1, lane), OBSTACLE_APPEARANCES[type].at(-1));
   }
 }
-console.log("All 15 obstacle variants keep their collision sizes and stable appearances.");
-console.log("Top-lane duck obstacles exclude hanging bats and spiked balls; other lanes are unchanged.");
+for (const [type, count] of [
+  [OBSTACLE_TYPE.JUMP, 1],
+  [OBSTACLE_TYPE.DUCK, 2],
+  [OBSTACLE_TYPE.LANE_BLOCKER, 3],
+]) {
+  assert.equal(normalizeObstacleAppearance(type, A.SAW_BLADE), A.SAW_BLADE);
+  const layout = getObstacleArtworkLayout(type, A.SAW_BLADE);
+  assert.equal(layout.blades.length, count);
+  let previousBottom = 0;
+
+  for (const blade of layout.blades) {
+    assert.ok(blade.diameter > 0);
+    assert.ok(blade.x - blade.diameter / 2 >= 0);
+    assert.ok(blade.x + blade.diameter / 2 <= layout.width);
+    assert.ok(blade.y - blade.diameter / 2 >= previousBottom);
+    previousBottom = blade.y + blade.diameter / 2;
+    assert.ok(previousBottom <= layout.height);
+  }
+}
+const flyingBatLayout = getObstacleArtworkLayout(OBSTACLE_TYPE.DUCK, A.FLYING_BAT);
+assert.equal(flyingBatLayout.frames, 8);
+assert.ok(flyingBatLayout.frameDuration > 0);
+for (let lane = 0; lane < 3; lane += 1) {
+  assert.equal(normalizeObstacleAppearance(OBSTACLE_TYPE.DUCK, A.FLYING_BAT, lane), A.FLYING_BAT);
+}
+console.log("All 25 obstacle variants keep their collision sizes and stable appearances.");
+console.log("Flying bats are allowed on every lane; top-lane hanging bats and spiked balls stay excluded.");
+console.log("Saw blades use one low disk, two elevated disks or three full-lane disks.");
