@@ -3,8 +3,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const WINDOW_SECONDS = 0.01;
+// The current song has a lone pickup followed by a decaying 1.3-second lead-in.
+const BGM_INTRO_SKIP_SECONDS = 1.3;
 
-export function prepareBgmLoop(wav) {
+export function prepareBgmLoop(wav, { skipIntroSeconds = 0 } = {}) {
+  if (!Number.isFinite(skipIntroSeconds) || skipIntroSeconds < 0) {
+    throw new Error("The intro skip must be a non-negative number of seconds.");
+  }
+
   if (
     wav.toString("ascii", 0, 4) !== "RIFF" ||
     wav.toString("ascii", 8, 12) !== "WAVE"
@@ -88,7 +94,7 @@ export function prepareBgmLoop(wav) {
   const threshold = Math.min(0.01, peakLevel * 0.1);
   const firstWindow = levels.findIndex((level) => level >= threshold);
   const lastWindow = levels.findLastIndex((level) => level >= threshold);
-  const startFrame = firstWindow * windowFrames;
+  const startFrame = firstWindow * windowFrames + Math.round(skipIntroSeconds * format.sampleRate);
   const endFrame = Math.min(frames, (lastWindow + 1) * windowFrames);
   const outputFrames = endFrame - startFrame;
 
@@ -111,7 +117,7 @@ export function prepareBgmLoop(wav) {
   output.write("data", 36);
   output.writeUInt32LE(dataBytes, 40);
 
-  // Keep every retained sample unchanged; only trim the leading/trailing padding.
+  // Keep retained samples unchanged: no overlap, resampling or fade is added.
   wav.copy(
     output,
     44,
@@ -132,7 +138,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const projectRoot = fileURLToPath(new URL("../", import.meta.url));
   const sourcePath = resolve(projectRoot, "msc/game_rope.wav");
   const outputPath = resolve(projectRoot, "msc/game_rope_loop.wav");
-  const { buffer, ...details } = prepareBgmLoop(readFileSync(sourcePath));
+  const { buffer, ...details } = prepareBgmLoop(readFileSync(sourcePath), {
+    skipIntroSeconds: BGM_INTRO_SKIP_SECONDS,
+  });
   writeFileSync(outputPath, buffer);
   console.log(JSON.stringify({ sourcePath, outputPath, ...details }, null, 2));
 }

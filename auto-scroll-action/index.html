@@ -35,12 +35,27 @@
           <img src="./img/ui/settings.svg" width="24" height="24" alt="" />
         </button>
         <h1 id="game-title">横自動スクロールアクション</h1>
-        <ul id="title-controls" aria-label="操作方法">
-          <li><kbd>W/↑</kbd><span>ジャンプ</span></li>
-          <li><kbd>WW/↑↑</kbd><span>2段ジャンプ</span></li>
-          <li><kbd>S/↓</kbd><span>降りる</span></li>
-          <li><kbd>Space</kbd><span>しゃがむ</span></li>
-        </ul>
+        <div id="title-play-options">
+          <fieldset id="character-selector">
+            <legend>キャラクター</legend>
+            <div class="character-options">
+              <label class="character-option">
+                <canvas width="320" height="360" data-character-preview="girl" aria-hidden="true"></canvas>
+                <span><input type="radio" name="character" value="girl" checked />女の子</span>
+              </label>
+              <label class="character-option">
+                <canvas width="320" height="360" data-character-preview="boy" aria-hidden="true"></canvas>
+                <span><input type="radio" name="character" value="boy" />男の子</span>
+              </label>
+            </div>
+          </fieldset>
+          <ul id="title-controls" aria-label="操作方法">
+            <li><kbd>W/↑</kbd><span>ジャンプ</span></li>
+            <li><kbd>WW/↑↑</kbd><span>2段ジャンプ</span></li>
+            <li><kbd>S/↓</kbd><span>降りる</span></li>
+            <li><kbd>Space</kbd><span>しゃがむ</span></li>
+          </ul>
+        </div>
         <div id="title-start-actions">
           <button
             id="start-button"

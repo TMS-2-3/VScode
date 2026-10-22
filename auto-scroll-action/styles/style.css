@@ -109,8 +109,84 @@ body {
 }
 
 #title-screen {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 20px;
   color: #26343a;
   background: #b8e8ef;
+}
+
+#title-play-options {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 32px;
+  max-width: 100%;
+}
+
+#character-selector {
+  color-scheme: light;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: 700 14px/1.25 sans-serif;
+}
+
+#character-selector legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.character-options {
+  display: flex;
+  gap: 8px;
+}
+
+.character-option {
+  display: grid;
+  width: 106px;
+  flex: 0 0 106px;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid #83aeb5;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+
+.character-option:hover {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.character-option:has(input:checked) {
+  border-color: #a45826;
+  background: #fff5df;
+}
+
+.character-option:has(input:focus-visible) {
+  outline: 3px solid #287b82;
+  outline-offset: 3px;
+}
+
+.character-option canvas {
+  display: block;
+  width: 84px;
+  height: 94.5px;
+}
+
+.character-option span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.character-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #a45826;
 }
 
 .settings-icon-button {
@@ -533,7 +609,7 @@ body {
   display: grid;
   grid-template-columns: max-content max-content;
   gap: 9px 18px;
-  margin: -10px 0 0;
+  margin: 0;
   padding: 0;
   color: #26343a;
   font: 700 15px/1.3 sans-serif;
@@ -680,6 +756,151 @@ body {
 
   #supply-roulette.is-large .supply-item-description {
     font-size: 13px;
+  }
+}
+
+@media (max-width: 600px), (max-height: 540px) {
+  #title-screen {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  #game-title {
+    max-width: calc(100% - 64px);
+    font-size: 20px;
+  }
+
+  #settings-button {
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 5px;
+  }
+
+  #settings-button img {
+    width: 20px;
+    height: 20px;
+  }
+
+  #title-play-options {
+    gap: 16px;
+  }
+
+  #character-selector {
+    font-size: 12px;
+  }
+
+  #character-selector legend {
+    margin-bottom: 4px;
+  }
+
+  .character-options {
+    gap: 6px;
+  }
+
+  .character-option {
+    width: 70px;
+    flex-basis: 70px;
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .character-option canvas {
+    width: 48px;
+    height: 54px;
+  }
+
+  .character-option span {
+    gap: 3px;
+  }
+
+  .character-option input {
+    width: 12px;
+    height: 12px;
+  }
+
+  #title-controls {
+    gap: 4px 10px;
+    font-size: 12px;
+  }
+
+  #title-controls kbd {
+    min-width: 56px;
+    padding: 3px 5px;
+    font-size: 11px;
+  }
+
+  #title-start-actions {
+    gap: 4px;
+  }
+
+  #start-button {
+    min-width: 130px;
+    min-height: 34px;
+    padding: 7px 18px;
+    font-size: 15px;
+  }
+
+  #title-start-hint {
+    font-size: 11px;
+  }
+
+  #title-start-hint kbd {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  #title-screen {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  #game-title {
+    font-size: 16px;
+  }
+
+  #title-play-options {
+    gap: 12px;
+  }
+
+  #character-selector {
+    font-size: 11px;
+  }
+
+  #character-selector legend {
+    margin-bottom: 2px;
+  }
+
+  .character-option {
+    width: 58px;
+    flex-basis: 58px;
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .character-option canvas {
+    width: 36px;
+    height: 40.5px;
+  }
+
+  #title-controls {
+    gap: 3px 8px;
+    font-size: 11px;
+  }
+
+  #title-controls kbd {
+    min-width: 48px;
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+
+  #start-button {
+    min-height: 32px;
+    font-size: 14px;
   }
 }
 

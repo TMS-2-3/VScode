@@ -13,6 +13,8 @@ const LAUNCHER_COUNTDOWN_DURATION_SECONDS = 0.18;
 const LAUNCHER_FIRE_DURATION_SECONDS = 0.48;
 const LAUNCHER_EXPLOSION_DURATION_SECONDS = 0.72;
 const CANDY_VACUUM_LOOP_DURATION_SECONDS = 0.64;
+const OBSTACLE_HIT_DURATION_SECONDS = 0.24;
+const GAME_OVER_DURATION_SECONDS = 1.18;
 const PUMPKIN_CRUSH_DURATION_SECONDS = 0.68;
 const CANDY_PARTY_BURST_DURATION_SECONDS = 0.7;
 const CANDY_VACUUM_IDLE_VOLUME = 0.12;
@@ -42,7 +44,7 @@ export function createAudioController() {
   const volumeSettings = loadVolumeSettings();
   // Rebuild after replacing game_rope.wav: node scripts/prepare-bgm-loop.mjs
   const backgroundMusic = new Audio(
-    new URL("../../msc/game_rope_loop.wav", import.meta.url).href,
+    new URL("../../msc/game_rope_loop.wav?v=2", import.meta.url).href,
   );
   backgroundMusic.loop = true;
   backgroundMusic.preload = "auto";
@@ -88,6 +90,8 @@ export function createAudioController() {
       launcherFire: createLauncherFireBuffer(audioContext),
       launcherExplosion: createLauncherExplosionBuffer(audioContext),
       candyVacuumLoop: createCandyVacuumLoopBuffer(audioContext),
+      obstacleHit: createObstacleHitBuffer(audioContext),
+      gameOver: createGameOverBuffer(audioContext),
       pumpkinCrush: createPumpkinCrushBuffer(audioContext),
       candyPartyBurst: createCandyPartyBurstBuffer(audioContext),
     };
@@ -438,6 +442,30 @@ export function createAudioController() {
     source.stop(now + 0.09);
   }
 
+  function playGameOver() {
+    const context = getAudioContext();
+
+    if (!context || !soundBuffers) {
+      return;
+    }
+
+    playBuffer(soundBuffers.gameOver, {
+      volume: 0.82,
+    });
+  }
+
+  function playObstacleHit() {
+    const context = getAudioContext();
+
+    if (!context || !soundBuffers) {
+      return;
+    }
+
+    playBuffer(soundBuffers.obstacleHit, {
+      volume: 0.95,
+    });
+  }
+
   function playPumpkinCrush() {
     const context = getAudioContext();
 
@@ -466,12 +494,14 @@ export function createAudioController() {
     getVolumeSettings: () => ({ ...volumeSettings }),
     playCandyCollect,
     playCandyPartyBurst,
+    playGameOver,
     playGhostFlee,
     playGhostScare,
     playJump,
     playLauncherCountdown,
     playLauncherExplosion,
     playLauncherFire,
+    playObstacleHit,
     playPumpkinCrush,
     playRunIntro,
     playSupplyGo,
@@ -1044,6 +1074,75 @@ function createCandyVacuumLoopBuffer(context) {
       const swirl = 0.82 + Math.sin(progress * TWO_PI * 2) * 0.18;
 
       return softClip((motor + air) * swirl * 0.72);
+    },
+  );
+}
+
+function createGameOverBuffer(context) {
+  const notes = [
+    { start: 0, duration: 0.17, frequency: 659.25, endFrequency: 659.25 },
+    { start: 0.135, duration: 0.18, frequency: 523.25, endFrequency: 523.25 },
+    { start: 0.28, duration: 0.9, frequency: 392, endFrequency: 246.94 },
+  ].map((note) => ({ ...note, phase: 0 }));
+
+  return createSoundBuffer(
+    context,
+    GAME_OVER_DURATION_SECONDS,
+    (time, progress, sampleRate) => {
+      let sample = 0;
+
+      notes.forEach((note) => {
+        const localTime = time - note.start;
+
+        if (localTime < 0 || localTime >= note.duration) {
+          return;
+        }
+
+        const noteProgress = localTime / note.duration;
+        const slide = easeOutCubic(noteProgress);
+        const frequency =
+          note.frequency * (note.endFrequency / note.frequency) ** slide;
+        const vibrato = 1 + Math.sin(localTime * TWO_PI * 5) * 0.004;
+        note.phase += TWO_PI * frequency * vibrato / sampleRate;
+        const attack = Math.min(1, localTime / 0.006);
+        const release = Math.min(1, (1 - noteProgress) / 0.25);
+        const body =
+          Math.sin(note.phase) * 0.72 +
+          Math.sin(note.phase * 2 + 0.15) * 0.2 +
+          Math.sin(note.phase * 3 + 0.3) * 0.08;
+
+        sample += body * attack * release * Math.exp(-noteProgress * 1.1);
+      });
+
+      return softClip(sample * 0.8 * Math.min(1, (1 - progress) / 0.06));
+    },
+  );
+}
+
+function createObstacleHitBuffer(context) {
+  let impactPhase = 0;
+  let noiseState = 0x5a17c0de;
+  let smoothedNoise = 0;
+
+  return createSoundBuffer(
+    context,
+    OBSTACLE_HIT_DURATION_SECONDS,
+    (time, progress, sampleRate) => {
+      const frequency = 195 * (72 / 195) ** easeOutCubic(progress);
+      impactPhase += TWO_PI * frequency / sampleRate;
+
+      noiseState = (noiseState * 1664525 + 1013904223) >>> 0;
+      const whiteNoise = noiseState / 0xffffffff * 2 - 1;
+      const smoothing = 1 - Math.exp(-TWO_PI * 2800 / sampleRate);
+      smoothedNoise += (whiteNoise - smoothedNoise) * smoothing;
+      const attack = Math.min(1, time / 0.0015);
+      const release = (1 - progress) ** 2;
+      const slap = smoothedNoise * Math.exp(-time * 34) * 1.45;
+      const thump = Math.sin(impactPhase) * Math.exp(-time * 22) * 0.85;
+      const crack =
+        Math.sin(time * TWO_PI * 710) * Math.exp(-time * 85) * 0.24;
+
+      return softClip((slap + thump + crack) * attack * release);
     },
   );
 }

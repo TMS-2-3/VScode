@@ -1,16 +1,19 @@
 import {
   COLLECTIBLE_TYPE,
   LANE_COUNT,
-  OBSTACLE_TYPE,
   PLAYER_SCREEN_X_RATIO,
 } from "../shared/contracts.js";
 import { getItemBounds, getItemWarningX } from "../lane/items.js";
 import { getObstacleBounds } from "../lane/obstacles.js";
+import { normalizeObstacleAppearance } from "../shared/obstacle-appearances.js";
 import {
   CANDY_APPEARANCES,
   normalizeCandyAppearance,
 } from "../shared/candy-appearances.js";
 import { paintCandyArtwork } from "./candy-art.js";
+import { normalizePlayerCharacter, paintPlayerArtwork, PLAYER_ARTWORK } from "./player-art.js";
+import { getPlayerDefeatMotion } from "./player-defeat.js";
+import { getObstacleArtworkLayout, paintObstacleArtwork } from "./obstacle-art.js";
 
 const GAME_CANVAS_PIXEL_RATIO = 1;
 
@@ -35,6 +38,7 @@ export function createRenderer(canvas, lanes) {
   let width = 0;
   let height = 0;
   const spriteCache = new Map();
+  let playerCharacter = normalizePlayerCharacter(null);
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
@@ -60,6 +64,7 @@ export function createRenderer(canvas, lanes) {
       items = [],
       obstacles = [],
       pumpkinBarrier = null,
+      playerDefeat = null,
       scaryCostume = null,
       supplyStations = [],
       hitObstacleIds = [],
@@ -83,18 +88,24 @@ export function createRenderer(canvas, lanes) {
     drawCoins(coins);
     drawCandyParty(candyParty);
     drawCandyLauncherWorld(candyLauncher);
-    drawCandyVacuumAura(player, candyVacuum);
-    drawCandyVacuumBackpack(player, candyVacuum);
-    drawPlayer(player);
-    drawScaryCostume(player, scaryCostume);
-    drawPumpkinBarrierShell(player, pumpkinBarrier);
-    drawCandyLauncherHeld(candyLauncher, player);
+    if (!playerDefeat) {
+      drawCandyVacuumAura(player, candyVacuum);
+      drawCandyVacuumBackpack(player, candyVacuum);
+    }
+    drawPlayer(player, hitObstacleIds.length > 0, playerDefeat);
+    if (!playerDefeat) {
+      drawScaryCostume(player, scaryCostume);
+      drawPumpkinBarrierShell(player, pumpkinBarrier);
+      drawCandyLauncherHeld(candyLauncher, player);
+    }
     drawItems(items, player);
     drawItemWarnings(items);
     drawSupplyStations(supplyStations);
-    drawPumpkinBarrierTimer(player, pumpkinBarrier);
-    drawCandyVacuumTimer(player, candyVacuum);
-    drawCandyLauncherCountdown(candyLauncher, player);
+    if (!playerDefeat) {
+      drawPumpkinBarrierTimer(player, pumpkinBarrier);
+      drawCandyVacuumTimer(player, candyVacuum);
+      drawCandyLauncherCountdown(candyLauncher, player);
+    }
     context.restore();
     drawCameraPrankGhost(cameraPrank, player);
   }
@@ -193,9 +204,18 @@ export function createRenderer(canvas, lanes) {
     );
   }
 
-  function drawPlayer(player) {
+  function drawPlayer(player, isHit, playerDefeat) {
     const footX = width * PLAYER_SCREEN_X_RATIO;
     const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+
+    if (playerDefeat) {
+      drawDefeatedPlayer(player, playerDefeat);
+      return;
+    }
+
+    if (player.isDucking && !isHit) {
+      drawSlidingSmoke(footX, footY);
+    }
 
     if (playerImage?.complete && playerImage.naturalWidth > 0) {
       context.drawImage(
@@ -208,7 +228,7 @@ export function createRenderer(canvas, lanes) {
       return;
     }
 
-    drawFallbackPlayer(footX, footY, player.hitbox);
+    drawFallbackPlayer(footX, footY, player, isHit);
   }
 
   function drawScaryCostume(player, scaryCostume) {
@@ -626,23 +646,153 @@ export function createRenderer(canvas, lanes) {
     context.restore();
   }
 
-  function drawFallbackPlayer(footX, footY, hitbox) {
+  function drawFallbackPlayer(footX, footY, player, isHit, poseOverride = null) {
+    const pose = poseOverride ?? (isHit ? "hit" : player.isDucking ? "duck" : player.jumpCount > 0 ? "jump" : "run");
+    const frame = pose === "run"
+      ? Math.floor(performance.now() / 85) % PLAYER_ARTWORK.runFrames
+      : 0;
+    const dimensions = pose === "duck" ? PLAYER_ARTWORK.ducking : PLAYER_ARTWORK.standing;
+    // All poses share one scale; only the posture and gameplay hitbox get lower.
+    const scale = lanes.getLaneGap() * 0.39 / PLAYER_ARTWORK.standing.height;
+    const targetHeight = dimensions.height * scale;
     const sprite = getCachedSprite(
-      `player:${hitbox.width}:${hitbox.height}`,
-      hitbox.width,
-      hitbox.height,
+      `player-witch:${playerCharacter}:${pose}:${frame}`,
+      dimensions.width,
+      dimensions.height,
       0,
       (spriteContext, spriteWidth, spriteHeight) => {
-        spriteContext.fillStyle = "#56b6a7";
-        spriteContext.fillRect(0, 0, spriteWidth, spriteHeight);
+        paintPlayerArtwork(spriteContext, spriteWidth, spriteHeight, { pose, frame, character: playerCharacter });
       },
     );
 
     drawCachedSprite(
       sprite,
-      footX - hitbox.width / 2,
-      footY - hitbox.height,
+      footX - dimensions.anchorX * scale,
+      footY - targetHeight,
+      dimensions.width * scale,
+      targetHeight,
     );
+  }
+
+  function drawDefeatedPlayer(player, defeat) {
+    const laneGap = lanes.getLaneGap();
+    const motion = getPlayerDefeatMotion(defeat.elapsedSeconds);
+    const originX = width * PLAYER_SCREEN_X_RATIO;
+    const travel = Math.max(0, Math.min(laneGap * 0.48, originX - laneGap * 0.2));
+    const footX = originX - travel * motion.backwardProgress;
+    const originY = lanes.getLaneY(player.lanePosition) - laneGap * defeat.originElevationRatio;
+    const landingY = lanes.getLaneY(defeat.landingLane);
+    const footY = originY + (landingY - originY) * motion.landingProgress - laneGap * motion.liftRatio;
+    // Keep the rotating sprite above the floor throughout the tumble.
+    const bottomExtent = laneGap * (
+      Math.abs(Math.cos(motion.rotation)) * 0.195 +
+      Math.abs(Math.sin(motion.rotation)) * 0.178
+    );
+    const dizzy = motion.phase === "dizzy";
+
+    if (dizzy) {
+      drawDizzyStars(footX, footY - laneGap * 0.42, defeat.elapsedSeconds, true);
+    }
+
+    context.save();
+    context.translate(footX, footY - bottomExtent);
+    context.rotate(motion.rotation);
+    drawFallbackPlayer(0, laneGap * 0.195, player, true, dizzy ? "dizzy" : "hit");
+    context.restore();
+
+    if (dizzy) {
+      drawDizzyStars(footX, footY - laneGap * 0.42, defeat.elapsedSeconds, false);
+    }
+  }
+
+  function drawDizzyStars(centerX, centerY, time, behind) {
+    const laneGap = lanes.getLaneGap();
+    const sprite = getCachedSprite("player-dizzy-star", 32, 32, 2, (spriteContext) => {
+      spriteContext.beginPath();
+
+      for (let point = 0; point < 10; point += 1) {
+        const angle = -Math.PI / 2 + point * Math.PI / 5;
+        const radius = point % 2 === 0 ? 13 : 6;
+        const x = 16 + Math.cos(angle) * radius;
+        const y = 16 + Math.sin(angle) * radius;
+
+        if (point === 0) {
+          spriteContext.moveTo(x, y);
+        } else {
+          spriteContext.lineTo(x, y);
+        }
+      }
+
+      spriteContext.closePath();
+      spriteContext.fillStyle = "#ffda56";
+      spriteContext.strokeStyle = "#fff7d0";
+      spriteContext.lineWidth = 2;
+      spriteContext.lineJoin = "round";
+      spriteContext.fill();
+      spriteContext.stroke();
+    });
+
+    context.save();
+
+    for (let index = 0; index < 5; index += 1) {
+      const angle = time * 5 + index * Math.PI * 2 / 5;
+      const depth = Math.sin(angle);
+
+      if ((depth < 0) !== behind) {
+        continue;
+      }
+
+      const size = laneGap * (0.055 + (depth + 1) * 0.008);
+      context.globalAlpha = behind ? 0.75 : 1;
+      context.save();
+      context.translate(centerX + Math.cos(angle) * laneGap * 0.14, centerY + depth * laneGap * 0.035);
+      context.rotate(angle * 0.5);
+      drawCachedSpriteCentered(sprite, 0, 0, size, size);
+      context.restore();
+    }
+
+    context.restore();
+  }
+
+  function drawSlidingSmoke(footX, footY) {
+    const laneGap = lanes.getLaneGap();
+    const time = performance.now() / 1000;
+    const sprite = getCachedSprite("player-slide-smoke", 64, 48, 2, paintSlidingSmoke);
+
+    context.save();
+
+    for (let index = 0; index < 6; index += 1) {
+      const progress = ((time / 0.72 + index / 6) % 1 + 1) % 1;
+      const puffWidth = laneGap * (0.035 + progress * 0.075);
+      const puffHeight = puffWidth * (0.65 + index % 2 * 0.08);
+      context.globalAlpha = 0.6 * (1 - progress) * Math.min(1, progress * 10);
+      drawCachedSpriteCentered(
+        sprite,
+        footX - laneGap * (0.09 + progress * 0.32),
+        footY - puffHeight / 2 - laneGap * progress * (0.018 + index % 3 * 0.008),
+        puffWidth,
+        puffHeight,
+      );
+    }
+
+    context.restore();
+  }
+
+  function paintSlidingSmoke(spriteContext, spriteWidth, spriteHeight) {
+    spriteContext.save();
+    spriteContext.scale(spriteWidth / 64, spriteHeight / 48);
+    const fill = spriteContext.createLinearGradient(0, 10, 0, 42);
+    fill.addColorStop(0, "#fffaf0");
+    fill.addColorStop(1, "#d7d2df");
+    const puff = new Path2D(
+      "M12 40 C3 40 0 30 6 24 C6 12 20 9 27 17 C35 4 52 10 52 23 C66 24 65 40 53 42 Z",
+    );
+    spriteContext.fillStyle = fill;
+    spriteContext.fill(puff);
+    spriteContext.strokeStyle = "#fff9ef";
+    spriteContext.lineWidth = 1.5;
+    spriteContext.stroke(puff);
+    spriteContext.restore();
   }
 
   function drawObstacles(obstacles, hitObstacleIds) {
@@ -651,22 +801,26 @@ export function createRenderer(canvas, lanes) {
     obstacles.forEach((obstacle) => {
       const bounds = getObstacleBounds(obstacle, lanes);
       const isHit = hitIds.has(obstacle.id);
-      const lineWidth = Math.max(2, lanes.getLaneGap() * 0.012);
+      const appearance = normalizeObstacleAppearance(obstacle.type, obstacle.appearance, obstacle.lane);
+      const artwork = getObstacleArtworkLayout(obstacle.type, appearance);
       const sprite = getCachedSprite(
-        `obstacle:${obstacle.type}:${isHit}`,
-        bounds.width,
-        bounds.height,
-        lineWidth,
+        `obstacle:${appearance}:${isHit}`,
+        artwork.width,
+        artwork.height,
+        5,
         (spriteContext, spriteWidth, spriteHeight) => {
-          spriteContext.fillStyle = getFallbackObstacleColor(obstacle.type);
-          spriteContext.fillRect(0, 0, spriteWidth, spriteHeight);
-          spriteContext.lineWidth = lineWidth;
-          spriteContext.strokeStyle = isHit ? "#fff4a8" : "#2b1835";
-          spriteContext.strokeRect(0, 0, spriteWidth, spriteHeight);
+          paintObstacleArtwork(spriteContext, obstacle.type, appearance, spriteWidth, spriteHeight, isHit);
         },
       );
 
-      drawCachedSprite(sprite, bounds.left, bounds.top);
+      const artworkWidth = bounds.width * artwork.widthScale;
+      drawCachedSprite(
+        sprite,
+        obstacle.x - artworkWidth / 2,
+        bounds.top,
+        artworkWidth,
+        bounds.height,
+      );
     });
   }
 
@@ -2645,19 +2799,10 @@ export function createRenderer(canvas, lanes) {
     getViewportSize: () => ({ height, width }),
     render,
     resize,
+    setPlayerCharacter: (character) => {
+      playerCharacter = normalizePlayerCharacter(character);
+    },
   };
-}
-
-function getFallbackObstacleColor(type) {
-  if (type === OBSTACLE_TYPE.JUMP) {
-    return "rgba(239, 147, 53, 0.82)";
-  }
-
-  if (type === OBSTACLE_TYPE.DUCK) {
-    return "rgba(112, 88, 181, 0.82)";
-  }
-
-  return "rgba(190, 61, 76, 0.82)";
 }
 
 function easeInCubic(value) {

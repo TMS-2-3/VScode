@@ -3,6 +3,10 @@ import {
   LANE_ENTITY_KIND,
   OBSTACLE_TYPE,
 } from "../shared/contracts.js";
+import {
+  chooseObstacleAppearance,
+  normalizeObstacleAppearance,
+} from "../shared/obstacle-appearances.js";
 
 const OBSTACLE_WIDTH_SCALE = 1 - 0.07 * 2;
 
@@ -35,11 +39,11 @@ const OBSTACLE_DEFINITIONS_BY_TYPE = new Map(
   OBSTACLE_DEFINITIONS.map((definition) => [definition.type, definition]),
 );
 
-export function createObstacleManager() {
+export function createObstacleManager({ random = Math.random } = {}) {
   const activeObstacles = new Map();
   let nextId = 1;
 
-  function addObstacle({ x, lane, type = OBSTACLE_TYPE.LANE_BLOCKER } = {}) {
+  function addObstacle({ x, lane, type = OBSTACLE_TYPE.LANE_BLOCKER, appearance } = {}) {
     const definition = OBSTACLE_DEFINITIONS_BY_TYPE.get(type);
 
     if (!definition) {
@@ -59,6 +63,9 @@ export function createObstacleManager() {
       id: `obstacle-${nextId}`,
       x,
       lane,
+      appearance: appearance === undefined
+        ? chooseObstacleAppearance(type, random, lane)
+        : normalizeObstacleAppearance(type, appearance, lane),
     };
 
     nextId += 1;

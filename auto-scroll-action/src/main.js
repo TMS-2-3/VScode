@@ -25,8 +25,10 @@ import {
   PLAYER_SCREEN_X_RATIO,
 } from "./shared/contracts.js";
 import { createBackgroundScroller } from "./visual/background-scroller.js";
+import { createCharacterSelector } from "./visual/character-selector.js";
 import { createHud } from "./visual/hud.js";
 import { createRenderer } from "./visual/renderer.js";
+import { PLAYER_DEFEAT_DURATION_SECONDS } from "./visual/player-defeat.js";
 import { createSettingsPanel } from "./visual/settings-panel.js";
 import { createSupplyRoulette } from "./visual/supply-roulette.js";
 
@@ -180,9 +182,18 @@ const collisions = createCollisionSystem(lanes);
 const renderer = createRenderer(canvas, lanes);
 const backgroundScroller = createBackgroundScroller(backgroundRoot);
 const supplyRoulette = createSupplyRoulette(supplyRouletteRoot);
+const characterSelector = createCharacterSelector(
+  document.querySelector("#character-selector"),
+  (character) => {
+    renderer.setPlayerCharacter(character);
+    resizeGame();
+  },
+);
+renderer.setPlayerCharacter(characterSelector.getSelectedCharacter());
 let input = null;
 let animationFrameId = null;
 let introTimeoutId = null;
+let defeatAnimation = null;
 let previousTime = performance.now();
 
 function resetFrameTiming() {
@@ -208,6 +219,12 @@ function resizeGame() {
   renderer.resize();
   const viewportBounds = renderer.getViewportSize();
   backgroundScroller.resize(viewportBounds.width, viewportBounds.height);
+
+  if (defeatAnimation) {
+    renderDefeatScene();
+    return;
+  }
+
   const playerSnapshot = player.getSnapshot();
   const cameraPrankSnapshot = cameraPrank.getSnapshot();
   applyCameraView(playerSnapshot, cameraPrankSnapshot);
@@ -232,12 +249,14 @@ function startGame() {
   if (
     game.isPlaying() ||
     game.isSupplyPaused() ||
+    game.isDefeated() ||
     introTimeoutId !== null ||
     settingsPanel.isOpen()
   ) {
     return;
   }
 
+  defeatAnimation = null;
   player.reset();
   audio.setCandyVacuumState();
   progression.reset();
@@ -307,7 +326,8 @@ function returnToTitle() {
   disableInput();
   audio.setCandyVacuumState();
   cameraPrank.reset();
-  applyCameraView(player.getSnapshot(), cameraPrank.getSnapshot());
+  defeatAnimation = null;
+  resizeGame();
   game.returnToReady();
   supplyRoulette.reset();
   runIntro.hidden = true;
@@ -317,14 +337,47 @@ function returnToTitle() {
   startButton.focus();
 }
 
+function renderDefeatScene() {
+  backgroundScroller.setCamera();
+  renderer.render(defeatAnimation.player, {
+    ...defeatAnimation.scene,
+    cameraPrank: null,
+    playerDefeat: {
+      elapsedSeconds: defeatAnimation.elapsedSeconds,
+      landingLane: defeatAnimation.landingLane,
+      originElevationRatio: defeatAnimation.originElevationRatio,
+    },
+  });
+}
+
 function frame(currentTime) {
+  const deltaSeconds = Math.max(0, (currentTime - previousTime) / 1000);
+  previousTime = currentTime;
+
+  if (game.isDefeated()) {
+    defeatAnimation.elapsedSeconds = Math.min(
+      PLAYER_DEFEAT_DURATION_SECONDS,
+      defeatAnimation.elapsedSeconds + deltaSeconds,
+    );
+    renderDefeatScene();
+
+    if (defeatAnimation.elapsedSeconds >= PLAYER_DEFEAT_DURATION_SECONDS) {
+      game.finishGameOver();
+      animationFrameId = null;
+      gameOverScreen.hidden = false;
+      audio.playGameOver();
+      returnButton.focus();
+      return;
+    }
+
+    animationFrameId = requestAnimationFrame(frame);
+    return;
+  }
+
   if (!game.isPlaying()) {
     animationFrameId = null;
     return;
   }
-
-  const deltaSeconds = Math.max(0, (currentTime - previousTime) / 1000);
-  previousTime = currentTime;
 
   const movement = progression.update(
     deltaSeconds,
@@ -512,7 +565,7 @@ function frame(currentTime) {
 
   applyCameraView(playerSnapshot, cameraPrankSnapshot);
 
-  renderer.render(playerSnapshot, {
+  const scene = {
     candyLauncher: candyLauncher.getSnapshot(),
     cameraPrank: cameraPrankSnapshot,
     coins: coinSnapshot,
@@ -524,16 +577,28 @@ function frame(currentTime) {
     pumpkinBarrier: pumpkinBarrier.getSnapshot(),
     supplyStations: supplyStationSnapshot,
     hitObstacleIds: unprotectedHitObstacleIds,
-  });
+  };
+  renderer.render(playerSnapshot, scene);
 
-  if (game.tryGameOverFromObstacle(unprotectedHitObstacleIds.length > 0)) {
-    disableInput();
+  if (game.tryDefeatFromObstacle(unprotectedHitObstacleIds.length > 0)) {
     audio.setBackgroundMusicMode("off");
+    audio.playObstacleHit();
+    const hitObstacle = obstacleSnapshot.find((obstacle) =>
+      unprotectedHitObstacleIds.includes(obstacle.id),
+    );
+    // Keep the world and score frozen while only the defeated character animates.
+    defeatAnimation = {
+      elapsedSeconds: 0,
+      player: playerSnapshot,
+      scene,
+      landingLane: hitObstacle.lane,
+      originElevationRatio: playerSnapshot.elevation / lanes.getLaneGap(),
+    };
+    disableInput();
     audio.setCandyVacuumState();
-    animationFrameId = null;
     gameOverCandyCount.value = String(coins.getCollectedCandyValue());
-    gameOverScreen.hidden = false;
-    returnButton.focus();
+    renderDefeatScene();
+    animationFrameId = requestAnimationFrame(frame);
     return;
   }
 
@@ -608,7 +673,8 @@ window.addEventListener("keydown", (event) => {
     event.repeat ||
     titleScreen.hidden ||
     settingsPanel.isOpen() ||
-    event.target.closest?.("button, input, select, textarea")
+    (event.target.closest?.("button, input, select, textarea") &&
+      !event.target.matches?.('#character-selector input:checked'))
   ) {
     return;
   }

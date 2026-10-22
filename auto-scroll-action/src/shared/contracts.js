@@ -17,6 +17,7 @@ export const RUN_STATE = Object.freeze({
   READY: "ready",
   PLAYING: "playing",
   SUPPLY: "supply",
+  DEFEATED: "defeated",
   GAME_OVER: "gameOver",
 });
 
