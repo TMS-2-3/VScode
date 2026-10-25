@@ -7,6 +7,7 @@ import { createPlayerController } from "./core/player-controller.js";
 import { createProgression } from "./core/progression.js";
 import { createPumpkinBarrier } from "./core/pumpkin-barrier.js";
 import { createScaryCostume } from "./core/scary-costume.js";
+import { createStampCollection } from "./core/stamp-collection.js";
 import { createCandyLauncherManager } from "./lane/candy-launcher.js";
 import { createCandyPartyManager } from "./lane/candy-party.js";
 import { createCandyVacuumManager } from "./lane/candy-vacuum.js";
@@ -31,6 +32,7 @@ import { createRenderer } from "./visual/renderer.js";
 import { PLAYER_DEFEAT_DURATION_SECONDS } from "./visual/player-defeat.js";
 import { createSettingsPanel } from "./visual/settings-panel.js";
 import { createSupplyRoulette } from "./visual/supply-roulette.js";
+import { paintStampArtwork } from "./visual/stamp-art.js";
 
 const canvas = document.querySelector("#game-canvas");
 const backgroundRoot = document.querySelector("#game-background");
@@ -40,6 +42,7 @@ const startButton = document.querySelector("#start-button");
 const runIntro = document.querySelector("#run-intro");
 const gameOverScreen = document.querySelector("#game-over-screen");
 const gameOverCandyCount = document.querySelector("#game-over-candy-count");
+const gameOverStamp = document.querySelector("#game-over-stamp");
 const returnButton = document.querySelector("#return-button");
 const supplyRouletteRoot = document.querySelector("#supply-roulette");
 
@@ -55,6 +58,7 @@ if (
   !(runIntro instanceof HTMLElement) ||
   !(gameOverScreen instanceof HTMLElement) ||
   !(gameOverCandyCount instanceof HTMLOutputElement) ||
+  !(gameOverStamp instanceof HTMLElement) ||
   !(returnButton instanceof HTMLButtonElement) ||
   !(supplyRouletteRoot instanceof HTMLElement)
 ) {
@@ -62,11 +66,19 @@ if (
 }
 
 const audio = createAudioController();
+const stampCollection = createStampCollection();
 const settingsPanel = createSettingsPanel(
   document.querySelector("#settings-button"),
   document.querySelector("#settings-dialog"),
   audio,
+  { getStampLog: stampCollection.getLatestLog },
 );
+document.querySelectorAll("canvas[data-stamp-icon]").forEach((icon) => {
+  const iconContext = icon.getContext("2d");
+  if (iconContext) {
+    paintStampArtwork(iconContext, icon.width, icon.height);
+  }
+});
 audio.setBackgroundMusicMode("title", { restart: true });
 window.addEventListener("pointerdown", audio.unlock, { once: true });
 window.addEventListener("keydown", audio.unlock, { once: true });
@@ -85,7 +97,13 @@ const scaryCostume = createScaryCostume();
 const hud = createHud(hudRoot);
 const supplyStations = createSupplyStationManager({
   isItemSelectable: isSupplyItemSelectable,
+  getCandyCount: () => coins.getCollectedCandyValue(),
   onUseItem(item) {
+    if (item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.STAMP) {
+      stampCollection.collect();
+      return;
+    }
+
     if (
       item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.SPEED_BOOST ||
       item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.MAGIC_CLOCK
@@ -257,6 +275,9 @@ function startGame() {
   }
 
   defeatAnimation = null;
+  stampCollection.reset();
+  gameOverStamp.hidden = true;
+  gameOverScreen.classList.remove("has-stamp");
   player.reset();
   audio.setCandyVacuumState();
   progression.reset();
@@ -363,6 +384,9 @@ function frame(currentTime) {
 
     if (defeatAnimation.elapsedSeconds >= PLAYER_DEFEAT_DURATION_SECONDS) {
       game.finishGameOver();
+      stampCollection.finishRun();
+      gameOverStamp.hidden = !stampCollection.hasStamp();
+      gameOverScreen.classList.toggle("has-stamp", stampCollection.hasStamp());
       animationFrameId = null;
       gameOverScreen.hidden = false;
       audio.playGameOver();
@@ -628,7 +652,11 @@ function frame(currentTime) {
         audio.playSupplyRouletteTick(step);
       },
       onSpinComplete: () => {
-        audio.playSupplyRouletteResult();
+        if (supplyDraw.slots.some((slot) => slot.item.effect?.type === SUPPLY_ITEM_EFFECT_TYPE.STAMP)) {
+          audio.playStampFanfare();
+        } else {
+          audio.playSupplyRouletteResult();
+        }
       },
       onTheftEscape: () => {
         audio.playSupplyTheftVoice();

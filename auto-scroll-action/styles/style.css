@@ -7,6 +7,18 @@
   box-sizing: border-box;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 html,
 body {
   min-height: 100%;
@@ -109,84 +121,94 @@ body {
 }
 
 #title-screen {
-  grid-template-columns: minmax(0, 1fr);
-  padding: 20px;
-  color: #26343a;
-  background: #b8e8ef;
+  display: block;
+  color: #fff9ec;
+  background: #302039 url("../img/title/title.png") center / 100% 100% no-repeat;
 }
 
 #title-play-options {
+  position: absolute;
+  top: 54%;
+  left: 31%;
+  right: 31%;
   display: grid;
-  grid-template-columns: auto auto;
-  align-items: center;
-  gap: 32px;
-  max-width: 100%;
+  justify-content: center;
 }
 
 #character-selector {
-  color-scheme: light;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
-  font: 700 14px/1.25 sans-serif;
-}
-
-#character-selector legend {
-  margin-bottom: 8px;
-  padding: 0;
+  pointer-events: none;
+  font: 700 16px/1.25 sans-serif;
 }
 
 .character-options {
-  display: flex;
-  gap: 8px;
+  position: absolute;
+  inset: 0;
 }
 
 .character-option {
-  display: grid;
-  width: 106px;
-  flex: 0 0 106px;
-  justify-items: center;
-  gap: 6px;
-  padding: 8px;
-  border: 2px solid #83aeb5;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.35);
+  position: absolute;
+  bottom: 3%;
+  width: 28%;
+  height: 52%;
+  transform: scale(0.88);
+  transition: transform 180ms ease-out;
+  pointer-events: auto;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.character-option:hover {
-  background: rgba(255, 255, 255, 0.65);
+.character-option[data-character="girl"] {
+  left: 2%;
+  transform-origin: bottom left;
+}
+
+.character-option[data-character="boy"] {
+  right: 2%;
+  transform-origin: bottom right;
 }
 
 .character-option:has(input:checked) {
-  border-color: #a45826;
-  background: #fff5df;
+  transform: scale(1);
 }
 
 .character-option:has(input:focus-visible) {
-  outline: 3px solid #287b82;
+  outline: 3px solid #fff3b5;
   outline-offset: 3px;
 }
 
-.character-option canvas {
+.character-option img {
+  position: absolute;
+  bottom: 0;
   display: block;
-  width: 84px;
-  height: 94.5px;
+  /* Source PNGs include the full title canvas; only the character region is clickable. */
+  width: 260%;
+  max-width: none;
+  height: 140%;
+  pointer-events: none;
+  user-select: none;
 }
 
-.character-option span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
+.character-option[data-character="girl"] img {
+  left: 0;
 }
 
-.character-option input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: #a45826;
+.character-option[data-character="boy"] img {
+  right: 0;
+}
+
+.character-option:has(input:checked) img {
+  filter:
+    drop-shadow(3px 0 0 #fff)
+    drop-shadow(-3px 0 0 #fff)
+    drop-shadow(0 3px 0 #fff)
+    drop-shadow(0 -3px 0 #fff)
+    drop-shadow(0 0 8px #f9b751);
 }
 
 .settings-icon-button {
@@ -218,8 +240,11 @@ body {
 
 #settings-button {
   position: absolute;
+  z-index: 1;
   top: 18px;
   right: 18px;
+  border-color: #f9d498;
+  background: #fff3dc;
 }
 
 #settings-dialog {
@@ -307,6 +332,47 @@ body {
   background: transparent;
   cursor: pointer;
   touch-action: pan-y;
+}
+
+.stamp-log {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid #b6ced1;
+}
+
+.stamp-log h3 {
+  margin: 0;
+  color: #4d666e;
+  font-size: 15px;
+}
+
+#stamp-log-entry {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+#stamp-log-entry canvas {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+
+#stamp-log-time {
+  overflow-wrap: anywhere;
+}
+
+#stamp-log-empty {
+  margin: 0;
+  color: #61777e;
+  font-size: 14px;
 }
 
 .volume-control input[type="range"]::-webkit-slider-runnable-track {
@@ -411,6 +477,30 @@ body {
   background: rgba(22, 20, 27, 0.88);
 }
 
+#game-over-stamp {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  max-width: calc(100% - 36px);
+  align-items: center;
+  gap: 10px;
+  color: #f5d289;
+  font: 700 18px/1.3 sans-serif;
+}
+
+#game-over-stamp canvas {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+}
+
+#game-over-stamp[hidden],
+#stamp-log-entry[hidden],
+#stamp-log-empty[hidden] {
+  display: none;
+}
+
 #supply-roulette {
   --supply-item-accent: #ffd45c;
   z-index: 20;
@@ -439,7 +529,8 @@ body {
   width: min(760px, calc(100vw - 40px));
 }
 
-#supply-theft-canvas {
+#supply-theft-canvas,
+#stamp-celebration-canvas {
   position: absolute;
   z-index: 2;
   inset: 0;
@@ -448,7 +539,12 @@ body {
   pointer-events: none;
 }
 
-#supply-theft-canvas[hidden] {
+#stamp-celebration-canvas {
+  z-index: 3;
+}
+
+#supply-theft-canvas[hidden],
+#stamp-celebration-canvas[hidden] {
   display: none;
 }
 
@@ -533,6 +629,7 @@ body {
 
 .supply-item-description {
   min-height: 42px;
+  white-space: pre-line;
   color: #e9edf0;
   font: 600 15px/1.4 sans-serif;
 }
@@ -580,7 +677,6 @@ body {
   display: none;
 }
 
-#game-title,
 #game-over-title {
   margin: 0;
   font-family: sans-serif;
@@ -608,12 +704,13 @@ body {
 #title-controls {
   display: grid;
   grid-template-columns: max-content max-content;
-  gap: 9px 18px;
+  gap: 8px 16px;
   margin: 0;
   padding: 0;
-  color: #26343a;
+  color: #fff9ec;
   font: 700 15px/1.3 sans-serif;
   list-style: none;
+  text-shadow: 0 2px 3px #24142e, 0 0 6px #24142e;
 }
 
 #title-controls li {
@@ -623,10 +720,10 @@ body {
 #title-controls kbd {
   min-width: 64px;
   padding: 4px 8px;
-  border: 1px solid #587078;
+  border: 1px solid #f5d9a8;
   border-radius: 4px;
   color: #fff;
-  background: #344c55;
+  background: rgba(41, 29, 49, 0.92);
   font: 700 14px/1.2 sans-serif;
   text-align: center;
 }
@@ -636,6 +733,10 @@ body {
 }
 
 #title-start-actions {
+  position: absolute;
+  left: 30%;
+  right: 30%;
+  bottom: 12%;
   display: grid;
   justify-items: center;
   gap: 8px;
@@ -643,17 +744,18 @@ body {
 
 #title-start-hint {
   margin: 0;
-  color: #40565e;
+  color: #fff9ec;
   font: 700 13px/1.3 sans-serif;
+  text-shadow: 0 2px 3px #24142e, 0 0 6px #24142e;
 }
 
 #title-start-hint kbd {
   margin-right: 6px;
   padding: 3px 8px;
-  border: 1px solid #587078;
+  border: 1px solid #f5d9a8;
   border-radius: 4px;
   color: #fff;
-  background: #344c55;
+  background: rgba(41, 29, 49, 0.92);
   font: 700 12px/1 sans-serif;
 }
 
@@ -675,14 +777,35 @@ body {
   background: #ed9a53;
 }
 
+#start-button {
+  min-width: 176px;
+  border-color: #ffe4a2;
+  color: #382038;
+  background: #ffc35b;
+  box-shadow: 0 4px 0 #663b40, 0 6px 15px rgba(28, 12, 36, 0.4);
+  font-weight: 800;
+}
+
+#start-button:hover {
+  background: #ffda83;
+}
+
+#start-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #663b40;
+}
+
 #start-button:focus-visible,
 #return-button:focus-visible {
   outline: 3px solid #26343a;
   outline-offset: 3px;
 }
 
+#start-button:focus-visible {
+  outline-color: #fff3b5;
+}
+
 @media (max-width: 520px) {
-  #game-title,
   #game-over-title {
     font-size: 24px;
   }
@@ -760,14 +883,42 @@ body {
 }
 
 @media (max-width: 600px), (max-height: 540px) {
-  #title-screen {
-    gap: 8px;
-    padding: 8px;
+  #game-over-stamp {
+    top: 8px;
+    right: 10px;
+    gap: 6px;
+    font-size: 12px;
   }
 
-  #game-title {
-    max-width: calc(100% - 64px);
-    font-size: 20px;
+  #game-over-stamp canvas {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+
+  #game-over-screen.has-stamp {
+    gap: 12px;
+    padding: 38px 10px 6px;
+  }
+
+  #game-over-screen.has-stamp #game-over-title {
+    font-size: 22px;
+  }
+
+  #game-over-screen.has-stamp #game-over-result {
+    gap: 10px;
+    margin: 0;
+    font-size: 13px;
+  }
+
+  #game-over-screen.has-stamp #game-over-candy-count {
+    font-size: 26px;
+  }
+
+  #game-over-screen.has-stamp #return-button {
+    min-height: 40px;
+    padding: 8px 20px;
+    font-size: 16px;
   }
 
   #settings-button {
@@ -782,43 +933,6 @@ body {
   #settings-button img {
     width: 20px;
     height: 20px;
-  }
-
-  #title-play-options {
-    gap: 16px;
-  }
-
-  #character-selector {
-    font-size: 12px;
-  }
-
-  #character-selector legend {
-    margin-bottom: 4px;
-  }
-
-  .character-options {
-    gap: 6px;
-  }
-
-  .character-option {
-    width: 70px;
-    flex-basis: 70px;
-    gap: 4px;
-    padding: 5px;
-  }
-
-  .character-option canvas {
-    width: 48px;
-    height: 54px;
-  }
-
-  .character-option span {
-    gap: 3px;
-  }
-
-  .character-option input {
-    width: 12px;
-    height: 12px;
   }
 
   #title-controls {
@@ -853,58 +967,85 @@ body {
   }
 }
 
-@media (max-width: 380px) {
-  #title-screen {
-    gap: 6px;
-    padding: 6px;
-  }
-
-  #game-title {
-    font-size: 16px;
-  }
-
+@media (max-width: 600px), (max-height: 420px) {
   #title-play-options {
-    gap: 12px;
+    top: 47%;
   }
 
   #character-selector {
-    font-size: 11px;
-  }
-
-  #character-selector legend {
-    margin-bottom: 2px;
-  }
-
-  .character-option {
-    width: 58px;
-    flex-basis: 58px;
-    gap: 3px;
-    padding: 4px;
-  }
-
-  .character-option canvas {
-    width: 36px;
-    height: 40.5px;
+    font-size: 12px;
   }
 
   #title-controls {
-    gap: 3px 8px;
-    font-size: 11px;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 6px;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  #title-controls li {
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: 1px;
+    white-space: nowrap;
   }
 
   #title-controls kbd {
-    min-width: 48px;
-    padding: 2px 4px;
+    min-width: 44px;
+    padding: 0 3px;
     font-size: 10px;
+    line-height: 1;
+  }
+
+  #title-start-actions {
+    left: 29%;
+    right: 29%;
+    bottom: 6%;
   }
 
   #start-button {
-    min-height: 32px;
+    min-width: 110px;
+    min-height: 30px;
+    padding: 5px 12px;
     font-size: 14px;
   }
 }
 
+@media (max-width: 380px) {
+  #title-play-options {
+    top: 45.5%;
+  }
+
+  #title-controls {
+    gap: 2px 4px;
+    line-height: 1.1;
+  }
+
+  #title-controls kbd {
+    font-size: 9px;
+  }
+
+  #title-start-actions {
+    bottom: 2%;
+    gap: 3px;
+  }
+
+  #start-button {
+    min-height: 28px;
+  }
+
+  #title-start-hint {
+    font-size: 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .character-option {
+    transition: none;
+  }
+
   #run-intro img {
     animation-name: run-intro-fade;
   }

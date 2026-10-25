@@ -1,4 +1,6 @@
-export function createSettingsPanel(button, dialog, audio) {
+import { formatStampTimestamp } from "../core/stamp-collection.js";
+
+export function createSettingsPanel(button, dialog, audio, { getStampLog = () => null } = {}) {
   if (
     !(button instanceof HTMLButtonElement) ||
     !(dialog instanceof HTMLDialogElement)
@@ -8,6 +10,9 @@ export function createSettingsPanel(button, dialog, audio) {
 
   const closeButton = dialog.querySelector("[data-settings-close]");
   const sliders = Array.from(dialog.querySelectorAll("input[data-volume]"));
+  const stampLogEntry = dialog.querySelector("#stamp-log-entry");
+  const stampLogEmpty = dialog.querySelector("#stamp-log-empty");
+  const stampLogTime = dialog.querySelector("#stamp-log-time");
 
   function updateControls() {
     const settings = audio.getVolumeSettings();
@@ -23,6 +28,15 @@ export function createSettingsPanel(button, dialog, audio) {
 
   button.addEventListener("click", () => {
     updateControls();
+    const log = getStampLog();
+    stampLogEntry.hidden = !log;
+    stampLogEmpty.hidden = Boolean(log);
+    stampLogTime.textContent = log ? formatStampTimestamp(log.gameOverAt) : "";
+    if (log) {
+      stampLogTime.dateTime = log.gameOverAt;
+    } else {
+      stampLogTime.removeAttribute("datetime");
+    }
     dialog.showModal();
     button.setAttribute("aria-expanded", "true");
     sliders[0].focus();

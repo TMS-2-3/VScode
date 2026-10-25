@@ -7,10 +7,19 @@ export const SUPPLY_ITEM_EFFECT_TYPE = Object.freeze({
   PUMPKIN_BARRIER: "pumpkinBarrier",
   SCARY_COSTUME: "scaryCostume",
   SPEED_BOOST: "speedBoost",
+  STAMP: "stamp",
 });
 
 export const SUPPLY_ITEM_THEFT_CHANCE = 0.05;
 const CANDY_ASSORTMENT_ITEM_TYPE = "candyAssortment";
+const STAMP_ITEM_TYPE = "stamp";
+export const STAMP_APPEARANCE_RULES = Object.freeze({
+  baseChance: 0.03,
+  rampMaxChance: 0.08,
+  candyForRampMaxChance: 150,
+  bonusChance: 0.1,
+  bonusCandyThreshold: 200,
+});
 
 export const MAGIC_CLOCK_SPEED_PERCENT_VALUES = Object.freeze([
   -50, -45, -40, -35, -30, -25, -20, -15, -10,
@@ -106,11 +115,21 @@ export const SUPPLY_ITEM_DEFINITIONS = [
       type: SUPPLY_ITEM_EFFECT_TYPE.MAGIC_CLOCK,
     },
   },
+  {
+    type: STAMP_ITEM_TYPE,
+    name: "スタンプ",
+    symbol: "STAMP",
+    artwork: "stamp",
+    description: "スタンプをゲット！！\nスタッフの人にこの画面を見せてね！",
+    accentColor: "#e6bb61",
+    effect: { type: SUPPLY_ITEM_EFFECT_TYPE.STAMP },
+  },
 ];
 
 export function createSupplyStationManager({
   itemDefinitions = SUPPLY_ITEM_DEFINITIONS,
   isItemSelectable = () => true,
+  getCandyCount = () => 0,
   random = Math.random,
   theftChance = SUPPLY_ITEM_THEFT_CHANCE,
   onUseItem = (item, context) => item.use?.(context),
@@ -118,6 +137,7 @@ export function createSupplyStationManager({
   const activeStations = new Map();
   let activeDraw = null;
   let nextId = 1;
+  let stampWasDrawn = false;
 
   function addStation({ x, isLarge = false } = {}) {
     if (!Number.isFinite(x)) {
@@ -157,18 +177,31 @@ export function createSupplyStationManager({
       isItemSelectable(itemDefinition),
     );
     const requestedItemCount = station.isLarge ? 2 : 1;
-    const selectedItems = chooseDistinctItems(
-      selectableItems,
-      requestedItemCount,
-      random,
-    );
     const fallbackItem = itemDefinitions.find(
       (itemDefinition) => itemDefinition.type === CANDY_ASSORTMENT_ITEM_TYPE,
     );
+    const stampItem = selectableItems.find((item) => item.type === STAMP_ITEM_TYPE);
+    const stampChance = getStampAppearanceChance(getCandyCount());
+    let candidates = selectableItems.filter((item) => item.type !== STAMP_ITEM_TYPE);
+    const selectedItems = [];
 
-    // Only the fallback assortment may appear in both slots.
-    while (selectedItems.length < requestedItemCount && fallbackItem) {
-      selectedItems.push(cloneItem(fallbackItem));
+    for (let index = 0; index < requestedItemCount; index += 1) {
+      // Stamp odds are per slot and independent of the normal item pool size.
+      const drawStamp = stampItem && !stampWasDrawn &&
+        normalizeRandomRoll(random()) < stampChance;
+      const item = drawStamp
+        ? cloneItem(stampItem)
+        : chooseDistinctItems(candidates, 1, random)[0] ?? cloneItem(fallbackItem);
+
+      if (!item) {
+        continue;
+      }
+      if (drawStamp) {
+        // Reserve the one appearance now, including for a two-slot draw.
+        stampWasDrawn = true;
+      }
+      selectedItems.push(item);
+      candidates = candidates.filter((candidate) => candidate.type !== item.type);
     }
 
     if (selectedItems.length === 0) {
@@ -177,7 +210,8 @@ export function createSupplyStationManager({
 
     station.isTriggered = true;
     const slots = selectedItems.map((selectedItem) => {
-      const isStolen = random() < normalizeChance(theftChance);
+      const isStolen = selectedItem.type !== STAMP_ITEM_TYPE &&
+        random() < normalizeChance(theftChance);
 
       return {
         item: resolveItemEffect(selectedItem, random),
@@ -248,6 +282,7 @@ export function createSupplyStationManager({
   function reset() {
     activeStations.clear();
     activeDraw = null;
+    stampWasDrawn = false;
   }
 
   return {
@@ -260,6 +295,17 @@ export function createSupplyStationManager({
     removeStation,
     reset,
   };
+}
+
+export function getStampAppearanceChance(candyCount) {
+  const candy = Number.isFinite(candyCount) ? Math.max(0, candyCount) : 0;
+  if (candy > STAMP_APPEARANCE_RULES.bonusCandyThreshold) {
+    return STAMP_APPEARANCE_RULES.bonusChance;
+  }
+
+  const progress = Math.min(1, candy / STAMP_APPEARANCE_RULES.candyForRampMaxChance);
+  return STAMP_APPEARANCE_RULES.baseChance +
+    (STAMP_APPEARANCE_RULES.rampMaxChance - STAMP_APPEARANCE_RULES.baseChance) * progress;
 }
 
 export function chooseRandomItem(itemDefinitions, random = Math.random) {

@@ -1,5 +1,7 @@
 import { CANDY_APPEARANCES } from "../shared/candy-appearances.js";
 import { paintCandyArtwork } from "./candy-art.js";
+import { paintStampArtwork } from "./stamp-art.js";
+import { createStampCelebration } from "./stamp-celebration.js";
 
 const ROULETTE_DURATION_MS = 3200;
 const REDUCED_MOTION_DURATION_MS = 900;
@@ -16,6 +18,7 @@ const THEFT_REPEL_PROGRESS = THEFT_GRAB_PROGRESS * THEFT_REPEL_APPROACH_RATIO;
 export function createSupplyRoulette(root) {
   const status = root.querySelector("#supply-roulette-status");
   const theftCanvas = root.querySelector("#supply-theft-canvas");
+  const celebrationCanvas = root.querySelector("#stamp-celebration-canvas");
   const result = root.querySelector("#supply-result");
   const goButton = root.querySelector("#supply-go-button");
   const slotViews = [
@@ -36,6 +39,7 @@ export function createSupplyRoulette(root) {
   if (
     !(status instanceof HTMLElement) ||
     !(theftCanvas instanceof HTMLCanvasElement) ||
+    !(celebrationCanvas instanceof HTMLCanvasElement) ||
     !(result instanceof HTMLElement) ||
     !(goButton instanceof HTMLButtonElement) ||
     slotViews.some(
@@ -61,6 +65,7 @@ export function createSupplyRoulette(root) {
   }
 
   const artworkCache = new Map();
+  const stampCelebration = createStampCelebration(celebrationCanvas);
   let animationFrameId = null;
   let pendingGo = null;
   let pendingReveal = null;
@@ -82,6 +87,7 @@ export function createSupplyRoulette(root) {
     } = {},
   ) {
     cancelAnimation();
+    stampCelebration.reset();
     pendingReveal = typeof onReveal === "function" ? onReveal : null;
     pendingGo = typeof onGo === "function" ? onGo : null;
     activeSlots = normalizeDrawSlots(draw);
@@ -179,6 +185,9 @@ export function createSupplyRoulette(root) {
     reels.forEach((reel, slotIndex) => {
       drawReel(slotIndex, reel.candidates, reel.finalPosition);
     });
+    if (activeSlots.some((slot) => slot.item.artwork === "stamp" && !slot.isStolen)) {
+      stampCelebration.start();
+    }
     resolveSlot(0, callbacks);
   }
 
@@ -732,6 +741,10 @@ export function createSupplyRoulette(root) {
   }
 
   function paintTemporaryItem(artworkContext, item, size) {
+    if (item.artwork === "stamp") {
+      paintStampArtwork(artworkContext, size, size);
+      return;
+    }
     if (item.artwork === "candyBag") {
       paintCandyAssortment(artworkContext, size);
       return;
@@ -1663,6 +1676,7 @@ export function createSupplyRoulette(root) {
 
   function reset() {
     cancelAnimation();
+    stampCelebration.reset();
     activeSlots = [];
     pendingGo = null;
     pendingReveal = null;

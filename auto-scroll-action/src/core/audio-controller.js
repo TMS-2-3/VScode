@@ -7,6 +7,7 @@ const GHOST_SCARE_DURATION_SECONDS = 0.66;
 const GHOST_FLEE_DURATION_SECONDS = 0.72;
 const SUPPLY_ROULETTE_TICK_DURATION_SECONDS = 0.09;
 const SUPPLY_ROULETTE_RESULT_DURATION_SECONDS = 0.58;
+const STAMP_FANFARE_DURATION_SECONDS = 1.6;
 const SUPPLY_GO_DURATION_SECONDS = 0.4;
 const SUPPLY_THEFT_VOICE_DURATION_SECONDS = 0.86;
 const LAUNCHER_COUNTDOWN_DURATION_SECONDS = 0.18;
@@ -84,6 +85,7 @@ export function createAudioController() {
       ghostFlee: createGhostFleeBuffer(audioContext),
       supplyRouletteTick: createSupplyRouletteTickBuffer(audioContext),
       supplyRouletteResult: createSupplyRouletteResultBuffer(audioContext),
+      stampFanfare: createStampFanfareBuffer(audioContext),
       supplyGo: createSupplyGoBuffer(audioContext),
       supplyTheftVoice: createSupplyTheftVoiceBuffer(audioContext),
       launcherCountdown: createLauncherCountdownBuffer(audioContext),
@@ -308,6 +310,14 @@ export function createAudioController() {
     });
   }
 
+  function playStampFanfare() {
+    const context = getAudioContext();
+    if (!context || !soundBuffers) {
+      return;
+    }
+    playBuffer(soundBuffers.stampFanfare, { volume: 0.85 });
+  }
+
   function playSupplyGo() {
     const context = getAudioContext();
 
@@ -504,6 +514,7 @@ export function createAudioController() {
     playObstacleHit,
     playPumpkinCrush,
     playRunIntro,
+    playStampFanfare,
     playSupplyGo,
     playSupplyRouletteResult,
     playSupplyRouletteTick,
@@ -875,6 +886,51 @@ function createSupplyRouletteResultBuffer(context) {
       }
 
       return softClip(sample * 0.52);
+    },
+  );
+}
+
+function createStampFanfareBuffer(context) {
+  const notes = [
+    { start: 0, duration: 0.17, frequency: 523.25, phase: 0 },
+    { start: 0.16, duration: 0.17, frequency: 659.25, phase: 0 },
+    { start: 0.32, duration: 0.19, frequency: 783.99, phase: 0 },
+    { start: 0.5, duration: 1.02, frequency: 1046.5, phase: 0 },
+  ];
+
+  return createSoundBuffer(
+    context,
+    STAMP_FANFARE_DURATION_SECONDS,
+    (time, progress, sampleRate) => {
+      let sample = 0;
+      notes.forEach((note) => {
+        const localTime = time - note.start;
+        if (localTime < 0 || localTime >= note.duration) {
+          return;
+        }
+        const noteProgress = localTime / note.duration;
+        const vibrato = 1 + Math.sin(localTime * TWO_PI * 5.5) * 0.003;
+        note.phase += TWO_PI * note.frequency * vibrato / sampleRate;
+        const attack = Math.min(1, localTime / 0.008);
+        const release = Math.min(1, (1 - noteProgress) / 0.3);
+        const brass =
+          Math.sin(note.phase) * 0.6 +
+          Math.sin(note.phase * 2) * 0.24 +
+          Math.sin(note.phase * 3) * 0.11 +
+          Math.sin(note.phase * 4) * 0.05;
+        sample += brass * attack * release * Math.exp(-noteProgress * 1.5) * 0.78;
+      });
+
+      const chordTime = time - 0.5;
+      if (chordTime >= 0) {
+        const envelope = Math.min(1, chordTime / 0.02) * Math.exp(-chordTime * 3.5);
+        sample += [261.63, 329.63, 392].reduce(
+          (chord, frequency) => chord + Math.sin(chordTime * TWO_PI * frequency) * 0.13,
+          0,
+        ) * envelope;
+      }
+
+      return softClip(sample * Math.min(1, (1 - progress) / 0.08));
     },
   );
 }

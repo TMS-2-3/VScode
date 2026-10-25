@@ -1,0 +1,66 @@
+export function paintStampArtwork(c, width, height) {
+  c.save();
+  c.scale(width / 120, height / 120);
+  c.lineCap = "round";
+  c.lineJoin = "round";
+  c.strokeStyle = "#49364e";
+  const shape = (data, fill, lineWidth = 3) => {
+    const path = new Path2D(data);
+    c.fillStyle = fill;
+    c.fill(path);
+    c.strokeStyle = "#49364e";
+    c.lineWidth = lineWidth;
+    c.stroke(path);
+  };
+  const gradient = c.createLinearGradient(42, 44, 104, 110);
+  gradient.addColorStop(0, "#fff5d7");
+  gradient.addColorStop(1, "#e3d6b1");
+  shape("M43 43 L98 43 L111 56 L111 110 L43 110 Z", gradient);
+  shape("M98 43 L98 56 L111 56 Z", "#d2bb91", 2);
+  c.strokeStyle = "#bf9074";
+  c.lineWidth = 1.5;
+  c.setLineDash([3, 4]);
+  c.strokeRect(49, 62, 55, 42);
+  c.setLineDash([]);
+
+  const handleGradient = c.createLinearGradient(16, 12, 57, 57);
+  handleGradient.addColorStop(0, "#da8a86");
+  handleGradient.addColorStop(0.5, "#a34c67");
+  handleGradient.addColorStop(1, "#613e57");
+  shape("M25 27 L47 27 L43 51 L27 51 Z", handleGradient);
+  c.beginPath();
+  c.ellipse(36, 23, 24, 16, 0, 0, Math.PI * 2);
+  c.fillStyle = handleGradient;
+  c.fill();
+  c.lineWidth = 3;
+  c.stroke();
+  c.strokeStyle = "#f5c9ad";
+  c.beginPath();
+  c.ellipse(32, 18, 12, 5, -0.2, Math.PI, Math.PI * 2);
+  c.stroke();
+  shape("M22 47 L49 47 L53 56 L18 56 Z", "#d6ae69", 2.5);
+  shape("M12 54 L59 54 L68 64 L63 76 L8 76 L4 65 Z", "#566c70");
+  shape("M10 64 L63 64 L63 77 L9 77 Z", "#3a3e50", 2);
+  c.strokeStyle = "#c8d9c9";
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(15, 59);
+  c.lineTo(55, 59);
+  c.stroke();
+
+  shape("M77 68 Q69 61 72 57 Q80 55 83 67 Z", "#64836b", 2);
+  shape("M79 69 Q65 61 59 77 Q52 92 66 99 Q78 107 93 98 Q107 89 99 76 Q93 62 79 69 Z", "#de8b44", 2.5);
+  c.strokeStyle = "#b6643d";
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(72, 70);
+  c.quadraticCurveTo(64, 85, 71, 98);
+  c.moveTo(86, 70);
+  c.quadraticCurveTo(96, 86, 87, 99);
+  c.stroke();
+  shape("M65 79 L75 78 L73 86 L65 85 Z M86 78 L97 80 L95 86 L87 85 Z", "#613d50", 1);
+  shape("M67 90 L75 94 L80 89 L85 94 L96 88 Q88 103 77 99 Z", "#613d50", 1);
+  shape("M93 10 L96 17 L103 20 L96 23 L93 30 L90 23 L83 20 L90 17 Z", "#f3cf7b", 1.5);
+  shape("M108 29 L110 34 L115 36 L110 38 L108 43 L106 38 L101 36 L106 34 Z", "#f3cf7b", 1.3);
+  c.restore();
+}
