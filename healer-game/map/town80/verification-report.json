@@ -1,0 +1,228 @@
+{
+  "status": "PASS",
+  "tileSize": 32,
+  "dimensions": [
+    80,
+    80
+  ],
+  "imageDimensions": [
+    2560,
+    2560
+  ],
+  "buildings": 21,
+  "uniqueArchitecture": 17,
+  "residents": 11,
+  "connectedWalkableCells": 3127,
+  "doors": [
+    {
+      "name": "北の教会",
+      "x": 40,
+      "y": 20,
+      "steps": 61
+    },
+    {
+      "name": "武器屋",
+      "x": 56,
+      "y": 31,
+      "steps": 62
+    },
+    {
+      "name": "防具屋",
+      "x": 67,
+      "y": 32,
+      "steps": 72
+    },
+    {
+      "name": "旅人の宿",
+      "x": 51,
+      "y": 66,
+      "steps": 22
+    },
+    {
+      "name": "道具屋",
+      "x": 58,
+      "y": 48,
+      "steps": 47
+    },
+    {
+      "name": "酒場",
+      "x": 50,
+      "y": 55,
+      "steps": 32
+    },
+    {
+      "name": "パン屋",
+      "x": 66,
+      "y": 50,
+      "steps": 53
+    },
+    {
+      "name": "依頼所",
+      "x": 26,
+      "y": 33,
+      "steps": 58
+    },
+    {
+      "name": "薬草店",
+      "x": 57,
+      "y": 20,
+      "steps": 74
+    },
+    {
+      "name": "西の茅葺き住宅",
+      "x": 12,
+      "y": 31,
+      "steps": 74
+    },
+    {
+      "name": "庭付きの石造住宅",
+      "x": 21,
+      "y": 24,
+      "steps": 72
+    },
+    {
+      "name": "南西の木造住宅",
+      "x": 13,
+      "y": 53,
+      "steps": 51
+    },
+    {
+      "name": "菜園のある住宅",
+      "x": 25,
+      "y": 53,
+      "steps": 39
+    },
+    {
+      "name": "北西の町家",
+      "x": 13,
+      "y": 16,
+      "steps": 88
+    },
+    {
+      "name": "北の館",
+      "x": 27,
+      "y": 16,
+      "steps": 74
+    },
+    {
+      "name": "共同の納屋と厩舎",
+      "x": 22,
+      "y": 66,
+      "steps": 29
+    },
+    {
+      "name": "運河の水車小屋",
+      "x": 64,
+      "y": 19,
+      "steps": 82
+    },
+    {
+      "name": "農家の母屋",
+      "x": 11,
+      "y": 65,
+      "steps": 41
+    },
+    {
+      "name": "南の農家",
+      "x": 31,
+      "y": 66,
+      "steps": 20
+    },
+    {
+      "name": "住宅街の角の家",
+      "x": 17,
+      "y": 41,
+      "steps": 59
+    },
+    {
+      "name": "商人の町家",
+      "x": 62,
+      "y": 63,
+      "steps": 36
+    }
+  ],
+  "facilityChecks": [
+    {
+      "id": "weapon",
+      "x": 55,
+      "y": 31,
+      "action": "equipmentShop"
+    },
+    {
+      "id": "weapon",
+      "x": 56,
+      "y": 31,
+      "action": "equipmentShop"
+    },
+    {
+      "id": "armor",
+      "x": 66,
+      "y": 32,
+      "action": "equipmentShop"
+    },
+    {
+      "id": "armor",
+      "x": 67,
+      "y": 32,
+      "action": "equipmentShop"
+    },
+    {
+      "id": "inn",
+      "x": 50,
+      "y": 66,
+      "action": "inn"
+    },
+    {
+      "id": "inn",
+      "x": 51,
+      "y": 66,
+      "action": "inn"
+    },
+    {
+      "id": "item",
+      "x": 57,
+      "y": 48,
+      "action": "itemShop"
+    },
+    {
+      "id": "item",
+      "x": 58,
+      "y": 48,
+      "action": "itemShop"
+    },
+    {
+      "id": "guild",
+      "x": 25,
+      "y": 33,
+      "action": "questType"
+    },
+    {
+      "id": "guild",
+      "x": 26,
+      "y": 33,
+      "action": "questType"
+    }
+  ],
+  "npcConversationChecks": [
+    "門番",
+    "鍛冶屋",
+    "野菜売り",
+    "パン屋",
+    "散歩中の老人",
+    "噴水を眺める子",
+    "菜園の住人",
+    "農作業の住人",
+    "薬草を育てる人",
+    "旅の客",
+    "教会の世話係"
+  ],
+  "gateAndChurchCollision": "PASS",
+  "sceneSpace": "PASS",
+  "editorRoundtrip": "PASS",
+  "editorJSExport": "PASS",
+  "selfContainedPreview": "PASS",
+  "previewMovementAndDialogue": "PASS",
+  "groundAndSpriteFiles": "PASS",
+  "browserManualTest": false,
+  "runtimeFilesModified": false
+}

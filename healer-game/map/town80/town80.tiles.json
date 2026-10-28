@@ -1,0 +1,2376 @@
+{
+  "t80_grass": {
+    "id": "t80_grass",
+    "name": "grass",
+    "image": "map/town80/assets/ground/grass.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_grass2": {
+    "id": "t80_grass2",
+    "name": "grass2",
+    "image": "map/town80/assets/ground/grass2.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_earth": {
+    "id": "t80_earth",
+    "name": "earth",
+    "image": "map/town80/assets/ground/earth.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_cobble": {
+    "id": "t80_cobble",
+    "name": "cobble",
+    "image": "map/town80/assets/ground/cobble.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_plaza": {
+    "id": "t80_plaza",
+    "name": "plaza",
+    "image": "map/town80/assets/ground/plaza.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_border": {
+    "id": "t80_border",
+    "name": "border",
+    "image": "map/town80/assets/ground/border.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_water": {
+    "id": "t80_water",
+    "name": "water",
+    "image": "map/town80/assets/ground/water.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_water2": {
+    "id": "t80_water2",
+    "name": "water2",
+    "image": "map/town80/assets/ground/water2.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_soil": {
+    "id": "t80_soil",
+    "name": "soil",
+    "image": "map/town80/assets/ground/soil.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_crops": {
+    "id": "t80_crops",
+    "name": "crops",
+    "image": "map/town80/assets/ground/crops.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_gravel": {
+    "id": "t80_gravel",
+    "name": "gravel",
+    "image": "map/town80/assets/ground/gravel.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_drygrass": {
+    "id": "t80_drygrass",
+    "name": "drygrass",
+    "image": "map/town80/assets/ground/drygrass.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_brick": {
+    "id": "t80_brick",
+    "name": "brick",
+    "image": "map/town80/assets/ground/brick.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_moss_stone": {
+    "id": "t80_moss_stone",
+    "name": "moss_stone",
+    "image": "map/town80/assets/ground/moss_stone.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_terrace": {
+    "id": "t80_terrace",
+    "name": "terrace",
+    "image": "map/town80/assets/ground/terrace.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_forest_floor": {
+    "id": "t80_forest_floor",
+    "name": "forest_floor",
+    "image": "map/town80/assets/ground/forest_floor.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_tree": {
+    "id": "t80_tree",
+    "name": "tree",
+    "image": "map/town80/assets/props/tree.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 96,
+    "drawHeight": 112,
+    "drawOffsetX": -32,
+    "drawOffsetY": -80,
+    "footprintWidth": 1,
+    "footprintHeight": 1
+  },
+  "t80_pine": {
+    "id": "t80_pine",
+    "name": "pine",
+    "image": "map/town80/assets/props/pine.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 64,
+    "drawHeight": 112,
+    "drawOffsetX": -16,
+    "drawOffsetY": -80,
+    "footprintWidth": 1,
+    "footprintHeight": 1
+  },
+  "t80_lamp": {
+    "id": "t80_lamp",
+    "name": "lamp",
+    "image": "map/town80/assets/props/lamp.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 24,
+    "drawHeight": 64,
+    "drawOffsetX": 4,
+    "drawOffsetY": -32,
+    "footprintWidth": 1,
+    "footprintHeight": 1
+  },
+  "t80_bench_s": {
+    "id": "t80_bench_s",
+    "name": "bench_s",
+    "image": "map/town80/assets/props/bench_s.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 64,
+    "drawHeight": 32,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 2,
+    "footprintHeight": 1
+  },
+  "t80_bench_e": {
+    "id": "t80_bench_e",
+    "name": "bench_e",
+    "image": "map/town80/assets/props/bench_e.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 32,
+    "drawHeight": 64,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 1,
+    "footprintHeight": 2
+  },
+  "t80_cart": {
+    "id": "t80_cart",
+    "name": "cart",
+    "image": "map/town80/assets/props/cart.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 64,
+    "drawHeight": 48,
+    "drawOffsetX": 0,
+    "drawOffsetY": -16,
+    "footprintWidth": 2,
+    "footprintHeight": 1
+  },
+  "t80_crate": {
+    "id": "t80_crate",
+    "name": "crate",
+    "image": "map/town80/assets/props/crate.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 32,
+    "drawHeight": 32,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 1,
+    "footprintHeight": 1
+  },
+  "t80_barrel": {
+    "id": "t80_barrel",
+    "name": "barrel",
+    "image": "map/town80/assets/props/barrel.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 32,
+    "drawHeight": 32,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 1,
+    "footprintHeight": 1
+  },
+  "t80_well": {
+    "id": "t80_well",
+    "name": "well",
+    "image": "map/town80/assets/props/well.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 64,
+    "drawHeight": 64,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 2,
+    "footprintHeight": 2
+  },
+  "t80_fence_h": {
+    "id": "t80_fence_h",
+    "name": "fence_h",
+    "image": "map/town80/assets/props/fence_h.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 96,
+    "drawHeight": 32,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 3,
+    "footprintHeight": 1
+  },
+  "t80_fence_v": {
+    "id": "t80_fence_v",
+    "name": "fence_v",
+    "image": "map/town80/assets/props/fence_v.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 32,
+    "drawHeight": 96,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 1,
+    "footprintHeight": 3
+  },
+  "t80_wall_h": {
+    "id": "t80_wall_h",
+    "name": "wall_h",
+    "image": "map/town80/assets/props/wall_h.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 96,
+    "drawHeight": 32,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 3,
+    "footprintHeight": 1
+  },
+  "t80_wall_v": {
+    "id": "t80_wall_v",
+    "name": "wall_v",
+    "image": "map/town80/assets/props/wall_v.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 32,
+    "drawHeight": 96,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 1,
+    "footprintHeight": 3
+  },
+  "t80_stall": {
+    "id": "t80_stall",
+    "name": "stall",
+    "image": "map/town80/assets/props/stall.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 96,
+    "drawHeight": 64,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 3,
+    "footprintHeight": 2
+  },
+  "t80_flowerbed": {
+    "id": "t80_flowerbed",
+    "name": "flowerbed",
+    "image": "map/town80/assets/props/flowerbed.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 64,
+    "drawHeight": 32,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 2,
+    "footprintHeight": 1
+  },
+  "t80_fountain": {
+    "id": "t80_fountain",
+    "name": "fountain",
+    "image": "map/town80/assets/props/fountain.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 160,
+    "drawHeight": 160,
+    "drawOffsetX": 0,
+    "drawOffsetY": -32,
+    "footprintWidth": 5,
+    "footprintHeight": 4
+  },
+  "t80_gate": {
+    "id": "t80_gate",
+    "name": "gate",
+    "image": "map/town80/assets/props/gate.png",
+    "passable": true,
+    "tags": [
+      "object",
+      "town80"
+    ],
+    "drawWidth": 256,
+    "drawHeight": 288,
+    "drawOffsetX": 0,
+    "drawOffsetY": 0,
+    "footprintWidth": 8,
+    "footprintHeight": 9
+  },
+  "t80_block": {
+    "id": "t80_block",
+    "name": "通行境界",
+    "image": "map/town80/assets/props/collision.png",
+    "passable": false,
+    "tags": [
+      "town80"
+    ]
+  },
+  "t80_pier": {
+    "id": "t80_pier",
+    "name": "門の基礎",
+    "image": "map/town80/assets/props/collision.png",
+    "passable": false,
+    "tags": [
+      "town80"
+    ],
+    "footprintWidth": 3,
+    "footprintHeight": 3
+  },
+  "t80_building_church": {
+    "id": "t80_building_church",
+    "name": "北の教会",
+    "image": "map/town80/assets/props/church.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 320,
+    "drawHeight": 384,
+    "footprintWidth": 10,
+    "footprintHeight": 12,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_10_12": {
+    "id": "t80_shadow_10_12",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 300.79999999999995,
+    "drawHeight": 40,
+    "drawOffsetX": 9.6,
+    "drawOffsetY": 368
+  },
+  "t80_building_weapon": {
+    "id": "t80_building_weapon",
+    "name": "武器屋",
+    "image": "map/town80/assets/buildings/weapon.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 256,
+    "drawHeight": 224,
+    "footprintWidth": 8,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_8_7": {
+    "id": "t80_shadow_8_7",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 240.64,
+    "drawHeight": 40,
+    "drawOffsetX": 7.68,
+    "drawOffsetY": 208
+  },
+  "t80_building_armor": {
+    "id": "t80_building_armor",
+    "name": "防具屋",
+    "image": "map/town80/assets/buildings/armor.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 224,
+    "footprintWidth": 7,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_7_7": {
+    "id": "t80_shadow_7_7",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 210.56,
+    "drawHeight": 40,
+    "drawOffsetX": 6.72,
+    "drawOffsetY": 208
+  },
+  "t80_building_inn": {
+    "id": "t80_building_inn",
+    "name": "旅人の宿",
+    "image": "map/town80/assets/buildings/inn.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 320,
+    "drawHeight": 256,
+    "footprintWidth": 10,
+    "footprintHeight": 8,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_10_8": {
+    "id": "t80_shadow_10_8",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 300.79999999999995,
+    "drawHeight": 40,
+    "drawOffsetX": 9.6,
+    "drawOffsetY": 240
+  },
+  "t80_building_item": {
+    "id": "t80_building_item",
+    "name": "道具屋",
+    "image": "map/town80/assets/buildings/item.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 192,
+    "footprintWidth": 7,
+    "footprintHeight": 6,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_7_6": {
+    "id": "t80_shadow_7_6",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 210.56,
+    "drawHeight": 40,
+    "drawOffsetX": 6.72,
+    "drawOffsetY": 176
+  },
+  "t80_building_tavern": {
+    "id": "t80_building_tavern",
+    "name": "酒場",
+    "image": "map/town80/assets/buildings/tavern.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 288,
+    "drawHeight": 224,
+    "footprintWidth": 9,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_9_7": {
+    "id": "t80_shadow_9_7",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 270.71999999999997,
+    "drawHeight": 40,
+    "drawOffsetX": 8.64,
+    "drawOffsetY": 208
+  },
+  "t80_building_bakery": {
+    "id": "t80_building_bakery",
+    "name": "パン屋",
+    "image": "map/town80/assets/buildings/bakery.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 192,
+    "footprintWidth": 7,
+    "footprintHeight": 6,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_guild": {
+    "id": "t80_building_guild",
+    "name": "依頼所",
+    "image": "map/town80/assets/buildings/guild.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 224,
+    "footprintWidth": 7,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_apothecary": {
+    "id": "t80_building_apothecary",
+    "name": "薬草店",
+    "image": "map/town80/assets/buildings/apothecary.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 224,
+    "footprintWidth": 7,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_home_thatch": {
+    "id": "t80_building_home_thatch",
+    "name": "西の茅葺き住宅",
+    "image": "map/town80/assets/buildings/home_thatch.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 192,
+    "drawHeight": 160,
+    "footprintWidth": 6,
+    "footprintHeight": 5,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_6_5": {
+    "id": "t80_shadow_6_5",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 180.48,
+    "drawHeight": 35.2,
+    "drawOffsetX": 5.76,
+    "drawOffsetY": 144
+  },
+  "t80_building_home_stone": {
+    "id": "t80_building_home_stone",
+    "name": "庭付きの石造住宅",
+    "image": "map/town80/assets/buildings/home_stone.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 192,
+    "footprintWidth": 7,
+    "footprintHeight": 6,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_home_red": {
+    "id": "t80_building_home_red",
+    "name": "南西の木造住宅",
+    "image": "map/town80/assets/buildings/home_red.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 192,
+    "footprintWidth": 7,
+    "footprintHeight": 6,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_home_timber": {
+    "id": "t80_building_home_timber",
+    "name": "菜園のある住宅",
+    "image": "map/town80/assets/buildings/home_timber.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 192,
+    "drawHeight": 192,
+    "footprintWidth": 6,
+    "footprintHeight": 6,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_6_6": {
+    "id": "t80_shadow_6_6",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 180.48,
+    "drawHeight": 40,
+    "drawOffsetX": 5.76,
+    "drawOffsetY": 176
+  },
+  "t80_building_townhouse": {
+    "id": "t80_building_townhouse",
+    "name": "北西の町家",
+    "image": "map/town80/assets/buildings/townhouse.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 224,
+    "drawHeight": 224,
+    "footprintWidth": 7,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_manor": {
+    "id": "t80_building_manor",
+    "name": "北の館",
+    "image": "map/town80/assets/buildings/manor.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 256,
+    "drawHeight": 224,
+    "footprintWidth": 8,
+    "footprintHeight": 7,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_building_stable": {
+    "id": "t80_building_stable",
+    "name": "共同の納屋と厩舎",
+    "image": "map/town80/assets/buildings/stable.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 288,
+    "drawHeight": 192,
+    "footprintWidth": 9,
+    "footprintHeight": 6,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_9_6": {
+    "id": "t80_shadow_9_6",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 270.71999999999997,
+    "drawHeight": 40,
+    "drawOffsetX": 8.64,
+    "drawOffsetY": 176
+  },
+  "t80_building_mill": {
+    "id": "t80_building_mill",
+    "name": "運河の水車小屋",
+    "image": "map/town80/assets/buildings/mill.png",
+    "passable": false,
+    "tags": [
+      "object",
+      "building",
+      "town80"
+    ],
+    "drawWidth": 256,
+    "drawHeight": 288,
+    "footprintWidth": 8,
+    "footprintHeight": 9,
+    "placementAnchor": "bottomCenter"
+  },
+  "t80_shadow_8_9": {
+    "id": "t80_shadow_8_9",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 240.64,
+    "drawHeight": 40,
+    "drawOffsetX": 7.68,
+    "drawOffsetY": 272
+  },
+  "t80_shadow_2_2": {
+    "id": "t80_shadow_2_2",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 60.16,
+    "drawHeight": 14.08,
+    "drawOffsetX": 1.92,
+    "drawOffsetY": 48
+  },
+  "t80_shadow_1_1": {
+    "id": "t80_shadow_1_1",
+    "name": "接地影",
+    "image": "map/town80/assets/props/shadow.png",
+    "passable": true,
+    "tags": [
+      "overlay",
+      "shadow",
+      "town80"
+    ],
+    "drawWidth": 30.08,
+    "drawHeight": 7.04,
+    "drawOffsetX": 0.96,
+    "drawOffsetY": 16
+  },
+  "t80_edge_water_d7": {
+    "id": "t80_edge_water_d7",
+    "name": "地面の境目 water_d7",
+    "image": "map/town80/assets/ground/edge_water_d7.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_6f": {
+    "id": "t80_edge_water_6f",
+    "name": "地面の境目 water_6f",
+    "image": "map/town80/assets/ground/edge_water_6f.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_d6": {
+    "id": "t80_edge_water_d6",
+    "name": "地面の境目 water_d6",
+    "image": "map/town80/assets/ground/edge_water_d6.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_6b": {
+    "id": "t80_edge_water_6b",
+    "name": "地面の境目 water_6b",
+    "image": "map/town80/assets/ground/edge_water_6b.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_f6": {
+    "id": "t80_edge_water_f6",
+    "name": "地面の境目 water_f6",
+    "image": "map/town80/assets/ground/edge_water_f6.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_eb": {
+    "id": "t80_edge_water_eb",
+    "name": "地面の境目 water_eb",
+    "image": "map/town80/assets/ground/edge_water_eb.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_de": {
+    "id": "t80_edge_water_de",
+    "name": "地面の境目 water_de",
+    "image": "map/town80/assets/ground/edge_water_de.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_7b": {
+    "id": "t80_edge_water_7b",
+    "name": "地面の境目 water_7b",
+    "image": "map/town80/assets/ground/edge_water_7b.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_d7": {
+    "id": "t80_edge_gravel_d7",
+    "name": "地面の境目 gravel_d7",
+    "image": "map/town80/assets/ground/edge_gravel_d7.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_fb": {
+    "id": "t80_edge_gravel_fb",
+    "name": "地面の境目 gravel_fb",
+    "image": "map/town80/assets/ground/edge_gravel_fb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f9": {
+    "id": "t80_edge_gravel_f9",
+    "name": "地面の境目 gravel_f9",
+    "image": "map/town80/assets/ground/edge_gravel_f9.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f8": {
+    "id": "t80_edge_gravel_f8",
+    "name": "地面の境目 gravel_f8",
+    "image": "map/town80/assets/ground/edge_gravel_f8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_68": {
+    "id": "t80_edge_gravel_68",
+    "name": "地面の境目 gravel_68",
+    "image": "map/town80/assets/ground/edge_gravel_68.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_76": {
+    "id": "t80_edge_gravel_76",
+    "name": "地面の境目 gravel_76",
+    "image": "map/town80/assets/ground/edge_gravel_76.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_3f": {
+    "id": "t80_edge_gravel_3f",
+    "name": "地面の境目 gravel_3f",
+    "image": "map/town80/assets/ground/edge_gravel_3f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_1f": {
+    "id": "t80_edge_gravel_1f",
+    "name": "地面の境目 gravel_1f",
+    "image": "map/town80/assets/ground/edge_gravel_1f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_9f": {
+    "id": "t80_edge_gravel_9f",
+    "name": "地面の境目 gravel_9f",
+    "image": "map/town80/assets/ground/edge_gravel_9f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_df": {
+    "id": "t80_edge_gravel_df",
+    "name": "地面の境目 gravel_df",
+    "image": "map/town80/assets/ground/edge_gravel_df.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_6b": {
+    "id": "t80_edge_gravel_6b",
+    "name": "地面の境目 gravel_6b",
+    "image": "map/town80/assets/ground/edge_gravel_6b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_d0": {
+    "id": "t80_edge_soil_d0",
+    "name": "地面の境目 soil_d0",
+    "image": "map/town80/assets/ground/edge_soil_d0.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_f8": {
+    "id": "t80_edge_soil_f8",
+    "name": "地面の境目 soil_f8",
+    "image": "map/town80/assets/ground/edge_soil_f8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_68": {
+    "id": "t80_edge_soil_68",
+    "name": "地面の境目 soil_68",
+    "image": "map/town80/assets/ground/edge_soil_68.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_d7": {
+    "id": "t80_edge_earth_d7",
+    "name": "地面の境目 earth_d7",
+    "image": "map/town80/assets/ground/edge_earth_d7.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_fb": {
+    "id": "t80_edge_earth_fb",
+    "name": "地面の境目 earth_fb",
+    "image": "map/town80/assets/ground/edge_earth_fb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f9": {
+    "id": "t80_edge_earth_f9",
+    "name": "地面の境目 earth_f9",
+    "image": "map/town80/assets/ground/edge_earth_f9.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f8": {
+    "id": "t80_edge_earth_f8",
+    "name": "地面の境目 earth_f8",
+    "image": "map/town80/assets/ground/edge_earth_f8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_f0": {
+    "id": "t80_edge_soil_f0",
+    "name": "地面の境目 soil_f0",
+    "image": "map/town80/assets/ground/edge_soil_f0.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_d6": {
+    "id": "t80_edge_crops_d6",
+    "name": "地面の境目 crops_d6",
+    "image": "map/town80/assets/ground/edge_crops_d6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_6b": {
+    "id": "t80_edge_crops_6b",
+    "name": "地面の境目 crops_6b",
+    "image": "map/town80/assets/ground/edge_crops_6b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_16": {
+    "id": "t80_edge_earth_16",
+    "name": "地面の境目 earth_16",
+    "image": "map/town80/assets/ground/edge_earth_16.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_1f": {
+    "id": "t80_edge_earth_1f",
+    "name": "地面の境目 earth_1f",
+    "image": "map/town80/assets/ground/edge_earth_1f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_9f": {
+    "id": "t80_edge_earth_9f",
+    "name": "地面の境目 earth_9f",
+    "image": "map/town80/assets/ground/edge_earth_9f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_df": {
+    "id": "t80_edge_earth_df",
+    "name": "地面の境目 earth_df",
+    "image": "map/town80/assets/ground/edge_earth_df.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_f9": {
+    "id": "t80_edge_crops_f9",
+    "name": "地面の境目 crops_f9",
+    "image": "map/town80/assets/ground/edge_crops_f9.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_f8": {
+    "id": "t80_edge_crops_f8",
+    "name": "地面の境目 crops_f8",
+    "image": "map/town80/assets/ground/edge_crops_f8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_fc": {
+    "id": "t80_edge_crops_fc",
+    "name": "地面の境目 crops_fc",
+    "image": "map/town80/assets/ground/edge_crops_fc.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_fe": {
+    "id": "t80_edge_crops_fe",
+    "name": "地面の境目 crops_fe",
+    "image": "map/town80/assets/ground/edge_crops_fe.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_d6": {
+    "id": "t80_edge_gravel_d6",
+    "name": "地面の境目 gravel_d6",
+    "image": "map/town80/assets/ground/edge_gravel_d6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_47": {
+    "id": "t80_edge_earth_47",
+    "name": "地面の境目 earth_47",
+    "image": "map/town80/assets/ground/edge_earth_47.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_eb": {
+    "id": "t80_edge_gravel_eb",
+    "name": "地面の境目 gravel_eb",
+    "image": "map/town80/assets/ground/edge_gravel_eb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_42": {
+    "id": "t80_edge_earth_42",
+    "name": "地面の境目 earth_42",
+    "image": "map/town80/assets/ground/edge_earth_42.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_d6": {
+    "id": "t80_edge_soil_d6",
+    "name": "地面の境目 soil_d6",
+    "image": "map/town80/assets/ground/edge_soil_d6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_6b": {
+    "id": "t80_edge_soil_6b",
+    "name": "地面の境目 soil_6b",
+    "image": "map/town80/assets/ground/edge_soil_6b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_d6": {
+    "id": "t80_edge_earth_d6",
+    "name": "地面の境目 earth_d6",
+    "image": "map/town80/assets/ground/edge_earth_d6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_7f": {
+    "id": "t80_edge_soil_7f",
+    "name": "地面の境目 soil_7f",
+    "image": "map/town80/assets/ground/edge_soil_7f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_3f": {
+    "id": "t80_edge_soil_3f",
+    "name": "地面の境目 soil_3f",
+    "image": "map/town80/assets/ground/edge_soil_3f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_b": {
+    "id": "t80_edge_soil_b",
+    "name": "地面の境目 soil_b",
+    "image": "map/town80/assets/ground/edge_soil_b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_e2": {
+    "id": "t80_edge_earth_e2",
+    "name": "地面の境目 earth_e2",
+    "image": "map/town80/assets/ground/edge_earth_e2.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_16": {
+    "id": "t80_edge_crops_16",
+    "name": "地面の境目 crops_16",
+    "image": "map/town80/assets/ground/edge_crops_16.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_1f": {
+    "id": "t80_edge_crops_1f",
+    "name": "地面の境目 crops_1f",
+    "image": "map/town80/assets/ground/edge_crops_1f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_b": {
+    "id": "t80_edge_crops_b",
+    "name": "地面の境目 crops_b",
+    "image": "map/town80/assets/ground/edge_crops_b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_3f": {
+    "id": "t80_edge_crops_3f",
+    "name": "地面の境目 crops_3f",
+    "image": "map/town80/assets/ground/edge_crops_3f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_9f": {
+    "id": "t80_edge_crops_9f",
+    "name": "地面の境目 crops_9f",
+    "image": "map/town80/assets/ground/edge_crops_9f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_cf": {
+    "id": "t80_edge_crops_cf",
+    "name": "地面の境目 crops_cf",
+    "image": "map/town80/assets/ground/edge_crops_cf.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_d0": {
+    "id": "t80_edge_crops_d0",
+    "name": "地面の境目 crops_d0",
+    "image": "map/town80/assets/ground/edge_crops_d0.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_68": {
+    "id": "t80_edge_crops_68",
+    "name": "地面の境目 crops_68",
+    "image": "map/town80/assets/ground/edge_crops_68.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_7f": {
+    "id": "t80_edge_earth_7f",
+    "name": "地面の境目 earth_7f",
+    "image": "map/town80/assets/ground/edge_earth_7f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f6": {
+    "id": "t80_edge_gravel_f6",
+    "name": "地面の境目 gravel_f6",
+    "image": "map/town80/assets/ground/edge_gravel_f6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_6f": {
+    "id": "t80_edge_earth_6f",
+    "name": "地面の境目 earth_6f",
+    "image": "map/town80/assets/ground/edge_earth_6f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_fe": {
+    "id": "t80_edge_earth_fe",
+    "name": "地面の境目 earth_fe",
+    "image": "map/town80/assets/ground/edge_earth_fe.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_fd": {
+    "id": "t80_edge_earth_fd",
+    "name": "地面の境目 earth_fd",
+    "image": "map/town80/assets/ground/edge_earth_fd.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_fe": {
+    "id": "t80_edge_gravel_fe",
+    "name": "地面の境目 gravel_fe",
+    "image": "map/town80/assets/ground/edge_gravel_fe.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_eb": {
+    "id": "t80_edge_earth_eb",
+    "name": "地面の境目 earth_eb",
+    "image": "map/town80/assets/ground/edge_earth_eb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f4": {
+    "id": "t80_edge_earth_f4",
+    "name": "地面の境目 earth_f4",
+    "image": "map/town80/assets/ground/edge_earth_f4.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_3f": {
+    "id": "t80_edge_earth_3f",
+    "name": "地面の境目 earth_3f",
+    "image": "map/town80/assets/ground/edge_earth_3f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_56": {
+    "id": "t80_edge_crops_56",
+    "name": "地面の境目 crops_56",
+    "image": "map/town80/assets/ground/edge_crops_56.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_be": {
+    "id": "t80_edge_water_be",
+    "name": "地面の境目 water_be",
+    "image": "map/town80/assets/ground/edge_water_be.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_df": {
+    "id": "t80_edge_water_df",
+    "name": "地面の境目 water_df",
+    "image": "map/town80/assets/ground/edge_water_df.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_fc": {
+    "id": "t80_edge_earth_fc",
+    "name": "地面の境目 earth_fc",
+    "image": "map/town80/assets/ground/edge_earth_fc.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_fa": {
+    "id": "t80_edge_earth_fa",
+    "name": "地面の境目 earth_fa",
+    "image": "map/town80/assets/ground/edge_earth_fa.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_66": {
+    "id": "t80_edge_crops_66",
+    "name": "地面の境目 crops_66",
+    "image": "map/town80/assets/ground/edge_crops_66.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f0": {
+    "id": "t80_edge_gravel_f0",
+    "name": "地面の境目 gravel_f0",
+    "image": "map/town80/assets/ground/edge_gravel_f0.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_fb": {
+    "id": "t80_edge_water_fb",
+    "name": "地面の境目 water_fb",
+    "image": "map/town80/assets/ground/edge_water_fb.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_69": {
+    "id": "t80_edge_water_69",
+    "name": "地面の境目 water_69",
+    "image": "map/town80/assets/ground/edge_water_69.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_96": {
+    "id": "t80_edge_earth_96",
+    "name": "地面の境目 earth_96",
+    "image": "map/town80/assets/ground/edge_earth_96.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_de": {
+    "id": "t80_edge_gravel_de",
+    "name": "地面の境目 gravel_de",
+    "image": "map/town80/assets/ground/edge_gravel_de.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_6b": {
+    "id": "t80_edge_earth_6b",
+    "name": "地面の境目 earth_6b",
+    "image": "map/town80/assets/ground/edge_earth_6b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f6": {
+    "id": "t80_edge_earth_f6",
+    "name": "地面の境目 earth_f6",
+    "image": "map/town80/assets/ground/edge_earth_f6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_fd": {
+    "id": "t80_edge_gravel_fd",
+    "name": "地面の境目 gravel_fd",
+    "image": "map/town80/assets/ground/edge_gravel_fd.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_ee": {
+    "id": "t80_edge_gravel_ee",
+    "name": "地面の境目 gravel_ee",
+    "image": "map/town80/assets/ground/edge_gravel_ee.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f7": {
+    "id": "t80_edge_earth_f7",
+    "name": "地面の境目 earth_f7",
+    "image": "map/town80/assets/ground/edge_earth_f7.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_ef": {
+    "id": "t80_edge_earth_ef",
+    "name": "地面の境目 earth_ef",
+    "image": "map/town80/assets/ground/edge_earth_ef.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_c2": {
+    "id": "t80_edge_earth_c2",
+    "name": "地面の境目 earth_c2",
+    "image": "map/town80/assets/ground/edge_earth_c2.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_7e": {
+    "id": "t80_edge_earth_7e",
+    "name": "地面の境目 earth_7e",
+    "image": "map/town80/assets/ground/edge_earth_7e.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_2b": {
+    "id": "t80_edge_earth_2b",
+    "name": "地面の境目 earth_2b",
+    "image": "map/town80/assets/ground/edge_earth_2b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_92": {
+    "id": "t80_edge_earth_92",
+    "name": "地面の境目 earth_92",
+    "image": "map/town80/assets/ground/edge_earth_92.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_d9": {
+    "id": "t80_edge_earth_d9",
+    "name": "地面の境目 earth_d9",
+    "image": "map/town80/assets/ground/edge_earth_d9.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_2f": {
+    "id": "t80_edge_earth_2f",
+    "name": "地面の境目 earth_2f",
+    "image": "map/town80/assets/ground/edge_earth_2f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_17": {
+    "id": "t80_edge_earth_17",
+    "name": "地面の境目 earth_17",
+    "image": "map/town80/assets/ground/edge_earth_17.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f0": {
+    "id": "t80_edge_earth_f0",
+    "name": "地面の境目 earth_f0",
+    "image": "map/town80/assets/ground/edge_earth_f0.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_7f": {
+    "id": "t80_edge_water_7f",
+    "name": "地面の境目 water_7f",
+    "image": "map/town80/assets/ground/edge_water_7f.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_2b": {
+    "id": "t80_edge_water_2b",
+    "name": "地面の境目 water_2b",
+    "image": "map/town80/assets/ground/edge_water_2b.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_fc": {
+    "id": "t80_edge_water_fc",
+    "name": "地面の境目 water_fc",
+    "image": "map/town80/assets/ground/edge_water_fc.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_fe": {
+    "id": "t80_edge_water_fe",
+    "name": "地面の境目 water_fe",
+    "image": "map/town80/assets/ground/edge_water_fe.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_ef": {
+    "id": "t80_edge_water_ef",
+    "name": "地面の境目 water_ef",
+    "image": "map/town80/assets/ground/edge_water_ef.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_d1": {
+    "id": "t80_edge_earth_d1",
+    "name": "地面の境目 earth_d1",
+    "image": "map/town80/assets/ground/edge_earth_d1.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_97": {
+    "id": "t80_edge_earth_97",
+    "name": "地面の境目 earth_97",
+    "image": "map/town80/assets/ground/edge_earth_97.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_db": {
+    "id": "t80_edge_earth_db",
+    "name": "地面の境目 earth_db",
+    "image": "map/town80/assets/ground/edge_earth_db.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_e9": {
+    "id": "t80_edge_earth_e9",
+    "name": "地面の境目 earth_e9",
+    "image": "map/town80/assets/ground/edge_earth_e9.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_77": {
+    "id": "t80_edge_earth_77",
+    "name": "地面の境目 earth_77",
+    "image": "map/town80/assets/ground/edge_earth_77.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_bf": {
+    "id": "t80_edge_earth_bf",
+    "name": "地面の境目 earth_bf",
+    "image": "map/town80/assets/ground/edge_earth_bf.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_ab": {
+    "id": "t80_edge_water_ab",
+    "name": "地面の境目 water_ab",
+    "image": "map/town80/assets/ground/edge_water_ab.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water2_fd": {
+    "id": "t80_edge_water2_fd",
+    "name": "地面の境目 water2_fd",
+    "image": "map/town80/assets/ground/edge_water2_fd.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water2_df": {
+    "id": "t80_edge_water2_df",
+    "name": "地面の境目 water2_df",
+    "image": "map/town80/assets/ground/edge_water2_df.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water2_d7": {
+    "id": "t80_edge_water2_d7",
+    "name": "地面の境目 water2_d7",
+    "image": "map/town80/assets/ground/edge_water2_d7.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water2_d6": {
+    "id": "t80_edge_water2_d6",
+    "name": "地面の境目 water2_d6",
+    "image": "map/town80/assets/ground/edge_water2_d6.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_7b": {
+    "id": "t80_edge_earth_7b",
+    "name": "地面の境目 earth_7b",
+    "image": "map/town80/assets/ground/edge_earth_7b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_0": {
+    "id": "t80_edge_soil_0",
+    "name": "地面の境目 soil_0",
+    "image": "map/town80/assets/ground/edge_soil_0.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_10": {
+    "id": "t80_edge_soil_10",
+    "name": "地面の境目 soil_10",
+    "image": "map/town80/assets/ground/edge_soil_10.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_d2": {
+    "id": "t80_edge_earth_d2",
+    "name": "地面の境目 earth_d2",
+    "image": "map/town80/assets/ground/edge_earth_d2.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_e8": {
+    "id": "t80_edge_earth_e8",
+    "name": "地面の境目 earth_e8",
+    "image": "map/town80/assets/ground/edge_earth_e8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f2": {
+    "id": "t80_edge_earth_f2",
+    "name": "地面の境目 earth_f2",
+    "image": "map/town80/assets/ground/edge_earth_f2.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_39": {
+    "id": "t80_edge_earth_39",
+    "name": "地面の境目 earth_39",
+    "image": "map/town80/assets/ground/edge_earth_39.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_98": {
+    "id": "t80_edge_earth_98",
+    "name": "地面の境目 earth_98",
+    "image": "map/town80/assets/ground/edge_earth_98.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_dc": {
+    "id": "t80_edge_earth_dc",
+    "name": "地面の境目 earth_dc",
+    "image": "map/town80/assets/ground/edge_earth_dc.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_eb": {
+    "id": "t80_edge_crops_eb",
+    "name": "地面の境目 crops_eb",
+    "image": "map/town80/assets/ground/edge_crops_eb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_b6": {
+    "id": "t80_edge_earth_b6",
+    "name": "地面の境目 earth_b6",
+    "image": "map/town80/assets/ground/edge_earth_b6.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_b": {
+    "id": "t80_edge_earth_b",
+    "name": "地面の境目 earth_b",
+    "image": "map/town80/assets/ground/edge_earth_b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_94": {
+    "id": "t80_edge_water_94",
+    "name": "地面の境目 water_94",
+    "image": "map/town80/assets/ground/edge_water_94.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water2_de": {
+    "id": "t80_edge_water2_de",
+    "name": "地面の境目 water2_de",
+    "image": "map/town80/assets/ground/edge_water2_de.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_f9": {
+    "id": "t80_edge_soil_f9",
+    "name": "地面の境目 soil_f9",
+    "image": "map/town80/assets/ground/edge_soil_f9.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_e9": {
+    "id": "t80_edge_water_e9",
+    "name": "地面の境目 water_e9",
+    "image": "map/town80/assets/ground/edge_water_e9.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_d1": {
+    "id": "t80_edge_crops_d1",
+    "name": "地面の境目 crops_d1",
+    "image": "map/town80/assets/ground/edge_crops_d1.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_7f": {
+    "id": "t80_edge_crops_7f",
+    "name": "地面の境目 crops_7f",
+    "image": "map/town80/assets/ground/edge_crops_7f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water2_96": {
+    "id": "t80_edge_water2_96",
+    "name": "地面の境目 water2_96",
+    "image": "map/town80/assets/ground/edge_water2_96.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_f": {
+    "id": "t80_edge_crops_f",
+    "name": "地面の境目 crops_f",
+    "image": "map/town80/assets/ground/edge_crops_f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_fc": {
+    "id": "t80_edge_gravel_fc",
+    "name": "地面の境目 gravel_fc",
+    "image": "map/town80/assets/ground/edge_gravel_fc.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_7e": {
+    "id": "t80_edge_gravel_7e",
+    "name": "地面の境目 gravel_7e",
+    "image": "map/town80/assets/ground/edge_gravel_7e.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_2b": {
+    "id": "t80_edge_gravel_2b",
+    "name": "地面の境目 gravel_2b",
+    "image": "map/town80/assets/ground/edge_gravel_2b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_c7": {
+    "id": "t80_edge_earth_c7",
+    "name": "地面の境目 earth_c7",
+    "image": "map/town80/assets/ground/edge_earth_c7.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f3": {
+    "id": "t80_edge_gravel_f3",
+    "name": "地面の境目 gravel_f3",
+    "image": "map/town80/assets/ground/edge_gravel_f3.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f": {
+    "id": "t80_edge_gravel_f",
+    "name": "地面の境目 gravel_f",
+    "image": "map/town80/assets/ground/edge_gravel_f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_water_96": {
+    "id": "t80_edge_water_96",
+    "name": "地面の境目 water_96",
+    "image": "map/town80/assets/ground/edge_water_96.png",
+    "passable": false,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_1b": {
+    "id": "t80_edge_earth_1b",
+    "name": "地面の境目 earth_1b",
+    "image": "map/town80/assets/ground/edge_earth_1b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_9d": {
+    "id": "t80_edge_earth_9d",
+    "name": "地面の境目 earth_9d",
+    "image": "map/town80/assets/ground/edge_earth_9d.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_de": {
+    "id": "t80_edge_earth_de",
+    "name": "地面の境目 earth_de",
+    "image": "map/town80/assets/ground/edge_earth_de.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_f4": {
+    "id": "t80_edge_gravel_f4",
+    "name": "地面の境目 gravel_f4",
+    "image": "map/town80/assets/ground/edge_gravel_f4.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_7f": {
+    "id": "t80_edge_gravel_7f",
+    "name": "地面の境目 gravel_7f",
+    "image": "map/town80/assets/ground/edge_gravel_7f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f1": {
+    "id": "t80_edge_earth_f1",
+    "name": "地面の境目 earth_f1",
+    "image": "map/town80/assets/ground/edge_earth_f1.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_e8": {
+    "id": "t80_edge_crops_e8",
+    "name": "地面の境目 crops_e8",
+    "image": "map/town80/assets/ground/edge_crops_e8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_af": {
+    "id": "t80_edge_earth_af",
+    "name": "地面の境目 earth_af",
+    "image": "map/town80/assets/ground/edge_earth_af.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_fb": {
+    "id": "t80_edge_soil_fb",
+    "name": "地面の境目 soil_fb",
+    "image": "map/town80/assets/ground/edge_soil_fb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_soil_e8": {
+    "id": "t80_edge_soil_e8",
+    "name": "地面の境目 soil_e8",
+    "image": "map/town80/assets/ground/edge_soil_e8.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_earth_f": {
+    "id": "t80_edge_earth_f",
+    "name": "地面の境目 earth_f",
+    "image": "map/town80/assets/ground/edge_earth_f.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_gravel_17": {
+    "id": "t80_edge_gravel_17",
+    "name": "地面の境目 gravel_17",
+    "image": "map/town80/assets/ground/edge_gravel_17.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_fb": {
+    "id": "t80_edge_crops_fb",
+    "name": "地面の境目 crops_fb",
+    "image": "map/town80/assets/ground/edge_crops_fb.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  },
+  "t80_edge_crops_2b": {
+    "id": "t80_edge_crops_2b",
+    "name": "地面の境目 crops_2b",
+    "image": "map/town80/assets/ground/edge_crops_2b.png",
+    "passable": true,
+    "tags": [
+      "ground",
+      "town80"
+    ]
+  }
+}

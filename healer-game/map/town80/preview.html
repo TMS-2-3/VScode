@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>リハス地方の町 — 32px / 80×80</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#172526;color:#f2e7cc;font:14px system-ui,"Yu Gothic UI",sans-serif;overflow:hidden}header{height:58px;display:flex;align-items:center;gap:12px;padding:0 20px;background:#233234;border-bottom:1px solid #54615a}h1{font-size:16px;margin:0 12px 0 0}button,select{font:inherit;color:inherit;background:#344644;border:1px solid #748372;border-radius:4px;padding:6px 12px;cursor:pointer}button.active{background:#826a44;border-color:#c3aa75}label{display:flex;align-items:center;gap:5px;font-size:12px}.hint{margin-left:auto;color:#c8c7b6;font-size:12px}canvas{display:block;image-rendering:pixelated}#status{position:fixed;left:20px;bottom:18px;padding:9px 14px;background:#172526e8;border:1px solid #7c8065;border-radius:4px;max-width:520px;pointer-events:none;font-size:13px}#mini{position:fixed;right:18px;bottom:18px;width:160px;height:160px;border:2px solid #a89a75;background:#172526;cursor:crosshair}@media(max-width:800px){.hint,h1 span{display:none}header{gap:6px;padding:0 8px}button,select{padding:6px}#mini{width:110px;height:110px}}
+</style>
+<header><h1>リハス地方の町 <span>· 32px / 80×80</span></h1><button id="overview" class="active">全景</button><button id="walk">歩く</button><select id="district"><option value="gate">南門</option><option value="plaza">中央広場</option><option value="church">教会前</option><option value="market">商店街</option><option value="homes">住宅街</option></select><label><input type="checkbox" id="collision">通行範囲</label><span class="hint">WASD / 矢印で移動 · Eで会話・入口確認</span></header>
+<canvas id="view"></canvas><canvas id="mini" width="160" height="160" aria-label="町の全景と現在位置"></canvas><div id="status">地図を読み込んでいます。</div>
+<script src="town80-data.js"></script>
+<script>
+'use strict';
+const {map,defs,specification}=window.TOWN80_DATA;
+// This review screen is self-contained. It does not alter or load the game runtime.
+const passability=new Uint8Array(map.width*map.height).fill(1);
+for(const layer of map.layers)for(let i=0;i<layer.tiles.length;i++){
+ const entry=layer.tiles[i],id=typeof entry==='string'?entry:entry&&entry.tileId,def=defs[id];
+ if(!def||def.passable!==false)continue;
+ const x=i%map.width,y=Math.floor(i/map.width);
+ for(let dy=0;dy<(def.footprintHeight||1);dy++)for(let dx=0;dx<(def.footprintWidth||1);dx++)if(x+dx<map.width&&y+dy<map.height)passability[(y+dy)*map.width+x+dx]=0;
+}
+const system={isTileCoordPassable:(_,x,y)=>Number.isInteger(x)&&Number.isInteger(y)&&x>=0&&y>=0&&x<map.width&&y<map.height&&Boolean(passability[y*map.width+x])};
+const canvas=document.querySelector('#view'),ctx=canvas.getContext('2d'),mini=document.querySelector('#mini'),mc=mini.getContext('2d');
+const background=new Image();background.src='town80-preview.png';const sprites={};for(const facing of ['up','down','left','right']){const im=new Image();im.src=`assets/people/adult_man/walk/${facing}_02.png`;sprites[facing]=im;}
+const keys=new Set(),residentTiles=new Set(map.npcs.map(n=>n.row*80+n.col));
+const starts={gate:[40,77],plaza:[40,44],church:[40,25],market:[62,40],homes:[21,42]};
+const player={col:40,row:77,x:40.5*32,y:77.5*32,facing:'up',target:null};let mode='overview',last=0,scale=1,camX=0,camY=0;
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight-58;}addEventListener('resize',resize);resize();
+function message(text){document.querySelector('#status').textContent=text;}
+function setMode(next){mode=next;document.querySelector('#overview').classList.toggle('active',next==='overview');document.querySelector('#walk').classList.toggle('active',next==='walk');message(next==='overview'?'全景：右下の地図をクリックすると、その地区へ移動します。':'WASD / 矢印で歩く · Eで会話・入口確認');}
+document.querySelector('#overview').onclick=()=>setMode('overview');document.querySelector('#walk').onclick=()=>setMode('walk');
+function jump(col,row){if(!system.isTileCoordPassable(map,col,row)||residentTiles.has(row*80+col))return;Object.assign(player,{col,row,x:(col+.5)*32,y:(row+.5)*32,target:null});setMode('walk');}
+document.querySelector('#district').onchange=e=>jump(...starts[e.target.value]);
+mini.onclick=e=>{const r=mini.getBoundingClientRect(),col=Math.floor((e.clientX-r.left)/r.width*80),row=Math.floor((e.clientY-r.top)/r.height*80);for(let d=0;d<8;d++)for(let dy=-d;dy<=d;dy++)for(let dx=-d;dx<=d;dx++)if(system.isTileCoordPassable(map,col+dx,row+dy)&&!residentTiles.has((row+dy)*80+col+dx)){jump(col+dx,row+dy);return;}};
+const directions={w:[0,-1,'up'],ArrowUp:[0,-1,'up'],s:[0,1,'down'],ArrowDown:[0,1,'down'],a:[-1,0,'left'],ArrowLeft:[-1,0,'left'],d:[1,0,'right'],ArrowRight:[1,0,'right']};
+function interact(){const dir=Object.values(directions).find(v=>v[2]===player.facing);const npc=map.npcs.find(n=>n.col===player.col+dir[0]&&n.row===player.row+dir[1]);if(npc){message(npc.name+'「'+npc.dialogue[0].text+'」');return;}const e=map.events.find(e=>e.type!=='buildingArea'&&player.col>=e.x&&player.col<e.x+(e.width||1)&&player.row>=e.y&&player.row<e.y+(e.height||1));message(e?e.text||e.name:'この場所には、調べる対象がありません。');}
+addEventListener('keydown',e=>{if(e.target.tagName==='SELECT'||e.target.tagName==='INPUT')return;if(directions[e.key]){keys.add(e.key);e.preventDefault();if(mode!=='walk')setMode('walk');}if(e.key.toLowerCase()==='e')interact();});addEventListener('keyup',e=>keys.delete(e.key));addEventListener('blur',()=>keys.clear());
+function update(dt){if(mode!=='walk')return;if(!player.target){const key=[...keys].find(k=>directions[k]);if(key){const [dx,dy,facing]=directions[key];player.facing=facing;const col=player.col+dx,row=player.row+dy;if(system.isTileCoordPassable(map,col,row)&&!residentTiles.has(row*80+col))player.target={col,row,x:(col+.5)*32,y:(row+.5)*32};}}if(player.target){const p=player.target,dx=p.x-player.x,dy=p.y-player.y,d=Math.hypot(dx,dy),step=dt*160;if(d<=step){Object.assign(player,{col:p.col,row:p.row,x:p.x,y:p.y,target:null});}else{player.x+=dx/d*step;player.y+=dy/d*step;}}}
+function render(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;update(dt);ctx.imageSmoothingEnabled=false;ctx.fillStyle='#172526';ctx.fillRect(0,0,canvas.width,canvas.height);scale=mode==='overview'?Math.min((canvas.width-32)/2560,(canvas.height-24)/2560):1.5;camX=mode==='overview'?(2560-canvas.width/scale)/2:Math.max(0,Math.min(2560-canvas.width/scale,player.x-canvas.width/scale/2));camY=mode==='overview'?(2560-canvas.height/scale)/2:Math.max(0,Math.min(2560-canvas.height/scale,player.y-canvas.height/scale/2));ctx.save();ctx.scale(scale,scale);ctx.translate(-camX,-camY);if(background.complete)ctx.drawImage(background,0,0);if(document.querySelector('#collision').checked){ctx.fillStyle='rgba(174,35,45,.36)';for(let y=0;y<80;y++)for(let x=0;x<80;x++)if(!system.isTileCoordPassable(map,x,y))ctx.fillRect(x*32,y*32,32,32);}if(mode==='walk'){const image=sprites[player.facing];ctx.fillStyle='#0b1b184a';ctx.beginPath();ctx.ellipse(player.x,player.y+5,11,4,0,0,Math.PI*2);ctx.fill();if(image.complete)ctx.drawImage(image,player.x-16,player.y+7-48,32,48);}ctx.restore();mc.imageSmoothingEnabled=false;if(background.complete)mc.drawImage(background,0,0,160,160);mc.strokeStyle='#fff3ba';mc.lineWidth=1.5;mc.strokeRect(Math.max(0,camX)*160/2560,Math.max(0,camY)*160/2560,Math.min(2560,canvas.width/scale)*160/2560,Math.min(2560,canvas.height/scale)*160/2560);requestAnimationFrame(render);}
+background.onload=()=>message('全景：地区を選んで「歩く」で確認できます。');requestAnimationFrame(render);
+</script></html>

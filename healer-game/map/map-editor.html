@@ -682,6 +682,10 @@
 
     <script src="tile.js"></script>
     <script src="maps.js"></script>
+    <script src="town80/town80-tiles.js"></script>
+    <script src="town80/town80-map.js"></script>
+    <script src="town40/town40-tiles.js"></script>
+    <script src="town40/town40-map.js"></script>
     <script>
       const defs = window.HEALER_TILE_DEFS || {};
       const sourceMaps = window.HEALER_TILE_MAPS || {};
@@ -1070,6 +1074,14 @@
         return state.map.marginTiles;
       }
 
+      function getOptionalMapFields(map) {
+        const extra = {};
+        if (Array.isArray(map.npcs)) extra.npcs = clone(map.npcs);
+        if (map.spawn && typeof map.spawn === "object") extra.spawn = clone(map.spawn);
+        if (Number.isFinite(Number(map.characterScale)) && Number(map.characterScale) > 0) extra.characterScale = Number(map.characterScale);
+        return extra;
+      }
+
       function normalizeMap(map) {
         const width = Math.max(1, Number(map.width) || 8);
         const height = Math.max(1, Number(map.height) || 15);
@@ -1086,13 +1098,14 @@
         const normalized = {
           id: sanitizeId(map.id || "smallMap01"),
           name: map.name || "小マップ01",
-          tileSize: COMMON_TILE_SIZE,
+          tileSize: Math.max(1, Math.floor(Number(map.tileSize) || COMMON_TILE_SIZE)),
           width,
           height,
           defaultTile,
           marginTiles: normalizeMarginTiles(map),
           layers,
           events,
+          ...getOptionalMapFields(map),
         };
         addCaveWallDepthToLayer(
           normalized.layers.find((layer) => layer.id === "terrain"),
@@ -1876,7 +1889,7 @@
             const img = document.createElement("img");
             img.src = resolveEditorImagePath(def.image);
             img.alt = def.name || tileId;
-            const previewTileSize = COMMON_TILE_SIZE;
+            const previewTileSize = state.map ? state.map.tileSize : COMMON_TILE_SIZE;
             const scale = previewTileSize / (def.drawWidth || state.map.tileSize || previewTileSize);
             img.style.width = `${(def.drawWidth || previewTileSize) * scale}px`;
             img.style.height = `${(def.drawHeight || previewTileSize) * scale}px`;
@@ -2196,7 +2209,7 @@
         const shouldRender = options.render !== false;
         const width = Math.max(1, Math.min(80, Number(mapWidthInput.value) || state.map.width));
         const height = Math.max(1, Math.min(80, Number(mapHeightInput.value) || state.map.height));
-        const tileSize = COMMON_TILE_SIZE;
+        const tileSize = state.map.tileSize || COMMON_TILE_SIZE;
         const defaultTile = getDefaultGroundTileFallback(state.map.defaultTile);
         const oldWidth = Math.max(1, Number(state.map.width) || width);
         const oldHeight = Math.max(1, Number(state.map.height) || height);
@@ -2267,6 +2280,9 @@ ${indent}}`;
       function buildMapObjectSource(baseIndent = "    ") {
         const safeId = sanitizeId(state.map.id);
         const layerIndent = `${baseIndent}  `;
+        const extraSource = Object.entries(getOptionalMapFields(state.map)).map(([key, value]) =>
+          `${baseIndent}  ${key}: ${JSON.stringify(value, null, 2).replace(/\n/g, `\n${baseIndent}  `)},\n`
+        ).join("");
         const layers = state.map.layers.map((layer) => `${layerIndent}  {
 ${layerIndent}    id: ${formatStringSource(layer.id)},
 ${layerIndent}    name: ${formatStringSource(layer.name)},
@@ -2287,7 +2303,7 @@ ${baseIndent}  layers: [
 ${layers}
 ${baseIndent}  ],
 ${baseIndent}  events: ${JSON.stringify(state.map.events || [], null, 8).replace(/\n/g, `\n${baseIndent}  `)},
-${baseIndent}}`;
+${extraSource}${baseIndent}}`;
       }
 
       function buildMapSource() {
@@ -2304,7 +2320,7 @@ ${baseIndent}}`;
         return {
           id: sanitizeId(map.id),
           name: map.name || sanitizeId(map.id),
-          tileSize: COMMON_TILE_SIZE,
+          tileSize: Math.max(1, Math.floor(Number(map.tileSize) || COMMON_TILE_SIZE)),
           width: Number(map.width) || 8,
           height: Number(map.height) || 15,
           defaultTile: map.defaultTile || "grass",
@@ -2318,6 +2334,7 @@ ${baseIndent}}`;
             tiles: (layer.tiles || []).map(createSerializableTileEntry),
           })),
           events: Array.isArray(map.events) ? clone(map.events) : [],
+          ...getOptionalMapFields(map),
         };
       }
 
@@ -2586,7 +2603,8 @@ ${baseIndent}}`;
           delete state.draftMaps[state.activeDraftMapId];
           state.activeDraftMapId = null;
         }
-        const firstMap = getSourceMapList()[0];
+        const requestedMapId = new URLSearchParams(window.location.search).get("map");
+        const firstMap = getSourceMapList().find((map) => map.id === requestedMapId) || getSourceMapList()[0];
         if (firstMap) {
           loadMapById(firstMap.id);
           setStatus(`${mapName} を削除して、${state.map.name} を読み込みました。`);
@@ -2905,6 +2923,10 @@ ${baseIndent}}`;
       }
 
       async function applyCurrentMapToMapsJs() {
+        if (state.map && state.map.tileSize !== COMMON_TILE_SIZE) {
+          setStatus("このマップは32px用の独立データです。共通処理を変更せずに管理するため、作業記録JSON保存またはJS書き出しを使用してください。");
+          return;
+        }
         finishPendingHistoryEntry();
         applyMapSettingsFromInputs();
         updateExport();

@@ -1,0 +1,10 @@
+{
+  "changesRestrictedTo": [
+    "map",
+    "img"
+  ],
+  "gameRuntimeUnmodified": true,
+  "standalone32pxTown": true,
+  "gameIntegration": "not applied; existing game stays at 48px",
+  "validation": "PASS"
+}

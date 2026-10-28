@@ -1,0 +1,41 @@
+{
+  "removedImages": [
+    {
+      "path": "map/img_tile/drafts/rihas/moss_cottage.png",
+      "reason": "Rejected house draft; no tile definition, map, or regeneration script references it.",
+      "size": 2455241,
+      "sha256": "5a5001a9fa9194527599835cbf86b27e9d07e19a04deada34420f305f899fc59"
+    },
+    {
+      "path": "map/img_tile/seamless_village/dirt-seamless.png",
+      "reason": "Byte-identical duplicate of the live dirt tile.",
+      "canonical": "map/img_tile/generated_ground/village_generated/tile_01_04.png",
+      "size": 4347,
+      "sha256": "2bc638602f7b2299068a0f4ea0ed8df3ffcc90e49bfa79afb2ea0e823571eb62"
+    },
+    {
+      "path": "map/img_tile/seamless_village/grass-seamless.png",
+      "reason": "Byte-identical duplicate of the live grass tile.",
+      "canonical": "map/img_tile/rpg_village/grass_base_01.png",
+      "size": 6167,
+      "sha256": "597da4a66d9f0e98c8e49112c8416bc5da13fd5f740562cef90a291770fb9c89"
+    }
+  ],
+  "removedAncillary": [
+    {
+      "path": "map/img_tile/drafts/rihas/README.md",
+      "reason": "Description for the removed unused house draft.",
+      "size": 193
+    }
+  ],
+  "freedBytes": 2465948,
+  "preservedRegisteredImages": 482,
+  "preservedMapCount": 13,
+  "checksPending": false,
+  "validation": {
+    "registeredImagesExist": 482,
+    "town80FilesByteIdentical": 300,
+    "town80AndTown40MapDataUnchanged": true,
+    "removedTargetsAbsent": true
+  }
+}
