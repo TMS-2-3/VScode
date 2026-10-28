@@ -204,6 +204,7 @@ const characterSelector = createCharacterSelector(
   document.querySelector("#character-selector"),
   (character) => {
     renderer.setPlayerCharacter(character);
+    audio.playCharacterSelect();
     resizeGame();
   },
 );

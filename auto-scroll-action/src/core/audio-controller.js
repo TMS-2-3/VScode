@@ -1,5 +1,6 @@
 const TWO_PI = Math.PI * 2;
 const RUN_INTRO_DURATION_SECONDS = 1.85;
+const CHARACTER_SELECT_DURATION_SECONDS = 0.16;
 const JUMP_DURATION_SECONDS = 0.28;
 const DOUBLE_JUMP_DURATION_SECONDS = 0.31;
 const CANDY_DURATION_SECONDS = 0.3;
@@ -78,6 +79,7 @@ export function createAudioController() {
     masterGain = createMasterOutput(audioContext, seVolumeGain);
     soundBuffers = {
       runIntro: createRunIntroBuffer(audioContext),
+      characterSelect: createCharacterSelectBuffer(audioContext),
       jump: createJumpBuffer(audioContext, false),
       doubleJump: createJumpBuffer(audioContext, true),
       candy: createCandyCollectBuffer(audioContext),
@@ -223,6 +225,16 @@ export function createAudioController() {
     }
 
     playBuffer(soundBuffers.runIntro, { volume: 0.68 });
+  }
+
+  function playCharacterSelect() {
+    const context = getAudioContext();
+
+    if (!context || !soundBuffers) {
+      return;
+    }
+
+    playBuffer(soundBuffers.characterSelect, { volume: 0.65 });
   }
 
   function playJump(jumpCount = 1) {
@@ -504,6 +516,7 @@ export function createAudioController() {
     getVolumeSettings: () => ({ ...volumeSettings }),
     playCandyCollect,
     playCandyPartyBurst,
+    playCharacterSelect,
     playGameOver,
     playGhostFlee,
     playGhostScare,
@@ -558,6 +571,24 @@ function createMasterOutput(context, output) {
   gain.connect(compressor);
   compressor.connect(output);
   return gain;
+}
+
+function createCharacterSelectBuffer(context) {
+  let phase = 0;
+
+  return createSoundBuffer(
+    context,
+    CHARACTER_SELECT_DURATION_SECONDS,
+    (time, progress, sampleRate) => {
+      const pitch = 520 + 230 * easeOutCubic(Math.min(1, time / 0.08));
+      phase += TWO_PI * pitch / sampleRate;
+      const attack = Math.min(1, time / 0.004);
+      const release = (1 - progress) ** 2;
+      const tone = Math.sin(phase) * 0.7 + Math.sin(phase * 2) * 0.18;
+
+      return softClip(tone * attack * release * 0.5);
+    },
+  );
 }
 
 function createRunIntroBuffer(context) {

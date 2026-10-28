@@ -13,14 +13,14 @@ assert.equal(stamp.name, "スタンプ");
 assert.equal(stamp.description, "スタンプをゲット！！\nスタッフの人にこの画面を見せてね！");
 assert.deepEqual(stamp.effect, { type: SUPPLY_ITEM_EFFECT_TYPE.STAMP });
 assert.equal(getStampAppearanceChance(0), 0.03);
-assert.ok(Math.abs(getStampAppearanceChance(75) - 0.055) < 1e-12);
-assert.ok(Math.abs(getStampAppearanceChance(149) - (0.03 + 0.05 * 149 / 150)) < 1e-12);
-assert.equal(getStampAppearanceChance(150), 0.08);
-assert.equal(getStampAppearanceChance(151), 0.08);
-assert.equal(getStampAppearanceChance(199), 0.08);
-assert.equal(getStampAppearanceChance(200), 0.08);
-assert.equal(getStampAppearanceChance(201), 0.1);
-assert.equal(getStampAppearanceChance(10000), 0.1);
+assert.ok(Math.abs(getStampAppearanceChance(75) - 0.09) < 1e-12);
+assert.ok(Math.abs(getStampAppearanceChance(149) - (0.03 + 0.12 * 149 / 150)) < 1e-12);
+assert.equal(getStampAppearanceChance(150), 0.15);
+assert.equal(getStampAppearanceChance(151), 0.15);
+assert.equal(getStampAppearanceChance(199), 0.15);
+assert.equal(getStampAppearanceChance(200), 0.15);
+assert.equal(getStampAppearanceChance(201), 0.3);
+assert.equal(getStampAppearanceChance(10000), 0.3);
 assert.equal(getStampAppearanceChance(-10), 0.03);
 assert.equal(getStampAppearanceChance(NaN), 0.03);
 
@@ -32,8 +32,8 @@ const open = (manager, isLarge = false, options = {}) => {
 const claimAll = (manager, draw) => draw.slots.forEach((slot, index) => manager.claimItem(index));
 
 for (const [candyCount, expectedPerThousand] of [
-  [0, 30], [75, 55], [150, 80], [151, 80],
-  [199, 80], [200, 80], [201, 100], [1000, 100],
+  [0, 30], [75, 90], [150, 150], [151, 150],
+  [199, 150], [200, 150], [201, 300], [1000, 300],
 ]) {
   const chance = getStampAppearanceChance(candyCount);
   for (const [roll, expected] of [[chance - 1e-8, "stamp"], [chance, "candyAssortment"]]) {
