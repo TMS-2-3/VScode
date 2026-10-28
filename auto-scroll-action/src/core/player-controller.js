@@ -7,6 +7,7 @@ import {
 const JUMP_DURATION_MULTIPLIER = 1.5;
 const GRAVITY = 2000 / (JUMP_DURATION_MULTIPLIER * JUMP_DURATION_MULTIPLIER);
 const FALL_GRAVITY_MULTIPLIER = 1.08;
+const FIRST_JUMP_AIRTIME_MULTIPLIER = 1.22;
 const LANE_DROP_DURATION_SECONDS = 0.63;
 const LANE_DROP_INITIAL_PROGRESS_RATE = 0.6;
 const LANE_DROP_INPUT_BUFFER_RATIO = 0.1;
@@ -144,12 +145,18 @@ export function createPlayerController(lanes) {
     }
 
     if (jumpCount === 1) {
-      jumpCount = 2;
-
       const originLaneIndex = Math.round(jumpOriginLane);
       const isLateSecondJump =
         verticalSpeed < 0 && elevation <= lanes.getLaneGap() * LATE_SECOND_JUMP_RATIO;
       const isTopLaneJump = originLaneIndex === 0;
+      const topLaneRemainingHeight =
+        lanes.getLaneGap() * FIRST_JUMP_PEAK_RATIO - elevation;
+
+      if (isTopLaneJump && topLaneRemainingHeight <= 0.5) {
+        return false;
+      }
+
+      jumpCount = 2;
 
       // 上昇中でも2回目の入力時点で二段ジャンプへ移行する。
       // 最上段では2回目も、1段ジャンプと同じ高さを上限にする。
@@ -179,10 +186,10 @@ export function createPlayerController(lanes) {
     }
 
     const safeJumpTimeScale = Number.isFinite(jumpTimeScale)
-      ? Math.max(1, jumpTimeScale)
+      ? Math.max(0.1, jumpTimeScale)
       : 1;
     const safeLaneDropTimeScale = Number.isFinite(laneDropTimeScale)
-      ? Math.max(1, laneDropTimeScale)
+      ? Math.max(0.1, laneDropTimeScale)
       : 1;
 
     if (isDroppingLane) {
@@ -213,7 +220,10 @@ export function createPlayerController(lanes) {
       return;
     }
 
-    const jumpDeltaSeconds = deltaSeconds * safeJumpTimeScale;
+    const activeJumpTimeScale = jumpCount === 1
+      ? safeJumpTimeScale / FIRST_JUMP_AIRTIME_MULTIPLIER
+      : safeJumpTimeScale;
+    const jumpDeltaSeconds = deltaSeconds * activeJumpTimeScale;
     const wasAscending = verticalSpeed > 0;
     const activeGravity = wasAscending ? GRAVITY : GRAVITY * FALL_GRAVITY_MULTIPLIER;
     elevation +=
@@ -244,6 +254,7 @@ export function createPlayerController(lanes) {
       lanePosition: jumpCount > 0 ? jumpOriginLane : lanePosition,
       elevation,
       isDucking,
+      jumpCount,
       hitbox: {
         width: laneGap * GAMEPLAY_UNIT_IN_LANE_GAPS,
         height: laneGap * (isDucking ? CROUCH_HITBOX_HEIGHT_RATIO : PLAYER_HITBOX_HEIGHT_RATIO),

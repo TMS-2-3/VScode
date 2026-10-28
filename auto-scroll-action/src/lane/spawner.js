@@ -22,6 +22,8 @@ export const SPAWN_POOLS = {
 };
 
 export const INTER_PATTERN_ITEM_RULES = Object.freeze({
+  cameraPrankChance: 0.08,
+  largeSupplyStationChance: 0.06,
   speedBoostChance: 0.18,
   supplyStationChance: 0.15,
 });
@@ -32,6 +34,7 @@ export function createObstacleSpawner(
   itemManager = null,
   supplyStationManager = null,
   random = Math.random,
+  { canSpawnCameraPrank = () => true } = {},
 ) {
   if (typeof supplyStationManager === "function") {
     random = supplyStationManager;
@@ -40,6 +43,7 @@ export function createObstacleSpawner(
 
   let nextSpawnDistance = null;
   let previousPatternId = null;
+  let skipNextInterPatternEvent = false;
 
   function update(traveledDistance, viewportWidth, laneGap) {
     if (
@@ -72,32 +76,55 @@ export function createObstacleSpawner(
       const patternSpacing = getPatternSpacing(pattern, viewportWidth, laneGap);
 
       const interPatternX = getInterPatternX(x, pattern, patternSpacing, laneGap);
-      const eventCandidates = [];
+      if (skipNextInterPatternEvent) {
+        // Leave one complete pattern interval empty after any event appears.
+        skipNextInterPatternEvent = false;
+      } else {
+        const eventCandidates = [];
 
-      if (itemManager && random() < INTER_PATTERN_ITEM_RULES.speedBoostChance) {
-        eventCandidates.push(() => {
-          itemManager.addItem({
-            x: interPatternX,
-            type: COLLECTIBLE_TYPE.SPEED_UP,
+        if (itemManager && random() < INTER_PATTERN_ITEM_RULES.speedBoostChance) {
+          eventCandidates.push(() => {
+            itemManager.addItem({
+              x: interPatternX,
+              type: COLLECTIBLE_TYPE.SPEED_UP,
+            });
           });
-        });
-      }
+        }
 
-      if (
-        supplyStationManager &&
-        random() < INTER_PATTERN_ITEM_RULES.supplyStationChance
-      ) {
-        eventCandidates.push(() => {
-          supplyStationManager.addStation({ x: interPatternX });
-        });
-      }
+        if (
+          itemManager &&
+          canSpawnCameraPrank() &&
+          random() < INTER_PATTERN_ITEM_RULES.cameraPrankChance
+        ) {
+          eventCandidates.push(() => {
+            itemManager.addItem({
+              x: interPatternX,
+              type: COLLECTIBLE_TYPE.CAMERA_PRANK,
+            });
+          });
+        }
 
-      if (eventCandidates.length > 0) {
-        const selectedIndex =
-          eventCandidates.length === 1
-            ? 0
-            : Math.floor(random() * eventCandidates.length);
-        eventCandidates[selectedIndex]();
+        if (
+          supplyStationManager &&
+          random() < INTER_PATTERN_ITEM_RULES.supplyStationChance
+        ) {
+          eventCandidates.push(() => {
+            supplyStationManager.addStation({
+              x: interPatternX,
+              isLarge:
+                random() < INTER_PATTERN_ITEM_RULES.largeSupplyStationChance,
+            });
+          });
+        }
+
+        if (eventCandidates.length > 0) {
+          const selectedIndex =
+            eventCandidates.length === 1
+              ? 0
+              : Math.floor(random() * eventCandidates.length);
+          eventCandidates[selectedIndex]();
+          skipNextInterPatternEvent = true;
+        }
       }
 
       nextSpawnDistance += patternSpacing;
@@ -128,6 +155,7 @@ export function createObstacleSpawner(
   function reset() {
     nextSpawnDistance = null;
     previousPatternId = null;
+    skipNextInterPatternEvent = false;
     obstacleManager.reset();
     coinManager.reset();
     itemManager?.reset();

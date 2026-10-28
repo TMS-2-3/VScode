@@ -1,6 +1,6 @@
 import { LANE_COUNT } from "../shared/contracts.js";
 
-const TOP_LANE_RATIO = 0.35;
+const TOP_LANE_RATIO = 0.37;
 const LANE_GAP_RATIO = 0.25;
 
 export function createLaneManager() {

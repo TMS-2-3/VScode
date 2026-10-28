@@ -26,6 +26,17 @@ export const ITEM_DEFINITIONS = [
     persistAfterTrigger: true,
     triggerAnimationDuration: SPEED_BOOST_GHOST_DURATION_SECONDS,
   },
+  {
+    kind: LANE_ENTITY_KIND.ITEM,
+    type: COLLECTIBLE_TYPE.CAMERA_PRANK,
+    widthRatio: 0.44,
+    heightRatio: 0.5,
+    bottomOffsetRatio: 0,
+    affectsAllLanes: true,
+    warningOffsetUnitCount: 3,
+    persistAfterTrigger: true,
+    triggerAnimationDuration: 0,
+  },
   ...STANDARD_ITEM_TYPES.map((type) => ({
     kind: LANE_ENTITY_KIND.ITEM,
     type,
@@ -69,6 +80,9 @@ export function createItemManager() {
       lane: definition.affectsAllLanes ? null : lane,
       triggerLane: null,
       isTriggered: false,
+      isRepelled: false,
+      repelCandyCount: 0,
+      repelCandyCollected: false,
       triggerElapsedSeconds: 0,
     };
 
@@ -83,6 +97,8 @@ export function createItemManager() {
       ? Math.max(0, deltaSeconds)
       : 0;
 
+    let repelledCandyCollected = 0;
+
     activeItems.forEach((item) => {
       item.x += safeDeltaX;
 
@@ -93,12 +109,23 @@ export function createItemManager() {
       item.triggerElapsedSeconds += safeDeltaSeconds;
 
       if (
+        item.isRepelled &&
+        !item.repelCandyCollected &&
+        item.triggerElapsedSeconds >= item.triggerAnimationDuration
+      ) {
+        item.repelCandyCollected = true;
+        repelledCandyCollected += item.repelCandyCount;
+      }
+
+      if (
         !item.persistAfterTrigger &&
         item.triggerElapsedSeconds >= item.triggerAnimationDuration
       ) {
         activeItems.delete(item.id);
       }
     });
+
+    return { repelledCandyCollected };
   }
 
   function triggerItem(id, lanePosition = null) {
@@ -120,6 +147,21 @@ export function createItemManager() {
     return activeItems.delete(id);
   }
 
+  function repelTriggeredGhost(id, candyCount) {
+    const item = activeItems.get(id);
+
+    if (!item || !item.isTriggered || item.type !== COLLECTIBLE_TYPE.SPEED_UP) {
+      return false;
+    }
+
+    item.isRepelled = true;
+    item.repelCandyCount = Number.isFinite(candyCount)
+      ? Math.max(0, Math.floor(candyCount))
+      : 0;
+    item.repelCandyCollected = false;
+    return true;
+  }
+
   function getSnapshot() {
     return Array.from(activeItems.values(), (item) => ({ ...item }));
   }
@@ -131,6 +173,7 @@ export function createItemManager() {
   return {
     addItem,
     getSnapshot,
+    repelTriggeredGhost,
     removeItem,
     reset,
     triggerItem,

@@ -79,6 +79,10 @@ export const NOVA_RECOVERY = {
 };
 
 export const NOVA_BODY_SIZE = Object.freeze({ width: 38, height: 66 });
+export const GOJO_BODY_SIZE = Object.freeze({ width: 38, height: 78 });
+export const GOJO_GROUND_JUMP_HEIGHT_MULTIPLIER = 1.2;
+// Calibrated against the fixed-step jump integrator to land at exactly 1.2x Nova's rise.
+export const GOJO_GROUND_JUMP_SPEED = -729.5131500114651;
 
 export const NOVA_AIR_DOWN_FLAME = Object.freeze({
   originY: 34,
@@ -929,6 +933,8 @@ export const CHARACTER_DEFINITIONS = {
     id: "nova",
     name: "ノヴァ",
     weightClass: "middle",
+    movesImplemented: true,
+    specialSystem: "nova",
     stats: {
       w: NOVA_BODY_SIZE.width,
       h: NOVA_BODY_SIZE.height,
@@ -950,6 +956,34 @@ export const CHARACTER_DEFINITIONS = {
       airJumpSpeed: -729.51
     },
     moves: NOVA_MOVES
+  },
+  gojo: {
+    id: "gojo",
+    name: "五条悟",
+    weightClass: "light",
+    movesImplemented: false,
+    specialSystem: null,
+    stats: {
+      w: GOJO_BODY_SIZE.width,
+      h: GOJO_BODY_SIZE.height,
+      jumps: 2,
+      runSpeed: 365,
+      dashSpeed: 455,
+      turnStepSpeed: 310,
+      shieldSpeed: 120,
+      groundAccel: 2600,
+      airAccel: 1500,
+      launchedAirAccel: 270,
+      groundFriction: 2300,
+      airFriction: 130,
+      gravity: 1750,
+      fastFallGravity: 2250,
+      maxFallSpeed: 980,
+      fastFallMaxSpeed: 1120,
+      jumpSpeed: GOJO_GROUND_JUMP_SPEED,
+      airJumpSpeed: -729.51
+    },
+    moves: Object.freeze({})
   }
 };
 
@@ -1008,7 +1042,7 @@ export function applyFinalGaugeKoRule(fighter, enabled = true) {
 
 export function getMove(characterId, moveId) {
   const character = getCharacterDefinition(characterId);
-  return character.moves[moveId] || character.moves.neutral;
+  return character.moves[moveId] || null;
 }
 
 export function selectMoveFromInput(characterId, input, axis, kind, options = {}) {
@@ -1040,6 +1074,7 @@ export function selectMoveFromInput(characterId, input, axis, kind, options = {}
 
 export function selectGrabMove(characterId, variant = "standing") {
   const base = getMove(characterId, "grab");
+  if (!base) return null;
   const config = GRAB.variants[variant] || GRAB.variants.standing;
   return {
     ...base,
@@ -1660,8 +1695,7 @@ export function updateLedgeHang(fighter, input = {}, jumpPressed = false, attack
   }
 
   if (attackPressed) {
-    startLedgeAttack(fighter, ledge);
-    return "attack";
+    if (startLedgeAttack(fighter, ledge)) return "attack";
   }
 
   if (shieldPressed) {
@@ -3598,6 +3632,7 @@ function updateLedgeClimb(fighter, dt) {
 
 function startLedgeAttack(fighter, ledge) {
   const move = getMove(fighter.characterId, "ledgeAttack");
+  if (!move) return false;
   const invulnEnd = getLedgeAttackInvulnEnd(move);
   fighter.ledgeAttack = {
     elapsed: 0,
@@ -3629,6 +3664,7 @@ function startLedgeAttack(fighter, ledge) {
   fighter.actionTime = 0;
   fighter.hitList = [];
   fighter.landingLag = Math.max(fighter.landingLag || 0, LEDGE.attackLag);
+  return true;
 }
 
 function updateLedgeAttack(fighter, dt) {

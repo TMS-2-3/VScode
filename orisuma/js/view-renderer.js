@@ -420,7 +420,7 @@ export class ViewRenderer {
             >
               ${this.characterPortraitMarkup(character.id, colorIndex)}
               <span class="character-icon-name">${escapeHtml(character.name)}</span>
-              <span class="character-icon-status">${selectedId === character.id ? "選択中" : character.weightLabel}</span>
+              <span class="character-icon-status">${selectedId === character.id ? "選択中" : character.movesImplemented ? character.weightLabel : "技未実装"}</span>
             </button>
           `).join("")}
         </div>
@@ -431,6 +431,7 @@ export class ViewRenderer {
           <div class="stack">
             <h2>${selectedId ? `${escapeHtml(CHARACTER_ASSETS[selectedId]?.name || "ノヴァ")} を選択中` : "キャラを選択してください"}</h2>
             ${selectedId ? `<span class="pill">重量: ${escapeHtml(CHARACTER_ASSETS[selectedId]?.weightLabel || "中量")}</span>` : ""}
+            ${selectedId && !CHARACTER_ASSETS[selectedId]?.movesImplemented ? `<span class="pill">仮実装 / 技未実装</span>` : ""}
             <p class="muted">キャラアイコンをクリックして選択します。選択後にレディできます。</p>
           </div>
         </div>
@@ -453,7 +454,7 @@ export class ViewRenderer {
           >
             ${this.characterPortraitMarkup(character.id, colorIndex)}
             <span class="character-icon-name">${escapeHtml(character.name)}</span>
-            <span class="character-icon-status">${selectedId === character.id ? "選択中" : character.weightLabel}</span>
+            <span class="character-icon-status">${selectedId === character.id ? "選択中" : character.movesImplemented ? character.weightLabel : "技未実装"}</span>
           </button>
         `).join("")}
       </div>

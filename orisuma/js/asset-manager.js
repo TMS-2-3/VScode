@@ -227,8 +227,183 @@ export class AssetManager {
     const ctx = canvas.getContext("2d");
     const color = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
     ctx.translate(center, center);
-    this.drawNovaSprite(ctx, color, pose, frame);
+    if (characterId === "gojo") this.drawGojoSprite(ctx, color, pose, frame);
+    else this.drawNovaSprite(ctx, color, pose, frame);
     return { canvas, cx: center, cy: center, pose, frame };
+  }
+
+  drawGojoSprite(ctx, accent, pose, frame) {
+    const frameCount = FIGHTER_POSE_FRAMES[pose] || 1;
+    const progress = frameCount > 1 ? frame / (frameCount - 1) : 0;
+    const motion = this.getGojoPose(pose, progress, frame);
+    const outfit = "#101824";
+    const outfitLight = "#223044";
+    const skin = "#f2d1ba";
+
+    ctx.save();
+    ctx.translate(motion.offsetX, motion.offsetY);
+    ctx.rotate(motion.bodyRotation);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.globalAlpha = 0.14;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.ellipse(0, -8, 25, 47, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    this.drawGojoLimb(ctx, -8, 8, 29, 9, motion.rearLeg, outfit, outfitLight, accent, false);
+    this.drawGojoLimb(ctx, 8, 8, 29, 9, motion.frontLeg, outfit, outfitLight, accent, false);
+    this.drawGojoLimb(ctx, -16, -17, 29, 8, motion.rearArm, outfit, outfitLight, accent, true, skin);
+
+    const coatGradient = ctx.createLinearGradient(-18, -31, 18, 15);
+    coatGradient.addColorStop(0, "#26364b");
+    coatGradient.addColorStop(0.45, outfit);
+    coatGradient.addColorStop(1, "#080d15");
+    ctx.fillStyle = coatGradient;
+    ctx.beginPath();
+    ctx.moveTo(-14, -29);
+    ctx.quadraticCurveTo(-22, -22, -18, 3);
+    ctx.lineTo(-13, 15);
+    ctx.quadraticCurveTo(0, 20, 13, 15);
+    ctx.lineTo(18, 3);
+    ctx.quadraticCurveTo(22, -22, 14, -29);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#060a10";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = accent;
+    roundRect(ctx, -14, 8, 28, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    roundRect(ctx, -11, -25, 5, 31, 2);
+    ctx.fill();
+
+    this.drawGojoLimb(ctx, 16, -17, 29, 8, motion.frontArm, outfit, outfitLight, accent, true, skin);
+
+    ctx.fillStyle = outfitLight;
+    roundRect(ctx, -12, -36, 24, 14, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#070c13";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.ellipse(0, -43, 14, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#8f6e60";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "#090c12";
+    roundRect(ctx, -15, -48, 30, 11, 5);
+    ctx.fill();
+    ctx.strokeStyle = colorWithAlpha(accent, 0.82);
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-12, -39);
+    ctx.quadraticCurveTo(0, -35, 12, -39);
+    ctx.stroke();
+
+    ctx.fillStyle = "#f5f7fb";
+    ctx.strokeStyle = "#aeb9c9";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-15, -51);
+    ctx.lineTo(-20, -57);
+    ctx.lineTo(-11, -56);
+    ctx.lineTo(-13, -64);
+    ctx.lineTo(-4, -59);
+    ctx.lineTo(0, -67);
+    ctx.lineTo(5, -59);
+    ctx.lineTo(14, -64);
+    ctx.lineTo(12, -56);
+    ctx.lineTo(21, -58);
+    ctx.lineTo(15, -49);
+    ctx.quadraticCurveTo(0, -54, -15, -51);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    if (pose === "hurt" || pose === "launched") {
+      ctx.strokeStyle = "rgba(255,115,115,0.9)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(-8, -34);
+      ctx.lineTo(-3, -31);
+      ctx.moveTo(8, -34);
+      ctx.lineTo(3, -31);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  getGojoPose(pose, progress = 0, frame = 0) {
+    const runSwing = pose === "run"
+      ? Math.sin(frame / Math.max(1, FIGHTER_POSE_FRAMES.run) * Math.PI * 2)
+      : 0;
+    const base = {
+      rearLeg: 0.04,
+      frontLeg: -0.04,
+      rearArm: -0.05,
+      frontArm: 0.05,
+      offsetX: 0,
+      offsetY: 0,
+      bodyRotation: 0
+    };
+    if (pose === "run") {
+      return {
+        rearLeg: runSwing * 0.58,
+        frontLeg: -runSwing * 0.58,
+        rearArm: -runSwing * 0.5,
+        frontArm: runSwing * 0.5,
+        offsetX: 0,
+        offsetY: Math.abs(runSwing) * 1.5,
+        bodyRotation: 0.07
+      };
+    }
+    if (pose === "jumpRise") {
+      return { ...base, rearLeg: 0.48, frontLeg: -0.38, rearArm: -0.62, frontArm: 0.62, offsetY: -2 };
+    }
+    if (pose === "jumpFall") {
+      return { ...base, rearLeg: -0.2, frontLeg: 0.24, rearArm: 0.35, frontArm: -0.38, offsetY: 1 };
+    }
+    if (pose === "hurt") {
+      return { ...base, rearLeg: 0.4, frontLeg: -0.36, rearArm: 0.72, frontArm: -0.68, bodyRotation: -0.12 };
+    }
+    if (pose === "launched") {
+      return { ...base, rearLeg: 0.68, frontLeg: -0.62, rearArm: -0.82, frontArm: 0.78 };
+    }
+    if (pose === "downed") {
+      const settle = 1 - progress;
+      return { ...base, rearLeg: 0.12, frontLeg: -0.12, rearArm: 0.15, frontArm: -0.15, offsetY: settle * 1.5 };
+    }
+    return base;
+  }
+
+  drawGojoLimb(ctx, x, y, length, width, angle, color, highlight, accent, hand = false, skin = "#f2d1ba") {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    roundRect(ctx, -width / 2, 0, width, length, width / 2);
+    ctx.fill();
+    ctx.fillStyle = highlight;
+    roundRect(ctx, -width / 2 + 1.5, 3, 2.5, Math.max(5, length - 8), 1.2);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    roundRect(ctx, -width / 2, length - 5, width, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = hand ? skin : "#070b12";
+    ctx.beginPath();
+    ctx.arc(0, length, hand ? width * 0.55 : width * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   drawNovaSprite(ctx, accent, pose, frame) {

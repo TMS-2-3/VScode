@@ -10,6 +10,7 @@
 - マップデータの正式な管理先: `map/maps.js`
 - タイル画像の正式な管理先: `map/img_tile/`
 - エディター: `map/map-editor.html`
+- 未接続のダンジョン自動生成基盤: `map/dungeon/`
 
 `Desktop\map` や `Downloads` にある一時ファイルは、正式データとしては扱いません。  
 また、通常のマップ制作では `world/tileMapSystem.js` を編集しないでください。そこは共通の仕組み側です。

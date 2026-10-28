@@ -12,12 +12,21 @@ export function createGameController() {
     state = RUN_STATE.PLAYING;
   }
 
-  function tryGameOverFromObstacle(hasCollision) {
+  function tryDefeatFromObstacle(hasCollision) {
     if (
       state !== RUN_STATE.PLAYING ||
       !hasCollision ||
       !DEBUG_SETTINGS.gameOverOnObstacleCollision
     ) {
+      return false;
+    }
+
+    state = RUN_STATE.DEFEATED;
+    return true;
+  }
+
+  function finishGameOver() {
+    if (state !== RUN_STATE.DEFEATED) {
       return false;
     }
 
@@ -50,11 +59,13 @@ export function createGameController() {
   return {
     getState: () => state,
     isPlaying: () => state === RUN_STATE.PLAYING,
+    isDefeated: () => state === RUN_STATE.DEFEATED,
     isSupplyPaused: () => state === RUN_STATE.SUPPLY,
     pauseForSupply,
+    finishGameOver,
     returnToReady,
     resumeFromSupply,
     startRun,
-    tryGameOverFromObstacle,
+    tryDefeatFromObstacle,
   };
 }

@@ -274,7 +274,12 @@ export class BattleSimulation {
 
     if (!state.punchDone && state.elapsed >= FINAL_SMASH.punchAt) {
       state.punchDone = true;
-      const punch = { ...getMove(fighter.characterId, "finalPunch"), ignoreNovaCharge: true };
+      const basePunch = getMove(fighter.characterId, "finalPunch");
+      if (!basePunch) {
+        this.finishFinalSmash(match, state);
+        return;
+      }
+      const punch = { ...basePunch, ignoreNovaCharge: true };
       const hitbox = getHitbox(fighter, punch);
       for (const target of match.fighters.values()) {
         if (target.id === fighter.id || !target.alive || !hitboxOverlapsFighter(hitbox, target)) continue;
@@ -307,6 +312,7 @@ export class BattleSimulation {
       const neutralInput = Math.abs(horizontalInput(input)) <= FINAL_SMASH.neutralInputThreshold
         && Math.abs(verticalInput(input)) <= FINAL_SMASH.neutralInputThreshold;
       if (!specialPressed || !neutralInput) continue;
+      if (!getMove(fighter.characterId, "finalPunch")) continue;
 
       fighter.finalSmashInputFrame = match.frame;
       if (match.finalSmash || !canAct(fighter) || fighter.action || fighter.shield || fighter.ledge) continue;
@@ -822,12 +828,15 @@ export class BattleSimulation {
     const upPressed = canChoose && stateInput.verticalAxis < -0.55 && stateInput.lastVerticalAxis >= -0.55;
 
     if (canChoose && (stateInput.attackPressed || stateInput.specialPressed)) {
-      fighter.knockdown = null;
-      fighter.crouching = false;
-      fighter.action = null;
-      fighter.actionTime = 0;
-      this.startMove(fighter, getMove(fighter.characterId, "getupAttack"));
-      return;
+      const move = getMove(fighter.characterId, "getupAttack");
+      if (move) {
+        fighter.knockdown = null;
+        fighter.crouching = false;
+        fighter.action = null;
+        fighter.actionTime = 0;
+        this.startMove(fighter, move);
+        return;
+      }
     }
 
     if (directionPressed) {
@@ -881,11 +890,12 @@ export class BattleSimulation {
   }
 
   startSpecial(fighter, input, axis) {
-    if (input.down) {
+    const character = getCharacterDefinition(fighter.characterId);
+    if (character.specialSystem === "nova" && input.down) {
       this.startNovaCharge(fighter);
       return;
     }
-    if (input.up) {
+    if (character.specialSystem === "nova" && input.up) {
       this.startRecovery(fighter);
       return;
     }
@@ -1244,6 +1254,7 @@ export class BattleSimulation {
   }
 
   startSmashCharge(fighter, move) {
+    if (!move) return false;
     clearLedgeState(fighter, 0);
     clearDodge(fighter);
     fighter.runTurn = null;
@@ -1260,6 +1271,7 @@ export class BattleSimulation {
     fighter.actionStartedAir = !fighter.onGround;
     fighter.shield = false;
     if (fighter.onGround) fighter.vx = 0;
+    return true;
   }
 
   updateSmashCharge(fighter, input, dt) {
@@ -2192,6 +2204,7 @@ export class BattleSimulation {
     const fighter = match.fighters.get(state.fighterId);
     if (!fighter?.alive) return null;
     const punch = getMove(fighter.characterId, "finalPunch");
+    if (!punch) return null;
     return { ...getHitbox(fighter, punch), hitId: punch.id };
   }
 }

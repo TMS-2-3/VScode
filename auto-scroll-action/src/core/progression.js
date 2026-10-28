@@ -1,5 +1,5 @@
 const BASE_SCROLL_SPEED_IN_LANES = 1;
-const SPEED_INCREASE_PER_CANDY_IN_LANES = 0.0055;
+const SPEED_INCREASE_PER_CANDY_IN_LANES = 0.0058;
 const MAX_SCROLL_SPEED_IN_LANES = 5;
 
 export const SPEED_BOOST_RULES = Object.freeze({
@@ -22,8 +22,16 @@ export function createProgression() {
   let timedSpeedBoostRemainingSeconds = 0;
   let timedSpeedBoostRatio = 0;
 
-  function update(deltaSeconds, collectedCandyValue, laneGap) {
+  function update(
+    deltaSeconds,
+    collectedCandyValue,
+    laneGap,
+    scrollDeltaSeconds = deltaSeconds,
+  ) {
     const safeDeltaSeconds = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
+    const safeScrollDeltaSeconds = Number.isFinite(scrollDeltaSeconds)
+      ? Math.max(0, scrollDeltaSeconds)
+      : safeDeltaSeconds;
     const safeLaneGap = Number.isFinite(laneGap) ? Math.max(0, laneGap) : 0;
 
     const baseScrollSpeedInLanes = calculateScrollSpeedInLanes(collectedCandyValue);
@@ -42,7 +50,7 @@ export function createProgression() {
     speedRatio = scrollSpeedInLanes / BASE_SCROLL_SPEED_IN_LANES;
     const jumpDistanceRatio = calculateBoostedJumpDistanceRatio(speedBoostRatio);
     const jumpTimeScale = speedRatio / jumpDistanceRatio;
-    const frameDistance = scrollSpeed * safeDeltaSeconds;
+    const frameDistance = scrollSpeed * safeScrollDeltaSeconds;
     traveledDistance += frameDistance;
     speedBoostRemainingSeconds = Math.max(
       0,
@@ -99,7 +107,7 @@ export function createProgression() {
       ? Math.max(0, durationSeconds)
       : 0;
     const safeSpeedIncreaseRatio = Number.isFinite(speedIncreaseRatio)
-      ? Math.max(0, speedIncreaseRatio)
+      ? Math.min(5, Math.max(-0.95, speedIncreaseRatio))
       : 0;
 
     timedSpeedBoostRemainingSeconds = safeDurationSeconds;

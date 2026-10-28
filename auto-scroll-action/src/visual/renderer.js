@@ -1,18 +1,31 @@
 import {
   COLLECTIBLE_TYPE,
   LANE_COUNT,
-  OBSTACLE_TYPE,
   PLAYER_SCREEN_X_RATIO,
 } from "../shared/contracts.js";
 import { getItemBounds, getItemWarningX } from "../lane/items.js";
 import { getObstacleBounds } from "../lane/obstacles.js";
+import {
+  normalizeObstacleAppearance,
+  OBSTACLE_APPEARANCE,
+} from "../shared/obstacle-appearances.js";
+import {
+  CANDY_APPEARANCES,
+  normalizeCandyAppearance,
+} from "../shared/candy-appearances.js";
+import { paintCandyArtwork } from "./candy-art.js";
+import { normalizePlayerCharacter, paintPlayerArtwork, PLAYER_ARTWORK } from "./player-art.js";
+import { getPlayerDefeatMotion } from "./player-defeat.js";
+import {
+  getObstacleArtworkLayout,
+  paintObstacleArtwork,
+  paintSawBladeArtwork,
+} from "./obstacle-art.js";
 
-const BACKGROUND_SOURCE_GUIDES = [0, 0.335, 0.55, 0.8, 1];
-const BACKGROUND_TARGET_GUIDES = [0, 0.35, 0.6, 0.85, 1];
+const GAME_CANVAS_PIXEL_RATIO = 1;
 
 // Set image paths here when artwork is ready. A null value uses the fallback drawing.
 const ASSET_PATHS = Object.freeze({
-  background: "./img/back/halloween-town-background-v9.png",
   coin: null,
   player: null,
   specialCoin: null,
@@ -25,23 +38,19 @@ export function createRenderer(canvas, lanes) {
     throw new Error("Canvas 2D context を作成できません。");
   }
 
-  const backgroundImage = loadImage(ASSET_PATHS.background);
   const coinImage = loadImage(ASSET_PATHS.coin);
   const playerImage = loadImage(ASSET_PATHS.player);
   const specialCoinImage = loadImage(ASSET_PATHS.specialCoin);
-  let backgroundTravelX = 0;
-  let backgroundCache = null;
-  let backgroundCacheLogicalWidth = 0;
   let pixelRatio = 1;
   let width = 0;
   let height = 0;
   const spriteCache = new Map();
-
-  backgroundImage?.addEventListener?.("load", rebuildBackgroundCache);
+  let playerCharacter = normalizePlayerCharacter(null);
+  let obstacleAnimationTime = 0;
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
-    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    pixelRatio = GAME_CANVAS_PIXEL_RATIO;
 
     width = Math.max(1, Math.round(bounds.width));
     height = Math.max(1, Math.round(bounds.height));
@@ -50,7 +59,6 @@ export function createRenderer(canvas, lanes) {
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     lanes.resize(width, height);
     spriteCache.clear();
-    rebuildBackgroundCache();
   }
 
   function render(
@@ -58,195 +66,59 @@ export function createRenderer(canvas, lanes) {
     {
       candyLauncher = null,
       candyParty = null,
+      candyVacuum = null,
+      cameraPrank = null,
       coins = [],
       items = [],
       obstacles = [],
       pumpkinBarrier = null,
+      playerDefeat = null,
+      scaryCostume = null,
       supplyStations = [],
       hitObstacleIds = [],
     } = {},
   ) {
-    drawBackground();
-    drawSupplyStations(supplyStations);
-    drawItemWarnings(items);
+    context.clearRect(0, 0, width, height);
+    if (!playerDefeat) {
+      obstacleAnimationTime = performance.now() / 1000;
+    }
+    const cameraScale = cameraPrank?.isActive && Number.isFinite(cameraPrank.scale)
+      ? Math.max(1, cameraPrank.scale)
+      : 1;
+    const cameraOriginX = width * PLAYER_SCREEN_X_RATIO;
+    const cameraOriginY =
+      lanes.getLaneY(player.lanePosition) -
+      player.elevation -
+      player.hitbox.height * 0.5;
+
+    context.save();
+    context.translate(cameraOriginX, cameraOriginY);
+    context.scale(cameraScale, cameraScale);
+    context.translate(-cameraOriginX, -cameraOriginY);
     drawObstacles(obstacles, hitObstacleIds);
     drawCoins(coins);
     drawCandyParty(candyParty);
     drawCandyLauncherWorld(candyLauncher);
-    drawPlayer(player);
-    drawPumpkinBarrierShell(player, pumpkinBarrier);
-    drawPumpkinBarrierTimer(player, pumpkinBarrier);
-    drawCandyLauncherHeld(candyLauncher, player);
-    drawItems(items);
-    drawCandyLauncherCountdown(candyLauncher);
-  }
-
-  function drawBackground() {
-    context.clearRect(0, 0, width, height);
-    context.fillStyle = "#b8e8ef";
-    context.fillRect(0, 0, width, height);
-
-    if (backgroundImage?.complete && backgroundImage.naturalWidth > 0) {
-      if (!backgroundCache) {
-        rebuildBackgroundCache();
-      }
-
-      if (backgroundCache) {
-        drawCachedBackground();
-      } else {
-        drawUncachedAlignedBackground();
-      }
+    if (!playerDefeat) {
+      drawCandyVacuumAura(player, candyVacuum);
+      drawCandyVacuumBackpack(player, candyVacuum);
     }
-  }
-
-  function rebuildBackgroundCache() {
-    backgroundCache = null;
-    backgroundCacheLogicalWidth = 0;
-
-    if (
-      !backgroundImage?.complete ||
-      backgroundImage.naturalWidth <= 0 ||
-      width <= 0 ||
-      height <= 0
-    ) {
-      return;
+    drawPlayer(player, hitObstacleIds.length > 0, playerDefeat);
+    if (!playerDefeat) {
+      drawScaryCostume(player, scaryCostume);
+      drawPumpkinBarrierShell(player, pumpkinBarrier);
+      drawCandyLauncherHeld(candyLauncher, player);
     }
-
-    const sourceViewportWidth = Math.min(
-      backgroundImage.naturalWidth,
-      backgroundImage.naturalHeight * (width / height),
-    );
-    const sourcePixelsPerCanvasPixel = sourceViewportWidth / width;
-    const requestedLogicalWidth =
-      backgroundImage.naturalWidth / sourcePixelsPerCanvasPixel;
-    const cache = createCacheCanvas(
-      Math.max(1, Math.ceil(requestedLogicalWidth * pixelRatio)),
-      Math.max(1, Math.ceil(height * pixelRatio)),
-    );
-    const cacheContext = cache?.getContext("2d");
-
-    if (!cache || !cacheContext) {
-      return;
+    drawItems(items, player);
+    drawItemWarnings(items);
+    drawSupplyStations(supplyStations);
+    if (!playerDefeat) {
+      drawPumpkinBarrierTimer(player, pumpkinBarrier);
+      drawCandyVacuumTimer(player, candyVacuum);
+      drawCandyLauncherCountdown(candyLauncher, player);
     }
-
-    backgroundCacheLogicalWidth = cache.width / pixelRatio;
-    cacheContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    cacheContext.imageSmoothingEnabled = true;
-    cacheContext.imageSmoothingQuality = "high";
-
-    for (let index = 0; index < BACKGROUND_SOURCE_GUIDES.length - 1; index += 1) {
-      const sourceY = Math.round(backgroundImage.naturalHeight * BACKGROUND_SOURCE_GUIDES[index]);
-      const sourceBottom = Math.round(
-        backgroundImage.naturalHeight * BACKGROUND_SOURCE_GUIDES[index + 1],
-      );
-      const targetY = Math.round(height * BACKGROUND_TARGET_GUIDES[index]);
-      const targetBottom = Math.round(height * BACKGROUND_TARGET_GUIDES[index + 1]);
-
-      cacheContext.drawImage(
-        backgroundImage,
-        0,
-        sourceY,
-        backgroundImage.naturalWidth,
-        sourceBottom - sourceY,
-        0,
-        targetY,
-        backgroundCacheLogicalWidth,
-        targetBottom - targetY,
-      );
-    }
-
-    backgroundCache = cache;
-  }
-
-  function drawCachedBackground() {
-    const offsetX = normalizeOffset(
-      backgroundTravelX,
-      backgroundCacheLogicalWidth,
-    );
-
-    for (
-      let targetX = -offsetX;
-      targetX < width;
-      targetX += backgroundCacheLogicalWidth
-    ) {
-      context.drawImage(
-        backgroundCache,
-        targetX,
-        0,
-        backgroundCacheLogicalWidth,
-        height,
-      );
-    }
-  }
-
-  function drawUncachedAlignedBackground() {
-    const sourceViewportWidth = Math.min(
-      backgroundImage.naturalWidth,
-      backgroundImage.naturalHeight * (width / height),
-    );
-    const sourcePixelsPerCanvasPixel = sourceViewportWidth / width;
-    const sourceStartX = normalizeOffset(
-      backgroundTravelX * sourcePixelsPerCanvasPixel,
-      backgroundImage.naturalWidth,
-    );
-
-    for (let index = 0; index < BACKGROUND_SOURCE_GUIDES.length - 1; index += 1) {
-      const sourceY = Math.round(backgroundImage.naturalHeight * BACKGROUND_SOURCE_GUIDES[index]);
-      const sourceBottom = Math.round(
-        backgroundImage.naturalHeight * BACKGROUND_SOURCE_GUIDES[index + 1],
-      );
-      const targetY = Math.round(height * BACKGROUND_TARGET_GUIDES[index]);
-      const targetBottom = Math.round(height * BACKGROUND_TARGET_GUIDES[index + 1]);
-
-      drawWrappedBackgroundBand(
-        sourceStartX,
-        sourceY,
-        sourceViewportWidth,
-        sourceBottom - sourceY,
-        targetY,
-        targetBottom - targetY,
-      );
-    }
-  }
-
-  function drawWrappedBackgroundBand(
-    sourceStartX,
-    sourceY,
-    sourceViewportWidth,
-    sourceHeight,
-    targetY,
-    targetHeight,
-  ) {
-    let sourceX = sourceStartX;
-    let remainingSourceWidth = sourceViewportWidth;
-    let targetX = 0;
-
-    while (remainingSourceWidth > 0) {
-      const sourceChunkWidth = Math.min(
-        remainingSourceWidth,
-        backgroundImage.naturalWidth - sourceX,
-      );
-      const targetChunkWidth =
-        sourceChunkWidth >= remainingSourceWidth
-          ? width - targetX
-          : (width * sourceChunkWidth) / sourceViewportWidth;
-
-      context.drawImage(
-        backgroundImage,
-        sourceX,
-        sourceY,
-        sourceChunkWidth,
-        sourceHeight,
-        targetX,
-        targetY,
-        targetChunkWidth,
-        targetHeight,
-      );
-
-      remainingSourceWidth -= sourceChunkWidth;
-      targetX += targetChunkWidth;
-      sourceX = 0;
-    }
+    context.restore();
+    drawCameraPrankGhost(cameraPrank, player);
   }
 
   function createCacheCanvas(cacheWidth, cacheHeight) {
@@ -343,13 +215,18 @@ export function createRenderer(canvas, lanes) {
     );
   }
 
-  function setBackgroundOffset(offsetX) {
-    backgroundTravelX = Number.isFinite(offsetX) ? offsetX : 0;
-  }
-
-  function drawPlayer(player) {
+  function drawPlayer(player, isHit, playerDefeat) {
     const footX = width * PLAYER_SCREEN_X_RATIO;
     const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+
+    if (playerDefeat) {
+      drawDefeatedPlayer(player, playerDefeat);
+      return;
+    }
+
+    if (player.isDucking && !isHit) {
+      drawSlidingSmoke(footX, footY);
+    }
 
     if (playerImage?.complete && playerImage.naturalWidth > 0) {
       context.drawImage(
@@ -362,7 +239,109 @@ export function createRenderer(canvas, lanes) {
       return;
     }
 
-    drawFallbackPlayer(footX, footY, player.hitbox);
+    drawFallbackPlayer(footX, footY, player, isHit);
+  }
+
+  function drawScaryCostume(player, scaryCostume) {
+    if (!scaryCostume?.isActive) {
+      return;
+    }
+
+    const laneGap = lanes.getLaneGap();
+    const footX = width * PLAYER_SCREEN_X_RATIO;
+    const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+    const hoodWidth = Math.max(player.hitbox.width * 1.28, laneGap * 0.27);
+    const hoodHeight = Math.max(player.hitbox.height * 0.72, laneGap * 0.27);
+    const hoodCenterY = footY - player.hitbox.height * 0.76;
+    const hoodSprite = getCachedSprite(
+      `scary-costume-hood:${Math.round(hoodWidth)}:${Math.round(hoodHeight)}`,
+      hoodWidth,
+      hoodHeight,
+      laneGap * 0.035,
+      paintScaryCostumeHood,
+    );
+    const bob = Math.sin(performance.now() / 135) * laneGap * 0.006;
+
+    context.save();
+    context.globalAlpha = 0.96;
+    drawCachedSpriteCentered(
+      hoodSprite,
+      footX,
+      hoodCenterY + bob,
+      hoodWidth,
+      hoodHeight,
+    );
+    context.restore();
+  }
+
+  function paintScaryCostumeHood(spriteContext, hoodWidth, hoodHeight) {
+    spriteContext.save();
+    spriteContext.lineJoin = "round";
+    spriteContext.lineCap = "round";
+    spriteContext.lineWidth = Math.max(1.5, hoodWidth * 0.055);
+    spriteContext.strokeStyle = "#3f3154";
+    const gradient = spriteContext.createLinearGradient(0, 0, 0, hoodHeight);
+    gradient.addColorStop(0, "#f5f0ff");
+    gradient.addColorStop(1, "#bba8dc");
+    spriteContext.fillStyle = gradient;
+    spriteContext.beginPath();
+    spriteContext.moveTo(hoodWidth * 0.12, hoodHeight * 0.9);
+    spriteContext.lineTo(hoodWidth * 0.12, hoodHeight * 0.43);
+    spriteContext.bezierCurveTo(
+      hoodWidth * 0.12,
+      hoodHeight * 0.03,
+      hoodWidth * 0.88,
+      hoodHeight * 0.03,
+      hoodWidth * 0.88,
+      hoodHeight * 0.43,
+    );
+    spriteContext.lineTo(hoodWidth * 0.88, hoodHeight * 0.9);
+    spriteContext.quadraticCurveTo(
+      hoodWidth * 0.74,
+      hoodHeight * 0.72,
+      hoodWidth * 0.62,
+      hoodHeight * 0.91,
+    );
+    spriteContext.quadraticCurveTo(
+      hoodWidth * 0.5,
+      hoodHeight * 0.72,
+      hoodWidth * 0.38,
+      hoodHeight * 0.91,
+    );
+    spriteContext.quadraticCurveTo(
+      hoodWidth * 0.25,
+      hoodHeight * 0.72,
+      hoodWidth * 0.12,
+      hoodHeight * 0.9,
+    );
+    spriteContext.closePath();
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.fillStyle = "#49345d";
+    spriteContext.beginPath();
+    spriteContext.moveTo(hoodWidth * 0.25, hoodHeight * 0.38);
+    spriteContext.lineTo(hoodWidth * 0.43, hoodHeight * 0.45);
+    spriteContext.lineTo(hoodWidth * 0.27, hoodHeight * 0.53);
+    spriteContext.closePath();
+    spriteContext.moveTo(hoodWidth * 0.75, hoodHeight * 0.38);
+    spriteContext.lineTo(hoodWidth * 0.57, hoodHeight * 0.45);
+    spriteContext.lineTo(hoodWidth * 0.73, hoodHeight * 0.53);
+    spriteContext.closePath();
+    spriteContext.fill();
+
+    spriteContext.strokeStyle = "#49345d";
+    spriteContext.lineWidth = Math.max(1.5, hoodWidth * 0.045);
+    spriteContext.beginPath();
+    spriteContext.arc(
+      hoodWidth * 0.5,
+      hoodHeight * 0.59,
+      hoodWidth * 0.13,
+      0.12,
+      Math.PI - 0.12,
+    );
+    spriteContext.stroke();
+    spriteContext.restore();
   }
 
   function drawPumpkinBarrierShell(player, barrier) {
@@ -678,23 +657,153 @@ export function createRenderer(canvas, lanes) {
     context.restore();
   }
 
-  function drawFallbackPlayer(footX, footY, hitbox) {
+  function drawFallbackPlayer(footX, footY, player, isHit, poseOverride = null) {
+    const pose = poseOverride ?? (isHit ? "hit" : player.isDucking ? "duck" : player.jumpCount > 0 ? "jump" : "run");
+    const frame = pose === "run"
+      ? Math.floor(performance.now() / 85) % PLAYER_ARTWORK.runFrames
+      : 0;
+    const dimensions = pose === "duck" ? PLAYER_ARTWORK.ducking : PLAYER_ARTWORK.standing;
+    // All poses share one scale; only the posture and gameplay hitbox get lower.
+    const scale = lanes.getLaneGap() * 0.39 / PLAYER_ARTWORK.standing.height;
+    const targetHeight = dimensions.height * scale;
     const sprite = getCachedSprite(
-      `player:${hitbox.width}:${hitbox.height}`,
-      hitbox.width,
-      hitbox.height,
+      `player-witch:${playerCharacter}:${pose}:${frame}`,
+      dimensions.width,
+      dimensions.height,
       0,
       (spriteContext, spriteWidth, spriteHeight) => {
-        spriteContext.fillStyle = "#56b6a7";
-        spriteContext.fillRect(0, 0, spriteWidth, spriteHeight);
+        paintPlayerArtwork(spriteContext, spriteWidth, spriteHeight, { pose, frame, character: playerCharacter });
       },
     );
 
     drawCachedSprite(
       sprite,
-      footX - hitbox.width / 2,
-      footY - hitbox.height,
+      footX - dimensions.anchorX * scale,
+      footY - targetHeight,
+      dimensions.width * scale,
+      targetHeight,
     );
+  }
+
+  function drawDefeatedPlayer(player, defeat) {
+    const laneGap = lanes.getLaneGap();
+    const motion = getPlayerDefeatMotion(defeat.elapsedSeconds);
+    const originX = width * PLAYER_SCREEN_X_RATIO;
+    const travel = Math.max(0, Math.min(laneGap * 0.48, originX - laneGap * 0.2));
+    const footX = originX - travel * motion.backwardProgress;
+    const originY = lanes.getLaneY(player.lanePosition) - laneGap * defeat.originElevationRatio;
+    const landingY = lanes.getLaneY(defeat.landingLane);
+    const footY = originY + (landingY - originY) * motion.landingProgress - laneGap * motion.liftRatio;
+    // Keep the rotating sprite above the floor throughout the tumble.
+    const bottomExtent = laneGap * (
+      Math.abs(Math.cos(motion.rotation)) * 0.195 +
+      Math.abs(Math.sin(motion.rotation)) * 0.178
+    );
+    const dizzy = motion.phase === "dizzy";
+
+    if (dizzy) {
+      drawDizzyStars(footX, footY - laneGap * 0.42, defeat.elapsedSeconds, true);
+    }
+
+    context.save();
+    context.translate(footX, footY - bottomExtent);
+    context.rotate(motion.rotation);
+    drawFallbackPlayer(0, laneGap * 0.195, player, true, dizzy ? "dizzy" : "hit");
+    context.restore();
+
+    if (dizzy) {
+      drawDizzyStars(footX, footY - laneGap * 0.42, defeat.elapsedSeconds, false);
+    }
+  }
+
+  function drawDizzyStars(centerX, centerY, time, behind) {
+    const laneGap = lanes.getLaneGap();
+    const sprite = getCachedSprite("player-dizzy-star", 32, 32, 2, (spriteContext) => {
+      spriteContext.beginPath();
+
+      for (let point = 0; point < 10; point += 1) {
+        const angle = -Math.PI / 2 + point * Math.PI / 5;
+        const radius = point % 2 === 0 ? 13 : 6;
+        const x = 16 + Math.cos(angle) * radius;
+        const y = 16 + Math.sin(angle) * radius;
+
+        if (point === 0) {
+          spriteContext.moveTo(x, y);
+        } else {
+          spriteContext.lineTo(x, y);
+        }
+      }
+
+      spriteContext.closePath();
+      spriteContext.fillStyle = "#ffda56";
+      spriteContext.strokeStyle = "#fff7d0";
+      spriteContext.lineWidth = 2;
+      spriteContext.lineJoin = "round";
+      spriteContext.fill();
+      spriteContext.stroke();
+    });
+
+    context.save();
+
+    for (let index = 0; index < 5; index += 1) {
+      const angle = time * 5 + index * Math.PI * 2 / 5;
+      const depth = Math.sin(angle);
+
+      if ((depth < 0) !== behind) {
+        continue;
+      }
+
+      const size = laneGap * (0.055 + (depth + 1) * 0.008);
+      context.globalAlpha = behind ? 0.75 : 1;
+      context.save();
+      context.translate(centerX + Math.cos(angle) * laneGap * 0.14, centerY + depth * laneGap * 0.035);
+      context.rotate(angle * 0.5);
+      drawCachedSpriteCentered(sprite, 0, 0, size, size);
+      context.restore();
+    }
+
+    context.restore();
+  }
+
+  function drawSlidingSmoke(footX, footY) {
+    const laneGap = lanes.getLaneGap();
+    const time = performance.now() / 1000;
+    const sprite = getCachedSprite("player-slide-smoke", 64, 48, 2, paintSlidingSmoke);
+
+    context.save();
+
+    for (let index = 0; index < 6; index += 1) {
+      const progress = ((time / 0.72 + index / 6) % 1 + 1) % 1;
+      const puffWidth = laneGap * (0.035 + progress * 0.075);
+      const puffHeight = puffWidth * (0.65 + index % 2 * 0.08);
+      context.globalAlpha = 0.6 * (1 - progress) * Math.min(1, progress * 10);
+      drawCachedSpriteCentered(
+        sprite,
+        footX - laneGap * (0.09 + progress * 0.32),
+        footY - puffHeight / 2 - laneGap * progress * (0.018 + index % 3 * 0.008),
+        puffWidth,
+        puffHeight,
+      );
+    }
+
+    context.restore();
+  }
+
+  function paintSlidingSmoke(spriteContext, spriteWidth, spriteHeight) {
+    spriteContext.save();
+    spriteContext.scale(spriteWidth / 64, spriteHeight / 48);
+    const fill = spriteContext.createLinearGradient(0, 10, 0, 42);
+    fill.addColorStop(0, "#fffaf0");
+    fill.addColorStop(1, "#d7d2df");
+    const puff = new Path2D(
+      "M12 40 C3 40 0 30 6 24 C6 12 20 9 27 17 C35 4 52 10 52 23 C66 24 65 40 53 42 Z",
+    );
+    spriteContext.fillStyle = fill;
+    spriteContext.fill(puff);
+    spriteContext.strokeStyle = "#fff9ef";
+    spriteContext.lineWidth = 1.5;
+    spriteContext.stroke(puff);
+    spriteContext.restore();
   }
 
   function drawObstacles(obstacles, hitObstacleIds) {
@@ -703,30 +812,73 @@ export function createRenderer(canvas, lanes) {
     obstacles.forEach((obstacle) => {
       const bounds = getObstacleBounds(obstacle, lanes);
       const isHit = hitIds.has(obstacle.id);
-      const lineWidth = Math.max(2, lanes.getLaneGap() * 0.012);
+      const appearance = normalizeObstacleAppearance(obstacle.type, obstacle.appearance, obstacle.lane);
+      const artwork = getObstacleArtworkLayout(obstacle.type, appearance);
+
+      if (appearance === OBSTACLE_APPEARANCE.SAW_BLADE) {
+        drawSawObstacle(obstacle, bounds, artwork, isHit);
+        return;
+      }
+
+      const frame = artwork.frames
+        ? Math.floor(obstacleAnimationTime / artwork.frameDuration) % artwork.frames
+        : 0;
       const sprite = getCachedSprite(
-        `obstacle:${obstacle.type}:${isHit}`,
-        bounds.width,
-        bounds.height,
-        lineWidth,
+        `obstacle:${obstacle.type}:${appearance}:${isHit}:${frame}`,
+        artwork.width,
+        artwork.height,
+        5,
         (spriteContext, spriteWidth, spriteHeight) => {
-          spriteContext.fillStyle = getFallbackObstacleColor(obstacle.type);
-          spriteContext.fillRect(0, 0, spriteWidth, spriteHeight);
-          spriteContext.lineWidth = lineWidth;
-          spriteContext.strokeStyle = isHit ? "#fff4a8" : "#2b1835";
-          spriteContext.strokeRect(0, 0, spriteWidth, spriteHeight);
+          paintObstacleArtwork(spriteContext, obstacle.type, appearance, spriteWidth, spriteHeight, isHit, frame);
         },
       );
 
-      drawCachedSprite(sprite, bounds.left, bounds.top);
+      const artworkWidth = bounds.width * artwork.widthScale;
+      drawCachedSprite(
+        sprite,
+        obstacle.x - artworkWidth / 2,
+        bounds.top,
+        artworkWidth,
+        bounds.height,
+      );
     });
   }
 
-  function drawItems(items) {
+  function drawSawObstacle(obstacle, bounds, artwork, isHit) {
+    const sprite = getCachedSprite(
+      `obstacle:saw-blade:${isHit}`,
+      120,
+      120,
+      3,
+      (spriteContext, spriteWidth, spriteHeight) => {
+        paintSawBladeArtwork(spriteContext, spriteWidth, spriteHeight, isHit);
+      },
+    );
+    const artworkWidth = bounds.width * artwork.widthScale;
+    const scaleX = artworkWidth / artwork.width;
+    const scaleY = bounds.height / artwork.height;
+    const left = obstacle.x - artworkWidth / 2;
+
+    // Rotate a shared cached disk, not the stack or a freshly painted canvas.
+    artwork.blades.forEach((blade, index) => {
+      const diameter = blade.diameter * Math.min(scaleX, scaleY);
+      context.save();
+      context.translate(left + blade.x * scaleX, bounds.top + blade.y * scaleY);
+      context.rotate(obstacleAnimationTime * 2.8 * (index % 2 ? -1 : 1) + index * 0.5);
+      drawCachedSpriteCentered(sprite, 0, 0, diameter, diameter);
+      context.restore();
+    });
+  }
+
+  function drawItems(items, player) {
     items.forEach((item) => {
+      if (item.type === COLLECTIBLE_TYPE.CAMERA_PRANK) {
+        return;
+      }
+
       if (item.type === COLLECTIBLE_TYPE.SPEED_UP) {
         if (item.isTriggered) {
-          drawFallbackSpeedBoost(item, getItemBounds(item, lanes));
+          drawFallbackSpeedBoost(item, getItemBounds(item, lanes), player);
         }
         return;
       }
@@ -749,6 +901,11 @@ export function createRenderer(canvas, lanes) {
 
   function drawItemWarnings(items) {
     items.forEach((item) => {
+      if (item.type === COLLECTIBLE_TYPE.CAMERA_PRANK) {
+        drawCameraPrankWarningSign(getItemWarningX(item, lanes.getLaneGap()));
+        return;
+      }
+
       if (item.type !== COLLECTIBLE_TYPE.SPEED_UP) {
         return;
       }
@@ -763,23 +920,27 @@ export function createRenderer(canvas, lanes) {
     }
 
     const laneGap = lanes.getLaneGap();
-    const stationWidth = laneGap * 0.92;
-    const stationHeight = laneGap * 0.72;
-    const roadBottom = Math.min(
-      height - laneGap * 0.02,
-      lanes.getLaneY(LANE_COUNT - 1) + laneGap * 0.58,
-    );
-    const sprite = getCachedSprite(
-      "supply-station",
-      stationWidth,
-      stationHeight,
-      Math.max(2, laneGap * 0.02),
-      (spriteContext, spriteWidth, spriteHeight) => {
-        paintSupplyStation(spriteContext, spriteWidth, spriteHeight, laneGap);
-      },
-    );
+    const roadBottom = height - laneGap * 0.02;
 
     stations.forEach((station) => {
+      const isLarge = station.isLarge === true;
+      const stationWidth = laneGap * (isLarge ? 1.46 : 0.92);
+      const stationHeight = laneGap * (isLarge ? 0.8 : 0.72);
+      const sprite = getCachedSprite(
+        isLarge ? "supply-station-large" : "supply-station",
+        stationWidth,
+        stationHeight,
+        Math.max(2, laneGap * 0.02),
+        (spriteContext, spriteWidth, spriteHeight) => {
+          paintSupplyStation(
+            spriteContext,
+            spriteWidth,
+            spriteHeight,
+            laneGap,
+            isLarge,
+          );
+        },
+      );
       drawCachedSprite(
         sprite,
         station.x - stationWidth / 2,
@@ -788,7 +949,13 @@ export function createRenderer(canvas, lanes) {
     });
   }
 
-  function paintSupplyStation(context, stationWidth, stationHeight, laneGap) {
+  function paintSupplyStation(
+    context,
+    stationWidth,
+    stationHeight,
+    laneGap,
+    isLarge = false,
+  ) {
     const canopyTop = stationHeight * 0.05;
     const canopyHeight = stationHeight * 0.24;
     const postWidth = laneGap * 0.035;
@@ -988,14 +1155,39 @@ export function createRenderer(canvas, lanes) {
     context.closePath();
     context.fill();
     context.stroke();
+
+    if (isLarge) {
+      [-1, 1].forEach((direction) => {
+        const badgeX = signCenterX + direction * stationWidth * 0.105;
+        context.fillStyle = "#fff4d2";
+        context.beginPath();
+        context.arc(
+          badgeX,
+          signCenterY,
+          laneGap * 0.043,
+          0,
+          Math.PI * 2,
+        );
+        context.fill();
+        context.strokeStyle = "#41313e";
+        context.stroke();
+        context.fillStyle = direction < 0 ? "#59c7bd" : "#ef8d45";
+        context.beginPath();
+        context.arc(
+          badgeX,
+          signCenterY,
+          laneGap * 0.022,
+          0,
+          Math.PI * 2,
+        );
+        context.fill();
+      });
+    }
   }
 
   function drawGhostWarningSign(signX) {
     const laneGap = lanes.getLaneGap();
-    const roadBottom = Math.min(
-      height - laneGap * 0.02,
-      lanes.getLaneY(LANE_COUNT - 1) + laneGap * 0.58,
-    );
+    const roadBottom = height - laneGap * 0.02;
     const signWidth = laneGap * 0.31;
     const signHeight = laneGap * 0.58;
     const padding = Math.max(2, laneGap * 0.02);
@@ -1108,16 +1300,462 @@ export function createRenderer(canvas, lanes) {
     spriteContext.restore();
   }
 
-  function drawFallbackSpeedBoost(item, bounds) {
+  function drawCameraPrankWarningSign(signX) {
+    const laneGap = lanes.getLaneGap();
+    const roadBottom = height - laneGap * 0.02;
+    const signWidth = laneGap * 0.34;
+    const signHeight = laneGap * 0.6;
+    const padding = Math.max(2, laneGap * 0.02);
+    const sprite = getCachedSprite(
+      "camera-prank-warning",
+      signWidth,
+      signHeight,
+      padding,
+      (spriteContext, spriteWidth, spriteHeight) => {
+        paintCameraPrankWarningSign(
+          spriteContext,
+          spriteWidth,
+          spriteHeight,
+          laneGap,
+        );
+      },
+    );
+
+    drawCachedSprite(
+      sprite,
+      signX - signWidth / 2,
+      roadBottom - signHeight,
+    );
+  }
+
+  function paintCameraPrankWarningSign(
+    spriteContext,
+    signWidth,
+    signHeight,
+    laneGap,
+  ) {
+    const boardHeight = laneGap * 0.29;
+    const boardCenterY = signHeight - laneGap * 0.46;
+    const postWidth = laneGap * 0.045;
+
+    spriteContext.fillStyle = "#50362b";
+    spriteContext.fillRect(
+      (signWidth - postWidth) / 2,
+      boardCenterY,
+      postWidth,
+      signHeight - boardCenterY,
+    );
+    spriteContext.strokeStyle = "#2e2023";
+    spriteContext.lineWidth = Math.max(1.5, laneGap * 0.012);
+    spriteContext.strokeRect(
+      (signWidth - postWidth) / 2,
+      boardCenterY,
+      postWidth,
+      signHeight - boardCenterY,
+    );
+
+    spriteContext.save();
+    spriteContext.translate(signWidth / 2, boardCenterY);
+    spriteContext.fillStyle = "#e6aa4e";
+    spriteContext.strokeStyle = "#382538";
+    spriteContext.lineWidth = Math.max(2, laneGap * 0.016);
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      -signWidth / 2,
+      -boardHeight / 2,
+      signWidth,
+      boardHeight,
+      laneGap * 0.025,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    const ghostWidth = signWidth * 0.34;
+    const ghostHeight = boardHeight * 0.58;
+    const ghostX = -signWidth * 0.19;
+    spriteContext.fillStyle = "#31283b";
+    spriteContext.beginPath();
+    spriteContext.moveTo(ghostX - ghostWidth / 2, ghostHeight * 0.42);
+    spriteContext.lineTo(ghostX - ghostWidth / 2, -ghostHeight * 0.05);
+    spriteContext.bezierCurveTo(
+      ghostX - ghostWidth / 2,
+      -ghostHeight * 0.62,
+      ghostX + ghostWidth / 2,
+      -ghostHeight * 0.62,
+      ghostX + ghostWidth / 2,
+      -ghostHeight * 0.05,
+    );
+    spriteContext.lineTo(ghostX + ghostWidth / 2, ghostHeight * 0.42);
+    spriteContext.lineTo(ghostX + ghostWidth * 0.18, ghostHeight * 0.2);
+    spriteContext.lineTo(ghostX, ghostHeight * 0.42);
+    spriteContext.lineTo(ghostX - ghostWidth * 0.18, ghostHeight * 0.2);
+    spriteContext.closePath();
+    spriteContext.fill();
+
+    spriteContext.fillStyle = "#f7efd6";
+    [-0.11, 0.11].forEach((eyeOffset) => {
+      spriteContext.beginPath();
+      spriteContext.arc(
+        ghostX + ghostWidth * eyeOffset,
+        -ghostHeight * 0.12,
+        laneGap * 0.012,
+        0,
+        Math.PI * 2,
+      );
+      spriteContext.fill();
+    });
+
+    const cameraX = signWidth * 0.2;
+    const cameraWidth = signWidth * 0.29;
+    const cameraHeight = boardHeight * 0.34;
+    spriteContext.fillStyle = "#55485e";
+    spriteContext.strokeStyle = "#28212e";
+    spriteContext.lineWidth = Math.max(1, laneGap * 0.009);
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      cameraX - cameraWidth / 2,
+      -cameraHeight / 2,
+      cameraWidth,
+      cameraHeight,
+      laneGap * 0.015,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+    spriteContext.fillStyle = "#79d4cc";
+    spriteContext.beginPath();
+    spriteContext.arc(cameraX, 0, cameraHeight * 0.29, 0, Math.PI * 2);
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.strokeStyle = "#b83d5f";
+    spriteContext.lineWidth = Math.max(2.5, laneGap * 0.025);
+    spriteContext.beginPath();
+    spriteContext.arc(0, 0, signWidth * 0.4, 0, Math.PI * 2);
+    spriteContext.moveTo(-signWidth * 0.29, -boardHeight * 0.38);
+    spriteContext.lineTo(signWidth * 0.29, boardHeight * 0.38);
+    spriteContext.stroke();
+    spriteContext.restore();
+  }
+
+  function drawCameraPrankGhost(cameraPrank, player) {
+    if (!cameraPrank?.isActive || cameraPrank.ghostOpacity <= 0) {
+      return;
+    }
+
+    const ghostWidth = Math.min(width * 0.48, height * 0.72);
+    const ghostHeight = ghostWidth * 1.08;
+    const displayScale = Number.isFinite(cameraPrank.ghostScale)
+      ? Math.max(0.4, cameraPrank.ghostScale)
+      : 1;
+    const ghostX = width * (
+      (cameraPrank.ghostXRatio ?? 0.67) + (cameraPrank.ghostDriftX ?? 0)
+    );
+    const ghostY = height * (
+      (cameraPrank.ghostYRatio ?? 0.43) + (cameraPrank.ghostDriftY ?? 0)
+    );
+    const ghostGaze = cameraPrank.ghostGaze ?? "camera";
+    const sprite = getCachedSprite(
+      `camera-prank-ghost:${ghostGaze}:${Math.round(ghostWidth)}:${Math.round(ghostHeight)}`,
+      ghostWidth,
+      ghostHeight,
+      Math.max(4, ghostWidth * 0.04),
+      (spriteContext, spriteWidth, spriteHeight) => {
+        paintCameraPrankGhost(
+          spriteContext,
+          spriteWidth,
+          spriteHeight,
+          ghostGaze,
+        );
+      },
+    );
+
+    context.save();
+    context.globalAlpha = Math.min(0.8, Math.max(0, cameraPrank.ghostOpacity));
+    context.translate(ghostX, ghostY);
+    context.rotate(cameraPrank.ghostRotation ?? 0);
+    drawCachedSpriteCentered(
+      sprite,
+      0,
+      0,
+      ghostWidth * displayScale,
+      ghostHeight * displayScale,
+    );
+    context.restore();
+
+    if (cameraPrank.isRepelled) {
+      drawCameraPrankRepelCandies(
+        cameraPrank,
+        player,
+        ghostX,
+        ghostY,
+      );
+    }
+  }
+
+  function paintCameraPrankGhost(
+    spriteContext,
+    ghostWidth,
+    ghostHeight,
+    gaze = "camera",
+  ) {
+    spriteContext.save();
+    spriteContext.translate(ghostWidth / 2, ghostHeight / 2);
+    spriteContext.lineJoin = "round";
+    spriteContext.lineCap = "round";
+    spriteContext.lineWidth = Math.max(3, ghostWidth * 0.025);
+    spriteContext.strokeStyle = "rgba(17, 13, 24, 0.94)";
+    const bodyGradient = spriteContext.createRadialGradient(
+      -ghostWidth * 0.12,
+      -ghostHeight * 0.2,
+      0,
+      0,
+      0,
+      ghostWidth * 0.7,
+    );
+    bodyGradient.addColorStop(0, "rgba(78, 68, 94, 0.98)");
+    bodyGradient.addColorStop(0.58, "rgba(42, 34, 54, 0.96)");
+    bodyGradient.addColorStop(1, "rgba(20, 16, 29, 0.9)");
+    spriteContext.fillStyle = bodyGradient;
+    spriteContext.shadowColor = "rgba(20, 15, 29, 0.72)";
+    spriteContext.shadowBlur = ghostWidth * 0.08;
+    spriteContext.beginPath();
+    spriteContext.moveTo(-ghostWidth * 0.48, ghostHeight * 0.45);
+    spriteContext.lineTo(-ghostWidth * 0.47, -ghostHeight * 0.03);
+    spriteContext.bezierCurveTo(
+      -ghostWidth * 0.47,
+      -ghostHeight * 0.61,
+      ghostWidth * 0.47,
+      -ghostHeight * 0.61,
+      ghostWidth * 0.47,
+      -ghostHeight * 0.03,
+    );
+    spriteContext.lineTo(ghostWidth * 0.48, ghostHeight * 0.45);
+    spriteContext.quadraticCurveTo(
+      ghostWidth * 0.31,
+      ghostHeight * 0.21,
+      ghostWidth * 0.14,
+      ghostHeight * 0.46,
+    );
+    spriteContext.quadraticCurveTo(
+      0,
+      ghostHeight * 0.2,
+      -ghostWidth * 0.14,
+      ghostHeight * 0.46,
+    );
+    spriteContext.quadraticCurveTo(
+      -ghostWidth * 0.31,
+      ghostHeight * 0.21,
+      -ghostWidth * 0.48,
+      ghostHeight * 0.45,
+    );
+    spriteContext.closePath();
+    spriteContext.fill();
+    spriteContext.stroke();
+    spriteContext.shadowBlur = 0;
+
+    const eyeGradient = spriteContext.createRadialGradient(
+      -ghostWidth * 0.05,
+      -ghostHeight * 0.12,
+      0,
+      0,
+      -ghostHeight * 0.1,
+      ghostWidth * 0.2,
+    );
+    eyeGradient.addColorStop(0, "#fff9d9");
+    eyeGradient.addColorStop(0.72, "#d7f4e9");
+    eyeGradient.addColorStop(1, "#89bcb8");
+    spriteContext.fillStyle = eyeGradient;
+    spriteContext.strokeStyle = "#18131f";
+    [-1, 1].forEach((direction) => {
+      spriteContext.beginPath();
+      spriteContext.ellipse(
+        ghostWidth * 0.18 * direction,
+        -ghostHeight * 0.12,
+        ghostWidth * 0.12,
+        ghostHeight * 0.15,
+        0.08 * direction,
+        0,
+        Math.PI * 2,
+      );
+      spriteContext.fill();
+      spriteContext.stroke();
+    });
+
+    spriteContext.fillStyle = "#17121e";
+    const pupilGaze = getCameraPrankPupilGaze(gaze);
+    const pupilGazeOffsetX = ghostWidth * pupilGaze.x;
+    const pupilGazeOffsetY = ghostHeight * pupilGaze.y;
+    spriteContext.beginPath();
+    spriteContext.ellipse(
+      -ghostWidth * 0.145 + pupilGazeOffsetX,
+      -ghostHeight * 0.08 + pupilGazeOffsetY,
+      ghostWidth * 0.048,
+      ghostHeight * 0.07,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    spriteContext.ellipse(
+      ghostWidth * 0.145 + pupilGazeOffsetX,
+      -ghostHeight * 0.08 + pupilGazeOffsetY,
+      ghostWidth * 0.048,
+      ghostHeight * 0.07,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    spriteContext.fill();
+
+    if (gaze === "scared") {
+      spriteContext.fillStyle = "#17121e";
+      spriteContext.beginPath();
+      spriteContext.ellipse(
+        0,
+        ghostHeight * 0.15,
+        ghostWidth * 0.09,
+        ghostHeight * 0.11,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      spriteContext.fill();
+    } else {
+      spriteContext.strokeStyle = "#d8e9df";
+      spriteContext.lineWidth = Math.max(3, ghostWidth * 0.022);
+      spriteContext.beginPath();
+      spriteContext.arc(
+        0,
+        ghostHeight * 0.11,
+        ghostWidth * 0.18,
+        0.16,
+        Math.PI - 0.16,
+      );
+      spriteContext.stroke();
+      spriteContext.fillStyle = "#d8e9df";
+      [-0.1, 0, 0.1].forEach((xRatio) => {
+        spriteContext.beginPath();
+        spriteContext.moveTo(
+          ghostWidth * xRatio - ghostWidth * 0.025,
+          ghostHeight * 0.14,
+        );
+        spriteContext.lineTo(ghostWidth * xRatio, ghostHeight * 0.21);
+        spriteContext.lineTo(
+          ghostWidth * xRatio + ghostWidth * 0.025,
+          ghostHeight * 0.14,
+        );
+        spriteContext.closePath();
+        spriteContext.fill();
+      });
+    }
+    spriteContext.restore();
+  }
+
+  function getCameraPrankPupilGaze(gaze) {
+    const gazeOffsets = {
+      "look-down-left": { x: -0.045, y: 0.04 },
+      "look-down-right": { x: 0.045, y: 0.04 },
+      "look-left": { x: -0.06, y: 0 },
+      "look-right": { x: 0.06, y: 0 },
+      "look-up": { x: 0, y: -0.045 },
+      "look-up-left": { x: -0.045, y: -0.04 },
+      "look-up-right": { x: 0.045, y: -0.04 },
+      player: { x: -0.045, y: 0 },
+    };
+
+    return gazeOffsets[gaze] ?? { x: 0, y: 0 };
+  }
+
+  function drawCameraPrankRepelCandies(
+    cameraPrank,
+    player,
+    ghostX,
+    ghostY,
+  ) {
+    const candyCount = Math.max(0, Math.floor(cameraPrank.ghostCandyCount ?? 0));
+    const repelProgress = Math.min(1, Math.max(0, cameraPrank.repelProgress ?? 0));
+
+    if (candyCount === 0 || repelProgress <= 0) {
+      return;
+    }
+
+    const laneGap = lanes.getLaneGap();
+    const targetX = width * PLAYER_SCREEN_X_RATIO;
+    const targetY =
+      lanes.getLaneY(player.lanePosition) -
+      player.elevation -
+      player.hitbox.height * 0.55;
+    const candySize = laneGap * 0.105;
+
+    for (let index = 0; index < candyCount; index += 1) {
+      const delay = index * 0.045;
+      const candyProgress = Math.min(
+        1,
+        Math.max(0, (repelProgress - delay) / (1 - delay)),
+      );
+
+      if (candyProgress <= 0 || candyProgress >= 1) {
+        continue;
+      }
+
+      const easedProgress = easeInCubic(candyProgress);
+      const spread = (index - (candyCount - 1) / 2) * laneGap * 0.08;
+      const candyX = quadraticBezier(
+        ghostX,
+        ghostX - laneGap * 0.5,
+        targetX,
+        easedProgress,
+      );
+      const candyY = quadraticBezier(
+        ghostY - laneGap * 0.25,
+        ghostY - laneGap * 0.7 + spread,
+        targetY,
+        easedProgress,
+      );
+
+      context.save();
+      context.translate(candyX, candyY);
+      context.rotate(candyProgress * 6 + index * 0.7);
+      paintCandyArtwork(
+        context,
+        CANDY_APPEARANCES[index % CANDY_APPEARANCES.length],
+        candySize,
+        candySize,
+      );
+      context.restore();
+    }
+  }
+
+  function drawFallbackSpeedBoost(item, bounds, player) {
     const laneGap = lanes.getLaneGap();
     const animationDuration = Math.max(0.001, item.triggerAnimationDuration);
     const triggerProgress = item.isTriggered
       ? Math.min(1, item.triggerElapsedSeconds / animationDuration)
       : 0;
-    const ghostScale = 1 + triggerProgress * 0.45;
-    const ghostX = item.x + laneGap * 0.38 * triggerProgress;
-    const ghostY =
-      bounds.top + bounds.height * 0.38 - laneGap * 0.48 * triggerProgress;
+    const repelTurnProgress = 0.38;
+    const approachProgress = Math.min(
+      1,
+      triggerProgress / repelTurnProgress,
+    );
+    const fleeProgress = Math.max(
+      0,
+      (triggerProgress - repelTurnProgress) / (1 - repelTurnProgress),
+    );
+    const ghostScale = item.isRepelled
+      ? 1 + approachProgress * 0.12 - fleeProgress * 0.18
+      : 1 + triggerProgress * 0.45;
+    const ghostX = item.isRepelled
+      ? item.x +
+        laneGap * 0.16 * easeOutCubic(approachProgress) -
+        laneGap * 0.72 * easeInCubic(fleeProgress)
+      : item.x + laneGap * 0.38 * triggerProgress;
+    const ghostY = item.isRepelled
+      ? bounds.top +
+        bounds.height * 0.38 -
+        laneGap * 0.08 * approachProgress -
+        laneGap * 0.45 * fleeProgress
+      : bounds.top +
+        bounds.height * 0.38 -
+        laneGap * 0.48 * triggerProgress;
     const baseGhostWidth = bounds.width * 0.44;
     const baseGhostHeight = bounds.height * 0.62;
     const ghostWidth = baseGhostWidth * ghostScale;
@@ -1125,7 +1763,7 @@ export function createRenderer(canvas, lanes) {
     const fadeInProgress = Math.min(1, triggerProgress / 0.15);
     const opacity = 0.88 * fadeInProgress * (1 - triggerProgress);
     const sprite = getCachedSprite(
-      "speed-boost-ghost",
+      `speed-boost-ghost:${item.isRepelled ? "scared" : "normal"}`,
       baseGhostWidth,
       baseGhostHeight,
       Math.max(2, laneGap * 0.04),
@@ -1135,20 +1773,32 @@ export function createRenderer(canvas, lanes) {
           spriteWidth,
           spriteHeight,
           laneGap,
+          item.isRepelled,
         );
       },
     );
 
     context.save();
     context.globalAlpha = Math.max(0, opacity);
+    context.translate(ghostX, ghostY);
+
+    if (item.isRepelled) {
+      context.rotate(-fleeProgress * 0.24);
+      context.scale(-1, 1);
+    }
+
     drawCachedSpriteCentered(
       sprite,
-      ghostX,
-      ghostY,
+      0,
+      0,
       ghostWidth,
       ghostHeight,
     );
     context.restore();
+
+    if (item.isRepelled) {
+      drawRepelledSpeedGhostCandies(item, bounds, player, triggerProgress);
+    }
   }
 
   function paintSpeedBoostGhost(
@@ -1156,6 +1806,7 @@ export function createRenderer(canvas, lanes) {
     ghostWidth,
     ghostHeight,
     laneGap,
+    isScared = false,
   ) {
     spriteContext.save();
     spriteContext.translate(ghostWidth / 2, ghostHeight / 2);
@@ -1200,11 +1851,13 @@ export function createRenderer(canvas, lanes) {
 
     spriteContext.fillStyle = "#30243d";
     spriteContext.beginPath();
+    const eyeRadiusX = ghostWidth * (isScared ? 0.085 : 0.055);
+    const eyeRadiusY = ghostHeight * (isScared ? 0.13 : 0.1);
     spriteContext.ellipse(
       -ghostWidth * 0.17,
       -ghostHeight * 0.08,
-      ghostWidth * 0.055,
-      ghostHeight * 0.1,
+      eyeRadiusX,
+      eyeRadiusY,
       0,
       0,
       Math.PI * 2,
@@ -1212,8 +1865,8 @@ export function createRenderer(canvas, lanes) {
     spriteContext.ellipse(
       ghostWidth * 0.17,
       -ghostHeight * 0.08,
-      ghostWidth * 0.055,
-      ghostHeight * 0.1,
+      eyeRadiusX,
+      eyeRadiusY,
       0,
       0,
       Math.PI * 2,
@@ -1234,20 +1887,311 @@ export function createRenderer(canvas, lanes) {
     spriteContext.restore();
   }
 
+  function drawRepelledSpeedGhostCandies(
+    item,
+    bounds,
+    player,
+    triggerProgress,
+  ) {
+    const candyCount = Math.max(0, Math.floor(item.repelCandyCount));
+
+    if (candyCount === 0 || triggerProgress < 0.3) {
+      return;
+    }
+
+    const laneGap = lanes.getLaneGap();
+    const targetX = width * PLAYER_SCREEN_X_RATIO;
+    const targetY =
+      lanes.getLaneY(player.lanePosition) -
+      player.elevation -
+      player.hitbox.height * 0.55;
+    const startX = item.x + laneGap * 0.16;
+    const startY = bounds.top + bounds.height * 0.3;
+    const candySize = laneGap * 0.105;
+
+    for (let index = 0; index < candyCount; index += 1) {
+      const delay = index * 0.035;
+      const candyProgress = Math.min(
+        1,
+        Math.max(0, (triggerProgress - 0.3 - delay) / (0.7 - delay)),
+      );
+
+      if (candyProgress <= 0 || candyProgress >= 1) {
+        continue;
+      }
+
+      const easedProgress = easeInCubic(candyProgress);
+      const spread = (index - (candyCount - 1) / 2) * laneGap * 0.07;
+      const controlX = startX - laneGap * 0.24;
+      const controlY = startY - laneGap * 0.38 + spread;
+      const candyX = quadraticBezier(
+        startX,
+        controlX,
+        targetX,
+        easedProgress,
+      );
+      const candyY = quadraticBezier(
+        startY,
+        controlY,
+        targetY,
+        easedProgress,
+      );
+
+      context.save();
+      context.translate(candyX, candyY);
+      context.rotate(candyProgress * 5 + index);
+      paintCandyArtwork(
+        context,
+        CANDY_APPEARANCES[index % CANDY_APPEARANCES.length],
+        candySize,
+        candySize,
+      );
+      context.restore();
+    }
+  }
+
+  function drawCandyVacuumAura(player, candyVacuum) {
+    if (!candyVacuum?.isActive) {
+      return;
+    }
+
+    const laneGap = lanes.getLaneGap();
+    const footX = width * PLAYER_SCREEN_X_RATIO;
+    const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+    const centerY = footY - player.hitbox.height * 0.5;
+    const phase = candyVacuum.elapsedSeconds * 4.5;
+
+    context.save();
+    context.translate(footX, centerY);
+    context.rotate(phase * 0.18);
+    context.lineCap = "round";
+    context.strokeStyle = "rgba(109, 224, 215, 0.72)";
+    context.lineWidth = Math.max(2, laneGap * 0.018);
+    context.shadowColor = "rgba(92, 199, 189, 0.55)";
+    context.shadowBlur = laneGap * 0.08;
+
+    [0.34, 0.48, 0.62].forEach((radiusRatio, index) => {
+      const startAngle = phase + index * 2.05;
+      context.beginPath();
+      context.arc(
+        0,
+        0,
+        laneGap * radiusRatio,
+        startAngle,
+        startAngle + Math.PI * 0.72,
+      );
+      context.stroke();
+    });
+
+    context.restore();
+  }
+
+  function drawCandyVacuumBackpack(player, candyVacuum) {
+    if (!candyVacuum?.isActive) {
+      return;
+    }
+
+    const laneGap = lanes.getLaneGap();
+    const footX = width * PLAYER_SCREEN_X_RATIO;
+    const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+    const backpackWidth = laneGap * 0.25;
+    const backpackHeight = laneGap * 0.34;
+    const backpackLeft =
+      footX - player.hitbox.width / 2 - backpackWidth * 0.68;
+    const backpackTop = footY - Math.max(player.hitbox.height, backpackHeight);
+    const sprite = getCachedSprite(
+      "candy-vacuum-backpack",
+      backpackWidth,
+      backpackHeight,
+      laneGap * 0.04,
+      paintCandyVacuumBackpack,
+    );
+
+    drawCachedSprite(
+      sprite,
+      backpackLeft,
+      backpackTop,
+      backpackWidth,
+      backpackHeight,
+    );
+  }
+
+  function paintCandyVacuumBackpack(
+    spriteContext,
+    backpackWidth,
+    backpackHeight,
+  ) {
+    const outlineWidth = Math.max(1.5, backpackWidth * 0.075);
+    const bodyLeft = backpackWidth * 0.14;
+    const bodyTop = backpackHeight * 0.16;
+    const bodyWidth = backpackWidth * 0.72;
+    const bodyHeight = backpackHeight * 0.72;
+    const bodyGradient = spriteContext.createLinearGradient(
+      bodyLeft,
+      bodyTop,
+      bodyLeft + bodyWidth,
+      bodyTop + bodyHeight,
+    );
+    bodyGradient.addColorStop(0, "#78e4d8");
+    bodyGradient.addColorStop(0.56, "#4eaeb3");
+    bodyGradient.addColorStop(1, "#694d8e");
+
+    spriteContext.lineJoin = "round";
+    spriteContext.lineCap = "round";
+    spriteContext.strokeStyle = "#30243d";
+    spriteContext.lineWidth = outlineWidth;
+
+    spriteContext.fillStyle = "#433052";
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      backpackWidth * 0.3,
+      backpackHeight * 0.02,
+      backpackWidth * 0.4,
+      backpackHeight * 0.2,
+      backpackWidth * 0.1,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.fillStyle = bodyGradient;
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      bodyLeft,
+      bodyTop,
+      bodyWidth,
+      bodyHeight,
+      backpackWidth * 0.2,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.fillStyle = "#fff4d2";
+    spriteContext.beginPath();
+    spriteContext.arc(
+      backpackWidth * 0.5,
+      backpackHeight * 0.5,
+      backpackWidth * 0.19,
+      0,
+      Math.PI * 2,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.strokeStyle = "#58b9ba";
+    spriteContext.lineWidth = outlineWidth * 0.72;
+    spriteContext.beginPath();
+    spriteContext.arc(
+      backpackWidth * 0.5,
+      backpackHeight * 0.5,
+      backpackWidth * 0.105,
+      -Math.PI * 0.25,
+      Math.PI * 1.25,
+    );
+    spriteContext.stroke();
+
+    spriteContext.strokeStyle = "#30243d";
+    spriteContext.lineWidth = outlineWidth * 1.15;
+    spriteContext.beginPath();
+    spriteContext.moveTo(bodyLeft + backpackWidth * 0.04, backpackHeight * 0.34);
+    spriteContext.bezierCurveTo(
+      -backpackWidth * 0.1,
+      backpackHeight * 0.36,
+      -backpackWidth * 0.03,
+      backpackHeight * 0.72,
+      backpackWidth * 0.08,
+      backpackHeight * 0.76,
+    );
+    spriteContext.stroke();
+
+    spriteContext.fillStyle = "#f4a34d";
+    spriteContext.lineWidth = outlineWidth;
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      0,
+      backpackHeight * 0.69,
+      backpackWidth * 0.28,
+      backpackHeight * 0.16,
+      backpackWidth * 0.05,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.fillStyle = "#f4a34d";
+    [0.3, 0.7].forEach((xRatio) => {
+      spriteContext.beginPath();
+      spriteContext.arc(
+        backpackWidth * xRatio,
+        backpackHeight * 0.87,
+        backpackWidth * 0.08,
+        0,
+        Math.PI * 2,
+      );
+      spriteContext.fill();
+      spriteContext.stroke();
+    });
+  }
+
+  function drawCandyVacuumTimer(player, candyVacuum) {
+    if (!candyVacuum?.isActive) {
+      return;
+    }
+
+    const laneGap = lanes.getLaneGap();
+    const footX = width * PLAYER_SCREEN_X_RATIO;
+    const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+    const timerWidth = laneGap * 0.38;
+    const timerHeight = laneGap * 0.15;
+    const timerLeft = footX - laneGap * 0.62;
+    const timerTop =
+      footY - Math.max(player.hitbox.height, laneGap * 0.64) - timerHeight * 0.3;
+    const fontSize = Math.max(12, laneGap * 0.075);
+    const timerText = `${Math.max(0, candyVacuum.remainingSeconds).toFixed(1)}s`;
+
+    context.save();
+    context.fillStyle = "rgba(40, 42, 67, 0.9)";
+    context.strokeStyle = "#6de0d7";
+    context.lineWidth = Math.max(1.5, laneGap * 0.01);
+    context.beginPath();
+    context.roundRect(
+      timerLeft,
+      timerTop,
+      timerWidth,
+      timerHeight,
+      Math.min(6, timerHeight * 0.24),
+    );
+    context.fill();
+    context.stroke();
+    context.fillStyle = "#effffd";
+    context.font = `900 ${fontSize}px sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(
+      timerText,
+      timerLeft + timerWidth / 2,
+      timerTop + timerHeight / 2,
+    );
+    context.restore();
+  }
+
   function drawCoins(coins) {
     const laneGap = lanes.getLaneGap();
 
     coins.forEach((coin) => {
       const coinWidth = laneGap * coin.widthRatio;
       const coinHeight = laneGap * coin.heightRatio;
-      const centerY = lanes.getLaneY(coin.lane) - laneGap * coin.elevationRatio;
+      const centerX =
+        coin.x + (Number.isFinite(coin.vacuumOffsetX) ? coin.vacuumOffsetX : 0);
+      const centerY =
+        lanes.getLaneY(coin.lane) -
+        laneGap * coin.elevationRatio +
+        (Number.isFinite(coin.vacuumOffsetY) ? coin.vacuumOffsetY : 0);
       const isSpecialCoin = coin.type === COLLECTIBLE_TYPE.SPECIAL_COIN;
       const coinArtwork = isSpecialCoin ? specialCoinImage : coinImage;
 
       if (coinArtwork?.complete && coinArtwork.naturalWidth > 0) {
         context.drawImage(
           coinArtwork,
-          coin.x - coinWidth / 2,
+          centerX - coinWidth / 2,
           centerY - coinHeight / 2,
           coinWidth,
           coinHeight,
@@ -1256,11 +2200,17 @@ export function createRenderer(canvas, lanes) {
       }
 
       if (isSpecialCoin) {
-        drawFallbackCandyBag(coin.x, centerY, coinWidth, coinHeight);
+        drawFallbackCandyBag(centerX, centerY, coinWidth, coinHeight);
         return;
       }
 
-      drawFallbackCandy(coin.x, centerY, coinWidth, coinHeight);
+      drawFallbackCandy(
+        centerX,
+        centerY,
+        coinWidth,
+        coinHeight,
+        coin.appearance,
+      );
     });
   }
 
@@ -1273,7 +2223,13 @@ export function createRenderer(canvas, lanes) {
       if (candy.type === COLLECTIBLE_TYPE.SPECIAL_COIN) {
         drawFallbackCandyBag(0, 0, candy.size * 1.08, candy.size);
       } else {
-        drawFallbackCandy(0, 0, candy.size, candy.size);
+        drawFallbackCandy(
+          0,
+          0,
+          candy.size,
+          candy.size,
+          candy.appearance,
+        );
       }
 
       context.restore();
@@ -1418,18 +2374,22 @@ export function createRenderer(canvas, lanes) {
     );
   }
 
-  function drawCandyLauncherCountdown(candyLauncher) {
+  function drawCandyLauncherCountdown(candyLauncher, player) {
     if (!Number.isInteger(candyLauncher?.countdownValue)) {
       return;
     }
 
     const laneGap = lanes.getLaneGap();
-    const countdownSize = Math.min(54, Math.max(30, laneGap * 0.27));
+    const bubbleWidth = Math.min(82, Math.max(58, laneGap * 0.42));
+    const bubbleHeight = bubbleWidth * 0.72;
+    const footX = width * PLAYER_SCREEN_X_RATIO;
+    const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
+    const playerHeight = Math.max(player.hitbox.height, laneGap * 0.35);
     const sprite = getCachedSprite(
       `candy-launcher-countdown:${candyLauncher.countdownValue}`,
-      countdownSize,
-      countdownSize,
-      countdownSize * 0.16,
+      bubbleWidth,
+      bubbleHeight,
+      bubbleHeight * 0.08,
       (spriteContext, spriteWidth, spriteHeight) => {
         paintCandyLauncherCountdown(
           spriteContext,
@@ -1441,8 +2401,14 @@ export function createRenderer(canvas, lanes) {
     );
 
     context.save();
-    context.globalAlpha = 0.92;
-    drawCachedSpriteCentered(sprite, width * 0.5, height * 0.46);
+    context.globalAlpha = 0.96;
+    drawCachedSpriteCentered(
+      sprite,
+      footX - laneGap * 0.18,
+      footY - playerHeight - bubbleHeight * 0.5 - laneGap * 0.06,
+      bubbleWidth,
+      bubbleHeight,
+    );
     context.restore();
   }
 
@@ -1668,25 +2634,76 @@ export function createRenderer(canvas, lanes) {
     countdownHeight,
     countdownValue,
   ) {
-    const fontSize = countdownHeight * 0.78;
+    const bubbleLeft = countdownWidth * 0.05;
+    const bubbleTop = countdownHeight * 0.04;
+    const bubbleWidth = countdownWidth * 0.9;
+    const bubbleHeight = countdownHeight * 0.69;
+    const cornerRadius = countdownHeight * 0.2;
+    const outlineWidth = Math.max(2, countdownHeight * 0.055);
+    const fontSize = countdownHeight * 0.48;
 
     spriteContext.save();
+    spriteContext.lineJoin = "round";
+    spriteContext.lineCap = "round";
+    spriteContext.lineWidth = outlineWidth;
+    spriteContext.strokeStyle = "#4b3157";
+    spriteContext.fillStyle = "#fff6dc";
+
+    spriteContext.beginPath();
+    spriteContext.moveTo(
+      countdownWidth * 0.68,
+      countdownHeight * 0.66,
+    );
+    spriteContext.lineTo(
+      countdownWidth * 0.88,
+      countdownHeight * 0.94,
+    );
+    spriteContext.lineTo(
+      countdownWidth * 0.84,
+      countdownHeight * 0.63,
+    );
+    spriteContext.closePath();
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      bubbleLeft,
+      bubbleTop,
+      bubbleWidth,
+      bubbleHeight,
+      cornerRadius,
+    );
+    spriteContext.fill();
+    spriteContext.stroke();
+
+    spriteContext.strokeStyle = "rgba(240, 164, 75, 0.7)";
+    spriteContext.lineWidth = Math.max(1, outlineWidth * 0.45);
+    spriteContext.beginPath();
+    spriteContext.roundRect(
+      bubbleLeft + outlineWidth * 1.4,
+      bubbleTop + outlineWidth * 1.4,
+      bubbleWidth - outlineWidth * 2.8,
+      bubbleHeight - outlineWidth * 2.8,
+      cornerRadius * 0.72,
+    );
+    spriteContext.stroke();
+
     spriteContext.font = `900 ${fontSize}px "Arial Rounded MT Bold", sans-serif`;
     spriteContext.textAlign = "center";
     spriteContext.textBaseline = "middle";
-    spriteContext.lineJoin = "round";
-    spriteContext.lineWidth = Math.max(2, countdownWidth * 0.1);
+    spriteContext.lineWidth = Math.max(2, countdownWidth * 0.055);
     spriteContext.strokeStyle = "rgba(48, 36, 61, 0.9)";
-    spriteContext.fillStyle = "#fff4d2";
+    spriteContext.fillStyle = "#cf62a5";
     spriteContext.strokeText(
       String(countdownValue),
       countdownWidth / 2,
-      countdownHeight * 0.54,
+      bubbleTop + bubbleHeight * 0.52,
     );
     spriteContext.fillText(
       String(countdownValue),
       countdownWidth / 2,
-      countdownHeight * 0.54,
+      bubbleTop + bubbleHeight * 0.52,
     );
     spriteContext.restore();
   }
@@ -1711,72 +2728,30 @@ export function createRenderer(canvas, lanes) {
     spriteContext.restore();
   }
 
-  function drawFallbackCandy(centerX, centerY, candyWidth, candyHeight) {
+  function drawFallbackCandy(
+    centerX,
+    centerY,
+    candyWidth,
+    candyHeight,
+    appearance,
+  ) {
+    const normalizedAppearance = normalizeCandyAppearance(appearance);
     const sprite = getCachedSprite(
-      "normal-candy",
+      `normal-candy:${normalizedAppearance}`,
       candyWidth,
       candyHeight,
       Math.max(2, candyWidth * 0.12),
       (spriteContext, spriteWidth, spriteHeight) => {
-        paintFallbackCandy(spriteContext, spriteWidth, spriteHeight);
+        paintCandyArtwork(
+          spriteContext,
+          normalizedAppearance,
+          spriteWidth,
+          spriteHeight,
+        );
       },
     );
 
     drawCachedSpriteCentered(sprite, centerX, centerY, candyWidth, candyHeight);
-  }
-
-  function paintFallbackCandy(context, candyWidth, candyHeight) {
-    const centerX = candyWidth / 2;
-    const centerY = candyHeight / 2;
-    const bodyHalfWidth = candyWidth * 0.28;
-    const bodyHalfHeight = candyHeight * 0.32;
-    const outlineWidth = Math.max(1, candyHeight * 0.06);
-
-    context.save();
-    context.translate(centerX, centerY);
-    context.rotate(-Math.PI / 18);
-    context.lineJoin = "round";
-    context.lineWidth = outlineWidth;
-    context.strokeStyle = "#4b2740";
-    context.fillStyle = "#ff9b55";
-
-    context.beginPath();
-    context.moveTo(-bodyHalfWidth, -bodyHalfHeight * 0.72);
-    context.lineTo(-candyWidth / 2, -candyHeight * 0.34);
-    context.lineTo(-candyWidth * 0.44, candyHeight * 0.35);
-    context.lineTo(-bodyHalfWidth, bodyHalfHeight * 0.72);
-    context.closePath();
-    context.fill();
-    context.stroke();
-
-    context.beginPath();
-    context.moveTo(bodyHalfWidth, -bodyHalfHeight * 0.72);
-    context.lineTo(candyWidth / 2, -candyHeight * 0.34);
-    context.lineTo(candyWidth * 0.44, candyHeight * 0.35);
-    context.lineTo(bodyHalfWidth, bodyHalfHeight * 0.72);
-    context.closePath();
-    context.fill();
-    context.stroke();
-
-    context.fillStyle = "#ee5f72";
-    context.beginPath();
-    context.ellipse(0, 0, bodyHalfWidth, bodyHalfHeight, 0, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-
-    context.fillStyle = "rgba(255, 244, 210, 0.82)";
-    context.beginPath();
-    context.ellipse(
-      -bodyHalfWidth * 0.3,
-      -bodyHalfHeight * 0.3,
-      bodyHalfWidth * 0.2,
-      bodyHalfHeight * 0.18,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    context.fill();
-    context.restore();
   }
 
   function drawFallbackCandyBag(centerX, centerY, bagWidth, bagHeight) {
@@ -1815,6 +2790,13 @@ export function createRenderer(canvas, lanes) {
     context.quadraticCurveTo(-bagWidth * 0.34, bagHeight * 0.48, -bagWidth * 0.4, bagHeight * 0.3);
     context.quadraticCurveTo(-bagWidth * 0.4, -bagHeight * 0.2, -bagWidth * 0.12, -bagHeight * 0.32);
     context.closePath();
+    context.save();
+    context.strokeStyle = "rgba(255, 255, 255, 0.98)";
+    context.lineWidth = outlineWidth * 3.1;
+    context.shadowColor = "rgba(255, 238, 164, 0.82)";
+    context.shadowBlur = bagWidth * 0.09;
+    context.stroke();
+    context.restore();
     context.fill();
     context.stroke();
 
@@ -1860,26 +2842,30 @@ export function createRenderer(canvas, lanes) {
   }
 
   return {
+    getViewportSize: () => ({ height, width }),
     render,
     resize,
-    setBackgroundOffset,
+    setPlayerCharacter: (character) => {
+      playerCharacter = normalizePlayerCharacter(character);
+    },
   };
 }
 
-function normalizeOffset(offset, period) {
-  return ((offset % period) + period) % period;
+function easeInCubic(value) {
+  return value ** 3;
 }
 
-function getFallbackObstacleColor(type) {
-  if (type === OBSTACLE_TYPE.JUMP) {
-    return "rgba(239, 147, 53, 0.82)";
-  }
+function easeOutCubic(value) {
+  return 1 - (1 - value) ** 3;
+}
 
-  if (type === OBSTACLE_TYPE.DUCK) {
-    return "rgba(112, 88, 181, 0.82)";
-  }
-
-  return "rgba(190, 61, 76, 0.82)";
+function quadraticBezier(start, control, end, progress) {
+  const inverseProgress = 1 - progress;
+  return (
+    inverseProgress ** 2 * start +
+    2 * inverseProgress * progress * control +
+    progress ** 2 * end
+  );
 }
 
 function loadImage(path) {
