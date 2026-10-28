@@ -15,9 +15,9 @@ const CANDY_ASSORTMENT_ITEM_TYPE = "candyAssortment";
 const STAMP_ITEM_TYPE = "stamp";
 export const STAMP_APPEARANCE_RULES = Object.freeze({
   baseChance: 0.03,
-  rampMaxChance: 0.08,
+  rampMaxChance: 0.15,
   candyForRampMaxChance: 150,
-  bonusChance: 0.1,
+  bonusChance: 0.3,
   bonusCandyThreshold: 200,
 });
 

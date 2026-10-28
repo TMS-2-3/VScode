@@ -15,6 +15,7 @@ import {
 } from "../shared/candy-appearances.js";
 import { paintCandyArtwork } from "./candy-art.js";
 import { normalizePlayerCharacter, paintPlayerArtwork, PLAYER_ARTWORK } from "./player-art.js";
+import { paintGhostCostumeArtwork } from "./ghost-costume-art.js";
 import { getPlayerDefeatMotion } from "./player-defeat.js";
 import {
   getObstacleArtworkLayout,
@@ -103,9 +104,8 @@ export function createRenderer(canvas, lanes) {
       drawCandyVacuumAura(player, candyVacuum);
       drawCandyVacuumBackpack(player, candyVacuum);
     }
-    drawPlayer(player, hitObstacleIds.length > 0, playerDefeat);
+    drawPlayer(player, hitObstacleIds.length > 0, playerDefeat, Boolean(scaryCostume?.isActive));
     if (!playerDefeat) {
-      drawScaryCostume(player, scaryCostume);
       drawPumpkinBarrierShell(player, pumpkinBarrier);
       drawCandyLauncherHeld(candyLauncher, player);
     }
@@ -215,12 +215,12 @@ export function createRenderer(canvas, lanes) {
     );
   }
 
-  function drawPlayer(player, isHit, playerDefeat) {
+  function drawPlayer(player, isHit, playerDefeat, isCostumed) {
     const footX = width * PLAYER_SCREEN_X_RATIO;
     const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
 
     if (playerDefeat) {
-      drawDefeatedPlayer(player, playerDefeat);
+      drawDefeatedPlayer(player, playerDefeat, isCostumed);
       return;
     }
 
@@ -228,7 +228,7 @@ export function createRenderer(canvas, lanes) {
       drawSlidingSmoke(footX, footY);
     }
 
-    if (playerImage?.complete && playerImage.naturalWidth > 0) {
+    if (!isCostumed && playerImage?.complete && playerImage.naturalWidth > 0) {
       context.drawImage(
         playerImage,
         footX - player.hitbox.width / 2,
@@ -239,109 +239,7 @@ export function createRenderer(canvas, lanes) {
       return;
     }
 
-    drawFallbackPlayer(footX, footY, player, isHit);
-  }
-
-  function drawScaryCostume(player, scaryCostume) {
-    if (!scaryCostume?.isActive) {
-      return;
-    }
-
-    const laneGap = lanes.getLaneGap();
-    const footX = width * PLAYER_SCREEN_X_RATIO;
-    const footY = lanes.getLaneY(player.lanePosition) - player.elevation;
-    const hoodWidth = Math.max(player.hitbox.width * 1.28, laneGap * 0.27);
-    const hoodHeight = Math.max(player.hitbox.height * 0.72, laneGap * 0.27);
-    const hoodCenterY = footY - player.hitbox.height * 0.76;
-    const hoodSprite = getCachedSprite(
-      `scary-costume-hood:${Math.round(hoodWidth)}:${Math.round(hoodHeight)}`,
-      hoodWidth,
-      hoodHeight,
-      laneGap * 0.035,
-      paintScaryCostumeHood,
-    );
-    const bob = Math.sin(performance.now() / 135) * laneGap * 0.006;
-
-    context.save();
-    context.globalAlpha = 0.96;
-    drawCachedSpriteCentered(
-      hoodSprite,
-      footX,
-      hoodCenterY + bob,
-      hoodWidth,
-      hoodHeight,
-    );
-    context.restore();
-  }
-
-  function paintScaryCostumeHood(spriteContext, hoodWidth, hoodHeight) {
-    spriteContext.save();
-    spriteContext.lineJoin = "round";
-    spriteContext.lineCap = "round";
-    spriteContext.lineWidth = Math.max(1.5, hoodWidth * 0.055);
-    spriteContext.strokeStyle = "#3f3154";
-    const gradient = spriteContext.createLinearGradient(0, 0, 0, hoodHeight);
-    gradient.addColorStop(0, "#f5f0ff");
-    gradient.addColorStop(1, "#bba8dc");
-    spriteContext.fillStyle = gradient;
-    spriteContext.beginPath();
-    spriteContext.moveTo(hoodWidth * 0.12, hoodHeight * 0.9);
-    spriteContext.lineTo(hoodWidth * 0.12, hoodHeight * 0.43);
-    spriteContext.bezierCurveTo(
-      hoodWidth * 0.12,
-      hoodHeight * 0.03,
-      hoodWidth * 0.88,
-      hoodHeight * 0.03,
-      hoodWidth * 0.88,
-      hoodHeight * 0.43,
-    );
-    spriteContext.lineTo(hoodWidth * 0.88, hoodHeight * 0.9);
-    spriteContext.quadraticCurveTo(
-      hoodWidth * 0.74,
-      hoodHeight * 0.72,
-      hoodWidth * 0.62,
-      hoodHeight * 0.91,
-    );
-    spriteContext.quadraticCurveTo(
-      hoodWidth * 0.5,
-      hoodHeight * 0.72,
-      hoodWidth * 0.38,
-      hoodHeight * 0.91,
-    );
-    spriteContext.quadraticCurveTo(
-      hoodWidth * 0.25,
-      hoodHeight * 0.72,
-      hoodWidth * 0.12,
-      hoodHeight * 0.9,
-    );
-    spriteContext.closePath();
-    spriteContext.fill();
-    spriteContext.stroke();
-
-    spriteContext.fillStyle = "#49345d";
-    spriteContext.beginPath();
-    spriteContext.moveTo(hoodWidth * 0.25, hoodHeight * 0.38);
-    spriteContext.lineTo(hoodWidth * 0.43, hoodHeight * 0.45);
-    spriteContext.lineTo(hoodWidth * 0.27, hoodHeight * 0.53);
-    spriteContext.closePath();
-    spriteContext.moveTo(hoodWidth * 0.75, hoodHeight * 0.38);
-    spriteContext.lineTo(hoodWidth * 0.57, hoodHeight * 0.45);
-    spriteContext.lineTo(hoodWidth * 0.73, hoodHeight * 0.53);
-    spriteContext.closePath();
-    spriteContext.fill();
-
-    spriteContext.strokeStyle = "#49345d";
-    spriteContext.lineWidth = Math.max(1.5, hoodWidth * 0.045);
-    spriteContext.beginPath();
-    spriteContext.arc(
-      hoodWidth * 0.5,
-      hoodHeight * 0.59,
-      hoodWidth * 0.13,
-      0.12,
-      Math.PI - 0.12,
-    );
-    spriteContext.stroke();
-    spriteContext.restore();
+    drawFallbackPlayer(footX, footY, player, isHit, null, isCostumed);
   }
 
   function drawPumpkinBarrierShell(player, barrier) {
@@ -657,7 +555,7 @@ export function createRenderer(canvas, lanes) {
     context.restore();
   }
 
-  function drawFallbackPlayer(footX, footY, player, isHit, poseOverride = null) {
+  function drawFallbackPlayer(footX, footY, player, isHit, poseOverride = null, isCostumed = false) {
     const pose = poseOverride ?? (isHit ? "hit" : player.isDucking ? "duck" : player.jumpCount > 0 ? "jump" : "run");
     const frame = pose === "run"
       ? Math.floor(performance.now() / 85) % PLAYER_ARTWORK.runFrames
@@ -667,12 +565,16 @@ export function createRenderer(canvas, lanes) {
     const scale = lanes.getLaneGap() * 0.39 / PLAYER_ARTWORK.standing.height;
     const targetHeight = dimensions.height * scale;
     const sprite = getCachedSprite(
-      `player-witch:${playerCharacter}:${pose}:${frame}`,
+      isCostumed ? `player-ghost-child:${pose}:${frame}` : `player-witch:${playerCharacter}:${pose}:${frame}`,
       dimensions.width,
       dimensions.height,
       0,
       (spriteContext, spriteWidth, spriteHeight) => {
-        paintPlayerArtwork(spriteContext, spriteWidth, spriteHeight, { pose, frame, character: playerCharacter });
+        if (isCostumed) {
+          paintGhostCostumeArtwork(spriteContext, spriteWidth, spriteHeight, { pose, frame });
+        } else {
+          paintPlayerArtwork(spriteContext, spriteWidth, spriteHeight, { pose, frame, character: playerCharacter });
+        }
       },
     );
 
@@ -685,7 +587,7 @@ export function createRenderer(canvas, lanes) {
     );
   }
 
-  function drawDefeatedPlayer(player, defeat) {
+  function drawDefeatedPlayer(player, defeat, isCostumed) {
     const laneGap = lanes.getLaneGap();
     const motion = getPlayerDefeatMotion(defeat.elapsedSeconds);
     const originX = width * PLAYER_SCREEN_X_RATIO;
@@ -708,7 +610,7 @@ export function createRenderer(canvas, lanes) {
     context.save();
     context.translate(footX, footY - bottomExtent);
     context.rotate(motion.rotation);
-    drawFallbackPlayer(0, laneGap * 0.195, player, true, dizzy ? "dizzy" : "hit");
+    drawFallbackPlayer(0, laneGap * 0.195, player, true, dizzy ? "dizzy" : "hit", isCostumed);
     context.restore();
 
     if (dizzy) {
@@ -924,10 +826,10 @@ export function createRenderer(canvas, lanes) {
 
     stations.forEach((station) => {
       const isLarge = station.isLarge === true;
-      const stationWidth = laneGap * (isLarge ? 1.46 : 0.92);
-      const stationHeight = laneGap * (isLarge ? 0.8 : 0.72);
+      const stationWidth = laneGap * 0.31;
+      const stationHeight = laneGap * 0.58;
       const sprite = getCachedSprite(
-        isLarge ? "supply-station-large" : "supply-station",
+        isLarge ? "supply-sign-two-stars" : "supply-sign-one-star",
         stationWidth,
         stationHeight,
         Math.max(2, laneGap * 0.02),
@@ -956,233 +858,75 @@ export function createRenderer(canvas, lanes) {
     laneGap,
     isLarge = false,
   ) {
-    const canopyTop = stationHeight * 0.05;
-    const canopyHeight = stationHeight * 0.24;
-    const postWidth = laneGap * 0.035;
-    const tableTopY = stationHeight * 0.58;
-    const tableHeight = stationHeight * 0.17;
-    const tableLeft = stationWidth * 0.08;
-    const tableWidth = stationWidth * 0.84;
+    const centerX = stationWidth / 2;
+    const boardHeight = laneGap * 0.27;
+    const boardCenterY = stationHeight - laneGap * 0.44;
+    const postWidth = laneGap * 0.045;
 
-    context.fillStyle = "#43323e";
-    context.fillRect(stationWidth * 0.13, canopyTop + canopyHeight, postWidth, tableTopY - canopyTop);
-    context.fillRect(stationWidth * 0.87 - postWidth, canopyTop + canopyHeight, postWidth, tableTopY - canopyTop);
-
-    context.fillStyle = "#f6e5bc";
-    context.strokeStyle = "#3b2939";
+    context.fillStyle = "#50362b";
+    context.strokeStyle = "#2e2023";
     context.lineWidth = Math.max(1.5, laneGap * 0.012);
-    context.beginPath();
-    context.roundRect(
-      stationWidth * 0.06,
-      canopyTop,
-      stationWidth * 0.88,
-      canopyHeight,
-      laneGap * 0.035,
+    context.fillRect(
+      centerX - postWidth / 2,
+      boardCenterY,
+      postWidth,
+      stationHeight - boardCenterY,
     );
-    context.fill();
-    context.stroke();
+    context.strokeRect(
+      centerX - postWidth / 2,
+      boardCenterY,
+      postWidth,
+      stationHeight - boardCenterY,
+    );
 
-    const stripeWidth = stationWidth * 0.88 / 5;
     context.save();
+    context.translate(centerX, boardCenterY);
+    context.fillStyle = "#f2a943";
+    context.strokeStyle = "#3a2532";
+    context.lineWidth = Math.max(2, laneGap * 0.018);
     context.beginPath();
     context.roundRect(
-      stationWidth * 0.06,
-      canopyTop,
-      stationWidth * 0.88,
-      canopyHeight,
-      laneGap * 0.035,
+      -stationWidth / 2,
+      -boardHeight / 2,
+      stationWidth,
+      boardHeight,
+      laneGap * 0.025,
     );
-    context.clip();
-    [0, 2, 4].forEach((index) => {
-      context.fillStyle = index === 2 ? "#59c7bd" : "#ef8d45";
-      context.fillRect(
-        stationWidth * 0.06 + stripeWidth * index,
-        canopyTop,
-        stripeWidth,
-        canopyHeight,
+    context.fill();
+    context.stroke();
+
+    paintSupplyStar(context, 0, 0, laneGap * 0.083, laneGap);
+    if (isLarge) {
+      paintSupplyStar(
+        context,
+        laneGap * 0.09,
+        laneGap * 0.065,
+        laneGap * 0.042,
+        laneGap,
       );
-    });
+    }
     context.restore();
+  }
 
-    context.fillStyle = "#775039";
-    context.strokeStyle = "#35252d";
-    context.lineWidth = Math.max(1.5, laneGap * 0.011);
-    context.fillRect(tableLeft, tableTopY, tableWidth, tableHeight);
-    context.strokeRect(tableLeft, tableTopY, tableWidth, tableHeight);
-    context.fillStyle = "#51372f";
-    context.fillRect(stationWidth * 0.18, tableTopY + tableHeight, laneGap * 0.05, stationHeight * 0.23);
-    context.fillRect(stationWidth * 0.77, tableTopY + tableHeight, laneGap * 0.05, stationHeight * 0.23);
-
-    const itemBaseY = tableTopY;
-    context.strokeStyle = "#3b2939";
-    context.lineWidth = Math.max(1, laneGap * 0.008);
-
-    // Potion bottle
-    const bottleX = stationWidth * 0.23;
-    const bottleWidth = laneGap * 0.08;
-    const bottleHeight = laneGap * 0.13;
-    context.fillStyle = "#69d0c5";
+  function paintSupplyStar(context, x, y, radius, laneGap) {
     context.beginPath();
-    context.roundRect(
-      bottleX - bottleWidth / 2,
-      itemBaseY - bottleHeight,
-      bottleWidth,
-      bottleHeight,
-      laneGap * 0.018,
-    );
-    context.fill();
-    context.stroke();
-    context.fillStyle = "#f6e5bc";
-    context.fillRect(
-      bottleX - bottleWidth * 0.22,
-      itemBaseY - bottleHeight - laneGap * 0.025,
-      bottleWidth * 0.44,
-      laneGap * 0.03,
-    );
-    context.strokeRect(
-      bottleX - bottleWidth * 0.22,
-      itemBaseY - bottleHeight - laneGap * 0.025,
-      bottleWidth * 0.44,
-      laneGap * 0.03,
-    );
-
-    // Wrapped candy
-    const candyX = stationWidth * 0.42;
-    const candyY = itemBaseY - laneGap * 0.06;
-    const candyRadius = laneGap * 0.045;
-    context.fillStyle = "#ef8d45";
-    context.beginPath();
-    context.moveTo(candyX - candyRadius, candyY);
-    context.lineTo(candyX - candyRadius * 1.8, candyY - candyRadius * 0.72);
-    context.lineTo(candyX - candyRadius * 1.8, candyY + candyRadius * 0.72);
-    context.closePath();
-    context.fill();
-    context.stroke();
-    context.beginPath();
-    context.moveTo(candyX + candyRadius, candyY);
-    context.lineTo(candyX + candyRadius * 1.8, candyY - candyRadius * 0.72);
-    context.lineTo(candyX + candyRadius * 1.8, candyY + candyRadius * 0.72);
-    context.closePath();
-    context.fill();
-    context.stroke();
-    context.fillStyle = "#ffd45c";
-    context.beginPath();
-    context.arc(candyX, candyY, candyRadius, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-
-    // Item pouch
-    const pouchX = stationWidth * 0.61;
-    const pouchWidth = laneGap * 0.11;
-    const pouchHeight = laneGap * 0.12;
-    context.fillStyle = "#9a6b45";
-    context.beginPath();
-    context.roundRect(
-      pouchX - pouchWidth / 2,
-      itemBaseY - pouchHeight,
-      pouchWidth,
-      pouchHeight,
-      laneGap * 0.028,
-    );
-    context.fill();
-    context.stroke();
-    context.fillStyle = "#f0b85d";
-    context.fillRect(
-      pouchX - pouchWidth * 0.42,
-      itemBaseY - pouchHeight * 0.8,
-      pouchWidth * 0.84,
-      laneGap * 0.018,
-    );
-
-    // Rolled map
-    const scrollX = stationWidth * 0.79;
-    const scrollWidth = laneGap * 0.12;
-    const scrollHeight = laneGap * 0.085;
-    context.fillStyle = "#f6e5bc";
-    context.fillRect(
-      scrollX - scrollWidth / 2,
-      itemBaseY - scrollHeight,
-      scrollWidth,
-      scrollHeight,
-    );
-    context.strokeRect(
-      scrollX - scrollWidth / 2,
-      itemBaseY - scrollHeight,
-      scrollWidth,
-      scrollHeight,
-    );
-    context.fillStyle = "#d79a51";
-    context.beginPath();
-    context.arc(
-      scrollX - scrollWidth / 2,
-      itemBaseY - scrollHeight / 2,
-      scrollHeight * 0.3,
-      0,
-      Math.PI * 2,
-    );
-    context.arc(
-      scrollX + scrollWidth / 2,
-      itemBaseY - scrollHeight / 2,
-      scrollHeight * 0.3,
-      0,
-      Math.PI * 2,
-    );
-    context.fill();
-    context.stroke();
-
-    const signCenterX = stationWidth / 2;
-    const signCenterY = canopyTop + canopyHeight / 2;
-    context.fillStyle = "#fff4d2";
-    context.beginPath();
-    context.arc(signCenterX, signCenterY, laneGap * 0.065, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = "#41313e";
-    context.stroke();
-    context.fillStyle = "#ef8d45";
-    context.beginPath();
-    for (let pointIndex = 0; pointIndex < 10; pointIndex += 1) {
-      const radius = laneGap * (pointIndex % 2 === 0 ? 0.047 : 0.021);
-      const angle = -Math.PI / 2 + pointIndex * Math.PI / 5;
-      const pointX = signCenterX + Math.cos(angle) * radius;
-      const pointY = signCenterY + Math.sin(angle) * radius;
-
-      if (pointIndex === 0) {
+    for (let point = 0; point < 10; point += 1) {
+      const angle = -Math.PI / 2 + point * Math.PI / 5;
+      const distance = point % 2 === 0 ? radius : radius * 0.46;
+      const pointX = x + Math.cos(angle) * distance;
+      const pointY = y + Math.sin(angle) * distance;
+      if (point === 0) {
         context.moveTo(pointX, pointY);
       } else {
         context.lineTo(pointX, pointY);
       }
     }
     context.closePath();
+    context.fillStyle = "#fff1bf";
+    context.strokeStyle = "#463043";
+    context.lineWidth = Math.max(1, laneGap * 0.009);
     context.fill();
     context.stroke();
-
-    if (isLarge) {
-      [-1, 1].forEach((direction) => {
-        const badgeX = signCenterX + direction * stationWidth * 0.105;
-        context.fillStyle = "#fff4d2";
-        context.beginPath();
-        context.arc(
-          badgeX,
-          signCenterY,
-          laneGap * 0.043,
-          0,
-          Math.PI * 2,
-        );
-        context.fill();
-        context.strokeStyle = "#41313e";
-        context.stroke();
-        context.fillStyle = direction < 0 ? "#59c7bd" : "#ef8d45";
-        context.beginPath();
-        context.arc(
-          badgeX,
-          signCenterY,
-          laneGap * 0.022,
-          0,
-          Math.PI * 2,
-        );
-        context.fill();
-      });
-    }
   }
 
   function drawGhostWarningSign(signX) {

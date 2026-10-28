@@ -314,6 +314,10 @@ function paintNeckwear(context, x, y, boy) {
   context.restore();
 }
 
+export function paintPlayerCandyBasket(context, x, y, size) {
+  paintPumpkin(context, x, y, size, true);
+}
+
 function paintPumpkin(context, x, y, size, bag) {
   context.save();
   context.translate(x, y);
