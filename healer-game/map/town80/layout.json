@@ -1,0 +1,769 @@
+{
+  "tileSize": 32,
+  "width": 80,
+  "height": 80,
+  "buildings": [
+    {
+      "art": "church",
+      "name": "北の教会",
+      "x": 35,
+      "y": 8,
+      "w": 10,
+      "h": 12,
+      "doorX": 40,
+      "doorY": 20,
+      "id": "town80_home_building_0"
+    },
+    {
+      "art": "weapon",
+      "name": "武器屋",
+      "x": 53,
+      "y": 24,
+      "w": 8,
+      "h": 7,
+      "doorX": 56,
+      "doorY": 31,
+      "facilityId": "weapon",
+      "id": "town80_weapon_building_1"
+    },
+    {
+      "art": "armor",
+      "name": "防具屋",
+      "x": 64,
+      "y": 25,
+      "w": 7,
+      "h": 7,
+      "doorX": 67,
+      "doorY": 32,
+      "facilityId": "armor",
+      "id": "town80_armor_building_2"
+    },
+    {
+      "art": "inn",
+      "name": "旅人の宿",
+      "x": 48,
+      "y": 58,
+      "w": 10,
+      "h": 8,
+      "doorX": 51,
+      "doorY": 66,
+      "facilityId": "inn",
+      "id": "town80_inn_building_3"
+    },
+    {
+      "art": "item",
+      "name": "道具屋",
+      "x": 55,
+      "y": 42,
+      "w": 7,
+      "h": 6,
+      "doorX": 58,
+      "doorY": 48,
+      "facilityId": "item",
+      "id": "town80_item_building_4"
+    },
+    {
+      "art": "tavern",
+      "name": "酒場",
+      "x": 46,
+      "y": 48,
+      "w": 9,
+      "h": 7,
+      "doorX": 50,
+      "doorY": 55,
+      "id": "town80_home_building_5"
+    },
+    {
+      "art": "bakery",
+      "name": "パン屋",
+      "x": 63,
+      "y": 44,
+      "w": 7,
+      "h": 6,
+      "doorX": 66,
+      "doorY": 50,
+      "id": "town80_home_building_6"
+    },
+    {
+      "art": "guild",
+      "name": "依頼所",
+      "x": 23,
+      "y": 26,
+      "w": 7,
+      "h": 7,
+      "doorX": 26,
+      "doorY": 33,
+      "facilityId": "guild",
+      "id": "town80_request_building_7"
+    },
+    {
+      "art": "apothecary",
+      "name": "薬草店",
+      "x": 54,
+      "y": 13,
+      "w": 7,
+      "h": 7,
+      "doorX": 57,
+      "doorY": 20,
+      "id": "town80_home_building_8"
+    },
+    {
+      "art": "home_thatch",
+      "name": "西の茅葺き住宅",
+      "x": 9,
+      "y": 26,
+      "w": 6,
+      "h": 5,
+      "doorX": 12,
+      "doorY": 31,
+      "id": "town80_home_building_9"
+    },
+    {
+      "art": "home_stone",
+      "name": "庭付きの石造住宅",
+      "x": 18,
+      "y": 18,
+      "w": 7,
+      "h": 6,
+      "doorX": 21,
+      "doorY": 24,
+      "id": "town80_home_building_10"
+    },
+    {
+      "art": "home_red",
+      "name": "南西の木造住宅",
+      "x": 10,
+      "y": 47,
+      "w": 7,
+      "h": 6,
+      "doorX": 13,
+      "doorY": 53,
+      "id": "town80_home_building_11"
+    },
+    {
+      "art": "home_timber",
+      "name": "菜園のある住宅",
+      "x": 22,
+      "y": 47,
+      "w": 6,
+      "h": 6,
+      "doorX": 25,
+      "doorY": 53,
+      "id": "town80_home_building_12"
+    },
+    {
+      "art": "townhouse",
+      "name": "北西の町家",
+      "x": 10,
+      "y": 9,
+      "w": 7,
+      "h": 7,
+      "doorX": 13,
+      "doorY": 16,
+      "id": "town80_home_building_13"
+    },
+    {
+      "art": "manor",
+      "name": "北の館",
+      "x": 23,
+      "y": 9,
+      "w": 8,
+      "h": 7,
+      "doorX": 27,
+      "doorY": 16,
+      "id": "town80_home_building_14"
+    },
+    {
+      "art": "stable",
+      "name": "共同の納屋と厩舎",
+      "x": 18,
+      "y": 60,
+      "w": 9,
+      "h": 6,
+      "doorX": 22,
+      "doorY": 66,
+      "id": "town80_home_building_15"
+    },
+    {
+      "art": "mill",
+      "name": "運河の水車小屋",
+      "x": 62,
+      "y": 10,
+      "w": 8,
+      "h": 9,
+      "doorX": 64,
+      "doorY": 19,
+      "id": "town80_home_building_16"
+    },
+    {
+      "art": "home_stone",
+      "name": "農家の母屋",
+      "x": 8,
+      "y": 59,
+      "w": 7,
+      "h": 6,
+      "doorX": 11,
+      "doorY": 65,
+      "id": "town80_home_building_17"
+    },
+    {
+      "art": "home_thatch",
+      "name": "南の農家",
+      "x": 28,
+      "y": 61,
+      "w": 6,
+      "h": 5,
+      "doorX": 31,
+      "doorY": 66,
+      "id": "town80_home_building_18"
+    },
+    {
+      "art": "home_timber",
+      "name": "住宅街の角の家",
+      "x": 14,
+      "y": 35,
+      "w": 6,
+      "h": 6,
+      "doorX": 17,
+      "doorY": 41,
+      "id": "town80_home_building_19"
+    },
+    {
+      "art": "townhouse",
+      "name": "商人の町家",
+      "x": 59,
+      "y": 56,
+      "w": 7,
+      "h": 7,
+      "doorX": 62,
+      "doorY": 63,
+      "id": "town80_home_building_20"
+    }
+  ],
+  "bridges": [
+    {
+      "x": 70,
+      "y": 34,
+      "w": 6,
+      "h": 4
+    },
+    {
+      "x": 68,
+      "y": 52,
+      "w": 6,
+      "h": 4
+    }
+  ],
+  "placedProps": [
+    {
+      "x": 37,
+      "y": 37,
+      "n": "fountain"
+    },
+    {
+      "x": 32,
+      "y": 34,
+      "n": "bench_s"
+    },
+    {
+      "x": 45,
+      "y": 34,
+      "n": "bench_s"
+    },
+    {
+      "x": 34,
+      "y": 46,
+      "n": "bench_s"
+    },
+    {
+      "x": 45,
+      "y": 44,
+      "n": "bench_s"
+    },
+    {
+      "x": 34,
+      "y": 37,
+      "n": "bench_e"
+    },
+    {
+      "x": 45,
+      "y": 38,
+      "n": "bench_e"
+    },
+    {
+      "x": 31,
+      "y": 31,
+      "n": "lamp"
+    },
+    {
+      "x": 48,
+      "y": 31,
+      "n": "lamp"
+    },
+    {
+      "x": 31,
+      "y": 46,
+      "n": "lamp"
+    },
+    {
+      "x": 48,
+      "y": 46,
+      "n": "lamp"
+    },
+    {
+      "x": 33,
+      "y": 37,
+      "n": "lamp"
+    },
+    {
+      "x": 46,
+      "y": 41,
+      "n": "lamp"
+    },
+    {
+      "x": 32,
+      "y": 32,
+      "n": "flowerbed"
+    },
+    {
+      "x": 45,
+      "y": 32,
+      "n": "flowerbed"
+    },
+    {
+      "x": 46,
+      "y": 45,
+      "n": "flowerbed"
+    },
+    {
+      "x": 33,
+      "y": 22,
+      "n": "flowerbed"
+    },
+    {
+      "x": 45,
+      "y": 22,
+      "n": "flowerbed"
+    },
+    {
+      "x": 33,
+      "y": 25,
+      "n": "bench_s"
+    },
+    {
+      "x": 45,
+      "y": 25,
+      "n": "bench_s"
+    },
+    {
+      "x": 32,
+      "y": 24,
+      "n": "lamp"
+    },
+    {
+      "x": 47,
+      "y": 24,
+      "n": "lamp"
+    },
+    {
+      "x": 52,
+      "y": 34,
+      "n": "stall"
+    },
+    {
+      "x": 57,
+      "y": 34,
+      "n": "stall"
+    },
+    {
+      "x": 64,
+      "y": 37,
+      "n": "stall"
+    },
+    {
+      "x": 68,
+      "y": 39,
+      "n": "stall"
+    },
+    {
+      "x": 63,
+      "y": 27,
+      "n": "crate"
+    },
+    {
+      "x": 63,
+      "y": 28,
+      "n": "barrel"
+    },
+    {
+      "x": 65,
+      "y": 42,
+      "n": "cart"
+    },
+    {
+      "x": 67,
+      "y": 42,
+      "n": "crate"
+    },
+    {
+      "x": 68,
+      "y": 42,
+      "n": "barrel"
+    },
+    {
+      "x": 20,
+      "y": 45,
+      "n": "well"
+    },
+    {
+      "x": 18,
+      "y": 45,
+      "n": "flowerbed"
+    },
+    {
+      "x": 19,
+      "y": 44,
+      "n": "bench_s"
+    },
+    {
+      "x": 11,
+      "y": 57,
+      "n": "cart"
+    },
+    {
+      "x": 21,
+      "y": 58,
+      "n": "cart"
+    },
+    {
+      "x": 48,
+      "y": 67,
+      "n": "lamp"
+    },
+    {
+      "x": 55,
+      "y": 66,
+      "n": "bench_s"
+    },
+    {
+      "x": 57,
+      "y": 66,
+      "n": "barrel"
+    },
+    {
+      "x": 46,
+      "y": 56,
+      "n": "bench_s"
+    },
+    {
+      "x": 52,
+      "y": 56,
+      "n": "bench_s"
+    },
+    {
+      "x": 54,
+      "y": 55,
+      "n": "barrel"
+    },
+    {
+      "x": 55,
+      "y": 54,
+      "n": "cart"
+    },
+    {
+      "x": 9,
+      "y": 19,
+      "n": "tree"
+    },
+    {
+      "x": 11,
+      "y": 21,
+      "n": "tree"
+    },
+    {
+      "x": 29,
+      "y": 20,
+      "n": "tree"
+    },
+    {
+      "x": 32,
+      "y": 12,
+      "n": "pine"
+    },
+    {
+      "x": 47,
+      "y": 13,
+      "n": "tree"
+    },
+    {
+      "x": 50,
+      "y": 16,
+      "n": "tree"
+    },
+    {
+      "x": 8,
+      "y": 40,
+      "n": "tree"
+    },
+    {
+      "x": 8,
+      "y": 46,
+      "n": "tree"
+    },
+    {
+      "x": 20,
+      "y": 49,
+      "n": "tree"
+    },
+    {
+      "x": 32,
+      "y": 52,
+      "n": "tree"
+    },
+    {
+      "x": 27,
+      "y": 57,
+      "n": "tree"
+    },
+    {
+      "x": 7,
+      "y": 66,
+      "n": "tree"
+    },
+    {
+      "x": 35,
+      "y": 69,
+      "n": "pine"
+    },
+    {
+      "x": 45,
+      "y": 70,
+      "n": "tree"
+    },
+    {
+      "x": 74,
+      "y": 40,
+      "n": "tree"
+    },
+    {
+      "x": 74,
+      "y": 48,
+      "n": "tree"
+    },
+    {
+      "x": 73,
+      "y": 58,
+      "n": "tree"
+    },
+    {
+      "x": 48,
+      "y": 9,
+      "n": "tree"
+    },
+    {
+      "x": 58,
+      "y": 10,
+      "n": "pine"
+    },
+    {
+      "x": 16,
+      "y": 32,
+      "n": "flowerbed"
+    },
+    {
+      "x": 27,
+      "y": 54,
+      "n": "flowerbed"
+    },
+    {
+      "x": 19,
+      "y": 11,
+      "n": "tree"
+    },
+    {
+      "x": 20,
+      "y": 14,
+      "n": "tree"
+    },
+    {
+      "x": 48,
+      "y": 27,
+      "n": "bench_s"
+    }
+  ],
+  "skippedProps": [
+    {
+      "x": 51,
+      "y": 28,
+      "n": "crate"
+    },
+    {
+      "x": 51,
+      "y": 29,
+      "n": "barrel"
+    },
+    {
+      "x": 51,
+      "y": 30,
+      "n": "cart"
+    },
+    {
+      "x": 62,
+      "y": 20,
+      "n": "cart"
+    },
+    {
+      "x": 67,
+      "y": 64,
+      "n": "tree"
+    },
+    {
+      "x": 70,
+      "y": 59,
+      "n": "pine"
+    },
+    {
+      "x": 11,
+      "y": 31,
+      "n": "flowerbed"
+    },
+    {
+      "x": 25,
+      "y": 53,
+      "n": "flowerbed"
+    },
+    {
+      "x": 31,
+      "y": 66,
+      "n": "barrel"
+    },
+    {
+      "x": 17,
+      "y": 65,
+      "n": "barrel"
+    },
+    {
+      "x": 52,
+      "y": 24,
+      "n": "flowerbed"
+    }
+  ],
+  "sceneSpace": {
+    "x": 31,
+    "y": 41,
+    "width": 5,
+    "height": 5
+  },
+  "spawn": {
+    "col": 40,
+    "row": 77,
+    "facing": "up"
+  },
+  "doors": [
+    {
+      "name": "北の教会",
+      "x": 40,
+      "y": 20
+    },
+    {
+      "name": "武器屋",
+      "x": 56,
+      "y": 31
+    },
+    {
+      "name": "防具屋",
+      "x": 67,
+      "y": 32
+    },
+    {
+      "name": "旅人の宿",
+      "x": 51,
+      "y": 66
+    },
+    {
+      "name": "道具屋",
+      "x": 58,
+      "y": 48
+    },
+    {
+      "name": "酒場",
+      "x": 50,
+      "y": 55
+    },
+    {
+      "name": "パン屋",
+      "x": 66,
+      "y": 50
+    },
+    {
+      "name": "依頼所",
+      "x": 26,
+      "y": 33
+    },
+    {
+      "name": "薬草店",
+      "x": 57,
+      "y": 20
+    },
+    {
+      "name": "西の茅葺き住宅",
+      "x": 12,
+      "y": 31
+    },
+    {
+      "name": "庭付きの石造住宅",
+      "x": 21,
+      "y": 24
+    },
+    {
+      "name": "南西の木造住宅",
+      "x": 13,
+      "y": 53
+    },
+    {
+      "name": "菜園のある住宅",
+      "x": 25,
+      "y": 53
+    },
+    {
+      "name": "北西の町家",
+      "x": 13,
+      "y": 16
+    },
+    {
+      "name": "北の館",
+      "x": 27,
+      "y": 16
+    },
+    {
+      "name": "共同の納屋と厩舎",
+      "x": 22,
+      "y": 66
+    },
+    {
+      "name": "運河の水車小屋",
+      "x": 64,
+      "y": 19
+    },
+    {
+      "name": "農家の母屋",
+      "x": 11,
+      "y": 65
+    },
+    {
+      "name": "南の農家",
+      "x": 31,
+      "y": 66
+    },
+    {
+      "name": "住宅街の角の家",
+      "x": 17,
+      "y": 41
+    },
+    {
+      "name": "商人の町家",
+      "x": 62,
+      "y": 63
+    }
+  ]
+}

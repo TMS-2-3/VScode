@@ -1,0 +1,151 @@
+{
+  "status": "PASS",
+  "tileSize": 32,
+  "dimensions": [
+    40,
+    20
+  ],
+  "imageDimensions": [
+    1280,
+    640
+  ],
+  "buildings": 18,
+  "residents": 7,
+  "connectedWalkableCells": 414,
+  "doors": [
+    {
+      "name": "教会",
+      "x": 20,
+      "y": 6,
+      "steps": 15
+    },
+    {
+      "name": "北西の町家",
+      "x": 3,
+      "y": 5,
+      "steps": 31
+    },
+    {
+      "name": "北の館",
+      "x": 8,
+      "y": 4,
+      "steps": 27
+    },
+    {
+      "name": "石造りの家",
+      "x": 12,
+      "y": 5,
+      "steps": 22
+    },
+    {
+      "name": "依頼所",
+      "x": 15,
+      "y": 5,
+      "steps": 19
+    },
+    {
+      "name": "薬草店",
+      "x": 25,
+      "y": 4,
+      "steps": 20
+    },
+    {
+      "name": "武器屋",
+      "x": 29,
+      "y": 5,
+      "steps": 23
+    },
+    {
+      "name": "防具屋",
+      "x": 34,
+      "y": 4,
+      "steps": 29
+    },
+    {
+      "name": "パン屋",
+      "x": 36,
+      "y": 7,
+      "steps": 30
+    },
+    {
+      "name": "西の茅葺き住宅",
+      "x": 3,
+      "y": 12,
+      "steps": 24
+    },
+    {
+      "name": "庭付きの住宅",
+      "x": 7,
+      "y": 13,
+      "steps": 19
+    },
+    {
+      "name": "赤い屋根の住宅",
+      "x": 11,
+      "y": 12,
+      "steps": 16
+    },
+    {
+      "name": "納屋と厩舎",
+      "x": 4,
+      "y": 17,
+      "steps": 18
+    },
+    {
+      "name": "南西の町家",
+      "x": 8,
+      "y": 17,
+      "steps": 14
+    },
+    {
+      "name": "道具屋",
+      "x": 28,
+      "y": 12,
+      "steps": 15
+    },
+    {
+      "name": "酒場",
+      "x": 32,
+      "y": 13,
+      "steps": 18
+    },
+    {
+      "name": "宿屋",
+      "x": 27,
+      "y": 17,
+      "steps": 9
+    },
+    {
+      "name": "南東の住宅",
+      "x": 36,
+      "y": 17,
+      "steps": 18
+    }
+  ],
+  "facilities": [
+    "guild",
+    "weapon",
+    "armor",
+    "item",
+    "inn"
+  ],
+  "conversations": [
+    "教会の世話係",
+    "鍛冶屋",
+    "市場の売り手",
+    "井戸を使う住人",
+    "広場の子",
+    "酒場の店主",
+    "門番"
+  ],
+  "collisions": "PASS",
+  "sceneSpace": "PASS",
+  "editorRoundtrip": "PASS",
+  "editorJSExport": "PASS",
+  "previewMovementAndDialogue": "PASS",
+  "previewOcclusion": "PASS",
+  "preserved80Files": 300,
+  "preserved80ByteIdentical": true,
+  "runtimeFilesModified": false,
+  "browserManualTest": false
+}

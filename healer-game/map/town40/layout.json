@@ -1,0 +1,447 @@
+{
+  "tileSize": 32,
+  "width": 40,
+  "height": 20,
+  "buildings": [
+    {
+      "art": "church",
+      "name": "教会",
+      "x": 18,
+      "y": 1,
+      "w": 5,
+      "h": 5,
+      "doorX": 20,
+      "doorY": 6,
+      "id": "town40_home_building_0"
+    },
+    {
+      "art": "townhouse",
+      "name": "北西の町家",
+      "x": 2,
+      "y": 2,
+      "w": 3,
+      "h": 3,
+      "doorX": 3,
+      "doorY": 5,
+      "id": "town40_home_building_1"
+    },
+    {
+      "art": "manor",
+      "name": "北の館",
+      "x": 6,
+      "y": 1,
+      "w": 4,
+      "h": 3,
+      "doorX": 8,
+      "doorY": 4,
+      "id": "town40_home_building_2"
+    },
+    {
+      "art": "home_stone",
+      "name": "石造りの家",
+      "x": 11,
+      "y": 2,
+      "w": 3,
+      "h": 3,
+      "doorX": 12,
+      "doorY": 5,
+      "id": "town40_home_building_3"
+    },
+    {
+      "art": "guild",
+      "name": "依頼所",
+      "x": 14,
+      "y": 2,
+      "w": 3,
+      "h": 3,
+      "doorX": 15,
+      "doorY": 5,
+      "facilityId": "guild",
+      "id": "town40_request_building_4"
+    },
+    {
+      "art": "apothecary",
+      "name": "薬草店",
+      "x": 24,
+      "y": 1,
+      "w": 3,
+      "h": 3,
+      "doorX": 25,
+      "doorY": 4,
+      "id": "town40_home_building_5"
+    },
+    {
+      "art": "weapon",
+      "name": "武器屋",
+      "x": 28,
+      "y": 2,
+      "w": 4,
+      "h": 3,
+      "doorX": 29,
+      "doorY": 5,
+      "facilityId": "weapon",
+      "id": "town40_weapon_building_6"
+    },
+    {
+      "art": "armor",
+      "name": "防具屋",
+      "x": 33,
+      "y": 1,
+      "w": 3,
+      "h": 3,
+      "doorX": 34,
+      "doorY": 4,
+      "facilityId": "armor",
+      "id": "town40_armor_building_7"
+    },
+    {
+      "art": "bakery",
+      "name": "パン屋",
+      "x": 35,
+      "y": 4,
+      "w": 3,
+      "h": 3,
+      "doorX": 36,
+      "doorY": 7,
+      "id": "town40_home_building_8"
+    },
+    {
+      "art": "home_thatch",
+      "name": "西の茅葺き住宅",
+      "x": 2,
+      "y": 9,
+      "w": 3,
+      "h": 3,
+      "doorX": 3,
+      "doorY": 12,
+      "id": "town40_home_building_9"
+    },
+    {
+      "art": "home_timber",
+      "name": "庭付きの住宅",
+      "x": 6,
+      "y": 10,
+      "w": 3,
+      "h": 3,
+      "doorX": 7,
+      "doorY": 13,
+      "id": "town40_home_building_10"
+    },
+    {
+      "art": "home_red",
+      "name": "赤い屋根の住宅",
+      "x": 10,
+      "y": 9,
+      "w": 3,
+      "h": 3,
+      "doorX": 11,
+      "doorY": 12,
+      "id": "town40_home_building_11"
+    },
+    {
+      "art": "stable",
+      "name": "納屋と厩舎",
+      "x": 2,
+      "y": 14,
+      "w": 4,
+      "h": 3,
+      "doorX": 4,
+      "doorY": 17,
+      "id": "town40_home_building_12"
+    },
+    {
+      "art": "townhouse",
+      "name": "南西の町家",
+      "x": 7,
+      "y": 14,
+      "w": 3,
+      "h": 3,
+      "doorX": 8,
+      "doorY": 17,
+      "id": "town40_home_building_13"
+    },
+    {
+      "art": "item",
+      "name": "道具屋",
+      "x": 27,
+      "y": 9,
+      "w": 3,
+      "h": 3,
+      "doorX": 28,
+      "doorY": 12,
+      "facilityId": "item",
+      "id": "town40_item_building_14"
+    },
+    {
+      "art": "tavern",
+      "name": "酒場",
+      "x": 31,
+      "y": 10,
+      "w": 4,
+      "h": 3,
+      "doorX": 32,
+      "doorY": 13,
+      "id": "town40_home_building_15"
+    },
+    {
+      "art": "inn",
+      "name": "宿屋",
+      "x": 26,
+      "y": 14,
+      "w": 4,
+      "h": 3,
+      "doorX": 27,
+      "doorY": 17,
+      "facilityId": "inn",
+      "id": "town40_inn_building_16"
+    },
+    {
+      "art": "home_thatch",
+      "name": "南東の住宅",
+      "x": 35,
+      "y": 14,
+      "w": 3,
+      "h": 3,
+      "doorX": 36,
+      "doorY": 17,
+      "id": "town40_home_building_17"
+    }
+  ],
+  "placedProps": [
+    {
+      "x": 19,
+      "y": 9,
+      "n": "fountain"
+    },
+    {
+      "x": 16,
+      "y": 8,
+      "n": "bench_s"
+    },
+    {
+      "x": 23,
+      "y": 11,
+      "n": "bench_s"
+    },
+    {
+      "x": 15,
+      "y": 7,
+      "n": "lamp"
+    },
+    {
+      "x": 25,
+      "y": 13,
+      "n": "lamp"
+    },
+    {
+      "x": 23,
+      "y": 8,
+      "n": "flowerbed"
+    },
+    {
+      "x": 31,
+      "y": 7,
+      "n": "stall"
+    },
+    {
+      "x": 11,
+      "y": 15,
+      "n": "well"
+    },
+    {
+      "x": 14,
+      "y": 16,
+      "n": "cart"
+    },
+    {
+      "x": 1,
+      "y": 16,
+      "n": "barrel"
+    },
+    {
+      "x": 30,
+      "y": 12,
+      "n": "crate"
+    },
+    {
+      "x": 34,
+      "y": 13,
+      "n": "barrel"
+    },
+    {
+      "x": 9,
+      "y": 5,
+      "n": "flowerbed"
+    },
+    {
+      "x": 7,
+      "y": 9,
+      "n": "fence_h"
+    },
+    {
+      "x": 35,
+      "y": 10,
+      "n": "fence_h"
+    },
+    {
+      "x": 1,
+      "y": 8,
+      "n": "tree"
+    },
+    {
+      "x": 5,
+      "y": 9,
+      "n": "tree"
+    },
+    {
+      "x": 10,
+      "y": 14,
+      "n": "pine"
+    },
+    {
+      "x": 38,
+      "y": 11,
+      "n": "tree"
+    },
+    {
+      "x": 14,
+      "y": 9,
+      "n": "pine"
+    },
+    {
+      "x": 26,
+      "y": 8,
+      "n": "tree"
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "n": "tree"
+    },
+    {
+      "x": 37,
+      "y": 1,
+      "n": "tree"
+    }
+  ],
+  "skippedProps": [
+    {
+      "x": 16,
+      "y": 12,
+      "n": "flowerbed"
+    },
+    {
+      "x": 24,
+      "y": 4,
+      "n": "flowerbed"
+    },
+    {
+      "x": 34,
+      "y": 17,
+      "n": "tree"
+    }
+  ],
+  "sceneSpace": {
+    "x": 15,
+    "y": 10,
+    "width": 3,
+    "height": 3
+  },
+  "spawn": {
+    "col": 20,
+    "row": 19,
+    "facing": "up"
+  },
+  "doors": [
+    {
+      "name": "教会",
+      "x": 20,
+      "y": 6
+    },
+    {
+      "name": "北西の町家",
+      "x": 3,
+      "y": 5
+    },
+    {
+      "name": "北の館",
+      "x": 8,
+      "y": 4
+    },
+    {
+      "name": "石造りの家",
+      "x": 12,
+      "y": 5
+    },
+    {
+      "name": "依頼所",
+      "x": 15,
+      "y": 5
+    },
+    {
+      "name": "薬草店",
+      "x": 25,
+      "y": 4
+    },
+    {
+      "name": "武器屋",
+      "x": 29,
+      "y": 5
+    },
+    {
+      "name": "防具屋",
+      "x": 34,
+      "y": 4
+    },
+    {
+      "name": "パン屋",
+      "x": 36,
+      "y": 7
+    },
+    {
+      "name": "西の茅葺き住宅",
+      "x": 3,
+      "y": 12
+    },
+    {
+      "name": "庭付きの住宅",
+      "x": 7,
+      "y": 13
+    },
+    {
+      "name": "赤い屋根の住宅",
+      "x": 11,
+      "y": 12
+    },
+    {
+      "name": "納屋と厩舎",
+      "x": 4,
+      "y": 17
+    },
+    {
+      "name": "南西の町家",
+      "x": 8,
+      "y": 17
+    },
+    {
+      "name": "道具屋",
+      "x": 28,
+      "y": 12
+    },
+    {
+      "name": "酒場",
+      "x": 32,
+      "y": 13
+    },
+    {
+      "name": "宿屋",
+      "x": 27,
+      "y": 17
+    },
+    {
+      "name": "南東の住宅",
+      "x": 36,
+      "y": 17
+    }
+  ]
+}

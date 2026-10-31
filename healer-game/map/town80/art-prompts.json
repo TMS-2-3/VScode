@@ -1,0 +1,42 @@
+{
+  "tool": "built-in image_gen",
+  "assets": [
+    {
+      "output": "assets/source/buildings-atlas.png",
+      "operation": "edit",
+      "reference": "assets/source/buildings-reference.png",
+      "prompt": "Edit this 4x4 building atlas into TRUE clean 16-bit console pixel art, keeping all sixteen identities, materials, roof colors and grid positions. Two required corrections: (1) raise the orthographic camera to a near-overhead classic JRPG view: roofs occupy roughly TWO THIRDS of each building, shallow front walls, clear top roof planes, no tall frontal facades; (2) draw deliberate hard square pixel clusters as if the complete atlas were 640x640 logical pixels, with 3-4 flat tones per material and restrained outlines, then nearest-neighbor upscale. Remove all painterly/high-resolution brushwork, fuzzy antialiasing and overly fine noisy texture. Same coherent warm daylight/palette. Each sprite fully inside its own equal square cell with at least 12 logical pixels of transparent gutter from every cell edge, including chimneys and signs. Do not enlarge sprites to cell boundaries. Add visibly asymmetric side wings to buildings 1,3,5,8,11,14,15,16. Doors face south and remain readable; preserve windows, chimneys and pictogram signs. No backdrop, ground plates, captions, letters, frames or scene. Actual transparent background and empty gutters. Working game sprite atlas, not illustrations."
+    },
+    {
+      "output": "assets/source/props-atlas.png",
+      "operation": "generate",
+      "reference": "assets/source/buildings-atlas.png",
+      "prompt": "Create ONE matching environment-prop atlas for the referenced medieval 16-bit JRPG architecture. EXACT 4x4 equal-cell grid, SIXTEEN distinct isolated sprites, centered in each cell with clear empty transparent gutters, no cell borders. Crisp square pixel clusters, limited warm muted palette, same near-overhead orthographic south-facing JRPG camera and upper-left daylight, no smooth painting, no photorealism. Pixel detail should work with 32x32 ground tiles. Transparent background, no ground plates or scenery. Row 1: (1) large dignified stone CHURCH with slate-blue cruciform roof, tall bell tower, south doorway, rose window, side chapel and weathered masonry, roofs dominate; (2) SOUTH TOWN GATE with two squat stone towers and a connecting arched entry, open transparent passage between piers, small red tile caps and ivy, no solid wall across passage; (3) circular pale-stone two-tier FOUNTAIN, visible oval blue water basin and restrained water jets; (4) broadleaf TREE with irregular lush olive-green canopy and visible small trunk. Row 2: (5) tall slimmer conifer TREE; (6) one wrought iron STREETLAMP with warm glass lantern, slender post; (7) wooden BENCH facing south viewed from above; (8) matching BENCH facing east. Row 3: (9) wooden two-wheel HANDCART carrying sacks and a little straw, view from above; (10) one small wooden CRATE plus a second low box; (11) two small coopered BARRELS, no giant scale; (12) small stone WELL with wooden pitched canopy and bucket. Row 4: (13) continuous three-section low wooden FENCE, horizontal; (14) weathered low STONE WALL horizontal with moss and cap stones; (15) merchant MARKET STALL with muted green-and-cream striped awning, produce baskets on counter; (16) low stone-edged FLOWER BED with pink, cream and burgundy flowers. No people, words, letters, numbers, labels, decorative framing or props outside the specified cells. Do not clip towers, leaves, shadows or signs at cell edges. This is a working sprite atlas with consistent visual scale and art direction."
+    },
+    {
+      "output": "assets/source/ground-atlas.png",
+      "operation": "generate",
+      "reference": "assets/source/buildings-atlas.png",
+      "prompt": "Create ONE terrain texture atlas for the referenced 16-bit medieval JRPG artwork. Strict equal 4x4 grid, sixteen square textures filling their cells edge-to-edge without gutters, frames, outlines or labels. This is flat near-overhead pixel art GROUND MATERIAL, not perspective, not a scene. Work as though each cell is a hand-pixeled 32x32 game tile, upscale with nearest-neighbor style. Restrained mid-value colors, low contrast, tidy deliberate pixel clusters. Each individual cell must repeat seamlessly on all four sides: no dark borders, lighting gradients or center spotlight. All ground textures should support clear colorful buildings and actors. Row 1: (1) muted olive-green fine short grass, (2) slightly mottled muted grassy variation, (3) compact warm earthy footpath with tiny sparse grit, (4) aged neutral-grey small cobblestones with subtle irregular joints. Row 2: (5) pale warm-grey dressed stone plaza paving in staggered courses, (6) darker charcoal-grey plaza border stones, (7) deep teal calm canal water with a few short horizontal glints, (8) matching lighter teal water with restrained ripples. Row 3: (9) dark brown cultivated soil with evenly spaced horizontal furrows, (10) matching garden soil with small green vegetable sprouts, (11) quiet grey-brown gravel, (12) dry muted meadow grass. Row 4: (13) reddish brick courtyard paving, (14) mossy aged stone paving, (15) light packed sandstone steps/terrace paving, (16) dark green forest-floor grass. No flowers, rocks, props, borders, road edge strips, paths crossing inside grass cells, vignettes, numbers or text. Keep pixel size and palette consistent across all sixteen materials. Opaque square atlas."
+    }
+  ],
+  "postprocess": {
+    "spriteAlphaThreshold": 128,
+    "disconnectedFragmentThreshold": 0.055,
+    "spriteResampling": "nearest-neighbor, preserve aspect ratio and ground anchor",
+    "rgbChannelStep": 8,
+    "groundTileSize": 32,
+    "groundSeamFeather": 2,
+    "npcSource": "existing img/npc/*/walk_2head",
+    "npcOutput": [
+      32,
+      48
+    ],
+    "rebuildScripts": [
+      "prepare-assets.ps1",
+      "build-town.mjs",
+      "render-town.ps1",
+      "verify-town.mjs"
+    ]
+  }
+}
