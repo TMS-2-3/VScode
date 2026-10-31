@@ -125,7 +125,7 @@
           </div>
         </fieldset>
         <section class="stamp-log" aria-labelledby="stamp-log-title">
-          <h3 id="stamp-log-title">スタンプログ</h3>
+          <h3 id="stamp-log-title">はんこログ</h3>
           <div id="stamp-log-entry" hidden>
             <canvas width="120" height="120" data-stamp-icon aria-hidden="true"></canvas>
             <time id="stamp-log-time"></time>
@@ -142,7 +142,7 @@
       </section>
       <section id="game-over-screen" aria-labelledby="game-over-title" hidden>
         <div id="game-over-stamp" hidden>
-          <span>スタンプをゲット！</span>
+          <span>はんこをゲット！</span>
           <canvas width="120" height="120" data-stamp-icon aria-hidden="true"></canvas>
         </div>
         <h2 id="game-over-title">ゲームオーバー</h2>
@@ -215,6 +215,15 @@
         </div>
       </section>
     </main>
-    <script type="module" src="./src/main.js"></script>
+    <script>
+      const gameScript = document.createElement("script");
+      if (location.protocol === "file:") {
+        gameScript.src = "./dist/game.js";
+      } else {
+        gameScript.type = "module";
+        gameScript.src = "./src/main.js";
+      }
+      document.body.append(gameScript);
+    </script>
   </body>
 </html>

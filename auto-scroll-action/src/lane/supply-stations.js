@@ -117,10 +117,10 @@ export const SUPPLY_ITEM_DEFINITIONS = [
   },
   {
     type: STAMP_ITEM_TYPE,
-    name: "スタンプ",
+    name: "はんこ",
     symbol: "STAMP",
     artwork: "stamp",
-    description: "スタンプをゲット！！\nスタッフの人にこの画面を見せてね！",
+    description: "はんこをゲット！！\nスタッフの人にこの画面を見せてね！",
     accentColor: "#e6bb61",
     effect: { type: SUPPLY_ITEM_EFFECT_TYPE.STAMP },
   },

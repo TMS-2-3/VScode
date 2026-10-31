@@ -9,8 +9,8 @@ import {
 
 const stamp = SUPPLY_ITEM_DEFINITIONS.find((item) => item.type === "stamp");
 const assortment = SUPPLY_ITEM_DEFINITIONS.find((item) => item.type === "candyAssortment");
-assert.equal(stamp.name, "スタンプ");
-assert.equal(stamp.description, "スタンプをゲット！！\nスタッフの人にこの画面を見せてね！");
+assert.equal(stamp.name, "はんこ");
+assert.equal(stamp.description, "はんこをゲット！！\nスタッフの人にこの画面を見せてね！");
 assert.deepEqual(stamp.effect, { type: SUPPLY_ITEM_EFFECT_TYPE.STAMP });
 assert.equal(getStampAppearanceChance(0), 0.03);
 assert.ok(Math.abs(getStampAppearanceChance(75) - 0.09) < 1e-12);
