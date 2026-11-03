@@ -8,6 +8,7 @@
 
   window.HEALER_ENEMY_DEFS = {
     horn_rabbit: {
+      name: "ツノウサギ",
       label: "兎",
       imagePath: "img/entity/horn_rabbit/horn_rabbit_default.png",
       mapImagePath: "img/entity/horn_rabbit/horn_rabbit_96.png",
@@ -42,6 +43,7 @@
       color: "#d2b16a",
     },
     bud_alraune: {
+      name: "つぼみのアルラウネ",
       label: "蕾",
       imagePath: "img/entity/bud_alraune/bud_alraune_default.png",
       mapImagePath: "img/entity/bud_alraune/bud_alraune_96.png",
@@ -76,6 +78,7 @@
       color: "#76a96a",
     },
     shadow_wolf: {
+      name: "シャドウウルフ",
       label: "狼",
       imagePath: "img/entity/shadow_wolf/shadow_wolf_default.png",
       mapImagePath: "img/entity/shadow_wolf/wolf_96.png",
@@ -110,6 +113,7 @@
       color: "#59617d",
     },
     flostiny: {
+      name: "フロスティーニ",
       label: "花",
       hp: 4200,
       mp: 0,
@@ -163,6 +167,7 @@
       color: "#b45aa2",
     },
     scopics: {
+      name: "スコーピックス",
       label: "蠍",
       imagePath: "img/entity/scopics/scopics_default.png",
       hp: 630,
@@ -188,6 +193,7 @@
       color: "#8b6b48",
     },
     vibat: {
+      name: "ヴィバット",
       label: "蝙",
       imagePath: "img/entity/vibat/vibat_default.png",
       hp: 580,
@@ -213,6 +219,7 @@
       color: "#59617d",
     },
     speat: {
+      name: "スピート",
       label: "蜘",
       imagePath: "img/entity/speat/speat_default.png",
       hp: 600,
@@ -238,6 +245,7 @@
       color: "#6f5a7f",
     },
     stokage: {
+      name: "ストカゲ",
       label: "蜥",
       imagePath: "img/entity/stokage/stokage_default.png",
       hp: 750,
@@ -263,6 +271,7 @@
       color: "#7f8d52",
     },
     hedumol: {
+      name: "ヘデュモル",
       label: "菌",
       imagePath: "img/entity/hedumol/hedumol_default.png",
       hp: 620,
@@ -288,6 +297,7 @@
       color: "#8f6f68",
     },
     clime: {
+      name: "クライム",
       label: "晶",
       imagePath: "img/entity/clime/clime_default.png",
       hp: 700,

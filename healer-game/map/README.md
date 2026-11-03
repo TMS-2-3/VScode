@@ -10,6 +10,7 @@
 - マップデータの正式な管理先: `map/maps.js`
 - タイル画像の正式な管理先: `map/img_tile/`
 - エディター: `map/map-editor.html`
+- ダンジョン生成・編集: `map/dungeon-editor.html`
 - 未接続のダンジョン自動生成基盤: `map/dungeon/`
 
 `Desktop\map` や `Downloads` にある一時ファイルは、正式データとしては扱いません。  
@@ -154,5 +155,6 @@ grass: {
 
 ## メモ
 
+- ダンジョン編集は`dungeon-editor.html`。名前付き生成設定の保存先は`dungeon/dungeonSavedProfiles.js`で、`HEALER_DUNGEON_PROFILES.get("ID")`からゲーム側も同じ設定を取得できる。操作・読込順・テストは`dungeon/README.md`を参照。ゲーム本体のマップにはまだ接続していない。
 - 文字化けが起きやすい共有文は、無理に日本語へ統一せず英語を使っても大丈夫です
 - マップ担当以外が読むことを考えて、ID・ファイル名・レイヤー名はなるべく一貫させてください

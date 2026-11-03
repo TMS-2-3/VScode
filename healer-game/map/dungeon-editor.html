@@ -1,0 +1,1678 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dungeon Editor - healer-game</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+        background: #111615;
+        color: #edf3ee;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 760px;
+        min-height: 100vh;
+        background: #111615;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      input,
+      select {
+        border: 1px solid #4d5b55;
+        border-radius: 5px;
+        background: #202825;
+        color: #f5f8f5;
+      }
+
+      button {
+        min-height: 36px;
+        padding: 7px 14px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button:hover:not(:disabled) {
+        border-color: #d0a84a;
+        background: #2b342f;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid #e1b955;
+        outline-offset: 2px;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.55;
+      }
+
+      input,
+      select {
+        height: 36px;
+        padding: 6px 9px;
+      }
+
+      input[type="checkbox"] {
+        width: 17px;
+        height: 17px;
+        margin: 0;
+        accent-color: #d0a84a;
+      }
+
+      .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        min-height: 68px;
+        padding: 12px 18px;
+        border-bottom: 1px solid #34403b;
+        background: #171e1b;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin: 3px 0 0;
+        color: #aebbb4;
+        font-size: 12px;
+      }
+
+      .status {
+        min-width: 230px;
+        text-align: right;
+        color: #b9c6bf;
+        font-size: 13px;
+      }
+
+      .status.error {
+        color: #ff8b83;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: end;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px 18px;
+        border-bottom: 1px solid #34403b;
+        background: #1a211e;
+      }
+
+      .profile-toolbar {
+        display: flex;
+        align-items: end;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px 18px;
+        border-bottom: 1px solid #34403b;
+        background: #171e1b;
+      }
+
+      .field {
+        display: grid;
+        gap: 4px;
+      }
+
+      .field label {
+        color: #b8c4bd;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      #seed-input {
+        width: 220px;
+      }
+
+      #profile-select {
+        width: 280px;
+      }
+
+      #scale-select,
+      #danger-select {
+        width: 92px;
+      }
+
+      .primary {
+        border-color: #c49b3b;
+        background: #b78c2c;
+        color: #14130f;
+      }
+
+      .primary:hover:not(:disabled) {
+        background: #d0a84a;
+      }
+
+      .view-options {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        min-height: 36px;
+        margin-left: auto;
+        padding: 0 4px;
+      }
+
+      .view-options label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #d9e1dc;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        min-height: calc(100vh - 132px);
+      }
+
+      .preview-section {
+        min-width: 0;
+        padding: 16px;
+        border-right: 1px solid #34403b;
+      }
+
+      .canvas-shell {
+        position: relative;
+        width: 100%;
+        height: calc(100vh - 214px);
+        min-height: 470px;
+        overflow: hidden;
+        border: 1px solid #49564f;
+        border-radius: 6px;
+        background: #090d0c;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .hover-info {
+        display: flex;
+        align-items: center;
+        min-height: 34px;
+        margin-top: 8px;
+        padding: 5px 8px;
+        border-left: 3px solid #d0a84a;
+        background: #1a211e;
+        color: #cbd5cf;
+        font-size: 13px;
+      }
+
+      aside {
+        overflow: auto;
+        padding: 16px;
+        background: #151b19;
+      }
+
+      .section {
+        padding: 0 0 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid #35413c;
+      }
+
+      .section:last-child {
+        margin-bottom: 0;
+        border-bottom: 0;
+      }
+
+      h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 7px 14px;
+        margin: 0;
+        font-size: 13px;
+      }
+
+      .metrics dt {
+        color: #aebbb4;
+      }
+
+      .metrics dd {
+        margin: 0;
+        color: #ffffff;
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        text-align: right;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 10px;
+        font-size: 12px;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .legend-heading {
+        grid-column: 1 / -1;
+        margin: 8px 0 2px;
+        color: #aebbb4;
+        font-size: 12px;
+      }
+
+      .swatch {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+      }
+
+      .swatch.circle {
+        border-radius: 50%;
+      }
+
+      .swatch.small-circle {
+        border-radius: 50%;
+        transform: scale(0.7);
+      }
+
+      .swatch.triangle {
+        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+      }
+
+      .swatch.diamond {
+        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+      }
+
+      .swatch.line {
+        height: 3px;
+        border: 0;
+      }
+
+      .swatch.outline {
+        background: transparent !important;
+        border: 2px solid var(--swatch-color);
+      }
+
+      .swatch.endpoint {
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #090d0c !important;
+        color: var(--swatch-color);
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .room-list {
+        display: grid;
+        gap: 5px;
+        max-height: 230px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .room-row {
+        display: grid;
+        grid-template-columns: 62px 1fr auto;
+        gap: 8px;
+        padding: 5px 7px;
+        border-left: 3px solid #69766f;
+        background: #1d2522;
+        color: #dce4df;
+        font-size: 12px;
+      }
+
+      .room-row strong {
+        color: #ffffff;
+      }
+
+      .validation-list {
+        margin: 0;
+        padding-left: 20px;
+        color: #ffaaa4;
+        font-size: 12px;
+      }
+
+      .empty {
+        color: #8f9d96;
+        font-size: 13px;
+      }
+
+      .setting-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .setting-button {
+        display: grid;
+        justify-items: start;
+        min-width: 126px;
+        padding: 5px 10px;
+        line-height: 1.15;
+      }
+
+      .setting-button span {
+        display: block;
+        max-width: 180px;
+        overflow: hidden;
+        color: #aebbb4;
+        font-size: 10px;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .editor-dialog {
+        width: min(1080px, calc(100vw - 48px));
+        height: min(760px, calc(100vh - 48px));
+        max-width: none;
+        max-height: none;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid #52615a;
+        border-radius: 6px;
+        background: #151b19;
+        color: #edf3ee;
+      }
+
+      .editor-dialog::backdrop {
+        background: rgba(4, 7, 6, 0.76);
+      }
+
+      .dialog-panel {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        height: 100%;
+      }
+
+      .dialog-panel > header,
+      .dialog-panel > footer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #34403b;
+        background: #1a211e;
+      }
+
+      .dialog-panel > header h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .dialog-panel > header .icon-close {
+        width: 36px;
+        min-width: 36px;
+        margin-left: auto;
+        padding: 0;
+        font-size: 22px;
+      }
+
+      .dialog-panel > footer {
+        border-top: 1px solid #34403b;
+        border-bottom: 0;
+      }
+
+      .dialog-panel > footer span {
+        flex: 1;
+      }
+
+      .dialog-body {
+        min-height: 0;
+        overflow: auto;
+        padding: 16px;
+      }
+
+      .dialog-filter {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 12px;
+      }
+
+      .dialog-filter input,
+      .loot-toolbar input[type="search"] {
+        width: min(360px, 100%);
+      }
+
+      .dialog-body:has(.tile-editor-layout) {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
+      }
+
+      .tile-group-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .tile-settings-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .wall-height-field {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+      }
+
+      .wall-height-field input {
+        width: 72px;
+      }
+
+      .tile-group-tabs [aria-selected="true"] {
+        border-color: #d0a84a;
+        background: #39412e;
+      }
+
+      .tile-editor-layout {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 20px;
+        min-height: 0;
+      }
+
+      .tile-stack-editor {
+        min-height: 0;
+        overflow: auto;
+        padding-right: 6px;
+      }
+
+      .tile-stack-editor h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+
+      .tile-composite-preview {
+        position: relative;
+        width: 192px;
+        height: 192px;
+        margin: 0 auto 16px;
+        overflow: hidden;
+        border: 1px solid #49564f;
+        background: #2b3831;
+      }
+
+      .tile-composite-preview img {
+        position: absolute;
+        image-rendering: pixelated;
+        pointer-events: none;
+      }
+
+      .tile-stack-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .tile-layer-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid #3e4a45;
+      }
+
+      .tile-layer-row.selected {
+        border-color: #d0a84a;
+        background: #2a2c23;
+      }
+
+      .tile-layer-row button {
+        min-width: 0;
+        min-height: 34px;
+        padding: 4px;
+      }
+
+      .tile-layer-label {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        align-items: center;
+        gap: 4px;
+        text-align: left;
+      }
+
+      .tile-layer-label strong {
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .add-tile-layer {
+        width: 36px;
+        margin-top: 8px;
+        padding: 0;
+        font-size: 20px;
+      }
+
+      .tile-palette {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 0;
+      }
+
+      .tile-choice-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+        grid-auto-rows: 64px;
+        align-content: start;
+        gap: 7px;
+        min-height: 0;
+        overflow: auto;
+        padding-right: 5px;
+      }
+
+      .tile-choice {
+        display: grid;
+        grid-template-columns: 46px minmax(0, 1fr);
+        grid-template-rows: 24px 20px;
+        align-items: center;
+        gap: 0 7px;
+        min-width: 0;
+        min-height: 64px;
+        height: 64px;
+        overflow: hidden;
+        padding: 6px;
+        border: 1px solid #3e4a45;
+        background: #1d2522;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .tile-choice[aria-pressed="true"] {
+        border-color: #d0a84a;
+        background: #2a2c23;
+      }
+
+      .tile-choice img,
+      .tile-no-image {
+        grid-row: 1 / 3;
+        width: 46px;
+        height: 46px;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .editor-dialog button:disabled {
+        cursor: default;
+      }
+
+      .tile-choice strong,
+      .tile-choice small {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tile-choice strong {
+        font-size: 13px;
+      }
+
+      .tile-choice small,
+      .config-row small {
+        display: block;
+        color: #96a49d;
+        font-size: 10px;
+      }
+
+      .loot-toolbar,
+      .custom-entry {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .loot-toolbar {
+        justify-content: space-between;
+      }
+
+      .loot-toolbar label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #c9d3cd;
+        font-size: 13px;
+      }
+
+      .loot-toolbar input[type="number"],
+      .range-inputs input {
+        width: 68px;
+      }
+
+      .custom-entry {
+        padding-bottom: 12px;
+        border-bottom: 1px solid #35413c;
+      }
+
+      .custom-entry input {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .config-table {
+        display: grid;
+        gap: 5px;
+      }
+
+      .config-head {
+        display: none;
+      }
+
+      .config-row {
+        display: grid;
+        align-items: center;
+        gap: 10px;
+        min-height: 54px;
+        padding: 7px 9px;
+        border-left: 3px solid #4f5e57;
+        background: #1d2522;
+      }
+
+      .config-table-treasure .config-row {
+        grid-template-columns: 24px minmax(180px, 1fr) 90px 170px;
+      }
+
+      .config-table-enemy .config-row {
+        grid-template-columns: 24px minmax(220px, 1fr) 110px;
+      }
+
+      .config-row > input[type="checkbox"] {
+        justify-self: center;
+      }
+
+      .range-inputs,
+      .enemy-entry {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .enemy-entry img {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+
+      .profile-dialog {
+        width: min(680px, calc(100vw - 40px));
+        height: min(690px, calc(100vh - 40px));
+      }
+
+      .new-profile-dialog {
+        width: min(520px, calc(100vw - 40px));
+        height: min(360px, calc(100vh - 40px));
+      }
+
+      .reference-profile-field {
+        margin-top: 24px;
+      }
+
+      .reference-profile-field select {
+        width: 100%;
+      }
+
+      .profile-current {
+        margin: 0 0 16px;
+        overflow-wrap: anywhere;
+      }
+
+      .profile-modes {
+        display: flex;
+        gap: 24px;
+        margin: 0 0 16px;
+        border: 1px solid #4d5b55;
+      }
+
+      .profile-modes label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 0;
+      }
+
+      .profile-field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 14px;
+        font-size: 14px;
+      }
+
+      .profile-field input {
+        width: 100%;
+      }
+
+      .profile-field input:read-only {
+        color: #aebbb4;
+      }
+
+      .profile-summary {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr);
+        gap: 9px 12px;
+        margin: 22px 0;
+        font-size: 13px;
+      }
+
+      .profile-summary dt {
+        color: #aebbb4;
+      }
+
+      .profile-summary dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .profile-file-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .profile-message {
+        min-height: 1.5em;
+        color: #a6d7b7;
+        overflow-wrap: anywhere;
+      }
+
+      .profile-message.error,
+      .danger-button {
+        color: #ff8b83;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 1050px) {
+        main {
+          grid-template-columns: minmax(0, 1fr) 280px;
+        }
+
+        .view-options {
+          width: 100%;
+          margin-left: 0;
+        }
+
+        .tile-setting-columns {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <h1>Dungeon Editor</h1>
+        <p class="subtitle">生成条件・タイル・宝箱・敵を設定するダンジョン編集ツール</p>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite">準備中</div>
+    </header>
+
+    <section class="profile-toolbar" aria-label="プロファイル切替">
+      <div class="field">
+        <label for="profile-select">プロファイル</label>
+        <select id="profile-select">
+          <option value="standard_digger">標準プロファイル</option>
+        </select>
+      </div>
+      <button id="new-profile-button" type="button">新規作成</button>
+      <button id="import-profile-button" type="button">JSON読込</button>
+      <button id="profile-settings-button" type="button">保存・管理</button>
+    </section>
+
+    <section class="toolbar" aria-label="生成設定">
+      <div class="field">
+        <label for="scale-select">規模</label>
+        <select id="scale-select">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3（標準）</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="danger-select">危険度</label>
+        <select id="danger-select">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3（標準）</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="seed-input">シード</label>
+        <input id="seed-input" type="text" value="preview" maxlength="80" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="direction-select">入口進行方向</label>
+        <select id="direction-select">
+          <option value="">ランダム</option>
+          <option value="down">下向き</option>
+          <option value="up">上向き</option>
+          <option value="right">右向き</option>
+          <option value="left">左向き</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="exit-direction-select">出口進行方向</label>
+        <select id="exit-direction-select">
+          <option value="">ランダム</option>
+          <option value="down">下向き</option>
+          <option value="up">上向き</option>
+          <option value="right">右向き</option>
+          <option value="left">左向き</option>
+        </select>
+      </div>
+      <button id="generate-button" class="primary" type="button">生成</button>
+      <button id="random-button" type="button">ランダム</button>
+      <button id="copy-button" type="button">シードをコピー</button>
+      <div class="setting-buttons" aria-label="ダンジョン内容設定">
+        <button id="tile-settings-button" class="setting-button" type="button">タイル設定<span>未設定</span></button>
+        <button id="treasure-settings-button" class="setting-button" type="button">宝箱設定<span>未設定</span></button>
+        <button id="enemy-settings-button" class="setting-button" type="button">敵設定<span>未設定</span></button>
+      </div>
+      <div class="view-options" aria-label="表示項目">
+        <label><input id="path-toggle" type="checkbox" checked>主経路</label>
+        <label><input id="room-toggle" type="checkbox" checked>部屋</label>
+        <label><input id="placement-toggle" type="checkbox" checked>配置候補</label>
+        <label><input id="grid-toggle" type="checkbox">グリッド</label>
+      </div>
+    </section>
+
+    <main>
+      <section class="preview-section" aria-label="生成結果">
+        <div id="canvas-shell" class="canvas-shell">
+          <canvas id="dungeon-canvas"></canvas>
+        </div>
+        <div id="hover-info" class="hover-info">マスにカーソルを合わせると情報を表示します</div>
+      </section>
+
+      <aside>
+        <section class="section">
+          <h2>生成結果</h2>
+          <dl id="metrics" class="metrics"></dl>
+        </section>
+
+        <section class="section">
+          <h2>凡例</h2>
+          <div id="legend" class="legend"></div>
+        </section>
+
+        <section class="section">
+          <h2>部屋</h2>
+          <div id="room-list" class="room-list"><span class="empty">未生成</span></div>
+        </section>
+
+        <section class="section">
+          <h2>検査</h2>
+          <div id="validation" class="empty">未生成</div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="../data/config.js"></script>
+    <script src="../data/enemies.js"></script>
+    <script src="../data/materials.js"></script>
+    <script src="./tile.js"></script>
+    <script src="../rot.js-master/dist/rot.js"></script>
+    <script src="./dungeon/dungeonTiles.js"></script>
+    <script src="./dungeon/dungeonSavedProfiles.js"></script>
+    <script src="./dungeon/dungeonProfiles.js"></script>
+    <script src="./dungeon/dungeonCorridors.js"></script>
+    <script src="./dungeon/dungeonRooms.js"></script>
+    <script src="./dungeon/dungeonWallSpace.js"></script>
+    <script src="./dungeon/dungeonPlacementSafety.js"></script>
+    <script src="./dungeon/dungeonGenerator.js"></script>
+    <script src="./dungeon/dungeonEditorSettings.js"></script>
+    <script src="./dungeon/dungeonEditorProfiles.js"></script>
+    <script>
+      (() => {
+        "use strict";
+
+        const canvas = document.getElementById("dungeon-canvas");
+        const shell = document.getElementById("canvas-shell");
+        const ctx = canvas.getContext("2d");
+        const status = document.getElementById("status");
+        const seedInput = document.getElementById("seed-input");
+        const directionSelect = document.getElementById("direction-select");
+        const exitDirectionSelect = document.getElementById("exit-direction-select");
+        const scaleSelect = document.getElementById("scale-select");
+        const dangerSelect = document.getElementById("danger-select");
+        const profileSelect = document.getElementById("profile-select");
+        const profileSettingsButton = document.getElementById("profile-settings-button");
+        const generateButton = document.getElementById("generate-button");
+        const randomButton = document.getElementById("random-button");
+        const copyButton = document.getElementById("copy-button");
+        const tileSettingsButton = document.getElementById("tile-settings-button");
+        const treasureSettingsButton = document.getElementById("treasure-settings-button");
+        const enemySettingsButton = document.getElementById("enemy-settings-button");
+        const metrics = document.getElementById("metrics");
+        const roomList = document.getElementById("room-list");
+        const validation = document.getElementById("validation");
+        const hoverInfo = document.getElementById("hover-info");
+        const toggles = {
+          path: document.getElementById("path-toggle"),
+          rooms: document.getElementById("room-toggle"),
+          placements: document.getElementById("placement-toggle"),
+          grid: document.getElementById("grid-toggle"),
+        };
+        const generator = window.HEALER_DUNGEON_GENERATOR.create(window.ROT);
+        const tileImageCache = new Map();
+        const settingsController = window.HEALER_DUNGEON_EDITOR_SETTINGS.create({
+          tileDefinitions: window.HEALER_TILE_DEFS,
+          enemyDefinitions: window.HEALER_ENEMY_DEFS,
+          materialData: window.HEALER_MATERIAL_DATA,
+          tileButton: tileSettingsButton,
+          treasureButton: treasureSettingsButton,
+          enemyButton: enemySettingsButton,
+          onApply() {
+            preloadSelectedTiles();
+            generate();
+          },
+        });
+        let result = null;
+        let layout = null;
+        let busy = false;
+        let pendingGeneration = false;
+        let activeProfile = window.HEALER_DUNGEON_PROFILES.get("standard_digger");
+
+        const colors = {
+          background: "#090d0c",
+          wall: "#26312d",
+          margin: "#1d2822",
+          floor: "#d7d2bc",
+          door: "#bf8842",
+          grid: "rgba(15, 22, 19, 0.18)",
+          path: "#3fc2d1",
+          entrance: "#ffffff",
+          exit: "#ef8d42",
+          treasure: "#efc44f",
+          rest: "#6fc18a",
+          enemy: "#d65b54",
+          trap: "#e38b45",
+          event: "#b875d6",
+          decoration: "#86a470",
+        };
+
+        const roleColors = {
+          entrance: "#ffffff",
+          exit: "#ef8d42",
+          treasure: "#efc44f",
+          rest: "#6fc18a",
+          event: "#b875d6",
+          junction: "#7a96cf",
+          normal: "#68746e",
+        };
+
+        const placementMarkers = [
+          { group: "treasure", key: "treasure", label: "宝箱", shape: "square", ratio: 0.58 },
+          { group: "rest", key: "rest", label: "休憩候補", shape: "square", ratio: 0.58 },
+          { group: "mandatoryEvents", key: "event", label: "必須イベント", shape: "diamond" },
+          { group: "enemies", key: "enemy", label: "魔物", shape: "circle", ratio: 0.32 },
+          { group: "traps", key: "trap", label: "罠", shape: "triangle" },
+          { group: "decorations", key: "decoration", label: "装飾候補", shape: "small-circle", ratio: 0.25 },
+        ];
+        renderLegend();
+
+        window.HEALER_DUNGEON_EDITOR_PROFILES.create({
+          profiles: window.HEALER_DUNGEON_PROFILES,
+          select: profileSelect,
+          button: profileSettingsButton,
+          newButton: document.getElementById("new-profile-button"),
+          importButton: document.getElementById("import-profile-button"),
+          getConfig: readCurrentProfile,
+          getPreview() {
+            return {
+              seed: seedInput.value,
+              viewOptions: Object.fromEntries(Object.entries(toggles).map(([key, toggle]) => [key, toggle.checked])),
+            };
+          },
+          onLoad(record) {
+            activeProfile = record.config;
+            scaleSelect.value = String(activeProfile.scale);
+            dangerSelect.value = String(activeProfile.danger);
+            restoreDirection(directionSelect, activeProfile.entranceApproach.startDirections);
+            restoreDirection(exitDirectionSelect, activeProfile.exitApproach.endDirections);
+            settingsController.setConfig(activeProfile);
+            seedInput.value = record.preview.seed;
+            Object.entries({ path: true, rooms: true, placements: true, grid: false, ...record.preview.viewOptions }).forEach(([key, checked]) => {
+              if (toggles[key]) toggles[key].checked = checked;
+            });
+            preloadSelectedTiles();
+            generate();
+          },
+          setStatus,
+        });
+
+        generateButton.addEventListener("click", generate);
+        randomButton.addEventListener("click", () => {
+          seedInput.value = createRandomSeed();
+          generate();
+        });
+        copyButton.addEventListener("click", copySeed);
+        seedInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") generate();
+        });
+        Object.values(toggles).forEach((toggle) => toggle.addEventListener("change", () => draw()));
+        canvas.addEventListener("mousemove", updateHoverInfo);
+        canvas.addEventListener("mouseleave", () => {
+          hoverInfo.textContent = "マスにカーソルを合わせると情報を表示します";
+        });
+
+        const resizeObserver = new ResizeObserver(resizeCanvas);
+        resizeObserver.observe(shell);
+
+        function readCurrentProfile() {
+          const selectedDirection = directionSelect.value;
+          const selectedExitDirection = exitDirectionSelect.value;
+          const contentSettings = settingsController.getConfig();
+          return {
+            ...activeProfile,
+            scale: Number(scaleSelect.value),
+            danger: Number(dangerSelect.value),
+            tiles: contentSettings.tiles,
+            treasureTable: contentSettings.treasureTable,
+            enemyPool: contentSettings.enemyPool,
+            entranceApproach: {
+              ...activeProfile.entranceApproach,
+              startDirections: selectedDirection === "profile"
+                ? activeProfile.entranceApproach.startDirections.slice()
+                : selectedDirection ? [selectedDirection] : ["down", "left", "up", "right"],
+            },
+            exitApproach: {
+              ...activeProfile.exitApproach,
+              endDirections: selectedExitDirection === "profile"
+                ? activeProfile.exitApproach.endDirections.slice()
+                : selectedExitDirection ? [selectedExitDirection] : ["up", "right", "down", "left"],
+            },
+          };
+        }
+
+        function restoreDirection(select, directions) {
+          select.querySelector("option[value='profile']")?.remove();
+          if (directions.length > 1 && directions.length < 4) {
+            const option = document.createElement("option");
+            option.value = "profile";
+            option.textContent = "プロファイル指定";
+            select.appendChild(option);
+          }
+          select.value = directions.length === 1 ? directions[0] : directions.length === 4 ? "" : "profile";
+        }
+
+        function generate() {
+          if (busy) {
+            pendingGeneration = true;
+            return;
+          }
+          const profile = readCurrentProfile();
+          const seed = seedInput.value.trim() || createRandomSeed();
+          seedInput.value = seed;
+          setBusy(true);
+          setStatus("生成中...");
+          requestAnimationFrame(() => {
+            try {
+              result = generator.generate(profile, { seed });
+              renderDetails();
+              resizeCanvas();
+              setStatus(`生成完了: ${result.attempt}回目で採用`);
+            } catch (error) {
+              console.error(error);
+              result = null;
+              renderDetails();
+              draw();
+              setStatus(error && error.message ? error.message : "生成に失敗しました", true);
+            } finally {
+              setBusy(false);
+              if (pendingGeneration) {
+                pendingGeneration = false;
+                generate();
+              }
+            }
+          });
+        }
+
+        function resizeCanvas() {
+          const rect = shell.getBoundingClientRect();
+          const width = Math.max(1, Math.floor(rect.width));
+          const height = Math.max(1, Math.floor(rect.height));
+          const dpr = Math.max(1, window.devicePixelRatio || 1);
+          canvas.width = Math.floor(width * dpr);
+          canvas.height = Math.floor(height * dpr);
+          canvas.style.width = `${width}px`;
+          canvas.style.height = `${height}px`;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          draw(width, height);
+        }
+
+        function draw(knownWidth, knownHeight) {
+          const width = knownWidth || Math.max(1, Math.floor(shell.getBoundingClientRect().width));
+          const height = knownHeight || Math.max(1, Math.floor(shell.getBoundingClientRect().height));
+          ctx.clearRect(0, 0, width, height);
+          ctx.fillStyle = colors.background;
+          ctx.fillRect(0, 0, width, height);
+          if (!result || !result.ok) {
+            layout = null;
+            drawCenteredMessage(width, height, "生成結果はまだありません");
+            return;
+          }
+
+          const padding = 18;
+          const cellSize = Math.min(
+            (width - padding * 2) / result.width,
+            (height - padding * 2) / result.height
+          );
+          const mapWidth = cellSize * result.width;
+          const mapHeight = cellSize * result.height;
+          const originX = (width - mapWidth) / 2;
+          const originY = (height - mapHeight) / 2;
+          layout = { originX, originY, cellSize, mapWidth, mapHeight };
+
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+          window.HEALER_DUNGEON_TILES.draw(ctx, result, {
+            originX, originY, cellSize, width, height,
+            getImage: getTileImage,
+            getDefinition: settingsController.getTileDefinition,
+            sourceTileSize: window.HEALER_TILE_SIZE || 48,
+          });
+          for (let y = 0; y < result.height; y += 1) {
+            for (let x = 0; x < result.width; x += 1) {
+              const cell = result.cells[y * result.width + x];
+              const drawX = originX + x * cellSize;
+              const drawY = originY + y * cellSize;
+              if (cell === 2) {
+                ctx.fillStyle = "rgba(191, 136, 66, 0.72)";
+                ctx.fillRect(drawX, drawY, Math.ceil(cellSize), Math.ceil(cellSize));
+              }
+            }
+          }
+
+          if (toggles.path.checked) drawMainPath(originX, originY, cellSize);
+          if (toggles.rooms.checked) drawRooms(originX, originY, cellSize);
+          if (toggles.placements.checked) drawPlacements(originX, originY, cellSize, width, height);
+          drawEndpoints(originX, originY, cellSize);
+          if (toggles.grid.checked) drawGrid(originX, originY, cellSize);
+          ctx.restore();
+        }
+
+        function drawMainPath(originX, originY, cellSize) {
+          if (!result.mainPath.length) return;
+          ctx.strokeStyle = colors.path;
+          ctx.lineWidth = Math.max(1.5, cellSize * 0.2);
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          ctx.globalAlpha = 0.78;
+          ctx.beginPath();
+          result.mainPath.forEach((cell, index) => {
+            const x = originX + (cell.x + 0.5) * cellSize;
+            const y = originY + (cell.y + 0.5) * cellSize;
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        function drawRooms(originX, originY, cellSize) {
+          result.rooms.forEach((room) => {
+            ctx.strokeStyle = roleColors[room.role] || roleColors.normal;
+            ctx.lineWidth = Math.max(1, cellSize * 0.12);
+            ctx.globalAlpha = room.onMainPath ? 0.92 : 0.62;
+            ctx.beginPath();
+            room.outlineEdges.forEach((edge) => {
+              ctx.moveTo(originX + edge.x1 * cellSize, originY + edge.y1 * cellSize);
+              ctx.lineTo(originX + edge.x2 * cellSize, originY + edge.y2 * cellSize);
+            });
+            ctx.stroke();
+          });
+          ctx.globalAlpha = 1;
+        }
+
+        function drawPlacements(originX, originY, cellSize, width, height) {
+          placementMarkers.forEach((marker) => {
+            const drawMarker = marker.shape === "square" ? drawSquare : marker.shape === "diamond" ? drawDiamond
+              : marker.shape === "triangle" ? drawTriangle : drawCircle;
+            result.placements[marker.group].forEach((item) => drawMarker(item, colors[marker.key], originX, originY, cellSize, marker.ratio));
+          });
+          drawEnemyNames(originX, originY, cellSize, width, height);
+        }
+
+        function enemyName(item) {
+          const definition = settingsController.getEnemyDefinition(item.enemyId);
+          return definition?.name || item.enemyName || definition?.label || item.enemyId || "魔物";
+        }
+
+        function drawEnemyNames(originX, originY, cellSize, width, height) {
+          const radius = Math.max(3, cellSize * 0.43) + 2;
+          const occupied = placementMarkers.flatMap((marker) => result.placements[marker.group]).concat(result.entrance, result.exit)
+            .filter(Boolean).map((item) => ({ x: originX + (item.x + 0.5) * cellSize - radius, y: originY + (item.y + 0.5) * cellSize - radius, width: radius * 2, height: radius * 2 }));
+          const overlaps = (a, b) => a.x < b.x + b.width + 2 && a.x + a.width + 2 > b.x
+            && a.y < b.y + b.height + 2 && a.y + a.height + 2 > b.y;
+          ctx.save();
+          ctx.font = '600 12px "Yu Gothic UI", sans-serif';
+          ctx.textAlign = "left";
+          ctx.textBaseline = "top";
+          ctx.lineJoin = "round";
+          result.placements.enemies.forEach((item) => {
+            const x = originX + (item.x + 0.5) * cellSize;
+            const y = originY + (item.y + 0.5) * cellSize;
+            const lines = [];
+            let line = "";
+            for (const char of enemyName(item)) {
+              if (line && ctx.measureText(line + char).width > 132) { lines.push(line); line = ""; }
+              line += char;
+            }
+            lines.push(line);
+            const labelWidth = Math.max(...lines.map((text) => ctx.measureText(text).width)) + 6;
+            const labelHeight = lines.length * 16 + 4;
+            const candidates = [];
+            for (let ring = 0; ring < 6; ring += 1) {
+              const gap = radius + 5 + ring * (labelHeight + 4);
+              candidates.push({ x: x - labelWidth / 2, y: y - gap - labelHeight }, { x: x - labelWidth / 2, y: y + gap },
+                { x: x + gap, y: y - labelHeight / 2 }, { x: x - gap - labelWidth, y: y - labelHeight / 2 });
+            }
+            const fits = (rect) => rect.x >= 4 && rect.y >= 4 && rect.x + labelWidth <= width - 4
+              && rect.y + labelHeight <= height - 4 && !occupied.some((other) => overlaps({ ...rect, width: labelWidth, height: labelHeight }, other));
+            let rect = candidates.find(fits);
+            if (!rect) {
+              const fallback = [];
+              for (let py = 4; py + labelHeight <= height - 4; py += labelHeight + 4) {
+                for (let px = 4; px + labelWidth <= width - 4; px += labelWidth + 4) fallback.push({ x: px, y: py });
+              }
+              fallback.sort((a, b) => Math.hypot(a.x + labelWidth / 2 - x, a.y + labelHeight / 2 - y)
+                - Math.hypot(b.x + labelWidth / 2 - x, b.y + labelHeight / 2 - y));
+              rect = fallback.find(fits);
+            }
+            if (!rect) return;
+            const edgeX = Math.max(rect.x, Math.min(rect.x + labelWidth, x));
+            const edgeY = Math.max(rect.y, Math.min(rect.y + labelHeight, y));
+            if (Math.hypot(edgeX - x, edgeY - y) > radius + 10) {
+              ctx.strokeStyle = "rgba(230,238,230,0.55)";
+              ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(edgeX, edgeY); ctx.stroke();
+            }
+            ctx.strokeStyle = "#101613";
+            ctx.lineWidth = 3;
+            ctx.fillStyle = "#ffffff";
+            lines.forEach((text, index) => {
+              ctx.strokeText(text, rect.x + 3, rect.y + 2 + index * 16);
+              ctx.fillText(text, rect.x + 3, rect.y + 2 + index * 16);
+            });
+            occupied.push({ ...rect, width: labelWidth, height: labelHeight });
+          });
+          ctx.restore();
+        }
+
+        function renderLegend() {
+          const swatch = (label, color, shape = "square", symbol = "", key = label) => `<div class="legend-item" data-legend-key="${escapeHtml(key)}"><span class="swatch ${shape}" style="background:${color};--swatch-color:${color}" aria-hidden="true">${symbol}</span><span>${escapeHtml(label)}</span></div>`;
+          document.getElementById("legend").innerHTML = '<h3 class="legend-heading">地形・経路</h3>'
+            + swatch("床", colors.floor) + swatch("壁", colors.wall) + swatch("余白", colors.margin)
+            + swatch("扉", colors.door) + swatch("主経路", colors.path, "line")
+            + swatch("入口", colors.entrance, "endpoint", "S") + swatch("出口", colors.exit, "endpoint", "G")
+            + '<h3 class="legend-heading">配置</h3>'
+            + placementMarkers.map((marker) => swatch(marker.label, colors[marker.key], marker.shape, "", marker.key)).join("")
+            + '<h3 class="legend-heading">部屋の枠</h3>'
+            + Object.entries(roleColors).map(([role, color]) => swatch(roleLabel(role), color, "outline", "", `room-${role}`)).join("");
+        }
+
+        function drawEndpoints(originX, originY, cellSize) {
+          drawLabel(result.entrance, "S", colors.entrance, originX, originY, cellSize);
+          drawLabel(result.exit, "G", colors.exit, originX, originY, cellSize);
+        }
+
+        function drawGrid(originX, originY, cellSize) {
+          if (cellSize < 5) return;
+          ctx.strokeStyle = colors.grid;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let x = 0; x <= result.width; x += 1) {
+            const px = originX + x * cellSize;
+            ctx.moveTo(px, originY);
+            ctx.lineTo(px, originY + result.height * cellSize);
+          }
+          for (let y = 0; y <= result.height; y += 1) {
+            const py = originY + y * cellSize;
+            ctx.moveTo(originX, py);
+            ctx.lineTo(originX + result.width * cellSize, py);
+          }
+          ctx.stroke();
+        }
+
+        function drawSquare(item, color, originX, originY, cellSize, ratio) {
+          const size = Math.max(3, cellSize * ratio);
+          ctx.fillStyle = color;
+          ctx.fillRect(
+            originX + (item.x + 0.5) * cellSize - size / 2,
+            originY + (item.y + 0.5) * cellSize - size / 2,
+            size,
+            size
+          );
+        }
+
+        function drawCircle(item, color, originX, originY, cellSize, ratio = 0.32) {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(
+            originX + (item.x + 0.5) * cellSize,
+            originY + (item.y + 0.5) * cellSize,
+            Math.max(2, cellSize * ratio),
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+
+        function drawTriangle(item, color, originX, originY, cellSize) {
+          const centerX = originX + (item.x + 0.5) * cellSize;
+          const centerY = originY + (item.y + 0.5) * cellSize;
+          const radius = Math.max(3, cellSize * 0.34);
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY - radius);
+          ctx.lineTo(centerX + radius, centerY + radius);
+          ctx.lineTo(centerX - radius, centerY + radius);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        function drawDiamond(item, color, originX, originY, cellSize) {
+          const centerX = originX + (item.x + 0.5) * cellSize;
+          const centerY = originY + (item.y + 0.5) * cellSize;
+          const radius = Math.max(3, cellSize * 0.35);
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY - radius);
+          ctx.lineTo(centerX + radius, centerY);
+          ctx.lineTo(centerX, centerY + radius);
+          ctx.lineTo(centerX - radius, centerY);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        function drawLabel(item, label, color, originX, originY, cellSize) {
+          if (!item) return;
+          const centerX = originX + (item.x + 0.5) * cellSize;
+          const centerY = originY + (item.y + 0.5) * cellSize;
+          ctx.fillStyle = "rgba(9, 13, 12, 0.88)";
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, Math.max(5, cellSize * 0.43), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = color;
+          ctx.font = `900 ${Math.max(8, Math.min(15, cellSize * 0.78))}px "Segoe UI", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, centerX, centerY + 0.5);
+        }
+
+        function drawCenteredMessage(width, height, message) {
+          ctx.fillStyle = "#87968e";
+          ctx.font = '700 15px "Segoe UI", "Yu Gothic UI", sans-serif';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(message, width / 2, height / 2);
+        }
+
+        function renderDetails() {
+          if (!result || !result.ok) {
+            metrics.innerHTML = "";
+            roomList.innerHTML = '<span class="empty">未生成</span>';
+            validation.className = "empty";
+            validation.textContent = "未生成";
+            return;
+          }
+          const values = [
+            ["入力シード", seedInput.value],
+            ["生成シード", result.generationSeed],
+            ["採用まで", `${result.attempt}回`],
+            ["規模", result.config.scale],
+            ["危険度", result.config.danger],
+            ["サイズ", `${result.width} x ${result.height}`],
+            ["壁用の追加行", `${result.metrics.wallSpaceAddedRows}行`],
+            ["部屋", `${result.metrics.roomCount}室`],
+            ["角丸の部屋", `${result.metrics.roundedRoomCount}室`],
+            ["通路", result.metrics.corridorCount],
+            ["道幅", `${result.metrics.corridorWidthMin}～${result.metrics.corridorWidthMax}マス`],
+            ["角の丸み", `${result.metrics.roundedCornerCount}箇所`],
+            ["壁の高さ", `${result.config.tiles.wallHeight}マス`],
+            ["主経路", `${result.metrics.mainPathLength}マス`],
+            ["入口通路", formatEntranceApproach(result.entranceApproach)],
+            ["出口通路", formatExitApproach(result.exitApproach)],
+            ["枝部屋", `${result.metrics.branchRoomCount}室`],
+            ["枝道判定", formatBranchContents(result.metrics.branchContentCounts)],
+            ["床面積率", `${(result.metrics.floorRatio * 100).toFixed(1)}%`],
+            ["宝箱候補", `${result.metrics.placementCounts.treasure}（確定${result.metrics.guaranteedTreasureCount}・追加${result.metrics.additionalTreasureCount}）`],
+            ["追加の宝箱率", `${((result.config.branchContents.outcomes.treasure + result.config.branchContents.outcomes.both) * 100).toFixed(1)}%`],
+            ["魔物候補", result.metrics.placementCounts.enemies],
+            ["罠候補", result.metrics.placementCounts.traps],
+            ...window.HEALER_DUNGEON_TILES.GROUPS.map(({ id, name }) => [name, `${result.config.tiles[id].length}層`]),
+            ["宝箱内容", `${result.config.treasureTable.entries.length}種類`],
+            ["敵種類", `${result.config.enemyPool.length}種類`],
+          ];
+          metrics.innerHTML = values.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("");
+          roomList.innerHTML = result.rooms.map((room) => {
+            const role = roleLabel(room.role);
+            const path = room.onMainPath ? "主経路" : "枝道";
+            const color = roleColors[room.role] || roleColors.normal;
+            return `<div class="room-row" style="border-left-color:${color}"><strong>${escapeHtml(room.id)}</strong><span>${escapeHtml(role)} / ${path}${room.cornerRadius ? " / 角丸" : ""}</span><span>${room.width}x${room.height}</span></div>`;
+          }).join("");
+
+          const messages = [...result.validation.errors, ...result.validation.warnings];
+          if (messages.length === 0) {
+            validation.className = "empty";
+            validation.textContent = "採用条件をすべて満たしています";
+          } else {
+            validation.className = "";
+            validation.innerHTML = `<ul class="validation-list">${messages.map((message) => `<li>${escapeHtml(message)}</li>`).join("")}</ul>`;
+          }
+        }
+
+        function updateHoverInfo(event) {
+          if (!result || !layout) return;
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+          const x = Math.floor((mouseX - layout.originX) / layout.cellSize);
+          const y = Math.floor((mouseY - layout.originY) / layout.cellSize);
+          if (x < 0 || y < 0 || x >= result.width || y >= result.height) {
+            hoverInfo.textContent = "マップ範囲外";
+            return;
+          }
+          const cell = result.cells[y * result.width + x];
+          const region = result.tileRegions[y * result.width + x];
+          const cellName = cell === 2 ? "扉" : window.HEALER_DUNGEON_TILES.GROUPS.find((group) => group.id === region)?.name || "床";
+          const room = result.rooms.find((candidate) => x >= candidate.left && x <= candidate.right && y >= candidate.top && y <= candidate.bottom);
+          const placement = findPlacementAt(x, y);
+          const details = [`${columnLabel(x)}${y + 1}`, cellName];
+          if (room) details.push(`${room.id} / ${roleLabel(room.role)}`);
+          if (placement) {
+            details.push(`${placement.type}: ${placement.id}`);
+            if (placement.enemyId) details.push(enemyName(placement));
+            if (Array.isArray(placement.contents) && placement.contents.length) {
+              details.push(placement.contents.map((item) => `${item.name || item.id} x${item.count}`).join(", "));
+            }
+          }
+          hoverInfo.textContent = details.join(" | ");
+        }
+
+        function findPlacementAt(x, y) {
+          const groups = [
+            result.placements.mandatoryEvents,
+            result.placements.treasure,
+            result.placements.rest,
+            result.placements.enemies,
+            result.placements.traps,
+            result.placements.decorations,
+          ];
+          for (const group of groups) {
+            const found = group.find((item) => {
+              const width = item.width || 1;
+              const height = item.height || 1;
+              return x >= item.x && x < item.x + width && y >= item.y && y < item.y + height;
+            });
+            if (found) return found;
+          }
+          if (result.entrance && result.entrance.x === x && result.entrance.y === y) return { type: "entrance", id: "entrance" };
+          if (result.exit && result.exit.x === x && result.exit.y === y) return { type: "exit", id: "exit" };
+          return null;
+        }
+
+        function roleLabel(role) {
+          const labels = {
+            entrance: "入口",
+            exit: "出口",
+            treasure: "宝物",
+            rest: "休憩",
+            event: "イベント",
+            junction: "分岐",
+            normal: "通常",
+          };
+          return labels[role] || role;
+        }
+
+        function formatEntranceApproach(approach) {
+          if (!approach) return "なし";
+          const labels = { up: "上向き", right: "右向き", down: "下向き", left: "左向き" };
+          return `${approach.length}マス / ${labels[approach.startDirection] || approach.startDirection} / ${approach.turns}曲がり`;
+        }
+
+        function formatExitApproach(approach) {
+          if (!approach) return "なし";
+          const labels = { up: "上向き", right: "右向き", down: "下向き", left: "左向き" };
+          return `${approach.length}マス / ${labels[approach.endDirection] || approach.endDirection} / ${approach.turns}曲がり`;
+        }
+
+        function formatBranchContents(counts) {
+          if (!counts || counts.total === 0) return "対象なし";
+          return `空${counts.empty} / 罠${counts.trap} / 宝${counts.treasure} / 両${counts.both}`;
+        }
+
+        function columnLabel(index) {
+          let value = index + 1;
+          let label = "";
+          while (value > 0) {
+            value -= 1;
+            label = String.fromCharCode(65 + (value % 26)) + label;
+            value = Math.floor(value / 26);
+          }
+          return label;
+        }
+
+        function createRandomSeed() {
+          if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+            const values = new Uint32Array(2);
+            window.crypto.getRandomValues(values);
+            return `${values[0].toString(36)}-${values[1].toString(36)}`;
+          }
+          return `${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
+        }
+
+        function preloadSelectedTiles() {
+          const settings = settingsController.getConfig();
+          window.HEALER_DUNGEON_TILES.GROUPS.forEach(({ id }) => settings.tiles[id].forEach(getTileImage));
+        }
+
+        function getTileImage(tileId) {
+          if (!tileId) return null;
+          const definition = settingsController.getTileDefinition(tileId);
+          if (!definition || !definition.image) return null;
+          if (tileImageCache.has(tileId)) return tileImageCache.get(tileId);
+          const image = new Image();
+          image.addEventListener("load", () => draw());
+          image.addEventListener("error", () => draw(), { once: true });
+          image.src = resolveEditorAssetPath(definition.image);
+          tileImageCache.set(tileId, image);
+          return image;
+        }
+
+        function resolveEditorAssetPath(path) {
+          const value = String(path || "").replaceAll("\\", "/");
+          return value.startsWith("map/") ? `./${value.slice(4)}` : value;
+        }
+
+        async function copySeed() {
+          const value = seedInput.value.trim();
+          if (!value) return;
+          try {
+            await navigator.clipboard.writeText(value);
+            setStatus("シードをコピーしました");
+          } catch (error) {
+            seedInput.focus();
+            seedInput.select();
+            setStatus("シードを選択しました。コピー操作を行ってください");
+          }
+        }
+
+        function setBusy(value) {
+          busy = value;
+          generateButton.disabled = value;
+          randomButton.disabled = value;
+        }
+
+        function setStatus(message, isError = false) {
+          status.textContent = message;
+          status.classList.toggle("error", isError);
+        }
+
+        function escapeHtml(value) {
+          return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+        }
+
+        preloadSelectedTiles();
+        generate();
+      })();
+    </script>
+  </body>
+</html>
