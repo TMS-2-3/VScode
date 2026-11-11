@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "tile": "map/img_tile/rpg_village/flower_meadow_01.png",
+  "dimensions": [
+    48,
+    48
+  ],
+  "beforeSHA256": "521378d58a719e0e1d667bc7c76dcc791ebad95fd34fb6a691ae699095252d3f",
+  "afterSHA256": "446023835c05c96d04ec05390a623b93ef6868ed45f7bdc406fa47d379bd96be",
+  "uses": [
+    {
+      "id": "kuraku_forest_3",
+      "name": "花畑",
+      "flowerCells": 118
+    },
+    {
+      "id": "kuraku_forest_4",
+      "name": "北クラク森",
+      "flowerCells": 10
+    }
+  ],
+  "registeredImagePathsVerified": 482,
+  "preservedTown80Files": 300,
+  "groundPixelsExactlyMatchingGrass": 2055,
+  "borderPixelsMatchingGrass": 188,
+  "totalBorderPixels": 188,
+  "renderedMap": "kuraku_forest_3",
+  "mapLayoutAndCollisionChanged": false,
+  "browserManualTest": false,
+  "method": "Built-in image_gen edit, nearest-neighbor resize to 48x48, exact existing-grass replacement for green backing pixels; floral pixels gently blended 4% toward grass."
+}

@@ -1,0 +1,19 @@
+{
+  "tool": "built-in image_gen",
+  "mode": "edit",
+  "editTarget": "map/img_tile/rpg_village/flower_meadow_01.png",
+  "reference": "map/img_tile/rpg_village/grass_base_01.png",
+  "prompt": "Use case: precise-object-edit. Asset: single seamless 48x48 pixel-art JRPG ground tile, returned enlarged to 768x768 or 1024x1024 using crisp nearest-neighbor pixel blocks. Image 1 is the edit target flower meadow tile; Image 2 is the exact neighboring grass palette and texture reference. Correct ONLY the color mismatch. Preserve the flower positions, sizes, flower types, amount and overall arrangement of image 1. Replace its muddy brown/dark olive grass backing with the brighter yellow-green grass colors and fine texture of image 2, so these two tiles can abut with almost invisible transition of their green ground. Keep flowers recognizable white, soft pale pink, warm cream yellow and a few muted violet, reduce the harsh white/dark outlines slightly to match the grass. Top down 16bit pixel art, native design grid EXACTLY 48x48; edges all grass, no border, no seam, no frame, no tile grid, no gradient lighting or vignette, no extra flowers or objects. Output ONLY the edited flower tile full bleed square, no sheet, no labels. Prioritize exact harmony of grass brightness/hue with Image 2, preserve small original floral motifs.",
+  "finishing": {
+    "resize": [
+      48,
+      48
+    ],
+    "interpolation": "NearestNeighbor",
+    "greenMask": "G >= R * 0.96 && G > B * 1.25",
+    "greenPixelReplacement": "grass_base_01.png pixel at identical coordinates",
+    "flowerBlend": "96% generated flower + 4% existing grass",
+    "alpha": 255
+  },
+  "comparison": "comparison.png: left before, right after; map-after.png is full-size rendering from unchanged runtime draw calls"
+}
