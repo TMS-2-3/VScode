@@ -2,10 +2,12 @@
   "use strict";
 
   const tiles = typeof module === "object" && module.exports ? require("./dungeonTiles.js") : root.HEALER_DUNGEON_TILES;
-  const api = factory(tiles);
+  const countLimits = typeof module === "object" && module.exports ? require("./dungeonTreasureLimits.js") : root.HEALER_DUNGEON_TREASURE_LIMITS;
+  const weights = typeof module === "object" && module.exports ? require("./dungeonWeights.js") : root.HEALER_DUNGEON_WEIGHTS;
+  const api = factory(tiles, countLimits, weights);
   if (typeof module === "object" && module.exports) module.exports = api;
   if (root) root.HEALER_DUNGEON_EDITOR_SETTINGS = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function createSettingsModule(tiles) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function createSettingsModule(tiles, countLimits, weights) {
   "use strict";
 
   const ITEM_PRESETS = [
@@ -16,9 +18,16 @@
     { type: "item", id: "d_power_flag", name: "力の結晶(D)" },
   ];
 
+  const COUNT_KINDS = {
+    treasure: { prefix: "treasure", field: "treasureLimits", label: "宝箱", rows: "[data-treasure-row]" },
+    enemies: { prefix: "enemy", field: "enemyLimits", label: "魔物", rows: "[data-enemy-row]", pool: "enemyPool" },
+    traps: { prefix: "trap", field: "trapLimits", label: "罠", rows: "[data-trap-row]", pool: "trapPool" },
+  };
+
   function create(options = {}) {
     const tileDefinitions = options.tileDefinitions || {};
     const enemyDefinitions = options.enemyDefinitions || {};
+    const trapDefinitions = options.trapDefinitions || {};
     const materialData = options.materialData || {};
     const onApply = typeof options.onApply === "function" ? options.onApply : () => {};
     const defaults = createDefaults(tileDefinitions, enemyDefinitions);
@@ -42,6 +51,7 @@
     bindTrigger(options.tileButton, "tiles");
     bindTrigger(options.treasureButton, "treasure");
     bindTrigger(options.enemyButton, "enemies");
+    bindTrigger(options.trapButton, "traps");
     applyButton.addEventListener("click", applyDraft);
     resetButton.addEventListener("click", resetDraft);
     closeButtons.forEach((button) => button.addEventListener("click", () => dialog.close()));
@@ -49,6 +59,11 @@
       if (event.target === dialog) dialog.close();
     });
     body.addEventListener("input", handleBodyInput);
+    body.addEventListener("change", (event) => {
+      if (!event.target.matches("[data-weight]")) return;
+      if (Number.isFinite(event.target.valueAsNumber)) event.target.value = String(Math.floor(event.target.valueAsNumber));
+      if (COUNT_KINDS[activeKind]) updateWeightedApplyAvailability();
+    });
     body.addEventListener("click", handleBodyClick);
     updateSummaries();
 
@@ -59,8 +74,12 @@
       setConfig(config) {
         state = {
           tiles: tiles.normalize(config.tiles || defaults.tiles),
+          treasureLimits: countLimits.normalize(config.treasureLimits),
           treasureTable: clone(config.treasureTable || defaults.treasureTable),
           enemyPool: clone(config.enemyPool || defaults.enemyPool),
+          enemyLimits: countLimits.normalize(config.enemyLimits, "魔物"),
+          trapPool: clone(config.trapPool || defaults.trapPool),
+          trapLimits: countLimits.normalize(config.trapLimits, "罠"),
         };
         draft = null;
         if (dialog.open) dialog.close();
@@ -71,6 +90,9 @@
       },
       getEnemyDefinition(enemyId) {
         return enemyDefinitions[enemyId] || null;
+      },
+      getTrapDefinition(trapId) {
+        return trapDefinitions[trapId] || null;
       },
       open(kind) {
         openDialog(kind);
@@ -96,17 +118,34 @@
         body.innerHTML = renderTileSettings(tileDefinitions, draft.tiles, activeTileGroup, selectedTileLayer, tileQuery);
         updateTileApplyAvailability();
       } else if (activeKind === "treasure") {
-        applyButton.disabled = false;
-        title.textContent = "宝箱の中身設定";
-        body.innerHTML = renderTreasureSettings(createTreasureCatalog(materialData, draft.treasureTable.entries), draft.treasureTable);
+        title.textContent = "宝箱設定";
+        body.innerHTML = renderTreasureSettings(createTreasureCatalog(materialData, draft.treasureTable.entries), draft.treasureTable, draft.treasureLimits);
+        updateWeightedApplyAvailability();
       } else {
-        applyButton.disabled = false;
-        title.textContent = "出現する敵の設定";
-        body.innerHTML = renderEnemySettings(enemyDefinitions, draft.enemyPool);
+        const info = COUNT_KINDS[activeKind];
+        title.textContent = `${info.label}設定`;
+        body.innerHTML = renderPoolSettings(activeKind, activeKind === "enemies" ? enemyDefinitions : trapDefinitions, draft[info.pool], draft[info.field]);
+        updateWeightedApplyAvailability();
       }
     }
 
     function handleBodyInput(event) {
+      if (event.target.matches("[data-weight], [data-enabled]")) {
+        if (COUNT_KINDS[activeKind]) updateWeightedApplyAvailability();
+        return;
+      }
+      const info = COUNT_KINDS[activeKind];
+      if (info && event.target.matches(`[data-${info.prefix}-limit-min], [data-${info.prefix}-limit-max], [data-${info.prefix}-limit-none]`)) {
+        const maximum = body.querySelector(`[data-${info.prefix}-limit-max]`);
+        maximum.disabled = body.querySelector(`[data-${info.prefix}-limit-none]`).checked;
+        if (event.target.matches(`[data-${info.prefix}-limit-none]`) && !maximum.disabled && maximum.value === "") {
+          const minimum = body.querySelector(`[data-${info.prefix}-limit-min]`).valueAsNumber;
+          maximum.value = String(Number.isSafeInteger(minimum) && minimum >= 0 ? minimum : 0);
+        }
+        readCountLimitsDraft();
+        updateWeightedApplyAvailability();
+        return;
+      }
       if (activeKind === "tiles" && event.target.matches("[data-wall-height]")) {
         draft.tiles.wallHeight = event.target.value === "" ? NaN : Number(event.target.value);
         updateTileApplyAvailability();
@@ -126,9 +165,53 @@
         || tiles.GROUPS.some(({ id }) => draft.tiles[id].some((tileId) => !tileId));
     }
 
+    function readCountLimitsDraft() {
+      const info = COUNT_KINDS[activeKind];
+      draft[info.field] = {
+        min: body.querySelector(`[data-${info.prefix}-limit-min]`).valueAsNumber,
+        max: body.querySelector(`[data-${info.prefix}-limit-none]`).checked ? null : body.querySelector(`[data-${info.prefix}-limit-max]`).valueAsNumber,
+      };
+    }
+
+    function updateWeightedApplyAvailability() {
+      const info = COUNT_KINDS[activeKind];
+      let message = "";
+      try {
+        countLimits.normalize(draft[info.field], info.label);
+        validateSelectedWeights(info.rows);
+      }
+      catch (error) { message = error.message; }
+      applyButton.disabled = Boolean(message);
+      const errorLabel = body.querySelector(`[data-${info.prefix}-limit-error]`);
+      errorLabel.textContent = message;
+      errorLabel.hidden = !message;
+      return !message;
+    }
+
+    function validateSelectedWeights(selector) {
+      body.querySelectorAll(selector).forEach((row) => {
+        if (row.querySelector("[data-enabled]").checked) weights.normalizeWeight(row.querySelector("[data-weight]").valueAsNumber);
+      });
+    }
+
     function handleBodyClick(event) {
       if (activeKind === "tiles") {
         handleTileClick(event);
+        return;
+      }
+      if (activeKind !== "treasure") return;
+      const duplicateButton = event.target.closest("[data-duplicate-treasure]");
+      if (duplicateButton) {
+        const row = duplicateButton.closest("[data-treasure-row]");
+        const minCount = positiveInteger(row.querySelector("[data-min]").value, 1);
+        const entry = {
+          type: row.dataset.type, id: row.dataset.id, name: row.dataset.name,
+          weight: Math.floor(row.querySelector("[data-weight]").valueAsNumber),
+          minCount, maxCount: Math.max(minCount, positiveInteger(row.querySelector("[data-max]").value, minCount)),
+        };
+        readTreasureDraft();
+        draft.treasureTable.entries.push(entry);
+        render();
         return;
       }
       const addButton = event.target.closest("[data-add-treasure]");
@@ -142,17 +225,17 @@
         return;
       }
       readTreasureDraft();
+      const type = typeInput.value.trim() || "item";
+      const known = createTreasureCatalog(materialData, draft.treasureTable.entries).find((entry) => entry.type === type && entry.id === id);
       const entry = {
-        type: typeInput.value.trim() || "item",
+        type,
         id,
-        name: nameInput.value.trim() || id,
+        name: nameInput.value.trim() || known?.name || id,
         weight: 1,
         minCount: 1,
         maxCount: 1,
       };
-      const index = draft.treasureTable.entries.findIndex((item) => item.type === entry.type && item.id === entry.id);
-      if (index >= 0) draft.treasureTable.entries[index] = entry;
-      else draft.treasureTable.entries.push(entry);
+      draft.treasureTable.entries.push(entry);
       render();
     }
 
@@ -195,8 +278,16 @@
 
     function applyDraft() {
       if (activeKind === "tiles") readTileDraft();
-      else if (activeKind === "treasure") readTreasureDraft();
-      else readEnemyDraft();
+      else {
+        const info = COUNT_KINDS[activeKind];
+        if (activeKind === "treasure") readTreasureDraft();
+        else {
+          readCountLimitsDraft();
+          readPoolDraft();
+        }
+        if (!updateWeightedApplyAvailability()) return;
+        draft[info.field] = countLimits.normalize(draft[info.field], info.label);
+      }
       state = clone(draft);
       updateSummaries();
       dialog.close();
@@ -208,8 +299,12 @@
         draft.tiles = clone(defaults.tiles);
         selectedTileLayer = 0;
       }
-      else if (activeKind === "treasure") draft.treasureTable = clone(defaults.treasureTable);
-      else draft.enemyPool = clone(defaults.enemyPool);
+      else {
+        const info = COUNT_KINDS[activeKind];
+        draft[info.field] = clone(defaults[info.field]);
+        if (activeKind === "treasure") draft.treasureTable = clone(defaults.treasureTable);
+        else draft[info.pool] = clone(defaults[info.pool]);
+      }
       render();
     }
 
@@ -218,6 +313,7 @@
     }
 
     function readTreasureDraft() {
+      readCountLimitsDraft();
       const entries = [];
       body.querySelectorAll("[data-treasure-row]").forEach((row) => {
         const enabled = row.querySelector("[data-enabled]");
@@ -226,7 +322,7 @@
           type: row.dataset.type,
           id: row.dataset.id,
           name: row.dataset.name,
-          weight: positiveNumber(row.querySelector("[data-weight]").value, 1),
+          weight: Math.floor(row.querySelector("[data-weight]").valueAsNumber),
           minCount: positiveInteger(row.querySelector("[data-min]").value, 1),
           maxCount: positiveInteger(row.querySelector("[data-max]").value, 1),
         });
@@ -237,17 +333,18 @@
       draft.treasureTable = { rolls: [minRolls, Math.max(minRolls, maxRolls)], entries };
     }
 
-    function readEnemyDraft() {
+    function readPoolDraft() {
+      const info = COUNT_KINDS[activeKind];
       const pool = [];
-      body.querySelectorAll("[data-enemy-row]").forEach((row) => {
+      body.querySelectorAll(info.rows).forEach((row) => {
         if (!row.querySelector("[data-enabled]").checked) return;
         pool.push({
           id: row.dataset.id,
           name: row.dataset.name,
-          weight: positiveNumber(row.querySelector("[data-weight]").value, 1),
+          weight: Math.floor(row.querySelector("[data-weight]").valueAsNumber),
         });
       });
-      draft.enemyPool = pool;
+      draft[info.pool] = pool;
     }
 
     function updateSummaries() {
@@ -256,10 +353,13 @@
         options.tileButton.title = `壁の高さ${state.tiles.wallHeight}マス / ${options.tileButton.querySelector("span").textContent}`;
       }
       if (options.treasureButton) {
-        options.treasureButton.querySelector("span").textContent = `${state.treasureTable.entries.length}種類`;
+        options.treasureButton.querySelector("span").textContent = `${state.treasureTable.entries.length}候補 / ${state.treasureLimits.min}～${state.treasureLimits.max ?? "なし"}個`;
       }
       if (options.enemyButton) {
-        options.enemyButton.querySelector("span").textContent = `${state.enemyPool.length}種類`;
+        options.enemyButton.querySelector("span").textContent = `${state.enemyPool.length}種類 / ${state.enemyLimits.min}～${state.enemyLimits.max ?? "なし"}体`;
+      }
+      if (options.trapButton) {
+        options.trapButton.querySelector("span").textContent = `${state.trapPool.length}種類 / ${state.trapLimits.min}～${state.trapLimits.max ?? "なし"}個`;
       }
     }
   }
@@ -272,11 +372,15 @@
       .map((id) => ({ id, name: displayName(enemyDefinitions[id], id), weight: 1 }));
     return {
       tiles: tiles.normalize({ floorTileId, wallTileId }),
+      treasureLimits: countLimits.normalize(),
       treasureTable: {
         rolls: [1, 1],
         entries: [{ type: "item", id: "wound_medicine", name: "傷薬", weight: 1, minCount: 1, maxCount: 1 }],
       },
       enemyPool: preferredEnemies,
+      enemyLimits: countLimits.normalize(),
+      trapPool: [],
+      trapLimits: countLimits.normalize(),
     };
   }
 
@@ -329,43 +433,67 @@
     </button>`;
   }
 
-  function renderTreasureSettings(catalog, table) {
-    const selected = new Map(table.entries.map((entry) => [`${entry.type}:${entry.id}`, entry]));
+  function renderTreasureSettings(catalog, table, limits) {
+    const selected = new Map();
+    // Each entry is a separate roll candidate, even when item IDs match.
+    table.entries.forEach((entry) => {
+      const key = `${entry.type}:${entry.id}`;
+      if (!selected.has(key)) selected.set(key, []);
+      selected.get(key).push(entry);
+    });
     return `
+      ${renderCountSettings("treasure", limits)}
       <div class="loot-toolbar">
         <label>1箱の抽選回数 <input data-roll-min type="number" min="1" value="${table.rolls[0]}"> ～ <input data-roll-max type="number" min="1" value="${table.rolls[1]}"></label>
         <input data-filter type="search" placeholder="内容名またはIDで検索">
       </div>
       <div class="custom-entry"><select data-custom-type><option value="item">アイテム</option><option value="material">素材</option><option value="currency">通貨</option><option value="equipment">装備</option></select><input data-custom-id placeholder="ID"><input data-custom-name placeholder="表示名"><button data-add-treasure type="button">追加</button></div>
-      <div class="config-table config-table-treasure"><div class="config-head">使用</div><div class="config-head">内容</div><div class="config-head">比率</div><div class="config-head">個数</div>
-        ${catalog.map((entry) => treasureRow(entry, selected.get(`${entry.type}:${entry.id}`))).join("")}
+      <div class="config-table config-table-treasure"><div class="config-head">使用</div><div class="config-head">内容</div><div class="config-head">重み</div><div class="config-head">個数</div><div class="config-head">追加</div>
+        ${catalog.map((entry) => (selected.get(`${entry.type}:${entry.id}`) || [null]).map((current) => treasureRow(entry, current)).join("")).join("")}
       </div>`;
   }
 
   function treasureRow(entry, current) {
-    const searchText = `${entry.name} ${entry.id} ${entry.type}`.toLowerCase();
-    return `<div class="config-row" data-treasure-row data-type="${escapeHtml(entry.type)}" data-id="${escapeHtml(entry.id)}" data-name="${escapeHtml(entry.name)}" data-search-text="${escapeHtml(searchText)}">
+    const name = current?.name || entry.name;
+    const searchText = `${name} ${entry.id} ${entry.type}`.toLowerCase();
+    return `<div class="config-row" data-treasure-row data-type="${escapeHtml(entry.type)}" data-id="${escapeHtml(entry.id)}" data-name="${escapeHtml(name)}" data-search-text="${escapeHtml(searchText)}">
       <input data-enabled type="checkbox" ${current ? "checked" : ""}>
-      <span><strong>${escapeHtml(entry.name)}</strong><small>${escapeHtml(entry.type)} / ${escapeHtml(entry.id)}</small></span>
-      <input data-weight type="number" min="0.01" step="0.01" value="${current ? current.weight : 1}">
+      <span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(entry.type)} / ${escapeHtml(entry.id)}</small></span>
+      <input data-weight type="number" min="1" max="${weights.MAX_WEIGHT}" step="1" aria-label="重み" value="${current ? Number.isFinite(current.weight) ? Math.floor(current.weight) : "" : 1}">
       <span class="range-inputs"><input data-min type="number" min="1" value="${current ? current.minCount : 1}"><b>～</b><input data-max type="number" min="1" value="${current ? current.maxCount : 1}"></span>
+      <button data-duplicate-treasure class="duplicate-treasure" type="button" title="同じアイテムの抽選候補を追加" aria-label="同じアイテムの抽選候補を追加">＋</button>
     </div>`;
   }
 
-  function renderEnemySettings(definitions, pool) {
-    const selected = new Map(pool.map((entry) => [entry.id, entry]));
-    const rows = Object.entries(definitions).map(([id, definition]) => ({ id, definition }));
-    return `<div class="dialog-filter"><input data-filter type="search" placeholder="敵名またはIDで検索"></div><div class="config-table config-table-enemy"><div class="config-head">使用</div><div class="config-head">敵</div><div class="config-head">抽選比率</div>${rows.map((entry) => enemyRow(entry, selected.get(entry.id))).join("")}</div>`;
+  function renderCountSettings(kind, limits) {
+    const { prefix, label } = COUNT_KINDS[kind];
+    return `<div class="treasure-count-settings">
+      <label>下限${label}数<input data-${prefix}-limit-min type="number" min="0" step="1" value="${Number.isFinite(limits.min) ? limits.min : ""}"></label>
+      <label>上限${label}数<input data-${prefix}-limit-max type="number" min="0" step="1" placeholder="なし" value="${Number.isFinite(limits.max) ? limits.max : ""}" ${limits.max === null ? "disabled" : ""}></label>
+      <label><input data-${prefix}-limit-none type="checkbox" aria-label="上限${label}数なし" ${limits.max === null ? "checked" : ""}>なし</label>
+      <p data-${prefix}-limit-error class="treasure-count-error" role="status" hidden></p>
+    </div>`;
   }
 
-  function enemyRow(entry, current) {
+  function renderPoolSettings(kind, definitions, pool, limits) {
+    const info = COUNT_KINDS[kind];
+    const selected = new Map(pool.map((entry) => [entry.id, entry]));
+    const catalog = new Map(Object.entries(definitions));
+    pool.forEach((entry) => { if (!catalog.has(entry.id)) catalog.set(entry.id, { name: entry.name || entry.id }); });
+    const rows = [...catalog].map(([id, definition]) => ({ id, definition }));
+    return `${renderCountSettings(kind, limits)}<div class="dialog-filter"><input data-filter type="search" placeholder="${info.label}名またはIDで検索"></div>
+      <div class="config-table config-table-enemy"><div class="config-head">使用</div><div class="config-head">${info.label}</div><div class="config-head">重み</div>
+      ${rows.length ? rows.map((entry) => poolRow(info.prefix, entry, selected.get(entry.id))).join("") : `<span class="empty">${info.label}データなし</span>`}</div>`;
+  }
+
+  function poolRow(prefix, entry, current) {
     const name = displayName(entry.definition, entry.id);
-    const image = entry.definition.mapImagePath || entry.definition.imagePath || "";
+    const image = entry.definition.mapImagePath || entry.definition.imagePath || entry.definition.image || "";
     const searchText = `${name} ${entry.id}`.toLowerCase();
-    return `<div class="config-row" data-enemy-row data-id="${escapeHtml(entry.id)}" data-name="${escapeHtml(name)}" data-search-text="${escapeHtml(searchText)}">
+    return `<div class="config-row" data-${prefix}-row data-id="${escapeHtml(entry.id)}" data-name="${escapeHtml(name)}" data-search-text="${escapeHtml(searchText)}">
       <input data-enabled type="checkbox" ${current ? "checked" : ""}>
       <span class="enemy-entry">${image ? `<img src="${escapeHtml(resolveAssetPath(image))}" alt="">` : ""}<span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(entry.id)}</small></span></span>
-      <input data-weight type="number" min="0.01" step="0.01" value="${current ? current.weight : 1}">
+      <input data-weight type="number" min="1" max="${weights.MAX_WEIGHT}" step="1" aria-label="重み" value="${current ? Number.isFinite(current.weight) ? Math.floor(current.weight) : "" : 1}">
     </div>`;
   }
 

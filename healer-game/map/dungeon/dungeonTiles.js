@@ -71,10 +71,47 @@
     return regions;
   }
 
-  function regionAt(dungeon, x, y) {
+  function createEndpointLineCopies(dungeon) {
+    if (dungeon.config?.endpointLineCopy !== true) return [];
+    const opposite = { up: "down", down: "up", left: "right", right: "left" };
+    const tileIds = { up: "lineCopyUp", down: "lineCopyDown", left: "lineCopyLeft", right: "lineCopyRight" };
+    const path = dungeon.mainPath || [];
+    const pathDirection = (from, to) => {
+      if (!from || !to) return null;
+      if (from.x !== to.x) return to.x > from.x ? "right" : "left";
+      if (from.y !== to.y) return to.y > from.y ? "down" : "up";
+      return null;
+    };
+    const entranceDirection = dungeon.entranceApproach?.startDirection || pathDirection(path[0], path[1]);
+    const exitDirection = dungeon.exitApproach?.endDirection || pathDirection(path[path.length - 2], path[path.length - 1]);
+    return [
+      { endpoint: "entrance", point: dungeon.entrance, direction: opposite[entranceDirection] },
+      { endpoint: "exit", point: dungeon.exit, direction: exitDirection },
+    ].filter((entry) => entry.point && tileIds[entry.direction]).map(({ endpoint, point, direction }) => ({
+      id: `${endpoint}_line_copy`, endpoint, x: point.x, y: point.y, direction, tileId: tileIds[direction],
+    })).sort((a, b) => a.y - b.y || a.x - b.x);
+  }
+
+  function rawRegionAt(dungeon, x, y) {
     if (x < 0 || y < 0 || x >= dungeon.width || y >= dungeon.height) return "margin";
     const region = dungeon.tileRegions[y * dungeon.width + x];
     return region === "wall" ? "pathWall" : region;
+  }
+
+  function regionAt(dungeon, x, y) {
+    const copies = dungeon.lineCopies || [];
+    if (!copies.some((entry) => entry.x === x && entry.y === y)) {
+      for (let index = copies.length - 1; index >= 0; index -= 1) {
+        const source = copies[index];
+        if (source.direction === "down" && x === source.x && y > source.y
+          || source.direction === "up" && x === source.x && y < source.y
+          || source.direction === "left" && y === source.y && x < source.x
+          || source.direction === "right" && y === source.y && x > source.x) {
+          return rawRegionAt(dungeon, source.x, source.y);
+        }
+      }
+    }
+    return rawRegionAt(dungeon, x, y);
   }
 
   function drawingBounds(definition = {}, sourceTileSize = 48) {
@@ -98,7 +135,7 @@
     const prepared = {};
     let overscan = 1;
     let layerCount = 0;
-    GROUPS.forEach(({ id }) => {
+    if (options.showImages !== false) GROUPS.forEach(({ id }) => {
       prepared[id] = settings[id].map((tileId) => {
         const bounds = drawingBounds(getDefinition(tileId) || {}, sourceTileSize);
         overscan = Math.max(overscan, Math.ceil(Math.max(Math.abs(bounds.x), Math.abs(bounds.y), bounds.x + bounds.width, bounds.y + bounds.height)));
@@ -135,5 +172,5 @@
     context.restore();
   }
 
-  return Object.freeze({ GROUPS, normalize, classifyCells, regionAt, drawingBounds, draw });
+  return Object.freeze({ GROUPS, normalize, classifyCells, createEndpointLineCopies, regionAt, drawingBounds, draw });
 });

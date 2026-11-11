@@ -57,13 +57,22 @@ async function main() {
     const request = pending.get(response.id);
     if (!request) return;
     pending.delete(response.id);
+    clearTimeout(request.timer);
     if (response.error) request.reject(new Error(JSON.stringify(response.error)));
     else request.resolve(response.result);
+  });
+  socket.addEventListener("close", () => {
+    pending.forEach((request) => { clearTimeout(request.timer); request.reject(new Error("Chrome debugging connection closed")); });
+    pending.clear();
   });
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
       const id = ++sequence;
-      pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`Chrome request timed out: ${method} ${String(params.expression || "").slice(0, 200)}`));
+      }, 15000);
+      pending.set(id, { resolve, reject, timer });
       socket.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -92,11 +101,76 @@ async function main() {
   assert.ok(legend.find((entry) => entry.key === 'event').shape.includes('diamond'));
   assert.ok(legend.find((entry) => entry.key === 'room-junction').shape.includes('outline'));
   const metricValue = (label) => evaluate(`(() => { const term = Array.from(document.querySelectorAll('#metrics dt')).find(dt => dt.textContent === ${JSON.stringify(label)}); return term?.nextElementSibling?.textContent; })()`);
-  assert.ok((await metricValue('宝箱候補')).includes('確定1'), 'the preview must show one guaranteed chest');
-  assert.equal(await metricValue('追加の宝箱率'), '31.1%', 'standard danger 3 uses the interpolated additional rate');
+  const editCountBounds = (prefix, min, max) => evaluate(`{
+    const minimum = document.querySelector('[data-${prefix}-limit-min]');
+    minimum.value = '${min}'; minimum.dispatchEvent(new Event('input', { bubbles: true }));
+    const none = document.querySelector('[data-${prefix}-limit-none]');
+    none.checked = ${max === null}; none.dispatchEvent(new Event('input', { bubbles: true }));
+    if (${max !== null}) { const maximum = document.querySelector('[data-${prefix}-limit-max]'); maximum.value = '${max}'; maximum.dispatchEvent(new Event('input', { bubbles: true })); }
+  }`);
+  assert.match(await metricValue('宝箱候補'), /^\d+$/, 'the preview must show a chest count without a guaranteed portion');
+  assert.equal(await metricValue('宝箱率'), '34.4%', 'standard danger 3 uses the interpolated chest rate');
+  assert.equal(await metricValue('宝箱数範囲'), '0～なし');
+  assert.equal(await metricValue('魔物数範囲'), '0～なし');
+  assert.equal(await metricValue('罠数範囲'), '0～なし');
   await evaluate(`HEALER_DUNGEON_PROFILES.replaceSaved([]);
     document.getElementById('profile-select').dispatchEvent(new Event('change'));`);
   await idle();
+  assert.equal(await evaluate("document.querySelectorAll('#path-toggle, #room-toggle, #placement-toggle').length"), 0);
+  assert.equal(await evaluate("document.querySelectorAll('#details-toggle, #tile-toggle, #line-copy-toggle, #grid-toggle').length"), 4);
+  const controlsFit = `Array.from(document.querySelectorAll('.view-options label')).every(label => {
+    const rect = label.getBoundingClientRect(); return rect.left >= 0 && rect.right <= document.documentElement.clientWidth;
+  })`;
+  assert.equal(await evaluate(controlsFit), true, 'preview controls must fit the desktop viewport');
+  assert.equal(await evaluate("document.getElementById('line-copy-toggle').checked"), false);
+  const previewControls = await evaluate(`(() => {
+    const api = window.HEALER_DUNGEON_TILES;
+    window.HEALER_DUNGEON_TILES = { ...api, draw(ctx, dungeon, options) {
+      window.__previewResult = dungeon; window.__previewOptions = options;
+      return api.draw(ctx, dungeon, options);
+    } };
+    const details = document.getElementById('details-toggle');
+    const tiles = document.getElementById('tile-toggle');
+    const copies = document.getElementById('line-copy-toggle');
+    const ctx = document.getElementById('dungeon-canvas').getContext('2d');
+    const original = { stroke: ctx.stroke, arc: ctx.arc, drawImage: ctx.drawImage };
+    let strokes = 0, arcs = 0, images = 0;
+    ctx.stroke = function(...args) { strokes += 1; return original.stroke.apply(this, args); };
+    ctx.arc = function(...args) { arcs += 1; return original.arc.apply(this, args); };
+    ctx.drawImage = function(...args) { images += 1; return original.drawImage.apply(this, args); };
+    const change = control => control.dispatchEvent(new Event('change'));
+    details.checked = true; change(details);
+    const result = window.__previewResult;
+    const geometry = JSON.stringify([result.cells, result.rooms, result.placements]);
+    const enabled = { strokes, rooms: result.rooms.length };
+    strokes = arcs = images = 0;
+    details.checked = false; change(details);
+    const disabled = { strokes, arcs };
+    strokes = arcs = images = 0;
+    tiles.checked = false; change(tiles);
+    const imagesOff = { images, showImages: window.__previewOptions.showImages };
+    copies.checked = true; change(copies);
+    const lineCopies = result.lineCopies;
+    const sameResult = window.__previewResult === result;
+    copies.checked = false; change(copies);
+    const removed = result.lineCopies.length;
+    copies.checked = true; change(copies);
+    details.checked = true; change(details);
+    Object.assign(ctx, original);
+    return { enabled, disabled, imagesOff, lineCopies, sameResult, removed,
+      entranceDirection: result.entranceApproach.startDirection, exitDirection: result.exitApproach.endDirection,
+      unchanged: geometry === JSON.stringify([result.cells, result.rooms, result.placements]) };
+  })()`);
+  assert.equal(previewControls.enabled.strokes, previewControls.enabled.rooms + 1);
+  assert.deepEqual(previewControls.disabled, { strokes: 0, arcs: 2 });
+  assert.deepEqual(previewControls.imagesOff, { images: 0, showImages: false });
+  assert.equal(previewControls.lineCopies.length, 2);
+  assert.equal(previewControls.lineCopies.find(entry => entry.endpoint === 'entrance').direction,
+    { up: 'down', down: 'up', left: 'right', right: 'left' }[previewControls.entranceDirection]);
+  assert.equal(previewControls.lineCopies.find(entry => entry.endpoint === 'exit').direction, previewControls.exitDirection);
+  assert.equal(previewControls.removed, 0);
+  assert.equal(previewControls.sameResult, true);
+  assert.equal(previewControls.unchanged, true);
   const pixelCheck = await evaluate(`(async () => {
     async function image(color, overlay = false) {
       const canvas = document.createElement('canvas');
@@ -216,21 +290,153 @@ async function main() {
     document.getElementById('danger-select').value = '7';
     document.getElementById('direction-select').value = 'down';
     document.getElementById('exit-direction-select').value = 'right';
-    document.getElementById('treasure-settings-button').click();
+    document.getElementById('treasure-settings-button').click();`);
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-min]').value"), '0');
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-none]').checked"), true);
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-max]').disabled"), true);
+  for (const invalid of ['-1', '0.5', '']) {
+    await evaluate(`document.querySelector('[data-treasure-limit-min]').value = ${JSON.stringify(invalid)};
+      document.querySelector('[data-treasure-limit-min]').dispatchEvent(new Event('input', { bubbles: true }));`);
+    assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  }
+  await evaluate(`document.querySelector('[data-treasure-limit-min]').value = '2';
+    document.querySelector('[data-treasure-limit-min]').dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('[data-treasure-limit-none]').click();
+    document.querySelector('[data-treasure-limit-max]').value = '1';
+    document.querySelector('[data-treasure-limit-max]').dispatchEvent(new Event('input', { bubbles: true }));`);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  assert.ok((await evaluate("document.querySelector('[data-treasure-limit-error]').textContent")).includes('下限'));
+  await evaluate("document.querySelector('[data-treasure-limit-none]').click();");
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), false, 'no maximum must permit a valid minimum');
+  await evaluate("document.querySelector('[data-action=close]').click(); document.getElementById('treasure-settings-button').click();");
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-min]').value"), '0', 'cancel must discard draft count bounds');
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-none]').checked"), true);
+  await evaluate(`document.querySelector('[data-treasure-limit-min]').value = '2';
+    document.querySelector('[data-treasure-limit-min]').dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('[data-treasure-limit-none]').click();
+    document.querySelector('[data-treasure-limit-max]').value = '3';
+    document.querySelector('[data-treasure-limit-max]').dispatchEvent(new Event('input', { bubbles: true }));
     document.querySelector('[data-roll-max]').value = '3';
-    document.querySelector('[data-treasure-row][data-id="wound_medicine"] [data-max]').value = '4';
-    document.querySelector('[data-action="apply"]').click();`);
+    document.querySelector('[data-treasure-row][data-id="wound_medicine"] [data-max]').value = '4';`);
+  assert.ok(await evaluate("Array.from(document.querySelectorAll('[data-treasure-row] [data-weight]')).every(input => input.step === '1' && input.min === '1')"));
+  for (const invalid of ['0.5', '0', '-1', '']) {
+    await evaluate(`{ const input = document.querySelector('[data-treasure-row][data-id="wound_medicine"] [data-weight]');
+      input.value = ${JSON.stringify(invalid)}; input.dispatchEvent(new Event('input', { bubbles: true })); }`);
+    assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  }
+  await evaluate(`{ const input = document.querySelector('[data-treasure-row][data-id="wound_medicine"] [data-weight]');
+    input.value = '2.8'; input.dispatchEvent(new Event('input', { bubbles: true })); }`);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), false);
+  assert.equal(await evaluate("document.querySelector('[data-treasure-row][data-id=wound_medicine] [data-weight]').value"), '2.8', 'typing must not truncate unfinished input');
+  await evaluate(`document.querySelector('[data-treasure-row][data-id="wound_medicine"] [data-weight]').dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('[data-treasure-row][data-id="wound_medicine"] [data-duplicate-treasure]').click();`);
+  assert.equal(await evaluate("document.querySelectorAll('[data-treasure-row][data-id=wound_medicine]').length"), 2, 'a duplicate item must get its own candidate row');
+  await evaluate(`{ const rows = document.querySelectorAll('[data-treasure-row][data-id="wound_medicine"]');
+    rows[1].querySelector('[data-min]').value = '2';
+    rows[1].querySelector('[data-max]').value = '2';
+    rows[1].querySelector('[data-weight]').value = '1';
+    rows[1].querySelector('[data-weight]').dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('[data-custom-id]').value = 'wound_medicine';
+    document.querySelector('[data-add-treasure]').click(); }`);
+  assert.equal(await evaluate("document.querySelectorAll('[data-treasure-row][data-id=wound_medicine]').length"), 3, 'adding an existing ID must append rather than replace a candidate');
+  await evaluate(`{ const row = document.querySelectorAll('[data-treasure-row][data-id="wound_medicine"]')[2];
+    row.querySelector('[data-enabled]').checked = false;
+    row.querySelector('[data-weight]').value = '0.5';
+    row.querySelector('[data-weight]').dispatchEvent(new Event('input', { bubbles: true })); }`);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), false, 'disabled candidates must not block apply');
+  await evaluate("document.querySelector('[data-action=apply]').click();");
   await idle();
-  for (const [danger, rate] of [[1, '20.0%'], [10, '70.0%'], [7, '53.3%']]) {
+  assert.equal(await metricValue('宝箱数範囲'), '2～3');
+  await evaluate("document.getElementById('treasure-settings-button').click(); document.querySelector('[data-action=reset]').click();");
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-min]').value"), '0');
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-none]').checked"), true);
+  await evaluate("document.querySelector('[data-action=close]').click(); document.getElementById('treasure-settings-button').click();");
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-min]').value"), '2', 'closing after reset must retain the applied bounds');
+  assert.equal(await evaluate("document.querySelector('[data-treasure-limit-max]').value"), '3');
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-treasure-row][data-id="wound_medicine"]')).map(row => [row.querySelector('[data-min]').valueAsNumber, row.querySelector('[data-max]').valueAsNumber, row.querySelector('[data-weight]').valueAsNumber])`), [[1, 4, 2], [2, 2, 1]], 'reopening must retain every quantity variant and its weight');
+  await evaluate("document.querySelector('[data-treasure-limit-none]').click(); document.querySelector('[data-action=apply]').click();");
+  await idle();
+  assert.equal(await metricValue('宝箱数範囲'), '2～なし');
+  await evaluate(`document.getElementById('treasure-settings-button').click();
+    document.querySelector('[data-treasure-limit-none]').click();
+    document.querySelector('[data-treasure-limit-max]').value = '3';
+    document.querySelector('[data-treasure-limit-max]').dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('[data-action=apply]').click();`);
+  await idle();
+  for (const [danger, rate] of [[1, '30.0%'], [10, '50.0%'], [7, '43.3%']]) {
     await evaluate(`document.getElementById('danger-select').value = '${danger}'; document.getElementById('danger-select').dispatchEvent(new Event('change')); document.getElementById('generate-button').click();`);
     await idle();
-    assert.equal(await metricValue('追加の宝箱率'), rate);
-    assert.ok((await metricValue('宝箱候補')).includes('確定1'));
+    assert.equal(await metricValue('宝箱率'), rate);
+    assert.match(await metricValue('宝箱候補'), /^\d+$/);
+    const treasureCount = Number(await metricValue('宝箱候補'));
+    assert.ok(treasureCount >= 2 && treasureCount <= 3);
   }
-  await evaluate(`document.getElementById('enemy-settings-button').click();
-    document.querySelectorAll('[data-enemy-row]').forEach(row => { row.querySelector('[data-enabled]').checked = row.dataset.id === 'shadow_wolf'; });
-    document.querySelector('[data-action="apply"]').click();`);
+  await evaluate("document.getElementById('trap-settings-button').click();");
+  assert.equal(await evaluate("document.querySelector('[data-trap-limit-min]').value"), '0');
+  assert.equal(await evaluate("document.querySelector('[data-trap-limit-none]').checked"), true);
+  assert.equal(await evaluate("document.querySelector('[data-trap-limit-max]').disabled"), true);
+  assert.equal(await evaluate("document.querySelectorAll('[data-trap-row]').length"), await evaluate("Object.keys(HEALER_TRAP_DEFS).length"));
+  await editCountBounds('trap', 3, 2);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  await evaluate("document.querySelector('[data-action=close]').click(); document.getElementById('trap-settings-button').click();");
+  assert.equal(await evaluate("document.querySelector('[data-trap-limit-min]').value"), '0', 'cancel must not commit trap count bounds');
+  await editCountBounds('trap', 2, 3);
+  await evaluate("document.querySelector('[data-action=reset]').click();");
+  assert.equal(await evaluate("document.querySelector('[data-trap-limit-min]').value"), '0');
+  assert.equal(await evaluate("document.querySelector('[data-trap-limit-none]').checked"), true);
+  await evaluate(`document.querySelector('[data-action=close]').click();
+    HEALER_TRAP_DEFS.__browser_spike = { name: '試験用の棘' };
+    HEALER_TRAP_DEFS.__browser_arrow = { name: '試験用の矢' };
+    document.getElementById('trap-settings-button').click();
+    document.querySelectorAll('[data-trap-row]').forEach(row => { row.querySelector('[data-enabled]').checked = row.dataset.id.startsWith('__browser_'); });`);
+  await editCountBounds('trap', 2, 3);
+  await evaluate(`{ const input = document.querySelector('[data-trap-row][data-id="__browser_spike"] [data-weight]');
+    input.value = '0'; input.dispatchEvent(new Event('input', { bubbles: true })); }`);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  await evaluate(`{ const input = document.querySelector('[data-trap-row][data-id="__browser_spike"] [data-weight]');
+    input.value = '2.8'; input.dispatchEvent(new Event('change', { bubbles: true })); }`);
+  assert.equal(await evaluate("document.querySelector('[data-trap-row][data-id=__browser_spike] [data-weight]').value"), '2');
+  await evaluate("document.querySelector('[data-action=apply]').click();");
   await idle();
+  assert.equal(await metricValue('罠数範囲'), '2～3');
+  assert.ok(Number(await metricValue('罠候補')) >= 2 && Number(await metricValue('罠候補')) <= 3);
+  await evaluate("document.getElementById('trap-settings-button').click();");
+  await editCountBounds('trap', 0, 0);
+  await evaluate("document.querySelector('[data-action=apply]').click();");
+  await idle();
+  assert.equal(await metricValue('罠候補'), '0');
+  await evaluate("delete HEALER_TRAP_DEFS.__browser_spike; delete HEALER_TRAP_DEFS.__browser_arrow; document.getElementById('trap-settings-button').click();");
+  assert.equal(await evaluate("document.querySelectorAll('[data-trap-row]').length"), await evaluate("Object.keys(HEALER_TRAP_DEFS).length + 2"), 'selected trap IDs without current definitions must remain editable');
+  await editCountBounds('trap', 2, 3);
+  await evaluate("document.querySelector('[data-action=apply]').click();");
+  await idle();
+  await evaluate(`document.getElementById('enemy-settings-button').click();
+    document.querySelectorAll('[data-enemy-row]').forEach(row => { row.querySelector('[data-enabled]').checked = row.dataset.id === 'shadow_wolf'; });`);
+  assert.equal(await evaluate("document.querySelector('[data-enemy-limit-min]').value"), '0');
+  assert.equal(await evaluate("document.querySelector('[data-enemy-limit-none]').checked"), true);
+  await editCountBounds('enemy', 7, 6);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  await evaluate("document.querySelector('[data-action=reset]').click();");
+  assert.equal(await evaluate("document.querySelector('[data-enemy-limit-min]').value"), '0');
+  await evaluate("document.querySelectorAll('[data-enemy-row]').forEach(row => { row.querySelector('[data-enabled]').checked = row.dataset.id === 'shadow_wolf'; });");
+  await editCountBounds('enemy', 0, 0);
+  assert.ok(await evaluate("Array.from(document.querySelectorAll('[data-enemy-row] [data-weight]')).every(input => input.step === '1' && input.min === '1')"));
+  await evaluate(`{ const input = document.querySelector('[data-enemy-row][data-id="shadow_wolf"] [data-weight]');
+    input.value = '0'; input.dispatchEvent(new Event('input', { bubbles: true })); }`);
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), true);
+  await evaluate(`{ const input = document.querySelector('[data-enemy-row][data-id="shadow_wolf"] [data-weight]');
+    input.value = '2.9'; input.dispatchEvent(new Event('change', { bubbles: true })); }`);
+  assert.equal(await evaluate("document.querySelector('[data-enemy-row][data-id=shadow_wolf] [data-weight]').value"), '2');
+  assert.equal(await evaluate("document.querySelector('[data-action=apply]').disabled"), false);
+  await evaluate("document.querySelector('[data-action=apply]').click();");
+  await idle();
+  assert.equal(await metricValue('魔物候補'), '0');
+  await evaluate("document.getElementById('enemy-settings-button').click();");
+  await editCountBounds('enemy', 4, 6);
+  await evaluate("document.querySelector('[data-action=apply]').click();");
+  await idle();
+  assert.equal(await metricValue('魔物数範囲'), '4～6');
+  assert.ok(Number(await metricValue('魔物候補')) >= 4 && Number(await metricValue('魔物候補')) <= 6);
   const enemyLabels = await evaluate(`(() => {
     const ctx = document.getElementById('dungeon-canvas').getContext('2d');
     const fillText = ctx.fillText;
@@ -239,7 +445,7 @@ async function main() {
     const circleColors = [];
     ctx.fillText = function(text, x, y, ...args) { labels.push({ text, x, y, width: this.measureText(text).width }); return fillText.call(this, text, x, y, ...args); };
     ctx.arc = function(...args) { circleColors.push(this.fillStyle); return arc.apply(this, args); };
-    document.getElementById('placement-toggle').dispatchEvent(new Event('change'));
+    document.getElementById('details-toggle').dispatchEvent(new Event('change'));
     ctx.fillText = fillText;
     ctx.arc = arc;
     return { labels, circleColors };
@@ -266,6 +472,13 @@ async function main() {
   assert.equal(record.name, "森テスト");
   assert.equal(record.config.scale, 5);
   assert.equal(record.config.danger, 7);
+  assert.equal(record.config.endpointLineCopy, true);
+  assert.equal(record.preview.viewOptions.tiles, false);
+  assert.equal(record.preview.viewOptions.details, true);
+  assert.deepEqual(record.config.treasureLimits, { min: 2, max: 3 }, 'saving must retain count limits');
+  assert.deepEqual(record.config.enemyLimits, { min: 4, max: 6 });
+  assert.deepEqual(record.config.trapLimits, { min: 2, max: 3 });
+  assert.deepEqual(record.config.trapPool.map(entry => [entry.id, entry.weight]), [['__browser_spike', 2], ['__browser_arrow', 1]]);
   assert.equal(record.config.width, 60);
   assert.deepEqual(record.config.tiles.path, ["caveWall01"], "wall-category tiles can be used as floors");
   assert.deepEqual(record.config.tiles.room, ["road"]);
@@ -278,7 +491,10 @@ async function main() {
   assert.deepEqual(record.config.exitApproach.endDirections, ["right"]);
   assert.equal(record.config.treasureTable.rolls[1], 3);
   assert.equal(record.config.treasureTable.entries[0].maxCount, 4);
+  assert.equal(record.config.treasureTable.entries.length, 2);
+  assert.deepEqual(record.config.treasureTable.entries.map(entry => [entry.id, entry.minCount, entry.maxCount, entry.weight]), [['wound_medicine', 1, 4, 2], ['wound_medicine', 2, 2, 1]]);
   assert.deepEqual(record.config.enemyPool.map((entry) => entry.id), ["shadow_wolf"]);
+  assert.equal(record.config.enemyPool[0].weight, 2);
   assert.equal(await evaluate("HEALER_DUNGEON_PROFILES.fromScript(window.__disk)[0].id"), "browser_test");
 
   await evaluate(`document.getElementById('profile-settings-button').click();
@@ -290,6 +506,8 @@ async function main() {
   await evaluate(`document.getElementById('scale-select').value = '8';
     document.getElementById('seed-input').value = 'working-copy';
     document.getElementById('grid-toggle').checked = true;
+    document.getElementById('tile-toggle').checked = true;
+    document.getElementById('details-toggle').checked = false;
     window.__confirmCalls = 0;
     window.confirm = () => { window.__confirmCalls += 1; return window.__confirm; };
     window.__confirm = false;
@@ -298,6 +516,8 @@ async function main() {
   await idle();
   assert.equal(await evaluate("document.getElementById('profile-select').value"), "standard_digger");
   assert.equal(await evaluate("document.getElementById('scale-select').value"), "3");
+  assert.equal(await evaluate("document.getElementById('line-copy-toggle').checked"), false);
+  assert.equal(await evaluate("document.getElementById('tile-toggle').checked"), true);
   assert.equal(await evaluate("window.__confirmCalls"), 0, "switching profiles must not ask to discard changes");
   await evaluate(`document.getElementById('profile-select').value = 'browser_test';
     document.getElementById('profile-select').dispatchEvent(new Event('change'));`);
@@ -305,6 +525,9 @@ async function main() {
   assert.equal(await evaluate("document.getElementById('scale-select').value"), "8", "switching back must restore unsaved settings");
   assert.equal(await evaluate("document.getElementById('seed-input').value"), "working-copy");
   assert.equal(await evaluate("document.getElementById('grid-toggle').checked"), true);
+  assert.equal(await evaluate("document.getElementById('tile-toggle').checked"), true);
+  assert.equal(await evaluate("document.getElementById('details-toggle').checked"), false);
+  assert.equal(await evaluate("document.getElementById('line-copy-toggle').checked"), true);
   assert.equal(await evaluate("HEALER_DUNGEON_PROFILES.get('browser_test').scale"), 5, "working copies must not change saved/runtime profiles");
   await evaluate(`window.__confirm = true;
     document.getElementById('scale-select').value = '5';
@@ -427,6 +650,7 @@ async function main() {
   assert.ok(dimensions.x + dimensions.width <= dimensions.viewportWidth);
   assert.ok(dimensions.y + dimensions.height <= dimensions.viewportHeight);
   await send("Emulation.setDeviceMetricsOverride", { width: 900, height: 700, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await evaluate(controlsFit), true, 'preview controls must wrap within a smaller desktop viewport');
   assert.ok(await evaluate(`(() => {
     const dialog = document.querySelector('.profile-dialog').getBoundingClientRect();
     const save = document.querySelector('[data-save]').getBoundingClientRect();
@@ -444,18 +668,23 @@ async function main() {
   assert.equal(await evaluate("document.getElementById('profile-select').value"), firstDraft);
   assert.equal(await evaluate("document.getElementById('scale-select').value"), "6");
   await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await evaluate(controlsFit), true);
   const screenshotFile = process.argv[2] || process.env.DUNGEON_SCREENSHOT;
   if (screenshotFile) {
-    if (["rooms", "placements"].includes(process.argv[3])) {
-      await evaluate(`document.getElementById('path-toggle').checked = false;
-        document.getElementById('placement-toggle').checked = ${process.argv[3] === "placements"};
-        document.getElementById('room-toggle').checked = true;
-        document.getElementById('room-toggle').dispatchEvent(new Event('change'));`);
+    if (["rooms", "placements", "preview"].includes(process.argv[3])) {
+      await evaluate(`document.getElementById('details-toggle').checked = ${process.argv[3] !== "preview"};
+        document.getElementById('tile-toggle').checked = true;
+        document.getElementById('line-copy-toggle').checked = true;
+        document.getElementById('line-copy-toggle').dispatchEvent(new Event('change'));`);
     } else {
       await evaluate(`document.getElementById('profile-select').value = 'browser_test';
-        document.getElementById('profile-select').dispatchEvent(new Event('change'));
-        document.getElementById('tile-settings-button').click();
-        document.querySelector('[data-tile-group="pathWall"]').click();`);
+        document.getElementById('profile-select').dispatchEvent(new Event('change'));`);
+      if (['treasure', 'traps', 'enemies'].includes(process.argv[3])) {
+        const button = { treasure: 'treasure-settings-button', traps: 'trap-settings-button', enemies: 'enemy-settings-button' }[process.argv[3]];
+        await evaluate(`document.getElementById('${button}').click();`);
+      } else {
+        await evaluate("document.getElementById('tile-settings-button').click(); document.querySelector('[data-tile-group=pathWall]').click();");
+      }
     }
     await idle();
     const clip = ["rooms", "placements"].includes(process.argv[3]) ? await evaluate(`(() => {

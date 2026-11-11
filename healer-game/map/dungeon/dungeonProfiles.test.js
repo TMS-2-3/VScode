@@ -28,6 +28,7 @@ function makeRecord(id = "forest_test") {
     entranceApproach: { ...profiles.standard.entranceApproach, startDirections: ["down"] },
     exitApproach: { ...profiles.standard.exitApproach, endDirections: ["left", "up"] },
     tiles: { floorTileId: "grass01", wallTileId: "caveWall01" },
+    treasureLimits: { min: 2, max: 4 },
     treasureTable: {
       rolls: [1, 3],
       entries: [{ type: "material", id: "horn", name: "角", weight: 3, minCount: 1, maxCount: 4 }],
@@ -44,6 +45,7 @@ function testRoundTrip() {
   assert.equal(record.config.width, 60);
   assert.equal(record.config.height, 40);
   assert.deepEqual(record.config.placements.enemyCount, [4, 8]);
+  assert.deepEqual(record.config.treasureLimits, { min: 2, max: 4 });
   assert.equal(record.config.id, record.id);
   assert.equal(record.config.name, record.name);
   profiles.replaceSaved([record]);
@@ -81,6 +83,8 @@ function testScriptAndFreshBrowserLoad() {
   assert.throws(() => profiles.fromScript(script + "\nalert('do not execute');"), /保存ファイル/);
   const browser = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(__dirname, "dungeonTiles.js"), "utf8"), browser);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "dungeonTreasureLimits.js"), "utf8"), browser);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "dungeonWeights.js"), "utf8"), browser);
   vm.runInContext(script, browser);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "dungeonProfiles.js"), "utf8"), browser);
   const restored = JSON.parse(JSON.stringify(browser.HEALER_DUNGEON_PROFILES.getRecord(record.id)));
@@ -124,5 +128,7 @@ function testUnscaledGeneration() {
     assert.deepEqual(result, first);
     assert.equal(record.config.width, 60, "the stored width must remain unscaled");
     assert.deepEqual(record.config.placements.enemyCount, [4, 8]);
+    assert.deepEqual(record.config.treasureLimits, { min: 2, max: 4 }, "bounds must stay unscaled through saving and loading");
+    assert.ok(result.placements.treasure.length >= 2 && result.placements.treasure.length <= 4);
   }
 }

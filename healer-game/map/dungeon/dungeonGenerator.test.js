@@ -12,7 +12,7 @@ testStandardProfile();
 testScaleLevels();
 testDangerLevels();
 testDangerTreasureRates();
-testGuaranteedTreasure();
+testTreasureWithoutGuarantee();
 testFixedStartDirection();
 testFixedExitDirection();
 testEditorContentConfiguration();
@@ -43,8 +43,7 @@ function testStandardProfile() {
     assertEntranceApproach(result);
     assertExitApproach(result);
     assert.equal(result.placements.rest.length, 0, "standard profile must not add a recovery room");
-    assert.equal(result.metrics.guaranteedTreasureCount, 1, "each standard map must contain one guaranteed chest");
-    assert.ok(result.placements.treasure.length >= 1);
+    assert.ok(result.placements.treasure.every((item) => item.branchId), "all chests must come from branch rolls");
     assertUniqueWalkablePlacements(result);
 
     const asciiRows = DungeonGenerator.toAscii(result).split("\n");
@@ -127,15 +126,15 @@ function testDangerTreasureRates() {
     const config = DungeonGenerator.normalizeConfig({ ...DungeonProfiles.standard, danger });
     const outcomes = config.branchContents.outcomes;
     const treasureRate = outcomes.treasure + outcomes.both;
-    const expectedTreasure = 0.2 + 0.5 * (danger - 1) / 9;
-    assert.ok(Math.abs(treasureRate - expectedTreasure) < 1e-12, `danger ${danger} must use the intended additional chest rate`);
+    const expectedTreasure = 0.3 + 0.2 * (danger - 1) / 9;
+    assert.ok(Math.abs(treasureRate - expectedTreasure) < 1e-12, `danger ${danger} must use the intended chest rate`);
     assert.ok(treasureRate > previousTreasureRate);
     previousTreasureRate = treasureRate;
     const expectedTrap = 0.38 * trapFactors[danger] / (0.62 + 0.38 * trapFactors[danger]);
-    assert.ok(Math.abs(trapOutcomeRate(config) - expectedTrap) < 1e-12, "the additional chest rate must not alter existing trap odds");
+    assert.ok(Math.abs(trapOutcomeRate(config) - expectedTrap) < 1e-12, "the chest rate must not alter existing trap odds");
     assert.ok(Math.abs(Object.values(outcomes).reduce((sum, value) => sum + value, 0) - 1) < 1e-12);
     assert.ok(Object.values(outcomes).every((value) => value >= 0 && value <= 1));
-    assert.deepEqual(config.roomRoles.treasureCount, [1, 1], "danger must not change the guaranteed chest count");
+    assert.deepEqual(config.roomRoles.treasureCount, [0, 0], "no danger level may guarantee a chest");
   }
   for (const outcomes of [
     { empty: 0.5, trap: 0.5, treasure: 0, both: 0 },
@@ -154,36 +153,30 @@ function testDangerTreasureRates() {
   }
 }
 
-function testGuaranteedTreasure() {
-  const legacy = { ...DungeonProfiles.standard, roomRoles: { ...DungeonProfiles.standard.roomRoles, treasureCount: [0, 0] } };
-  const guaranteedLocations = new Set();
-  const guaranteedRooms = new Set();
-  assert.deepEqual(DungeonGenerator.normalizeConfig(legacy).roomRoles.treasureCount, [1, 1], "old profiles must inherit the minimum chest guarantee without rewriting saved data");
+function testTreasureWithoutGuarantee() {
+  const legacy = { ...DungeonProfiles.standard, roomRoles: { ...DungeonProfiles.standard.roomRoles, treasureCount: [1, 1] } };
+  for (const treasureCount of [[0, 0], [1, 1], [3, 3]]) {
+    assert.deepEqual(DungeonGenerator.normalizeConfig({ ...legacy, roomRoles: { ...legacy.roomRoles, treasureCount } }).roomRoles.treasureCount, [0, 0], "legacy fixed counts must not restore guaranteed chests");
+  }
+  let mapsWithoutTreasure = 0;
   for (let danger = 1; danger <= 10; danger += 1) {
     for (const scale of [1, 3, 10]) {
       for (let seed = 1; seed <= 10; seed += 1) {
-        const result = generator.generate({ ...legacy, scale, danger }, { seed: `guaranteed-${seed}`, maxAttempts: 200 });
+        const result = generator.generate({ ...legacy, scale, danger }, { seed: `no-guarantee-${seed}`, maxAttempts: 200 });
         assert.equal(result.ok, true);
-        const guaranteed = result.placements.treasure.filter((item) => item.guaranteed);
-        const additional = result.placements.treasure.filter((item) => !item.guaranteed);
-        assert.equal(guaranteed.length, 1);
-        guaranteedLocations.add(`${guaranteed[0].x},${guaranteed[0].y}`);
-        guaranteedRooms.add(guaranteed[0].roomId);
-        assert.equal(result.metrics.guaranteedTreasureCount, 1);
-        assert.equal(result.metrics.additionalTreasureCount, additional.length);
-        assert.equal(additional.length, result.metrics.branchContentCounts.treasure + result.metrics.branchContentCounts.both, "the branch roll only supplies additional chests");
-        assert.ok(guaranteed.every((item) => !item.branchId && item.approach), "the guaranteed chest must not depend on a successful branch roll");
-        assert.ok(additional.every((item) => item.branchId && item.approach));
+        const treasure = result.placements.treasure;
+        if (!treasure.length) mapsWithoutTreasure += 1;
+        assert.equal(result.metrics.placementTargets.treasure, 0);
+        assert.equal(treasure.length, result.metrics.branchContentCounts.treasure + result.metrics.branchContentCounts.both, "branch rolls must account for every chest");
+        assert.ok(treasure.every((item) => item.branchId && item.approach && !item.guaranteed));
       }
     }
   }
-  assert.ok(guaranteedLocations.size > 10, "only the chest count is guaranteed; its position must vary with the seed");
-  assert.ok(guaranteedRooms.size > 1, "the guaranteed chest must not be tied to a fixed room");
+  assert.ok(mapsWithoutTreasure > 0, "maps with no chests must be possible");
   const withoutBranchRolls = generator.generate({ ...legacy, branchContents: { ...legacy.branchContents, enabled: false } }, { seed: "guarantee-no-rolls", maxAttempts: 200 });
   assert.equal(withoutBranchRolls.ok, true);
-  assert.equal(withoutBranchRolls.placements.treasure.length, 1);
-  assert.equal(withoutBranchRolls.placements.treasure[0].guaranteed, true);
-  assert.deepEqual(legacy.roomRoles.treasureCount, [0, 0], "normalization must not mutate the original saved profile");
+  assert.equal(withoutBranchRolls.placements.treasure.length, 0, "disabling branch rolls must not leave a guaranteed chest");
+  assert.deepEqual(legacy.roomRoles.treasureCount, [1, 1], "normalization must not mutate the original saved profile");
 }
 
 function collectDangerMetrics(result, totals) {
@@ -282,10 +275,6 @@ function testEditorContentConfiguration() {
   const profile = {
     ...DungeonProfiles.standard,
     tiles: { floorTileId: "sample_floor", wallTileId: "sample_wall" },
-    roomRoles: {
-      ...DungeonProfiles.standard.roomRoles,
-      treasureCount: [1, 1],
-    },
     treasureTable: {
       rolls: [2, 2],
       entries: [
@@ -296,8 +285,13 @@ function testEditorContentConfiguration() {
       { id: "sample_enemy", name: "Sample Enemy", weight: 1 },
     ],
   };
-  const result = generator.generate(profile, { seed: "editor-content", maxAttempts: 200 });
-  assert.equal(result.ok, true);
+  let result = null;
+  for (let seed = 0; seed < 30; seed += 1) {
+    const candidate = generator.generate(profile, { seed: `editor-content-${seed}`, maxAttempts: 200 });
+    assert.equal(candidate.ok, true);
+    if (candidate.placements.treasure.length) { result = candidate; break; }
+  }
+  assert.ok(result, "at least one fixture must contain a rolled chest to verify its contents");
   assert.equal(result.config.tiles.floorTileId, "sample_floor");
   assert.equal(result.config.tiles.wallTileId, "sample_wall");
   assert.ok(result.placements.treasure.length >= 1);
