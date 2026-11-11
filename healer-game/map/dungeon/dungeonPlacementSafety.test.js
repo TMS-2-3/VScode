@@ -74,16 +74,17 @@ function testGeneratedPlacementAccess() {
       }
     }
   }
+  let chestsAlongsideEvents = 0;
   for (let seed = 1; seed <= 20; seed += 1) {
     const result = generator.generate({
       ...profiles.standard,
-      roomRoles: { ...profiles.standard.roomRoles, treasureCount: [3, 3] },
       mandatoryEvents: [{ id: "monument", type: "event", required: true, footprint: { width: 2, height: 2 }, minEntranceDistance: 0 }],
     }, { seed, maxAttempts: 200 });
     assertGeneratedAccess(result);
     assert.equal(result.placements.mandatoryEvents.length, 1);
-    assert.ok(result.placements.treasure.length >= 3);
+    chestsAlongsideEvents += result.placements.treasure.length;
   }
+  assert.ok(chestsAlongsideEvents > 0, "the event fixtures must also exercise randomly placed chests");
 }
 
 function assertGeneratedAccess(result) {

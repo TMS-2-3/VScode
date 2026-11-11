@@ -7,6 +7,7 @@
     const commonTileSize = Math.max(1, Math.floor(Number(options.tileSize ?? window.HEALER_TILE_SIZE) || 48));
     const imageCache = new Map();
     const marginTileCache = new Map();
+    let lineCopyCache = new WeakMap();
 
     function getMap(mapOrId) {
       if (!mapOrId) {
@@ -147,7 +148,7 @@
       return normalizeTileId(getLayerTileEntry(map, layer, col, row));
     }
 
-    function getLayerTileEntry(map, layer, col, row) {
+    function getRawLayerTileEntry(map, layer, col, row) {
       if (!layer || !layer.tiles) {
         return null;
       }
@@ -168,6 +169,98 @@
         return tiles[`${col},${row}`] || tiles[`${row}:${col}`] || null;
       }
       return null;
+    }
+
+    function getLineCopyDirection(tileEntry) {
+      const tile = getTileDef(normalizeTileId(tileEntry));
+      if (!tile || !tile.lineCopyDirection) return null;
+      const directions = ["up", "right", "down", "left"];
+      const index = directions.indexOf(tile.lineCopyDirection);
+      if (index < 0) {
+        return null;
+      }
+      const turns = Math.round(getTileRotation(tileEntry) / 90);
+      return directions[((index + turns) % 4 + 4) % 4];
+    }
+
+    function getLineCopyData(map) {
+      let cached = lineCopyCache.get(map);
+      if (cached) {
+        return cached;
+      }
+      const width = Math.max(0, Math.floor(Number(map.width) || 0));
+      const height = Math.max(0, Math.floor(Number(map.height) || 0));
+      const layers = getVisibleLayers(map);
+      const sources = [];
+      for (const layer of layers.filter((entry) => entry.id === "event")) {
+        for (let row = 0; row < height; row += 1) {
+          for (let col = 0; col < width; col += 1) {
+            const tileEntry = getRawLayerTileEntry(map, layer, col, row);
+            const direction = getLineCopyDirection(tileEntry);
+            if (!direction) continue;
+            const entries = new Map();
+            for (const sourceLayer of layers) {
+              let entry = getRawLayerTileEntry(map, sourceLayer, col, row);
+              if (getLineCopyDirection(entry)) entry = null;
+              if (sourceLayer.id === "ground" && !normalizeTileId(entry)) entry = map.defaultTile || null;
+              entries.set(sourceLayer.id, entry);
+            }
+            sources.push({ col, row, direction, tileEntry, entries });
+          }
+        }
+      }
+      const cells = sources.length ? new Array(width * height).fill(null) : null;
+      const origins = new Set(sources.map((source) => source.row * width + source.col));
+      // Read every source before extending any ray; copies never become new sources.
+      for (const source of sources) {
+        const delta = getFacingDelta(source.direction);
+        for (let col = source.col + delta.x, row = source.row + delta.y;
+          col >= 0 && row >= 0 && col < width && row < height;
+          col += delta.x, row += delta.y) {
+          const index = row * width + col;
+          if (!origins.has(index)) cells[index] = source;
+        }
+      }
+      cached = { sources, cells, width };
+      lineCopyCache.set(map, cached);
+      return cached;
+    }
+
+    function getLineCopySources(mapOrId) {
+      const map = getMap(mapOrId);
+      return map ? getLineCopyData(map).sources : [];
+    }
+
+    function getLineCopySourceAt(map, col, row) {
+      const data = getLineCopyData(map);
+      if (!data.sources.length) return null;
+      if (isInsideMap(map, col, row)) return data.cells[row * data.width + col] || null;
+      for (let i = data.sources.length - 1; i >= 0; i -= 1) {
+        const source = data.sources[i];
+        if (source.direction === "down" && col === source.col && row > source.row
+          || source.direction === "up" && col === source.col && row < source.row
+          || source.direction === "left" && row === source.row && col < source.col
+          || source.direction === "right" && row === source.row && col > source.col) {
+          return source;
+        }
+      }
+      return null;
+    }
+
+    function getLayerTileEntry(map, layer, col, row) {
+      const source = getLineCopySourceAt(map, col, row);
+      const entry = source ? source.entries.get(layer.id) : getRawLayerTileEntry(map, layer, col, row);
+      return getLineCopyDirection(entry) ? null : entry;
+    }
+
+    function clearLineCopyCache(mapOrId = null) {
+      if (mapOrId) {
+        const map = getMap(mapOrId);
+        if (map) lineCopyCache.delete(map);
+      } else {
+        lineCopyCache = new WeakMap();
+      }
+      clearMarginTileCache(mapOrId);
     }
 
     function normalizeTileId(value) {
@@ -280,7 +373,7 @@
       return true;
     }
 
-    function getMapMarginTileEntries(map, options = {}) {
+    function getMapMarginLayerEntries(map, options = {}) {
       if (!map) {
         return [];
       }
@@ -300,7 +393,7 @@
           usedLayerIds.add(layer.id);
           const tileEntry = marginTiles[layer.id];
           if (normalizeTileId(tileEntry)) {
-            entries.push(tileEntry);
+            entries.push({ tileEntry, layer });
           }
         }
         Object.keys(marginTiles).forEach((layerId) => {
@@ -312,7 +405,7 @@
           }
           const tileEntry = marginTiles[layerId];
           if (normalizeTileId(tileEntry)) {
-            entries.push(tileEntry);
+            entries.push({ tileEntry, layer: { id: layerId } });
           }
         });
         return entries;
@@ -332,7 +425,29 @@
           || excludeLayerIds.has("margin"))) {
         return [];
       }
-      return normalizeTileId(legacyTileEntry) ? [legacyTileEntry] : [];
+      return normalizeTileId(legacyTileEntry) ? [{ tileEntry: legacyTileEntry, layer: { id: "ground" } }] : [];
+    }
+
+    function getMapMarginTileEntries(map, options = {}) {
+      return getMapMarginLayerEntries(map, options).map((entry) => entry.tileEntry);
+    }
+
+    function getLineCopyLayerEntries(map, source, options = {}) {
+      const includeLayerIds = createLayerIdSet(options.layerIds || options.includeLayerIds);
+      const excludeLayerIds = createLayerIdSet(options.excludeLayerIds);
+      return getVisibleLayers(map).flatMap((layer) => {
+        const tileEntry = source.entries.get(layer.id);
+        return shouldUseLayer(layer, includeLayerIds, excludeLayerIds) && normalizeTileId(tileEntry)
+          ? [{ tileEntry, layer }] : [];
+      });
+    }
+
+    function getMarginRenderTileEntries(map, options = {}) {
+      const entries = getMapMarginTileEntries(map, options);
+      for (const source of getLineCopySources(map)) {
+        entries.push(...getLineCopyLayerEntries(map, source, options).map((entry) => entry.tileEntry));
+      }
+      return entries.filter((entry) => !getLineCopyDirection(entry));
     }
 
     function getMarginTileBounds(map, viewport, drawPadding) {
@@ -662,8 +777,8 @@
       if (!map || typeof callback !== "function") {
         return false;
       }
-      const tileEntries = getMapMarginTileEntries(map, options);
-      if (!tileEntries.length) {
+      const marginEntries = getMapMarginLayerEntries(map, options);
+      if (!marginEntries.length && !getLineCopySources(map).length) {
         return false;
       }
       const bounds = getMarginTileBounds(map, options.viewport, options.drawPadding);
@@ -675,15 +790,18 @@
           if (isInsideMap(map, col, row)) {
             continue;
           }
-          for (const tileEntry of tileEntries) {
+          const source = getLineCopySourceAt(map, col, row);
+          const entries = source ? getLineCopyLayerEntries(map, source, options) : marginEntries;
+          for (const { tileEntry, layer } of entries) {
             const tileId = normalizeTileId(tileEntry);
-            if (!tileId) {
+            if (!tileId || getLineCopyDirection(tileEntry)) {
               continue;
             }
             const metrics = getTileDrawMetrics(tileEntry, bounds.tileSize);
             callback({
               tileEntry,
               tileId,
+              layer,
               col,
               row,
               x: col * bounds.tileSize,
@@ -744,7 +862,7 @@
       if (!ctx || !map) {
         return false;
       }
-      const tileEntries = getMapMarginTileEntries(map, options);
+      const tileEntries = getMarginRenderTileEntries(map, options);
       if (!tileEntries.length) {
         return false;
       }
@@ -762,6 +880,7 @@
           bounds.maxCol,
           bounds.maxRow,
           JSON.stringify(tileEntries),
+          JSON.stringify(getLineCopySources(map).map((source) => [source.col, source.row, source.direction])),
           options.drawFallback === false ? "nofallback" : "fallback",
         ].join("|");
         let cached = marginTileCache.get(cacheKey);
@@ -771,16 +890,10 @@
           const canvas = createRenderCanvas(cols * bounds.tileSize + overflow.left + overflow.right, rows * bounds.tileSize + overflow.top + overflow.bottom);
           const cacheCtx = canvas && canvas.getContext && canvas.getContext("2d");
           if (cacheCtx) {
-            for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
-              for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
-                if (isInsideMap(map, col, row)) {
-                  continue;
-                }
-                for (const tileEntry of tileEntries) {
-                  drawTile(cacheCtx, tileEntry, (col - bounds.minCol) * bounds.tileSize + overflow.left, (row - bounds.minRow) * bounds.tileSize + overflow.top, bounds.tileSize, options);
-                }
-              }
-            }
+            forEachMarginTileEntry(map, (entry) => {
+              drawTile(cacheCtx, entry.tileEntry, entry.x - bounds.minCol * bounds.tileSize + overflow.left,
+                entry.y - bounds.minRow * bounds.tileSize + overflow.top, bounds.tileSize, options);
+            }, options);
             cached = {
               canvas,
               x: bounds.minCol * bounds.tileSize - overflow.left,
@@ -794,16 +907,9 @@
           return true;
         }
       }
-      for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
-        for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
-          if (isInsideMap(map, col, row)) {
-            continue;
-          }
-          for (const tileEntry of tileEntries) {
-            drawTile(ctx, tileEntry, col * bounds.tileSize, row * bounds.tileSize, bounds.tileSize, options);
-          }
-        }
-      }
+      forEachMarginTileEntry(map, (entry) => {
+        drawTile(ctx, entry.tileEntry, entry.x, entry.y, entry.tileSize, options);
+      }, options);
       return true;
     }
 
@@ -822,6 +928,7 @@
     function drawTile(ctx, tileEntry, x, y, size, options = {}) {
       const tileId = normalizeTileId(tileEntry);
       const tile = getTileDef(tileId);
+      if (tile && tile.lineCopyDirection) return;
       const image = getTileImage(tileId);
       if (image && image.complete && image.naturalWidth > 0) {
         const { drawWidth, drawHeight, drawOffsetX, drawOffsetY } = getTileDrawMetrics(tileEntry, size);
@@ -913,6 +1020,9 @@
       getTileIdAt,
       getTileStackAt,
       getTileFootprint,
+      getLineCopySources,
+      getLineCopyDirection,
+      clearLineCopyCache,
       isTilePassable,
       isTileCoordPassable,
       isWorldPointPassable,

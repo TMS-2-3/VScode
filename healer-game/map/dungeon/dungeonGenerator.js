@@ -6,14 +6,16 @@
   const rooms = typeof module === "object" && module.exports ? require("./dungeonRooms.js") : root.HEALER_DUNGEON_ROOMS;
   const wallSpace = typeof module === "object" && module.exports ? require("./dungeonWallSpace.js") : root.HEALER_DUNGEON_WALL_SPACE;
   const placementSafety = typeof module === "object" && module.exports ? require("./dungeonPlacementSafety.js") : root.HEALER_DUNGEON_PLACEMENT_SAFETY;
-  const api = factory(tiles, corridors, rooms, wallSpace, placementSafety);
+  const countLimits = typeof module === "object" && module.exports ? require("./dungeonTreasureLimits.js") : root.HEALER_DUNGEON_TREASURE_LIMITS;
+  const weights = typeof module === "object" && module.exports ? require("./dungeonWeights.js") : root.HEALER_DUNGEON_WEIGHTS;
+  const api = factory(tiles, corridors, rooms, wallSpace, placementSafety, countLimits, weights);
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   }
   if (root) {
     root.HEALER_DUNGEON_GENERATOR = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function createDungeonGeneratorModule(tiles, corridors, rooms, wallSpace, placementSafety) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function createDungeonGeneratorModule(tiles, corridors, rooms, wallSpace, placementSafety, countLimits, weights) {
   "use strict";
 
   const CELL_TYPES = Object.freeze({
@@ -25,7 +27,7 @@
   const SCALE_FACTORS = Object.freeze([0, 0.7, 0.85, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7]);
   const DANGER_ENEMY_FACTORS = Object.freeze([0, 0.5, 0.75, 1, 1.35, 1.7, 2.05, 2.4, 2.75, 3.1, 3.5]);
   const DANGER_TRAP_FACTORS = Object.freeze([0, 0.45, 0.75, 1, 1.5, 2, 2.6, 3.3, 4.1, 5, 6]);
-  const DANGER_TREASURE_RATE_RANGE = Object.freeze([0.2, 0.7]);
+  const DANGER_TREASURE_RATE_RANGE = Object.freeze([0.3, 0.5]);
 
   const DEFAULT_CONFIG = Object.freeze({
     schemaVersion: 1,
@@ -37,6 +39,7 @@
     width: 60,
     height: 40,
     retryLimit: null,
+    endpointLineCopy: false,
     generator: {
       type: "digger",
       roomWidth: [4, 9],
@@ -81,7 +84,7 @@
       maxFloorRatio: 0.36,
     },
     roomRoles: {
-      treasureCount: [1, 1],
+      treasureCount: [0, 0],
       treasureCornerBias: 0.85,
       restCount: [0, 0],
       restPathRange: [0.6, 0.85],
@@ -100,11 +103,15 @@
       floorTileId: "caveFloor01",
       wallTileId: "caveWall01",
     },
+    treasureLimits: { min: 0, max: null },
     treasureTable: {
       rolls: [1, 1],
       entries: [],
     },
     enemyPool: [],
+    enemyLimits: { min: 0, max: null },
+    trapPool: [],
+    trapLimits: { min: 0, max: null },
     placements: {
       enemyCount: [4, 8],
       trapCount: [0, 0],
@@ -258,9 +265,9 @@
 
     const placementTargets = {
       mandatoryEvents: config.mandatoryEvents.filter((event) => event.required !== false).length,
-      treasure: randomInt(random, config.roomRoles.treasureCount),
+      treasure: config.treasureLimits.min,
       rest: randomInt(random, config.roomRoles.restCount),
-      enemies: randomInt(random, config.placements.enemyCount),
+      enemies: boundedCount(randomInt(random, config.placements.enemyCount), config.enemyLimits),
       traps: randomInt(random, config.placements.trapCount),
       decorations: randomInt(random, config.placements.decorationCount),
     };
@@ -289,18 +296,6 @@
       reservationMap,
       placements,
     });
-    placeTreasureRooms({
-      count: placementTargets.treasure,
-      canPlaceObject,
-      cells: generated.cells,
-      rooms: generated.rooms,
-      width: config.width,
-      height: config.height,
-      cornerBias: config.roomRoles.treasureCornerBias,
-      random,
-      reservationMap,
-      placements,
-    });
     placeBranchContents({
       config,
       canPlaceObject,
@@ -313,6 +308,18 @@
       reservationMap,
       placements,
     });
+    fillMinimumTreasure({
+      config,
+      canPlaceObject,
+      cells: generated.cells,
+      rooms: generated.rooms,
+      width: config.width,
+      height: config.height,
+      random,
+      reservationMap,
+      placements,
+    });
+    placementTargets.traps = boundedCount(placements.traps.length + placementTargets.traps, config.trapLimits);
     placeAmbientObjects({
       config,
       cells: generated.cells,
@@ -327,7 +334,8 @@
       placementTargets,
     });
     assignTreasureContents(placements.treasure, config.treasureTable, random);
-    assignEnemyTypes(placements.enemies, config.enemyPool, random);
+    assignWeightedTypes(placements.enemies, config.enemyPool, random, "enemyId", "enemyName");
+    assignWeightedTypes(placements.traps, config.trapPool, random, "trapTypeId", "trapName");
     const blockingObjects = placementSafety.objects(placements);
     const objectAccess = placementSafety.inspect(accessContext, blockingObjects);
     blockingObjects.forEach((object, index) => {
@@ -354,8 +362,6 @@
       corridorAddedCells: corridorShapes.reduce((total, road) => total + road.addedCells.length, 0),
       roundedCornerCount: corridorShapes.reduce((total, road) => total + road.roundedCorners.length, 0),
       wallSpaceAddedRows: wallSpacing.addedRows,
-      guaranteedTreasureCount: placements.treasure.filter((item) => item.guaranteed).length,
-      additionalTreasureCount: placements.treasure.filter((item) => !item.guaranteed).length,
       floorCount,
       floorRatio: floorCount / Math.max(1, config.width * config.height),
       mainPathLength: Math.max(0, mainPath.length - 1),
@@ -414,6 +420,7 @@
       entranceApproach,
       exitApproach,
       mainPath,
+      lineCopies: tiles.createEndpointLineCopies({ config, entrance, exit, entranceApproach, exitApproach, mainPath }),
       branchRoutes,
       branchRoomIds: branchRooms.map((room) => room.id),
       placements,
@@ -1017,27 +1024,6 @@
     });
   }
 
-  function placeTreasureRooms(context) {
-    const { count, cells, rooms, width, height, cornerBias, random, reservationMap, placements, canPlaceObject } = context;
-    const candidates = rooms.filter((room) => !["entrance", "exit", "event"].includes(room.role));
-    shuffle(candidates, random);
-    for (const room of candidates) {
-      if (placements.treasure.length >= count) break;
-      const cell = findTreasureCellInRoom(room, cells, width, height, reservationMap, random, cornerBias, canPlaceObject);
-      if (!cell) continue;
-      room.role = "treasure";
-      reserveCells(reservationMap, [cell], `treasure:${placements.treasure.length + 1}`);
-      placements.treasure.push({
-        id: `treasure_${placements.treasure.length + 1}`,
-        type: "treasure",
-        guaranteed: true,
-        x: cell.x,
-        y: cell.y,
-        roomId: room.id,
-      });
-    }
-  }
-
   function placeBranchContents(context) {
     const {
       config, branchRoutes, cells, rooms, width, height, random, reservationMap, placements, canPlaceObject,
@@ -1053,7 +1039,15 @@
       });
       if (!trapCandidates.length) return;
 
-      const outcome = chooseBranchOutcome(random, config.branchContents.outcomes);
+      let outcome = chooseBranchOutcome(random, config.branchContents.outcomes);
+      if (config.treasureLimits.max !== null && placements.treasure.length >= config.treasureLimits.max) {
+        if (outcome === "treasure") outcome = "empty";
+        else if (outcome === "both") outcome = "trap";
+      }
+      if (config.trapLimits.max !== null && placements.traps.length >= config.trapLimits.max) {
+        if (outcome === "trap") outcome = "empty";
+        else if (outcome === "both") outcome = "treasure";
+      }
       const wantsTrap = outcome === "trap" || outcome === "both";
       const wantsTreasure = outcome === "treasure" || outcome === "both";
       const content = {
@@ -1084,7 +1078,6 @@
           placements.treasure.push({
             id: treasureId,
             type: "treasure",
-            guaranteed: false,
             x: treasureCell.x,
             y: treasureCell.y,
             roomId: room.id,
@@ -1123,6 +1116,22 @@
       }
       placements.branchContents.push(content);
     });
+  }
+
+  function fillMinimumTreasure(context) {
+    const { config, cells, rooms, width, height, random, reservationMap, placements, canPlaceObject } = context;
+    if (placements.treasure.length >= config.treasureLimits.min) return;
+    const candidates = rooms.filter((room) => !["entrance", "exit", "event", "rest", "treasure"].includes(room.role));
+    shuffle(candidates, random);
+    for (const room of candidates) {
+      if (placements.treasure.length >= config.treasureLimits.min) break;
+      const cell = findTreasureCellInRoom(room, cells, width, height, reservationMap, random, config.roomRoles.treasureCornerBias, canPlaceObject);
+      if (!cell) continue;
+      const id = `treasure_${placements.treasure.length + 1}`;
+      room.role = "treasure";
+      reserveCells(reservationMap, [cell], `treasure:${id}`);
+      placements.treasure.push({ id, type: "treasure", x: cell.x, y: cell.y, roomId: room.id, minimumFill: true });
+    }
   }
 
   function chooseBranchOutcome(random, outcomes) {
@@ -1204,7 +1213,8 @@
     placements.traps.push(...selectSpacedCells({
       type: "trap",
       candidates: trapCandidates,
-      count: placementTargets.traps,
+      count: Math.max(0, placementTargets.traps - placements.traps.length),
+      existing: placements.traps,
       minSpacing: config.placements.minTrapSpacing,
       random,
       reservationMap,
@@ -1233,7 +1243,7 @@
       const contentById = new Map();
       const rollCount = randomInt(random, treasureTable.rolls);
       for (let roll = 0; roll < rollCount; roll += 1) {
-        const entry = selectWeightedEntry(treasureTable.entries, random);
+        const entry = weights.select(treasureTable.entries, random);
         if (!entry) continue;
         const count = randomInt(random, [entry.minCount, entry.maxCount]);
         const key = `${entry.type}:${entry.id}`;
@@ -1253,24 +1263,16 @@
     });
   }
 
-  function assignEnemyTypes(enemyPlacements, enemyPool, random) {
-    enemyPlacements.forEach((placement) => {
-      const entry = selectWeightedEntry(enemyPool, random);
-      placement.enemyId = entry ? entry.id : null;
-      placement.enemyName = entry ? entry.name : "";
+  function assignWeightedTypes(placements, pool, random, idField, nameField) {
+    placements.forEach((placement) => {
+      const entry = weights.select(pool, random);
+      placement[idField] = entry ? entry.id : null;
+      placement[nameField] = entry ? entry.name : "";
     });
   }
 
-  function selectWeightedEntry(entries, random) {
-    if (!entries.length) return null;
-    const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-    if (total <= 0) return null;
-    let cursor = random() * total;
-    for (const entry of entries) {
-      cursor -= entry.weight;
-      if (cursor <= 0) return entry;
-    }
-    return entries[entries.length - 1];
+  function boundedCount(count, limits) {
+    return Math.max(limits.min, limits.max === null ? count : Math.min(count, limits.max));
   }
 
   function selectSpacedCells(options) {
@@ -1281,6 +1283,7 @@
       if (selected.length >= options.count) break;
       if (options.reservationMap.has(keyOf(cell.x, cell.y))) continue;
       if (selected.some((other) => manhattan(cell, other) < options.minSpacing)) continue;
+      if ((options.existing || []).some((other) => manhattan(cell, other) < options.minSpacing)) continue;
       const id = `${options.type}_${(options.startIndex || 0) + selected.length + 1}`;
       const room = findContainingRoom(options.rooms, cell.x, cell.y);
       const placement = {
@@ -1342,6 +1345,12 @@
     if (incompleteBranches.length) {
       errors.push(`Branch contents could not be placed: ${incompleteBranches.map((content) => content.branchId).join(", ")}.`);
     }
+    if (config.treasureLimits.max !== null && placements.treasure.length > config.treasureLimits.max) {
+      errors.push(`Treasure count ${placements.treasure.length} exceeds ${config.treasureLimits.max}.`);
+    }
+    [["enemies", config.enemyLimits], ["traps", config.trapLimits]].forEach(([key, limits]) => {
+      if (limits.max !== null && placements[key].length > limits.max) errors.push(`${key} count ${placements[key].length} exceeds ${limits.max}.`);
+    });
     if (generated.rooms.length === rules.maxRooms) {
       warnings.push("Room count reached the configured maximum.");
     }
@@ -1547,6 +1556,15 @@
     const height = clampInt(Math.round(Number(merged.height) * scaleFactor), 20, 500, DEFAULT_CONFIG.height);
     const minRooms = scaleInteger(merged.validation.minRooms, areaFactor, 1, 1000, DEFAULT_CONFIG.validation.minRooms);
     const maxRooms = scaleInteger(merged.validation.maxRooms, areaFactor, minRooms, 1000, DEFAULT_CONFIG.validation.maxRooms);
+    const chestLimits = countLimits.normalize(merged.treasureLimits);
+    if (chestLimits.min > Math.max(0, maxRooms - 2)) throw new Error("下限宝箱数がこの規模で配置できる部屋数を超えています。");
+    const enemyLimits = countLimits.normalize(merged.enemyLimits, "魔物");
+    const trapLimits = countLimits.normalize(merged.trapLimits, "罠");
+    const tileSettings = tiles.normalize(rawConfig && rawConfig.tiles !== undefined ? rawConfig.tiles : DEFAULT_CONFIG.tiles);
+    if (typeof merged.endpointLineCopy !== "boolean") throw new Error("直線コピーの設定はONまたはOFFにしてください。");
+    const maximumCells = width * height * (tileSettings.wallHeight + 2);
+    if (enemyLimits.min > maximumCells) throw new Error("下限魔物数がこの規模で配置できるマス数を超えています。");
+    if (trapLimits.min > maximumCells) throw new Error("下限罠数がこの規模で配置できるマス数を超えています。");
     const entranceMinLength = scaleInteger(merged.entranceApproach.minLength, scaleFactor, 1, Math.max(width, height), 3);
     const entranceMaxLength = scaleInteger(merged.entranceApproach.maxLength, scaleFactor, entranceMinLength, Math.max(width, height), 18);
     const exitMinLength = scaleInteger(merged.exitApproach.minLength, scaleFactor, 1, Math.max(width, height), 3);
@@ -1570,6 +1588,7 @@
       width,
       height,
       retryLimit: normalizeRetryLimit(merged.retryLimit),
+      endpointLineCopy: merged.endpointLineCopy,
       generator: {
         type: String(merged.generator.type || "digger").toLowerCase(),
         roomWidth: normalizeIntRange(merged.generator.roomWidth, [4, 9], 2, width - 4),
@@ -1620,7 +1639,8 @@
         maxFloorRatio: clampNumber(merged.validation.maxFloorRatio, 0.01, 0.95, 0.36),
       },
       roomRoles: {
-        treasureCount: normalizeIntRange(merged.roomRoles.treasureCount, [1, 1], 1, maxRooms),
+        // Legacy fixed counts are ignored; treasureLimits controls the bounds.
+        treasureCount: [0, 0],
         treasureCornerBias: clampNumber(merged.roomRoles.treasureCornerBias, 0, 1, 0.85),
         restCount: normalizeIntRange(merged.roomRoles.restCount, [0, 0], 0, maxRooms),
         restPathRange: normalizeNumberRange(merged.roomRoles.restPathRange, [0.6, 0.85], 0, 1),
@@ -1630,9 +1650,13 @@
         minPathLength: clampInt(merged.branchContents.minPathLength, 1, width * height, 3),
         outcomes: branchOutcomes,
       },
-      tiles: tiles.normalize(rawConfig && rawConfig.tiles !== undefined ? rawConfig.tiles : DEFAULT_CONFIG.tiles),
+      tiles: tileSettings,
+      treasureLimits: chestLimits,
       treasureTable: normalizeTreasureTable(merged.treasureTable),
-      enemyPool: normalizeEnemyPool(merged.enemyPool),
+      enemyPool: normalizeTypePool(merged.enemyPool, "enemyId"),
+      enemyLimits,
+      trapPool: normalizeTypePool(merged.trapPool, "trapTypeId"),
+      trapLimits,
       placements: {
         enemyCount: scaleIntRange(merged.placements.enemyCount, [4, 8], populationFactor, 0, width * height),
         trapCount: scaleIntRange(merged.placements.trapCount, [0, 3], populationFactor, 0, width * height),
@@ -1657,8 +1681,8 @@
     const source = value && typeof value === "object" ? value : {};
     const entries = (Array.isArray(source.entries) ? source.entries : []).map((entry) => {
       const id = normalizeOptionalId(entry && entry.id);
-      const weight = clampNumber(entry && entry.weight, 0, 1000000, 0);
-      if (!id || weight <= 0) return null;
+      if (!id) return null;
+      const weight = weights.normalizeWeight(entry.weight);
       const minCount = clampInt(entry.minCount, 1, 999999, 1);
       const maxCount = clampInt(entry.maxCount, minCount, 999999, minCount);
       return {
@@ -1676,11 +1700,11 @@
     };
   }
 
-  function normalizeEnemyPool(value) {
+  function normalizeTypePool(value, legacyIdField) {
     return (Array.isArray(value) ? value : []).map((entry) => {
-      const id = normalizeOptionalId(entry && (entry.id || entry.enemyId));
-      const weight = clampNumber(entry && entry.weight, 0, 1000000, 0);
-      if (!id || weight <= 0) return null;
+      const id = normalizeOptionalId(entry && (entry.id || entry[legacyIdField]));
+      if (!id) return null;
+      const weight = weights.normalizeWeight(entry.weight);
       return {
         id,
         name: String(entry.name || id),

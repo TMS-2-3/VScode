@@ -5,14 +5,16 @@
     ? require("./dungeonSavedProfiles.js")
     : root && root.HEALER_DUNGEON_SAVED_PROFILES;
   const tiles = typeof module === "object" && module.exports ? require("./dungeonTiles.js") : root.HEALER_DUNGEON_TILES;
-  const api = factory(savedData, tiles);
+  const countLimits = typeof module === "object" && module.exports ? require("./dungeonTreasureLimits.js") : root.HEALER_DUNGEON_TREASURE_LIMITS;
+  const weights = typeof module === "object" && module.exports ? require("./dungeonWeights.js") : root.HEALER_DUNGEON_WEIGHTS;
+  const api = factory(savedData, tiles, countLimits, weights);
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   }
   if (root) {
     root.HEALER_DUNGEON_PROFILES = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function createDungeonProfiles(savedData, tiles) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function createDungeonProfiles(savedData, tiles, countLimits, weights) {
   "use strict";
 
   const standard = {
@@ -25,6 +27,7 @@
     width: 60,
     height: 40,
     retryLimit: null,
+    endpointLineCopy: false,
     generator: {
       type: "digger",
       roomWidth: [4, 9],
@@ -69,7 +72,7 @@
       maxFloorRatio: 0.36,
     },
     roomRoles: {
-      treasureCount: [1, 1],
+      treasureCount: [0, 0],
       treasureCornerBias: 0.85,
       restCount: [0, 0],
       restPathRange: [0.6, 0.85],
@@ -95,11 +98,15 @@
       wallHeight: 1,
       margin: ["caveWall01"],
     },
+    treasureLimits: { min: 0, max: null },
     treasureTable: {
       rolls: [1, 1],
       entries: [],
     },
     enemyPool: [],
+    enemyLimits: { min: 0, max: null },
+    trapPool: [],
+    trapLimits: { min: 0, max: null },
     placements: {
       enemyCount: [4, 8],
       trapCount: [0, 0],
@@ -189,7 +196,7 @@
     const preview = metadata.preview || {};
     assertObject(preview, "preview");
     const viewOptions = {};
-    ["path", "rooms", "placements", "grid"].forEach((key) => {
+    ["path", "rooms", "placements", "details", "tiles", "grid"].forEach((key) => {
       if (typeof preview.viewOptions?.[key] === "boolean") viewOptions[key] = preview.viewOptions[key];
     });
     return { id, name, config: settings, preview: { seed: String(preview.seed ?? "preview").slice(0, 80), viewOptions } };
@@ -216,6 +223,9 @@
   // Store the unscaled input, never result.config: normalization applies scale/danger again.
   function copySettings(template, value, path) {
     if (value === undefined) return clone(template);
+    if (path === "config.treasureLimits") return countLimits.normalize(value);
+    if (path === "config.enemyLimits") return countLimits.normalize(value, "魔物");
+    if (path === "config.trapLimits") return countLimits.normalize(value, "罠");
     if ((path === "config.tiles.floorTileId" || path === "config.tiles.wallTileId") && value === null) return null;
     if (template === null) {
       if (value !== null && (!Number.isInteger(value) || value < 1)) throw new Error(`${path}が不正です。`);
@@ -256,18 +266,20 @@
       if (!Number.isInteger(value) || value < 20 || value > 500) throw new Error("マップの幅・高さが不正です。");
     });
     if (config.generator.type !== "digger") throw new Error("未対応の生成方式です。");
-    config.enemyPool.forEach((entry) => {
-      assertObject(entry, "enemyPool");
-      if (typeof entry.id !== "string" || !entry.id.trim() || !Number.isFinite(entry.weight) || entry.weight <= 0) {
-        throw new Error("魔物のID・抽選比率が不正です。");
-      }
+    [["enemyPool", config.enemyPool, "魔物"], ["trapPool", config.trapPool, "罠"]].forEach(([key, pool, label]) => {
+      pool.forEach((entry) => {
+        assertObject(entry, key);
+        if (typeof entry.id !== "string" || !entry.id.trim()) throw new Error(`${label}のIDが不正です。`);
+        entry.weight = weights.normalizeWeight(entry.weight);
+      });
     });
     config.treasureTable.entries.forEach((entry) => {
       assertObject(entry, "treasureTable.entries");
-      if (typeof entry.id !== "string" || !entry.id.trim() || !Number.isFinite(entry.weight) || entry.weight <= 0
+      if (typeof entry.id !== "string" || !entry.id.trim()
         || !Number.isInteger(entry.minCount) || entry.minCount < 1 || !Number.isInteger(entry.maxCount) || entry.maxCount < entry.minCount) {
         throw new Error("宝箱のID・抽選比率・個数が不正です。");
       }
+      entry.weight = weights.normalizeWeight(entry.weight);
     });
     config.mandatoryEvents.forEach((entry) => assertObject(entry, "mandatoryEvents"));
   }

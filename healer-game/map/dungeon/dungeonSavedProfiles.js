@@ -133,6 +133,10 @@
             "tree"
           ]
         },
+        "treasureLimits": {
+          "min": 0,
+          "max": null
+        },
         "treasureTable": {
           "rolls": [
             1,
@@ -166,6 +170,15 @@
             "weight": 1
           }
         ],
+        "enemyLimits": {
+          "min": 0,
+          "max": null
+        },
+        "trapPool": [],
+        "trapLimits": {
+          "min": 0,
+          "max": null
+        },
         "placements": {
           "enemyCount": [
             4,
@@ -321,6 +334,10 @@
             "caveWallPillarV2"
           ]
         },
+        "treasureLimits": {
+          "min": 0,
+          "max": null
+        },
         "treasureTable": {
           "rolls": [
             1,
@@ -369,6 +386,15 @@
             "weight": 1
           }
         ],
+        "enemyLimits": {
+          "min": 0,
+          "max": null
+        },
+        "trapPool": [],
+        "trapLimits": {
+          "min": 0,
+          "max": null
+        },
         "placements": {
           "enemyCount": [
             4,
@@ -393,6 +419,186 @@
       },
       "preview": {
         "seed": "1iy2yre-1qzks9b",
+        "viewOptions": {
+          "path": true,
+          "rooms": true,
+          "placements": true,
+          "grid": false
+        }
+      }
+    },
+    {
+      "id": "dungeon_3",
+      "name": "チュートリアル",
+      "config": {
+        "schemaVersion": 1,
+        "id": "dungeon_3",
+        "name": "チュートリアル",
+        "theme": "generic_dungeon",
+        "scale": 1,
+        "danger": 1,
+        "width": 60,
+        "height": 40,
+        "retryLimit": null,
+        "generator": {
+          "type": "digger",
+          "roomWidth": [
+            4,
+            9
+          ],
+          "roomHeight": [
+            4,
+            7
+          ],
+          "corridorLength": [
+            2,
+            8
+          ],
+          "dugPercentage": 0.2,
+          "timeLimit": 1000,
+          "roomShape": {
+            "roundingChance": 0.55,
+            "maxCornerRadius": 3
+          },
+          "corridorShape": {
+            "enabled": true,
+            "minWidth": 1,
+            "maxWidth": 5,
+            "bulgeChance": 0.65,
+            "roundingChance": 0.55
+          }
+        },
+        "entranceApproach": {
+          "enabled": true,
+          "startDirections": [
+            "down"
+          ],
+          "minLength": 3,
+          "maxLength": 18,
+          "maxTurns": 2,
+          "turnChance": 0.45
+        },
+        "exitApproach": {
+          "enabled": true,
+          "endDirections": [
+            "up"
+          ],
+          "minLength": 3,
+          "maxLength": 18,
+          "maxTurns": 2,
+          "turnChance": 0.45
+        },
+        "validation": {
+          "minRooms": 6,
+          "maxRooms": 12,
+          "minMainPathLength": 30,
+          "minBranchRooms": 2,
+          "minFloorRatio": 0.12,
+          "maxFloorRatio": 0.36
+        },
+        "roomRoles": {
+          "treasureCount": [
+            0,
+            0
+          ],
+          "treasureCornerBias": 0.85,
+          "restCount": [
+            0,
+            0
+          ],
+          "restPathRange": [
+            0.6,
+            0.85
+          ]
+        },
+        "branchContents": {
+          "enabled": true,
+          "minPathLength": 3,
+          "outcomes": {
+            "empty": 0.31,
+            "trap": 0.31,
+            "treasure": 0.31,
+            "both": 0.07
+          }
+        },
+        "tiles": {
+          "floorTileId": "test_grass",
+          "wallTileId": "test_grass",
+          "path": [
+            "test_grass"
+          ],
+          "room": [
+            "test_grass"
+          ],
+          "wall": [
+            "test_grass",
+            "tree"
+          ],
+          "pathWall": [
+            "test_grass",
+            "tree"
+          ],
+          "roomWall": [
+            "test_grass",
+            "tree"
+          ],
+          "wallHeight": 0,
+          "margin": [
+            "test_grass",
+            "tree"
+          ]
+        },
+        "treasureLimits": {
+          "min": 0,
+          "max": 0
+        },
+        "treasureTable": {
+          "rolls": [
+            1,
+            1
+          ],
+          "entries": []
+        },
+        "enemyPool": [
+          {
+            "id": "horn_rabbit",
+            "name": "ツノウサギ",
+            "weight": 1
+          }
+        ],
+        "enemyLimits": {
+          "min": 2,
+          "max": 2
+        },
+        "trapPool": [],
+        "trapLimits": {
+          "min": 0,
+          "max": 0
+        },
+        "placements": {
+          "enemyCount": [
+            4,
+            8
+          ],
+          "trapCount": [
+            0,
+            0
+          ],
+          "decorationCount": [
+            0,
+            0
+          ],
+          "minEnemySpacing": 2,
+          "minTrapSpacing": 2
+        },
+        "safety": {
+          "entranceClearance": 8,
+          "exitClearance": 2
+        },
+        "mandatoryEvents": []
+      },
+      "preview": {
+        "seed": "17hn96s-2923x4",
         "viewOptions": {
           "path": true,
           "rooms": true,

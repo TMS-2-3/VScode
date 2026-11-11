@@ -404,6 +404,19 @@
         image-rendering: auto;
       }
 
+      .line-copy-symbol {
+        display: grid;
+        place-items: center;
+        color: #182c3c;
+        background: rgba(255, 229, 142, 0.8);
+        font: 700 26px sans-serif;
+      }
+
+      .tile-pick .line-copy-symbol {
+        position: absolute;
+        inset: 0 0 16px;
+      }
+
       .map-grid {
         position: absolute;
         inset: 0;
@@ -686,11 +699,15 @@
     <script src="town80/town80-map.js"></script>
     <script src="town40/town40-tiles.js"></script>
     <script src="town40/town40-map.js"></script>
+    <script src="../world/tileMapSystem.js"></script>
     <script>
       const defs = window.HEALER_TILE_DEFS || {};
       const sourceMaps = window.HEALER_TILE_MAPS || {};
       const COMMON_TILE_SIZE = Math.max(1, Math.floor(Number(window.HEALER_TILE_SIZE) || 48));
       window.HEALER_TILE_SIZE = COMMON_TILE_SIZE;
+      const tileMapSystem = window.createHealerTileMapSystem({ tileDefs: defs, tileMaps: sourceMaps });
+      const LINE_COPY_SYMBOLS = { down: "↓", up: "↑", left: "←", right: "→" };
+      const MAP_PREVIEW_MARGIN = 3;
       const layerConfigs = [
         { id: "ground", name: "地面" },
         { id: "terrain", name: "地形" },
@@ -1791,8 +1808,24 @@
         const def = getTileDef(placedTileId);
         if (!def) return;
         const tileSize = state.map.tileSize;
+        const direction = tileMapSystem.getLineCopyDirection(tileId);
+        if (direction) {
+          const marker = document.createElement("div");
+          marker.className = "map-image line-copy-symbol";
+          marker.textContent = LINE_COPY_SYMBOLS[direction];
+          marker.title = def.name || placedTileId;
+          marker.dataset.tileId = placedTileId;
+          marker.dataset.col = String(x);
+          marker.dataset.row = String(y);
+          marker.style.cssText = `left:${x * tileSize}px;top:${y * tileSize}px;width:${tileSize}px;height:${tileSize}px;z-index:22000`;
+          surface.appendChild(marker);
+          return marker;
+        }
         const img = document.createElement("img");
         img.className = "map-image";
+        img.dataset.tileId = placedTileId;
+        img.dataset.col = String(x);
+        img.dataset.row = String(y);
         img.src = resolveEditorImagePath(def.image || "");
         img.alt = def.name || placedTileId;
         img.title = `${def.name || placedTileId} (${placedTileId})`;
@@ -1809,6 +1842,7 @@
           img.style.background = "#d7cbb6";
         }
         surface.appendChild(img);
+        return img;
       }
 
       function renderCoordLabels() {
@@ -1841,14 +1875,28 @@
         renderCoordLabels();
 
         [...surface.querySelectorAll(".map-image")].forEach((node) => node.remove());
-
-        state.map.layers.forEach((layer, layerIndex) => {
-          layer.tiles.forEach((tileEntry, index) => {
-            if (!getTileIdFromEntry(tileEntry)) return;
-            const x = index % state.map.width;
-            const y = Math.floor(index / state.map.width);
-            drawTileImage(tileEntry, x, y, layerIndex);
+        tileMapSystem.clearLineCopyCache(state.map);
+        const sources = tileMapSystem.getLineCopySources(state.map);
+        const margin = MAP_PREVIEW_MARGIN;
+        surfaceWrap.style.padding = `${18 + margin * tileSize}px`;
+        const drawEntry = (entry) => drawTileImage(entry.tileEntry, entry.col, entry.row,
+          Math.max(0, state.map.layers.findIndex((layer) => layer.id === entry.layer.id)));
+        if (margin) {
+          tileMapSystem.forEachMarginTileEntry(state.map, (entry) => {
+            if (entry.col < -margin || entry.row < -margin
+              || entry.col >= state.map.width + margin || entry.row >= state.map.height + margin) return;
+            const image = drawEntry(entry);
+            if (image) image.dataset.margin = "true";
+          }, {
+            viewport: { x: -margin * tileSize, y: -margin * tileSize,
+              w: (state.map.width + margin * 2) * tileSize,
+              h: (state.map.height + margin * 2) * tileSize },
+            drawPadding: 1,
           });
+        }
+        tileMapSystem.forEachMapTileEntry(state.map, drawEntry);
+        sources.forEach((source) => {
+          drawTileImage(source.tileEntry, source.col, source.row, 3);
         });
 
         mapTitle.textContent = state.map.name;
@@ -1869,6 +1917,7 @@
             renderLayerTabs();
             renderPalette();
             renderSelectedInfo();
+            renderSurface();
           });
           layerTabs.appendChild(button);
         });
@@ -1896,6 +1945,11 @@
             img.style.left = `${(def.drawOffsetX || 0) * scale}px`;
             img.style.top = `${(def.drawOffsetY || 0) * scale}px`;
             button.appendChild(img);
+          } else if (def.lineCopyDirection) {
+            const symbol = document.createElement("div");
+            symbol.className = "line-copy-symbol";
+            symbol.textContent = LINE_COPY_SYMBOLS[def.lineCopyDirection];
+            button.appendChild(symbol);
           }
 
           const label = document.createElement("span");

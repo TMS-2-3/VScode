@@ -166,6 +166,7 @@
       .view-options {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 13px;
         min-height: 36px;
         margin-left: auto;
@@ -658,6 +659,34 @@
         margin-bottom: 12px;
       }
 
+      .treasure-count-settings {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        margin-bottom: 14px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #35413c;
+      }
+
+      .treasure-count-settings label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+      }
+
+      .treasure-count-settings input[type="number"] {
+        width: 84px;
+      }
+
+      .treasure-count-error {
+        flex-basis: 100%;
+        margin: 0;
+        color: #ff8b83;
+        font-size: 13px;
+      }
+
       .loot-toolbar {
         justify-content: space-between;
       }
@@ -705,7 +734,15 @@
       }
 
       .config-table-treasure .config-row {
-        grid-template-columns: 24px minmax(180px, 1fr) 90px 170px;
+        grid-template-columns: 24px minmax(180px, 1fr) 90px 170px 32px;
+      }
+
+      .duplicate-treasure {
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        padding: 0;
+        font-size: 20px;
       }
 
       .config-table-enemy .config-row {
@@ -917,12 +954,13 @@
       <div class="setting-buttons" aria-label="ダンジョン内容設定">
         <button id="tile-settings-button" class="setting-button" type="button">タイル設定<span>未設定</span></button>
         <button id="treasure-settings-button" class="setting-button" type="button">宝箱設定<span>未設定</span></button>
-        <button id="enemy-settings-button" class="setting-button" type="button">敵設定<span>未設定</span></button>
+        <button id="enemy-settings-button" class="setting-button" type="button">魔物設定<span>未設定</span></button>
+        <button id="trap-settings-button" class="setting-button" type="button">罠設定<span>未設定</span></button>
       </div>
       <div class="view-options" aria-label="表示項目">
-        <label><input id="path-toggle" type="checkbox" checked>主経路</label>
-        <label><input id="room-toggle" type="checkbox" checked>部屋</label>
-        <label><input id="placement-toggle" type="checkbox" checked>配置候補</label>
+        <label title="主経路・部屋・配置候補"><input id="details-toggle" type="checkbox" checked>補助表示</label>
+        <label><input id="tile-toggle" type="checkbox" checked>タイル表示</label>
+        <label><input id="line-copy-toggle" type="checkbox">直線コピー</label>
         <label><input id="grid-toggle" type="checkbox">グリッド</label>
       </div>
     </section>
@@ -960,10 +998,13 @@
 
     <script src="../data/config.js"></script>
     <script src="../data/enemies.js"></script>
+    <script src="../data/traps.js"></script>
     <script src="../data/materials.js"></script>
     <script src="./tile.js"></script>
     <script src="../rot.js-master/dist/rot.js"></script>
     <script src="./dungeon/dungeonTiles.js"></script>
+    <script src="./dungeon/dungeonTreasureLimits.js"></script>
+    <script src="./dungeon/dungeonWeights.js"></script>
     <script src="./dungeon/dungeonSavedProfiles.js"></script>
     <script src="./dungeon/dungeonProfiles.js"></script>
     <script src="./dungeon/dungeonCorridors.js"></script>
@@ -998,10 +1039,10 @@
         const roomList = document.getElementById("room-list");
         const validation = document.getElementById("validation");
         const hoverInfo = document.getElementById("hover-info");
+        const lineCopyToggle = document.getElementById("line-copy-toggle");
         const toggles = {
-          path: document.getElementById("path-toggle"),
-          rooms: document.getElementById("room-toggle"),
-          placements: document.getElementById("placement-toggle"),
+          details: document.getElementById("details-toggle"),
+          tiles: document.getElementById("tile-toggle"),
           grid: document.getElementById("grid-toggle"),
         };
         const generator = window.HEALER_DUNGEON_GENERATOR.create(window.ROT);
@@ -1009,10 +1050,12 @@
         const settingsController = window.HEALER_DUNGEON_EDITOR_SETTINGS.create({
           tileDefinitions: window.HEALER_TILE_DEFS,
           enemyDefinitions: window.HEALER_ENEMY_DEFS,
+          trapDefinitions: window.HEALER_TRAP_DEFS,
           materialData: window.HEALER_MATERIAL_DATA,
           tileButton: tileSettingsButton,
           treasureButton: treasureSettingsButton,
           enemyButton: enemySettingsButton,
+          trapButton: document.getElementById("trap-settings-button"),
           onApply() {
             preloadSelectedTiles();
             generate();
@@ -1083,7 +1126,10 @@
             restoreDirection(exitDirectionSelect, activeProfile.exitApproach.endDirections);
             settingsController.setConfig(activeProfile);
             seedInput.value = record.preview.seed;
-            Object.entries({ path: true, rooms: true, placements: true, grid: false, ...record.preview.viewOptions }).forEach(([key, checked]) => {
+            lineCopyToggle.checked = activeProfile.endpointLineCopy === true;
+            const savedView = record.preview.viewOptions;
+            const legacyDetails = ["path", "rooms", "placements"].some((key) => savedView[key] !== false);
+            Object.entries({ details: legacyDetails, tiles: true, grid: false, ...savedView }).forEach(([key, checked]) => {
               if (toggles[key]) toggles[key].checked = checked;
             });
             preloadSelectedTiles();
@@ -1102,6 +1148,14 @@
           if (event.key === "Enter") generate();
         });
         Object.values(toggles).forEach((toggle) => toggle.addEventListener("change", () => draw()));
+        lineCopyToggle.addEventListener("change", () => {
+          if (result && result.ok) {
+            result.config.endpointLineCopy = lineCopyToggle.checked;
+            result.lineCopies = window.HEALER_DUNGEON_TILES.createEndpointLineCopies(result);
+            renderDetails();
+            draw();
+          }
+        });
         canvas.addEventListener("mousemove", updateHoverInfo);
         canvas.addEventListener("mouseleave", () => {
           hoverInfo.textContent = "マスにカーソルを合わせると情報を表示します";
@@ -1118,9 +1172,14 @@
             ...activeProfile,
             scale: Number(scaleSelect.value),
             danger: Number(dangerSelect.value),
+            endpointLineCopy: lineCopyToggle.checked,
             tiles: contentSettings.tiles,
+            treasureLimits: contentSettings.treasureLimits,
             treasureTable: contentSettings.treasureTable,
             enemyPool: contentSettings.enemyPool,
+            enemyLimits: contentSettings.enemyLimits,
+            trapPool: contentSettings.trapPool,
+            trapLimits: contentSettings.trapLimits,
             entranceApproach: {
               ...activeProfile.entranceApproach,
               startDirections: selectedDirection === "profile"
@@ -1222,6 +1281,7 @@
             getImage: getTileImage,
             getDefinition: settingsController.getTileDefinition,
             sourceTileSize: window.HEALER_TILE_SIZE || 48,
+            showImages: toggles.tiles.checked,
           });
           for (let y = 0; y < result.height; y += 1) {
             for (let x = 0; x < result.width; x += 1) {
@@ -1235,9 +1295,12 @@
             }
           }
 
-          if (toggles.path.checked) drawMainPath(originX, originY, cellSize);
-          if (toggles.rooms.checked) drawRooms(originX, originY, cellSize);
-          if (toggles.placements.checked) drawPlacements(originX, originY, cellSize, width, height);
+          if (toggles.details.checked) {
+            drawMainPath(originX, originY, cellSize);
+            drawRooms(originX, originY, cellSize);
+            drawPlacements(originX, originY, cellSize, width, height);
+          }
+          drawLineCopies(originX, originY, cellSize);
           drawEndpoints(originX, originY, cellSize);
           if (toggles.grid.checked) drawGrid(originX, originY, cellSize);
           ctx.restore();
@@ -1363,6 +1426,28 @@
             + Object.entries(roleColors).map(([role, color]) => swatch(roleLabel(role), color, "outline", "", `room-${role}`)).join("");
         }
 
+        function drawLineCopies(originX, originY, cellSize) {
+          const deltas = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+          for (const copy of result.lineCopies) {
+            const [dx, dy] = deltas[copy.direction];
+            const x = originX + (copy.x + 0.5) * cellSize;
+            const y = originY + (copy.y + 0.5) * cellSize;
+            const length = Math.max(9, cellSize * 0.9);
+            const tipX = x + dx * length;
+            const tipY = y + dy * length;
+            const head = Math.max(3, cellSize * 0.25);
+            ctx.strokeStyle = colors[copy.endpoint];
+            ctx.lineWidth = Math.max(1.5, cellSize * 0.15);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(tipX, tipY);
+            ctx.moveTo(tipX - dx * head - dy * head, tipY - dy * head + dx * head);
+            ctx.lineTo(tipX, tipY);
+            ctx.lineTo(tipX - dx * head + dy * head, tipY - dy * head - dx * head);
+            ctx.stroke();
+          }
+        }
+
         function drawEndpoints(originX, originY, cellSize) {
           drawLabel(result.entrance, "S", colors.entrance, originX, originY, cellSize);
           drawLabel(result.exit, "G", colors.exit, originX, originY, cellSize);
@@ -1485,16 +1570,21 @@
             ["主経路", `${result.metrics.mainPathLength}マス`],
             ["入口通路", formatEntranceApproach(result.entranceApproach)],
             ["出口通路", formatExitApproach(result.exitApproach)],
+            ["直線コピー", result.lineCopies.length ? "ON" : "OFF"],
             ["枝部屋", `${result.metrics.branchRoomCount}室`],
             ["枝道判定", formatBranchContents(result.metrics.branchContentCounts)],
             ["床面積率", `${(result.metrics.floorRatio * 100).toFixed(1)}%`],
-            ["宝箱候補", `${result.metrics.placementCounts.treasure}（確定${result.metrics.guaranteedTreasureCount}・追加${result.metrics.additionalTreasureCount}）`],
-            ["追加の宝箱率", `${((result.config.branchContents.outcomes.treasure + result.config.branchContents.outcomes.both) * 100).toFixed(1)}%`],
+            ["宝箱候補", result.metrics.placementCounts.treasure],
+            ["宝箱数範囲", `${result.config.treasureLimits.min}～${result.config.treasureLimits.max ?? "なし"}`],
+            ["宝箱率", `${((result.config.branchContents.outcomes.treasure + result.config.branchContents.outcomes.both) * 100).toFixed(1)}%`],
             ["魔物候補", result.metrics.placementCounts.enemies],
+            ["魔物数範囲", `${result.config.enemyLimits.min}～${result.config.enemyLimits.max ?? "なし"}`],
             ["罠候補", result.metrics.placementCounts.traps],
+            ["罠数範囲", `${result.config.trapLimits.min}～${result.config.trapLimits.max ?? "なし"}`],
             ...window.HEALER_DUNGEON_TILES.GROUPS.map(({ id, name }) => [name, `${result.config.tiles[id].length}層`]),
-            ["宝箱内容", `${result.config.treasureTable.entries.length}種類`],
-            ["敵種類", `${result.config.enemyPool.length}種類`],
+            ["宝箱内容", `${result.config.treasureTable.entries.length}候補`],
+            ["魔物種類", `${result.config.enemyPool.length}種類`],
+            ["罠種類", `${result.config.trapPool.length}種類`],
           ];
           metrics.innerHTML = values.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("");
           roomList.innerHTML = result.rooms.map((room) => {
@@ -1526,15 +1616,18 @@
             return;
           }
           const cell = result.cells[y * result.width + x];
-          const region = result.tileRegions[y * result.width + x];
+          const region = window.HEALER_DUNGEON_TILES.regionAt(result, x, y);
           const cellName = cell === 2 ? "扉" : window.HEALER_DUNGEON_TILES.GROUPS.find((group) => group.id === region)?.name || "床";
           const room = result.rooms.find((candidate) => x >= candidate.left && x <= candidate.right && y >= candidate.top && y <= candidate.bottom);
           const placement = findPlacementAt(x, y);
           const details = [`${columnLabel(x)}${y + 1}`, cellName];
+          const copy = result.lineCopies.find((entry) => entry.x === x && entry.y === y);
+          if (copy) details.push(`直線コピー: ${{ up: "上", down: "下", left: "左", right: "右" }[copy.direction]}方向`);
           if (room) details.push(`${room.id} / ${roleLabel(room.role)}`);
           if (placement) {
             details.push(`${placement.type}: ${placement.id}`);
             if (placement.enemyId) details.push(enemyName(placement));
+            if (placement.trapTypeId) details.push(settingsController.getTrapDefinition(placement.trapTypeId)?.name || placement.trapName || placement.trapTypeId);
             if (Array.isArray(placement.contents) && placement.contents.length) {
               details.push(placement.contents.map((item) => `${item.name || item.id} x${item.count}`).join(", "));
             }
